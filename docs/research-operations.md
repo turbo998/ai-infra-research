@@ -32,6 +32,8 @@ GitHub 远端的 [queue](../research/queue.json)、[progress](../research/progre
 
 来源监控只是哈希与可用性检查，不做版本公告判断。新闻/标准/实现/硬件交付/作者结果/自己的测量分别登记，不互相升级。
 
+日报引用当日归档监控报告，而非会被后续日期覆盖的全局 latest 文件。可用 `--output research\monitor-YYYY-MM-DD.json` 生成当日报告，并将 progress.monitor_report 指向它；同日多次核验可增量更新或保留明确命名的快照，禁止重复创建同一天的日报。
+
 ## 运行与恢复
 
 自动化每日北京时间 22:30，从真实远端状态恢复；不新增 GitHub 定时任务/后台循环。Local 运行依赖本机/App/网络与认证。中断或认证失败必须报告；下一次从最后成功提交继续，不伪称已补跑。

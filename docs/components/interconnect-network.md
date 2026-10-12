@@ -97,3 +97,5 @@ QP/CQ 创建、发送/接收/完成、内存 pin/ODP、连接管理和 GPU 同�
 [UEC 1.1](../trends/uec-1-1.md) 让开放 scale-up 与 in-network collective 成为重点跟踪对象，但当前只核验发布正文。Queue 优先继续 RDMA 生命周期与 NCCL transport，用固定代码把控制路径、数据路径和同步完整连起来。
 
 自测见 [练习 3、6、7](../learning/exercises.md)。
+
+同日续接已完成 [RDMA 接口生命周期研究](rdma-lifecycle.md)，新增 PD/CQ/QP/post/poll 的固定手册证据；QP state/连接、provider 与 GPU 同步仍不在完成范围。
