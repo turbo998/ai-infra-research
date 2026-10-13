@@ -107,7 +107,13 @@ agents, not access control against concurrent uncooperative filesystem writers.
 ```powershell
 python -m unittest discover -s tests
 python -m experiments.capacity_roofline.run --check
+python -m experiments.ring_cut.run --check
 ```
 
 Tests use original synthetic fixtures under `tests` and mocked transports;
 they do not call APIs, download code, run models, or need third-party packages.
+
+The original Ring cut experiment accounts for one ideal Ring's directed payload
+across synthetic node cuts and a shared send-side NIC ceiling. It does not
+simulate NCCL graph search, measure network timings, or convert NIC payload
+into GPU/HBM traffic. See its [inputs and limits](../experiments/ring_cut/README.md).

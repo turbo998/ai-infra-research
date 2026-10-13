@@ -1,6 +1,6 @@
 # 互连、网络与通信库：先分层，再讨论性能
 
-状态：公开文档、固定源码/手册的静态阅读；无网络/GPU 执行。证据：`nccl-collective-contract`、`nccl-ring-path`、`rdma-registration-contract`。完整 NIC provider、NCCL transport 和拥塞控制实现尚未读完。
+状态：公开文档、固定源码/手册的静态阅读；无网络/GPU 执行。证据：`nccl-collective-contract`、`nccl-ring-path`、`rdma-registration-contract`。后续 [NCCL topology/transport](nccl-topology-transport.md) 已连接核心静态路径；完整 provider/拥塞控制和真实部署仍未验证。
 
 ## 1. 一张分层图
 
@@ -78,7 +78,10 @@ MR 关联 protection domain、地址、长度和 access flags。lkey/rkey 分别
 - 注销 MR 不能早于仍使用它的操作/绑定；错误生命周期可能造成正确性问题。
 - dma-buf 注册接口存在，不表示任何 GPU/driver/NIC 都已支持相同路径；兼容、同步和 provider 行为另核验。
 
-QP/CQ 创建、发送/接收/完成、内存 pin/ODP、连接管理和 GPU 同步仍是下一题。此处不能声称完成“RDMA 全流程实现”。
+QP/CQ 创建、发送/接收/完成见后续 [接口生命周期](rdma-lifecycle.md)，
+NCCL 内置 IB 的 QP/MR/post/poll 路径见 [transport 研究](nccl-topology-transport.md)。
+内存 pin/ODP、provider 与 GPU 内存序完整契约仍未完成；此处不声称
+“RDMA 全流程实现”。
 
 ## 6. 架构选型不做无条件排行榜
 
@@ -94,7 +97,7 @@ QP/CQ 创建、发送/接收/完成、内存 pin/ODP、连接管理和 GPU 同�
 
 ## 下一步
 
-[UEC 1.1](../trends/uec-1-1.md) 让开放 scale-up 与 in-network collective 成为重点跟踪对象，但当前只核验发布正文。Queue 优先继续 RDMA 生命周期与 NCCL transport，用固定代码把控制路径、数据路径和同步完整连起来。
+[UEC 1.1](../trends/uec-1-1.md) 让开放 scale-up 与 in-network collective 成为重点跟踪对象，但当前只核验发布正文。[NCCL transport](nccl-topology-transport.md) 已完成有界核心路径静态研究；下一步细化 graph/channel/rank/NIC 映射与 port recovery，不升级为硬件实践。
 
 自测见 [练习 3、6、7](../learning/exercises.md)。
 

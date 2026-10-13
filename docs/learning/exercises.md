@@ -43,3 +43,26 @@
 阅读 [UEC 1.1 条目](../trends/uec-1-1.md)。网络内归约减少 payload 是否必然使应用训练快两倍？
 
 答案：不必然。作者通信路径示例不代表整体训练时间；收敛到相同质量、可用 switch/NIC、数据类型、collective、通信占比和故障恢复都影响收益。满分需要一个可证伪的对照实验，而不是另引用一个宣传数字。
+
+## 8. Transport 四层与完成四阶段
+
+同机 P2P 可用就必定走 P2P 吗？GDR 为真就没有 host buffer 吗？看到 TCP
+连接就意味着 IB 数据面没有工作吗？为什么 NET request 完成不能代替应用
+CUDA stream 完成？
+
+评分看 [固定实现](../components/nccl-topology-transport.md) 的条件：
+同机 NET preference、LL host-buffer 例外、IB metadata 控制连接，
+以及 request 完成、GPU 可见、GPU 消费、应用 stream 完成的区别。
+只背 transport 名称、未检查 canConnect/setup/runtime 错误者不通过。
+
+## 9. Rank 顺序与共享 NIC
+
+8 ranks，A/B 节点各 4 ranks，每 rank 1 GiB；共享单方向 NIC payload
+上限 50 GB/s。分别复算节点分组和节点交替 Ring 的每条 edge、每节点
+发送量与时间下界。分母能换成双向聚合带宽吗？全部 ranks 同节点时如何解释？
+
+答案见 [原创 Ring cut](../../experiments/ring_cut/README.md)：每 edge 1.75 GiB，
+两例每节点 1.75/7 GiB，下界 0.03758096384/0.15032385536 s。
+4 倍只是该共享资源下界比，不能称实际加速比；全机内网络下界 0 不表示
+collective 时间 0。满分须保留 closed-loop、单方向、GB/GiB、独立 NIC/
+多 channel/其他算法的反例及质量/SLO 缺口。用户掌握仍未评估。

@@ -15,9 +15,11 @@
 | [GPU/HBM 深入研究](docs/components/gpu-hbm.md) | 执行模型、内存层级、容量账本、Roofline 与工作负载 |
 | [互连与网络分层](docs/components/interconnect-network.md) | NVLink/NVSwitch、IB/RoCE/RDMA、NCCL 及固定源码分析 |
 | [RDMA 接口生命周期](docs/components/rdma-lifecycle.md) | PD/MR/QP/CQ、WR/WC、缓冲重用、部分提交与错误边界 |
+| [NCCL topology/transport](docs/components/nccl-topology-transport.md) | 固定选型、P2P/SHM/NET、GDR/proxy、IB 完成与错误路径 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
-| [每日研究](docs/daily/2026-10-12.md) | 首轮研究及限制；后续按北京时间日期增量归档 |
+| [每日研究](docs/daily/2026-10-13.md) | 最新有界研究与限制；按北京时间日期增量归档 |
 | [原创离线实验](experiments/capacity_roofline/README.md) | 可重算的显存 payload 与 Roofline 理论界限 |
+| [Ring cut 离线算例](experiments/ring_cut/README.md) | rank 顺序、跨节点 payload 与共享 NIC 理论下界 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -35,6 +37,7 @@ Python 3.12 标准库；不需要 GPU 或第三方 Python 包。在仓库根目�
 python -m unittest discover -s tests
 python scripts\validate_research.py
 python experiments\capacity_roofline\run.py --check
+python experiments\ring_cut\run.py --check
 python scripts\source_monitor.py
 ```
 
