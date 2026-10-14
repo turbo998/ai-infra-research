@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "claims": [
+    {
+      "id": "gpu-execution-memory",
+      "claim": "已读 CUDA 模型区分 SM/block/warp 与内存范围；local memory 是逻辑线程局部，不等同片上资源；寄存器限制可能引入 spill。",
+      "source_ids": ["cuda-model", "cuda-memory"],
+      "status": "specification",
+      "artifacts": ["docs/components/gpu-hbm.md"],
+      "limitations": "只分析已读章节，未执行 GPU、未验证所有架构实现或真实 kernel 性能。",
+      "verified_at": "2026-10-12",
+      "verifier": "AI-assisted static reading"
+    },
+    {
+      "id": "historical-hopper-structure",
+      "claim": "Hopper 官方历史结构文章区别完整 GH100、H100 SXM5/PCIe 的实现配置及 HBM 类型；不能把完整设计或 preliminary 性能当当前 SKU 实测。",
+      "source_ids": ["hopper-architecture"],
+      "status": "announcement",
+      "artifacts": ["docs/components/gpu-hbm.md", "docs/components/interconnect-network.md"],
+      "limitations": "历史发布结构案例，未核验当前 SKU/交付性能，不采用作者速度倍率。",
+      "verified_at": "2026-10-12",
+      "verifier": "AI-assisted static reading"
+    },
+    {
+      "id": "nccl-collective-contract",
+      "claim": "NCCL 是支持多种 transport 的 GPU 通信库；collective 的 rank/count/datatype 与输出布局属于正确性契约，语义等价不规定 runtime 算法。",
+      "source_ids": ["nccl-overview", "nccl-collectives"],
+      "status": "specification",
+      "artifacts": ["docs/components/interconnect-network.md"],
+      "limitations": "未运行集群；不能据应用使用 NCCL 推断 RDMA 路径生效。",
+      "verified_at": "2026-10-12",
+      "verifier": "AI-assisted static reading"
+    },
+    {
+      "id": "nccl-ring-path",
+      "claim": "固定 all_reduce.h 所读范围含 Ring 与 Tree 路径；runRing 的分块与归约/传播支持理想 Ring 数据流分析。",
+      "source_ids": ["nccl-ring"],
+      "status": "implementation",
+      "artifacts": ["docs/components/interconnect-network.md"],
+      "limitations": "只读开头约 180 行；未追算法选型/primitives/transport。解析通信量不是真实 trace 或网络实测。",
+      "verified_at": "2026-10-12",
+      "verifier": "AI-assisted fixed-commit static reading"
+    },
+    {
+      "id": "rdma-registration-contract",
+      "claim": "固定 MR 手册明确注册范围、PD/权限、lkey/rkey、relaxed ordering 与错误/注销契约；不能将 RDMA 当无权限/同步要求的任意内存访问。",
+      "source_ids": ["rdma-mr"],
+      "status": "specification",
+      "artifacts": ["docs/components/interconnect-network.md"],
+      "limitations": "接口手册阅读，不是 provider 实现；完整 PD/QP/CQ 和 GPU lifecycle 尚未分析/执行。",
+      "verified_at": "2026-10-12",
+      "verifier": "AI-assisted fixed-commit manual reading"
+    },
+    {
+      "id": "rdma-lifecycle-contract",
+      "claim": "已读固定 PD/CQ/QP/post/poll 手册支持资源关联、部分提交、完成/错误、非 inline 缓冲重用与 CQ overrun 的接口生命周期分析；提交接受不是操作完成。",
+      "source_ids": ["rdma-mr", "rdma-pd", "rdma-cq", "rdma-qp", "rdma-post-send", "rdma-post-recv", "rdma-poll-cq"],
+      "status": "specification",
+      "artifacts": ["docs/components/rdma-lifecycle.md"],
+      "limitations": "静态接口手册研究；QP state/连接、事件 ack、provider/GPU 同步和真实 RDMA 性能未验证。",
+      "verified_at": "2026-10-12",
+      "verifier": "AI-assisted fixed-commit manual reading"
+    },
+    {
+      "id": "uec-1-1-announcement",
+      "claim": "UEC 官方发布正文宣布 1.1，并描述 scale-up、UET Verbs、INC、CSIG、PCM；只支持规范发布与机制线索的结论。",
+      "source_ids": ["uec-1-1"],
+      "status": "announcement",
+      "artifacts": ["docs/trends/uec-1-1.md"],
+      "limitations": "完整 PDF 标准、产品实现/兼容与硬件性能未验证；不采用最高加速倍率。",
+      "verified_at": "2026-10-12",
+      "verifier": "AI-assisted announcement reading"
+    },
+    {
+      "id": "nccl-selection-path",
+      "claim": "固定 NCCL enqueue/tuning 路径分开候选可用性、模型成本、tuner override 与 channel/thread 后处理；Ring/Tree/protocol 的模型和配置不能视为固定消息阈值或硬件实测。",
+      "source_ids": ["nccl-enqueue-selection", "nccl-tuning-dispatch", "nccl-cost-model", "nccl-tuning-general", "nccl-ring-tuning", "nccl-tree-tuning", "nccl-init-order"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-topology-transport.md"],
+      "limitations": "只读固定核心静态路径，未完整 graph search/全部算法/外部 tuner；FP8 成本偏好不等于质量验证，模型不是 p99/benchmark。",
+      "verified_at": "2026-10-13",
+      "verifier": "AI-assisted delegated fixed-commit source reading and synthesis"
+    },
+    {
+      "id": "nccl-connector-path",
+      "claim": "固定 connector 选择按 canConnect 的 P2P/SHM/NET 顺序，但同机 NET preference 可拒绝 P2P/SHM；选中后 setup 错误传播。NET provider 初始化尝试与 runtime 恢复是不同机制。",
+      "source_ids": ["nccl-topology-paths", "nccl-transport-selection", "nccl-p2p-transport", "nccl-shm-transport", "nccl-net-plugin"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-topology-transport.md"],
+      "limitations": "不是实际 transport trace；未验证所有平台/container/Socket/外部 provider，不承诺任意错误自动回退。",
+      "verified_at": "2026-10-13",
+      "verifier": "AI-assisted delegated fixed-commit source reading and synthesis"
+    },
+    {
+      "id": "nccl-net-progress",
+      "claim": "固定 SIMPLE/NET 核心路径分开 GPU slot/head/tail、网络 request 完成、flush/可见与消费回收；GDR 协议 buffer 不等于注册用户 buffer，LL send host-bank 与 device-provider callback 是反例。",
+      "source_ids": ["nccl-topology-paths", "nccl-net-transport", "nccl-simple-primitives", "nccl-device-layout", "nccl-host-proxy"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-topology-transport.md"],
+      "limitations": "只读标准 host NET 核心同步，不是全部 LL/LL128/外部 device provider 或 GPU/CUDA 内存序证明，没有 profiling。",
+      "verified_at": "2026-10-13",
+      "verifier": "AI-assisted delegated fixed-commit source reading and synthesis"
+    },
+    {
+      "id": "nccl-ib-lifecycle",
+      "claim": "固定内置 IB 实现连接 device/PD/CQ/RC QP、socket metadata、MR cache、CTS address/rkey/tag/idx、RDMA_WRITE/WITH_IMM 与 WC/event/slot 回收；port failover 默认关闭，恢复门控不等于无损保证。",
+      "source_ids": ["nccl-net-transport", "nccl-ib-discovery", "nccl-ib-connect", "nccl-ib-registration", "nccl-ib-p2p", "nccl-ib-fifo-layout", "nccl-ib-resiliency-gate", "nccl-host-proxy"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-topology-transport.md"],
+      "limitations": "未完整 provider/kernel/abort-drain 或 recovery state machine，未运行 verbs/故障测试；局部 teardown 不是全部失败路径正确性证明。",
+      "verified_at": "2026-10-13",
+      "verifier": "AI-assisted delegated fixed-commit source reading and synthesis"
+    },
+    {
+      "id": "nccl-stream-contract",
+      "claim": "固定官方 stream 文档说明 NCCL 返回通常表示已入 CUDA stream，不表示传输/结果已完成；group 多 stream 有同步依赖，内部 WC/head/tail 不代替应用 stream 完成契约。",
+      "source_ids": ["nccl-streams-fixed", "nccl-enqueue-selection"],
+      "status": "specification",
+      "artifacts": ["docs/components/nccl-topology-transport.md"],
+      "limitations": "只读所列固定文档/实现范围，不声称完整 CUDA 规范审阅或运行正确性证明。",
+      "verified_at": "2026-10-13",
+      "verifier": "AI-assisted delegated fixed-document reading and synthesis"
+    },
+    {
+      "id": "ring-cut-offline",
+      "claim": "原创合成理想 Ring cut：8 ranks、每 rank 1 GiB、两节点各 4 ranks、共享单方向 50 GB/s payload 上限；分组/交替每节点发送 1.75/7 GiB，NIC payload 时间下界 0.03758096384/0.15032385536 s。",
+      "source_ids": ["nccl-ring"],
+      "status": "own-offline",
+      "artifacts": ["experiments/ring_cut/run.py", "experiments/ring_cut/input.json", "experiments/ring_cut/results.json", "experiments/ring_cut/README.md", "docs/components/nccl-topology-transport.md"],
+      "limitations": "CPU/offline 算术，不是 NCCL graph search/channel trace/benchmark，4 倍仅共享 NIC 下界比；网络 payload 不是 HBM 流量，无质量/SLO/成本结论。",
+      "verified_at": "2026-10-13",
+      "verifier": "Original standard-library calculation with independent unit assertions"
+    },
+    {
+      "id": "capacity-roofline-offline",
+      "claim": "原创合成容量/Roofline 算术：指定 batch2/BF16 GQA KV logical payload 为 805306368 bytes；指定 Roofline 输入给出 0.01 秒理想时间下界。",
+      "source_ids": ["cuda-memory"],
+      "status": "own-offline",
+      "artifacts": ["experiments/capacity_roofline/run.py", "experiments/capacity_roofline/README.md", "experiments/capacity_roofline/results.json"],
+      "limitations": "CPU/offline 模型；不是 GPU benchmark、真实模型 deployment 或质量/SLO 证明。",
+      "verified_at": "2026-10-12",
+      "verifier": "Original calculation with executable independent assertions"
+    },
+    {
+      "id": "nccl-graph-search-channels",
+      "claim": "固定 NCCL ncclTopoCompute 通过 followPath 扣减底层链路 remBw 执行回溯搜索：按架构 speedArray 从高到低尝试 bwIntra/bwInter，先约束 sameChannels=1 与 crossNic=0（要求本机进出 NET 相同），失败后再放宽 sameChannels、路径类型上限与 crossNic=1，并在通道数不足半数时复制通道并将每通道带宽折半。",
+      "source_ids": ["nccl-graph-header", "nccl-topo-header", "nccl-graph-search"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "静态固定 commit 代码分析，未在实机拓扑上导出运行时 graph XML 或实测回溯耗时。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit source reading of src/include/graph.h, src/graph/topo.h, and src/graph/search.cc"
+    },
+    {
+      "id": "nccl-rings-connect-layout",
+      "claim": "固定 NCCL connect.cc 与 rings.cc 通过 allGather3Data 全局收敛各节点最小 nChannels 与最小 bwIntra/bwInter，并将每节点每 Channel 的 ringRecv（首 GPU）、ringIntra（机内链）和 ringSend（尾 GPU）首尾拼接为全局 Ring 或机间双二叉树 Tree。",
+      "source_ids": ["nccl-graph-connect", "nccl-graph-rings"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "单节点局部拓扑降级会通过全局最小收敛拉低整个 communicator 的 nChannels；未做实机故障注入。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit source reading of src/graph/connect.cc and src/graph/rings.cc"
+    },
+    {
+      "id": "nccl-rail-plane-pxn",
+      "claim": "固定 NCCL topo.cc 与 paths.cc 通过 mirrorBits 对称掩码与 ncclTopoSortDevsByRailPlane 排序分散不同 Channel 的 NIC 选择，并在满足 NVLink peer 到目标 NIC 为 PIX/PXB 时将 GPU->NET 发送路径单向改写为 PATH_PXN，但接收方向不支持相同远端 PXN 代理。",
+      "source_ids": ["nccl-topo-rail-plane", "nccl-topology-paths", "nccl-graph-search"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "PXN 消耗机内 NVLink 与代理 GPU 资源；未在物理多 Rail 交换机上实测拥塞改善幅度。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit source reading of src/graph/topo.cc, src/graph/paths.cc, and src/graph/search.cc"
+    },
+    {
+      "id": "rail-channel-cut-offline",
+      "claim": "原创合成多通道/多 Rail/机内瓶颈 cut 算例（p=8, S=1 GiB, C=4, 单 NIC 50 GB/s）：4 张 Rail NIC 对齐（crossNic=0）将 NIC 时间下界从单 NIC 的 0.03758096384 s 降为 0.00939524096 s；跨 Rail 偏斜使下界回升至 0.01879048192 s；若机内有向边退化为 32 GB/s（PATH_PHB）且被 4 通道叠加穿过，机内下界 0.058720256 s 反超网络成为主导瓶颈。",
+      "source_ids": ["nccl-graph-search", "nccl-graph-rings"],
+      "status": "own-offline",
+      "artifacts": ["experiments/rail_channel_cut/run.py", "experiments/rail_channel_cut/input.json", "experiments/rail_channel_cut/results.json", "experiments/rail_channel_cut/README.md", "docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "CPU/offline 理想等分算例；不含协议头、LL/LL128、PXN 转发开销或交换机拥塞，非实机测量。",
+      "verified_at": "2026-10-14",
+      "verifier": "Original standard-library calculation with independent unit tests in tests/test_rail_channel_cut.py"
+    },
+    {
+      "id": "fireworks-m3-sparse-sm100",
+      "claim": "Fireworks 公开的 SM100 M3 Block-Sparse Attention 采用 KV-outer 四阶段流水线：先由 5 个 CuTe-DSL kernel 将 Query Top-k 选择转置为带热点副本拆分（replica_threshold=128）的 CSR 反向索引，再经 LPT 贪心负载均衡分配至 148 个持久 CTA 执行 SparseKVOuterForward 与 LSE combine。",
+      "source_ids": ["fireworks-m3-sparse-doc"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态源码与设计文档核验；稀疏索引构建本身有 5 个预处理 kernel 开销，短序列或高选中率下未必优于稠密 Attention。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of fw-ai/minimax-kernels docs/m3-sparse-attention.md"
+    },
+    {
+      "id": "fireworks-b200-author-bench",
+      "claim": "Fireworks 作者披露的 B200（148 SMs, CUDA 13.0）评测区分了理想冷存单次读写带宽（fbw1x，约 2.88–3.12 TB/s）与计入跨 KV 分区重复访问的算法流量带宽（fbwAct，约 5.10–5.75 TB/s），在 Sq=Skv=32768 下达到 458–724 TFLOP/s 有效算力。",
+      "source_ids": ["fireworks-b200-perf-doc"],
+      "status": "author-benchmark",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "作者在 B200 上的评测报告（author-benchmark），非本仓库独立硬件复现；fbwAct 包含 L2 缓存支撑的重复访问，不能直接等同物理 HBM 引脚带宽。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of fw-ai/minimax-kernels docs/perf-results-b200.md"
+    },
+    {
+      "id": "fireworks-locust-cache-bench",
+      "claim": "Fireworks 开源压测客户端通过 prompt_cache_max_len 显式构造固定长度共享前缀（common_tokens）与随机后缀拼接，以受控方式分离 Prefix Cache 命中率对 TTFT 与吞吐的影响。",
+      "source_ids": ["fireworks-locust-load-test"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "仅核验压测负载生成机制，未对线上 API 执行压测。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of fw-ai/benchmark llm_bench/load_test.py"
+    },
+    {
+      "id": "together-fa3-hopper-async",
+      "claim": "FlashAttention-3 利用 Hopper Producer-Consumer Warp-Specialization（TMA 异步加载与 WGMMA 计算分离、setmaxnreg 寄存器重分配）、2-Stage GEMM-Softmax 跨迭代重叠以及 FP8 非相干块量化，在作者 H100 测试中将 FP16 Attention 推至最高 740 TFLOP/s。",
+      "source_ids": ["together-fa3-paper"],
+      "status": "author-benchmark",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "论文规范与作者 H100 跑分（author-benchmark），高度依赖 SM90 硬件特性（WGMMA/TMA），不可直接外推至旧代际 GPU。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct reading of arXiv:2407.08608v2 Sections 1-4"
+    },
+    {
+      "id": "together-sequoia-spec-tree",
+      "claim": "Sequoia 用动态规划最大化给定树预算 N 与深度 d 下的期望接受 token 数 F(T)，并结合目标 GPU 验证耗时 T_verify(N) 从 Memory-bound 向 Compute-bound 过渡的硬件拐点选择最优推测树形态。",
+      "source_ids": ["together-sequoia-paper"],
+      "status": "specification",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "当目标 GPU 已处于高并发大 Batch 计算饱和区时，大树宽并行验证会显著增加 T_verify(N) 并削弱有效吞吐收益。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct reading of arXiv:2402.12374v3 Sections 1-3.2"
+    },
+    {
+      "id": "together-stripedhyena-state",
+      "claim": "StripedHyena 推理引擎在自回归解码阶段通过 step_fir（固定长度 fir_length-1 滑动窗口）与 step_iir（一阶复数极点状态递推 state = poles * state + x）将单层状态复杂度控制在关于序列长度 O(1) 常数空间；而 MoA 多模型分层扇出则会按层成倍放大总 Token 消耗与最慢节点尾延迟。",
+      "source_ids": ["together-stripedhyena-engine", "together-moa-readme"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态源码审阅，未在长序列基准上独立评测 StripedHyena 与全 Attention 模型的精度取舍。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of togethercomputer/stripedhyena engine.py and togethercomputer/MoA README.md"
+    },
+    {
+      "id": "groq-tsp-microarch-bert",
+      "claim": "Groq 第一代 TSP 芯片采用无硬件缓存、软件显式调度的 220 MiB 片上 SRAM（55 TiB/s 内部带宽、20 TiB/s 320-byte SRF 流带宽），通过 MXM/SXM/VXM 空间流水线在作者 4000 次 Batch-1 BERT-base 实测中实现 128.9 µs 平均延迟与 129.5 µs P99 延迟（仅比均值高 0.4%，唯一波动来自 PCIe Gen4 错误重传）。",
+      "source_ids": ["groq-tsp-bert-paper"],
+      "status": "author-benchmark",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "作者在 14nm TSP 上的 BERT-base 评测（author-benchmark），单芯片仅能驻留百兆字节量级权重与Scratchpad。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct full-text reading of arXiv:2206.11062v1"
+    },
+    {
+      "id": "groq-groqflow-multichip",
+      "claim": "GroqFlow 编译栈按每张芯片约容纳 50M 参数（ceil(P / 50,000,000) 向上取 2 的幂次）计算多芯片数量，采用 --partition-mode=daisy-chain 将大模型切分为多芯片流水线，并在超长程序（--large-program）时征用片上数据 SRAM 切片存放指令。",
+      "source_ids": ["groq-groqflow-build", "groq-groqflow-compile", "groq-groqflow-assemble"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "全片上 SRAM 换取极低单步延迟的代价是单芯片容量极小，大模型必须跨数十张卡串联，增加机架成本与串联故障面。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of groq/groqflow build.py, compile.py, and assemble_multichip.py"
+    },
+    {
+      "id": "cerebras-csl-wse-allreduce",
+      "claim": "Cerebras WSE2/WSE3 的 CSL 片上 AllReduce 在每个 PE 仅 48 KB 本地 SRAM 的约束下，仅使用 1 个可路由颜色（C_ROUTE）、1 对进出队列与 3 个 DSR，通过硬件控制小波（ctrl_11）与拆卸小波（Teardown Wavelet）动态重构片上 2D Mesh 路由器开关完成行归约、列归约与广播，主机到晶圆边缘 I/O 则受限于最多 16 个流式通道。",
+      "source_ids": ["cerebras-csl-allreduce-pe", "cerebras-csl-allreduce-layout", "cerebras-csl-bandwidth-test", "cerebras-csl-gemm-2d"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "仅当权重与状态常驻晶圆 48 KB/PE 分布式 SRAM 时才具备晶圆级带宽优势；跨主机边缘流式换入受限于 H2D/D2H 通道数。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of Cerebras/sdk-examples allreduce, gemm-collectives_2d, and bandwidth-test"
+    },
+    {
+      "id": "nccl-ib-port-failover-invariants",
+      "claim": "NCCL net_ib 端口故障转移（NCCL_IB_RESILIENCY_PORT_FAILOVER）通过 nFailedDevices<=1 且 <ndevs 的非致命门控、Data CQ 容量按 ndevs 倍预放大、CTS 强制 IBV_SEND_SIGNALED、activeQps[] 动态替换同时保持 origDevIndex 分块偏移不变、128B RDMA_READ 完成位图探测选择性重传，以及接收端 |negativeEventsSum| == remainingEventsSum 的有符号事件守恒律，保证单端口故障时不丢包、不重复覆盖也不死锁；而重传期间二次故障与多设备同时故障则是显式不可恢复边界。",
+      "source_ids": ["nccl-ib-resiliency-header", "nccl-ib-resiliency-gate", "nccl-ib-p2p", "nccl-ib-fifo-layout"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-port-recovery-invariants.md"],
+      "limitations": "静态源码审阅，未在物理 IB HCA/交换机上执行拔线或端口闪断注入测试。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of NVIDIA/nccl p2p_resiliency.h, p2p_resiliency.cc, common.h, and p2p.cc"
+    },
+    {
+      "id": "nccl-ib-async-port-recovery",
+      "claim": "NCCL net_ib 异步端口恢复（NCCL_IB_RESILIENCY_PORT_RECOVERY）由后台线程 NCCL IbPortRec 驱动专用 IBV_QPT_UC QP 发送周期性 SEND_WITH_IMM Keep-Alive 帧，要求接收端收到严格连续保序的 >5 条消息并完成双阶段 0x1234 ACK 握手及 Data/Flush QP 重置后才标记 DevStateRecovered，再由主线程恢复 activeQps[]；销毁时通过持锁置位 closeReq->completed 配合条件变量规避虚假唤醒与 Use-After-Free。",
+      "source_ids": ["nccl-ib-recovery-header", "nccl-ib-recovery-cc", "nccl-ib-resiliency-gate"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-port-recovery-invariants.md"],
+      "limitations": "静态源码审阅，不包含物理交换机链路恢复耗时与 UC 丢包率的硬件实测。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of NVIDIA/nccl p2p_resiliency_recovery.h and p2p_resiliency_recovery.cc"
+    },
+    {
+      "id": "ib-failover-invariants-offline",
+      "claim": "在双设备（ndevs=2, nqps=4, max_requests=64, S=1 MiB）合成离线算例中，启用 Resiliency 将每设备 Send/Recv CQ 从 256/512 放大至 512/1024；当仅硬件 ACK 丢失时 128B RDMA_READ 探测实现 0 字节重传，当单 QP 分片丢失时仅选择性重传 256 KiB（省 75%），且接收端终态 events=[1, -1] 满足有符号守恒 |-1| == 1（朴素无符号计数会永久死锁）。",
+      "source_ids": ["nccl-ib-resiliency-gate", "nccl-ib-p2p"],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/ib_failover_invariants/run.py",
+        "experiments/ib_failover_invariants/results.json",
+        "docs/components/nccl-port-recovery-invariants.md"
+      ],
+      "limitations": "Python 标准库确定性 CPU/offline 算例，不替代真实 IB HCA 与交换机故障演练。",
+      "verified_at": "2026-10-14",
+      "verifier": "python experiments/ib_failover_invariants/run.py --check and tests/test_ib_failover_invariants.py"
+    },
+    {
+      "id": "kernel-dispatch-cute-sm100",
+      "claim": "在 Fireworks SM100 M3 稀疏注意力实现中，ATen 张量经 k_cache.permute(0,2,1,3) 零拷贝置换保持末维 stride=1，通过 CuTe-DSL AOT C-ABI（8 字节对齐打包 data_ptr、int32 shapes[R] 与 int64 strides[R-1]）无 JIT 分派至 21 个预编译 .o 算子；Forward kernel 利用 Tile-ordered Partials 消除散列写，并在 512 线程（16 warps）CTA 内将 64K 寄存器重分配为 softmax0/1 各 176、correction 96、mma/load 各 64，配合片上 TMEM 双缓冲与 K->Q0->V->Q1 加载顺序驱动 tcgen05.mma。",
+      "source_ids": [
+        "fireworks-aot-doc",
+        "fireworks-m3-interface-py",
+        "fireworks-m3-aot-export-py",
+        "fireworks-m3-sparse-fwd-py",
+        "fireworks-m3-cpp-binding",
+        "fireworks-b300-perf-doc"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/kernel-dispatch-layout.md", "docs/components/ai-infra-innovators.md"],
+      "limitations": "静态源码与作者 B200/B300 报告审阅，未在本机执行 SM100 CUDA kernel。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of fw-ai/minimax-kernels interface.py, aot_export.py, sparse_fwd_kvouter.py, and cute_sparse_kvouter.cpp"
+    },
+    {
+      "id": "innovator-arch-tradeoffs-offline",
+      "claim": "原创离线算例精确复现了 Fireworks M3 KV-outer 在 Tq=4096, KV=32768, sel=16 下的分析字节账本（fio1x=0.295 GB, fioAct=0.546 GB, cio=0.294 GB，相比无 KV 复用 ioAlt=4.588 GB 节省 8.40x），证明了 Together Sequoia 投机树在 K=64（Memory-bound，3.88x 加速）与 K=512（跨过 295.22 FLOP/B 拐点进入 Compute-bound，加速倒退至 2.94x）的非单调拐点，并量化了 70B INT8 模型在 Groq TSP（需 >=405 颗 220 MiB 芯片串联）与 Cerebras WSE-3（单晶圆 44 GB SRAM 需 >=3 片晶圆或外部流式加载）的片上 SRAM 驻留边界。",
+      "source_ids": ["fireworks-b200-perf-doc", "fireworks-b300-perf-doc", "together-sequoia-paper", "groq-tsp-bert-paper"],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/innovator_arch_tradeoffs/run.py",
+        "experiments/innovator_arch_tradeoffs/results.json",
+        "docs/components/kernel-dispatch-layout.md",
+        "docs/components/ai-infra-innovators.md"
+      ],
+      "limitations": "Python 标准库 CPU/offline 模型，不代表 GPU、Groq LPU 或 Cerebras WSE 实机端到端延迟测量。",
+      "verified_at": "2026-10-14",
+      "verifier": "python experiments/innovator_arch_tradeoffs/run.py --check and tests/test_innovator_arch_tradeoffs.py"
+    }
+  ]
+}

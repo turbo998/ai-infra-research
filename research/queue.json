@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "gpu-hbm-foundations",
+      "title": "GPU 执行与内存层级如何约束 AI 算子？",
+      "component": "gpu-memory",
+      "priority": 1,
+      "depends_on": [],
+      "status": "done",
+      "artifacts": ["docs/components/gpu-hbm.md"],
+      "evidence_ids": ["gpu-execution-memory", "historical-hopper-structure"],
+      "next_step": "已完成基础静态契约；继续 kernel dispatch 和公开 HBM 代际证据，不声称硬件调优完成。"
+    },
+    {
+      "id": "interconnect-layer-map",
+      "title": "NVLink、IB/RoCE、RDMA 与 NCCL 分别在哪一层？",
+      "component": "interconnect-network",
+      "priority": 2,
+      "depends_on": ["gpu-hbm-foundations"],
+      "status": "done",
+      "artifacts": ["docs/components/interconnect-network.md"],
+      "evidence_ids": ["nccl-collective-contract", "nccl-ring-path", "rdma-registration-contract"],
+      "next_step": "分层/初始 Ring 和 MR 契约已读；不等同完整 transport 或网络调优。"
+    },
+    {
+      "id": "capacity-roofline",
+      "title": "如何用透明算术区分显存 payload、allocation 与性能界限？",
+      "component": "capacity-performance",
+      "priority": 2,
+      "depends_on": ["gpu-hbm-foundations"],
+      "status": "done",
+      "artifacts": ["experiments/capacity_roofline/results.json", "experiments/capacity_roofline/results.csv", "docs/architectures/synthetic-inference-budget.md"],
+      "evidence_ids": ["capacity-roofline-offline"],
+      "next_step": "合成算例与独立测试已执行；后续绑定实际 workload 和另行获批硬件，不能当设备测量。"
+    },
+    {
+      "id": "rdma-verbs-lifecycle",
+      "title": "PD/MR/QP/CQ 的生命周期、发送/完成与注销怎样保证正确性？",
+      "component": "network",
+      "priority": 3,
+      "depends_on": ["interconnect-layer-map"],
+      "status": "done",
+      "artifacts": ["docs/components/rdma-lifecycle.md"],
+      "evidence_ids": ["rdma-lifecycle-contract"],
+      "next_step": "PD/MR/QP/CQ/post/poll 接口生命周期及错误契约已研究；继续 NCCL transport，并单独核验 QP state/连接、事件 ack/provider/GPU 同步，不声称硬件调优完成。"
+    },
+    {
+      "id": "nccl-topology-transport",
+      "title": "NCCL 如何选算法/协议并建立 GPU P2P 或网络传输？",
+      "component": "communication",
+      "priority": 4,
+      "depends_on": ["interconnect-layer-map", "rdma-verbs-lifecycle"],
+      "status": "done",
+      "artifacts": ["docs/components/nccl-topology-transport.md", "experiments/ring_cut/results.json"],
+      "evidence_ids": ["nccl-selection-path", "nccl-connector-path", "nccl-net-progress", "nccl-ib-lifecycle", "nccl-stream-contract", "ring-cut-offline"],
+      "next_step": "核心 topology eligibility/selection/P2P/SHM/NET/内置 IB/SIMPLE 完成静态研究；graph search、LL/LL128、外部 provider、完整 abort/recovery 与硬件 trace 均未验证，转窄题续研。"
+    },
+    {
+      "id": "nccl-graph-channel-mapping",
+      "title": "可行 topology 如何生成 channel、rank/NIC/rail 映射，何时 cut 模型失效？",
+      "component": "communication-topology",
+      "priority": 5,
+      "depends_on": ["nccl-topology-transport"],
+      "status": "done",
+      "artifacts": ["docs/components/nccl-graph-channel-mapping.md", "experiments/rail_channel_cut/results.json"],
+      "evidence_ids": ["nccl-graph-search-channels", "nccl-rings-connect-layout", "nccl-rail-plane-pxn", "rail-channel-cut-offline"],
+      "next_step": "已完成 search.cc/connect.cc/rings.cc/topo.cc 静态拆解与多通道/多 Rail/机内瓶颈反证算例；未做实机 XML 导出与交换机拥塞测量。"
+    },
+    {
+      "id": "ai-infra-innovators-arch",
+      "title": "AI Infra 创新公司（Fireworks/Together 推理加速与 Groq/Cerebras 新型芯片）如何用存储层次、异步流水线与片上互连重构延迟与容量边界？",
+      "component": "frontier-innovators",
+      "priority": 5,
+      "depends_on": ["gpu-hbm-foundations", "interconnect-layer-map"],
+      "status": "done",
+      "artifacts": ["docs/components/ai-infra-innovators.md", "experiments/innovator_arch_tradeoffs/results.json"],
+      "evidence_ids": [
+        "fireworks-m3-sparse-sm100",
+        "fireworks-b200-author-bench",
+        "fireworks-locust-cache-bench",
+        "together-fa3-hopper-async",
+        "together-sequoia-spec-tree",
+        "together-stripedhyena-state",
+        "groq-tsp-microarch-bert",
+        "groq-groqflow-multichip",
+        "cerebras-csl-wse-allreduce",
+        "innovator-arch-tradeoffs-offline"
+      ],
+      "next_step": "已完成 Fireworks/Together/Groq/Cerebras 源码、论文与离线算例（fio1x/fioAct/cio 复现、Sequoia 拐点与 SRAM 边界）；后续推进 vLLM/SGLang 连续批处理及分布式训练并行账本，不调用付费商业 API。"
+    },
+    {
+      "id": "nccl-port-recovery-invariants",
+      "title": "IB port-failover 如何维持重传、完成计数与 cleanup 的正确性不变量？",
+      "component": "communication-reliability",
+      "priority": 6,
+      "depends_on": ["nccl-topology-transport", "rdma-verbs-lifecycle"],
+      "status": "done",
+      "artifacts": ["docs/components/nccl-port-recovery-invariants.md", "experiments/ib_failover_invariants/results.json"],
+      "evidence_ids": ["nccl-ib-port-failover-invariants", "nccl-ib-async-port-recovery", "ib-failover-invariants-offline"],
+      "next_step": "已完成 p2p_resiliency.cc 与 p2p_resiliency_recovery.cc 静态不变量拆解及合成离线算例；真实 IB HCA/交换机拔线故障演练待另行获批。"
+    },
+    {
+      "id": "hbm-standard-comparison",
+      "title": "HBM 代际的通道/带宽/容量/封装约束怎样影响系统？",
+      "component": "memory-packaging",
+      "priority": 4,
+      "depends_on": ["gpu-hbm-foundations"],
+      "status": "blocked",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "2026-10-14 再读 JEDEC 目录仍仅页面壳，正文未取得；保留 blocked。查合法公开规范/厂商资料需明确替代边界，不绕过访问限制或猜章节。"
+    },
+    {
+      "id": "kernel-dispatch-layout",
+      "title": "张量 layout/dtype 如何映射到库、编译器和真实 kernel？",
+      "component": "software-stack",
+      "priority": 5,
+      "depends_on": ["gpu-hbm-foundations", "capacity-roofline"],
+      "status": "done",
+      "artifacts": ["docs/components/kernel-dispatch-layout.md", "experiments/innovator_arch_tradeoffs/results.json"],
+      "evidence_ids": ["kernel-dispatch-cute-sm100", "innovator-arch-tradeoffs-offline"],
+      "next_step": "已完成 ATen -> CuTe-DSL AOT C-ABI -> TMA Swizzle -> SM100 tcgen05/TMEM 五层分派链路与字节账本复现；继续推进 inference-slo（vLLM/SGLang 调度与 KV 管理），GPU 实机 profiling 另行批准。"
+    },
+    {
+      "id": "uec-specification",
+      "title": "UEC 1.1 的具体 profile/verbs/ordering/拥塞契约是什么？",
+      "component": "frontier-network",
+      "priority": 5,
+      "depends_on": ["interconnect-layer-map"],
+      "status": "pending",
+      "artifacts": ["docs/trends/uec-1-1.md"],
+      "evidence_ids": ["uec-1-1-announcement"],
+      "next_step": "合法读取规范章节和实现支持；当前只有发布分析，不升级为规范/产品已验证。"
+    },
+    {
+      "id": "storage-checkpoint",
+      "title": "数据加载与 checkpoint/恢复如何影响端到端训练？",
+      "component": "storage",
+      "priority": 6,
+      "depends_on": ["gpu-hbm-foundations"],
+      "status": "pending",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "公开源码/文档建立数据流、持久化契约和合成吞吐/恢复预算。"
+    },
+    {
+      "id": "training-parallelism",
+      "title": "DP/TP/PP/CP/EP 与 FSDP/ZeRO 怎样联合决定状态和通信？",
+      "component": "training",
+      "priority": 7,
+      "depends_on": ["nccl-topology-transport", "capacity-roofline", "storage-checkpoint"],
+      "status": "pending",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "固定一个训练实现，设计可核验显存/通信/恢复账本，不用离线模型承诺训练速度。"
+    },
+    {
+      "id": "inference-slo",
+      "title": "KV/batching/prefill-decode/并行如何满足质量与 TTFT/TPOT？",
+      "component": "inference",
+      "priority": 7,
+      "depends_on": ["kernel-dispatch-layout", "interconnect-layer-map"],
+      "status": "pending",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "固定 vLLM/SGLang 等公开版本，分析调度/内存机制与 SLO-goodput 实验契约。"
+    },
+    {
+      "id": "cluster-orchestration",
+      "title": "Kubernetes/Slurm 的拓扑、分区、隔离与恢复如何配合 workload？",
+      "component": "operations",
+      "priority": 8,
+      "depends_on": ["training-parallelism", "inference-slo"],
+      "status": "pending",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "比较控制面/资源/故障契约与观测/升级方法，禁止操作未授权现有集群。"
+    },
+    {
+      "id": "capacity-economics",
+      "title": "业务 SLO 如何映射为容量、可靠性与每有效工作成本？",
+      "component": "economics",
+      "priority": 9,
+      "depends_on": ["training-parallelism", "inference-slo"],
+      "status": "pending",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "固定成本假设与敏感性，结合失败分母/利用率/恢复，不调用付费报价或创建资源。"
+    },
+    {
+      "id": "rack-power-cooling",
+      "title": "功率、机架密度、冷却与故障域如何约束集群？",
+      "component": "facilities",
+      "priority": 9,
+      "depends_on": ["gpu-hbm-foundations"],
+      "status": "pending",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "从合法公开规范/系统设计建立选型边界；不扩展为施工或芯片制造认证。"
+    },
+    {
+      "id": "architecture-case",
+      "title": "形成带三张图、预算、反例和验证契约的 AI Infra 架构方案",
+      "component": "architecture",
+      "priority": 10,
+      "depends_on": ["cluster-orchestration", "capacity-economics", "rack-power-cooling"],
+      "status": "pending",
+      "artifacts": [],
+      "evidence_ids": [],
+      "next_step": "使用原创合成需求，给出数据流/拓扑/恢复图与证据；不冒充生产部署。"
+    }
+  ]
+}
