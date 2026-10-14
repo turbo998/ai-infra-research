@@ -140,6 +140,136 @@
       "limitations": "CPU/offline 模型；不是 GPU benchmark、真实模型 deployment 或质量/SLO 证明。",
       "verified_at": "2026-10-12",
       "verifier": "Original calculation with executable independent assertions"
+    },
+    {
+      "id": "nccl-graph-search-channels",
+      "claim": "固定 NCCL ncclTopoCompute 通过 followPath 扣减底层链路 remBw 执行回溯搜索：按架构 speedArray 从高到低尝试 bwIntra/bwInter，先约束 sameChannels=1 与 crossNic=0（要求本机进出 NET 相同），失败后再放宽 sameChannels、路径类型上限与 crossNic=1，并在通道数不足半数时复制通道并将每通道带宽折半。",
+      "source_ids": ["nccl-graph-header", "nccl-topo-header", "nccl-graph-search"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "静态固定 commit 代码分析，未在实机拓扑上导出运行时 graph XML 或实测回溯耗时。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit source reading of src/include/graph.h, src/graph/topo.h, and src/graph/search.cc"
+    },
+    {
+      "id": "nccl-rings-connect-layout",
+      "claim": "固定 NCCL connect.cc 与 rings.cc 通过 allGather3Data 全局收敛各节点最小 nChannels 与最小 bwIntra/bwInter，并将每节点每 Channel 的 ringRecv（首 GPU）、ringIntra（机内链）和 ringSend（尾 GPU）首尾拼接为全局 Ring 或机间双二叉树 Tree。",
+      "source_ids": ["nccl-graph-connect", "nccl-graph-rings"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "单节点局部拓扑降级会通过全局最小收敛拉低整个 communicator 的 nChannels；未做实机故障注入。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit source reading of src/graph/connect.cc and src/graph/rings.cc"
+    },
+    {
+      "id": "nccl-rail-plane-pxn",
+      "claim": "固定 NCCL topo.cc 与 paths.cc 通过 mirrorBits 对称掩码与 ncclTopoSortDevsByRailPlane 排序分散不同 Channel 的 NIC 选择，并在满足 NVLink peer 到目标 NIC 为 PIX/PXB 时将 GPU->NET 发送路径单向改写为 PATH_PXN，但接收方向不支持相同远端 PXN 代理。",
+      "source_ids": ["nccl-topo-rail-plane", "nccl-topology-paths", "nccl-graph-search"],
+      "status": "implementation",
+      "artifacts": ["docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "PXN 消耗机内 NVLink 与代理 GPU 资源；未在物理多 Rail 交换机上实测拥塞改善幅度。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit source reading of src/graph/topo.cc, src/graph/paths.cc, and src/graph/search.cc"
+    },
+    {
+      "id": "rail-channel-cut-offline",
+      "claim": "原创合成多通道/多 Rail/机内瓶颈 cut 算例（p=8, S=1 GiB, C=4, 单 NIC 50 GB/s）：4 张 Rail NIC 对齐（crossNic=0）将 NIC 时间下界从单 NIC 的 0.03758096384 s 降为 0.00939524096 s；跨 Rail 偏斜使下界回升至 0.01879048192 s；若机内有向边退化为 32 GB/s（PATH_PHB）且被 4 通道叠加穿过，机内下界 0.058720256 s 反超网络成为主导瓶颈。",
+      "source_ids": ["nccl-graph-search", "nccl-graph-rings"],
+      "status": "own-offline",
+      "artifacts": ["experiments/rail_channel_cut/run.py", "experiments/rail_channel_cut/input.json", "experiments/rail_channel_cut/results.json", "experiments/rail_channel_cut/README.md", "docs/components/nccl-graph-channel-mapping.md"],
+      "limitations": "CPU/offline 理想等分算例；不含协议头、LL/LL128、PXN 转发开销或交换机拥塞，非实机测量。",
+      "verified_at": "2026-10-14",
+      "verifier": "Original standard-library calculation with independent unit tests in tests/test_rail_channel_cut.py"
+    },
+    {
+      "id": "fireworks-m3-sparse-sm100",
+      "claim": "Fireworks 公开的 SM100 M3 Block-Sparse Attention 采用 KV-outer 四阶段流水线：先由 5 个 CuTe-DSL kernel 将 Query Top-k 选择转置为带热点副本拆分（replica_threshold=128）的 CSR 反向索引，再经 LPT 贪心负载均衡分配至 148 个持久 CTA 执行 SparseKVOuterForward 与 LSE combine。",
+      "source_ids": ["fireworks-m3-sparse-doc"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态源码与设计文档核验；稀疏索引构建本身有 5 个预处理 kernel 开销，短序列或高选中率下未必优于稠密 Attention。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of fw-ai/minimax-kernels docs/m3-sparse-attention.md"
+    },
+    {
+      "id": "fireworks-b200-author-bench",
+      "claim": "Fireworks 作者披露的 B200（148 SMs, CUDA 13.0）评测区分了理想冷存单次读写带宽（fbw1x，约 2.88–3.12 TB/s）与计入跨 KV 分区重复访问的算法流量带宽（fbwAct，约 5.10–5.75 TB/s），在 Sq=Skv=32768 下达到 458–724 TFLOP/s 有效算力。",
+      "source_ids": ["fireworks-b200-perf-doc"],
+      "status": "author-benchmark",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "作者在 B200 上的评测报告（author-benchmark），非本仓库独立硬件复现；fbwAct 包含 L2 缓存支撑的重复访问，不能直接等同物理 HBM 引脚带宽。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of fw-ai/minimax-kernels docs/perf-results-b200.md"
+    },
+    {
+      "id": "fireworks-locust-cache-bench",
+      "claim": "Fireworks 开源压测客户端通过 prompt_cache_max_len 显式构造固定长度共享前缀（common_tokens）与随机后缀拼接，以受控方式分离 Prefix Cache 命中率对 TTFT 与吞吐的影响。",
+      "source_ids": ["fireworks-locust-load-test"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "仅核验压测负载生成机制，未对线上 API 执行压测。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of fw-ai/benchmark llm_bench/load_test.py"
+    },
+    {
+      "id": "together-fa3-hopper-async",
+      "claim": "FlashAttention-3 利用 Hopper Producer-Consumer Warp-Specialization（TMA 异步加载与 WGMMA 计算分离、setmaxnreg 寄存器重分配）、2-Stage GEMM-Softmax 跨迭代重叠以及 FP8 非相干块量化，在作者 H100 测试中将 FP16 Attention 推至最高 740 TFLOP/s。",
+      "source_ids": ["together-fa3-paper"],
+      "status": "author-benchmark",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "论文规范与作者 H100 跑分（author-benchmark），高度依赖 SM90 硬件特性（WGMMA/TMA），不可直接外推至旧代际 GPU。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct reading of arXiv:2407.08608v2 Sections 1-4"
+    },
+    {
+      "id": "together-sequoia-spec-tree",
+      "claim": "Sequoia 用动态规划最大化给定树预算 N 与深度 d 下的期望接受 token 数 F(T)，并结合目标 GPU 验证耗时 T_verify(N) 从 Memory-bound 向 Compute-bound 过渡的硬件拐点选择最优推测树形态。",
+      "source_ids": ["together-sequoia-paper"],
+      "status": "specification",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "当目标 GPU 已处于高并发大 Batch 计算饱和区时，大树宽并行验证会显著增加 T_verify(N) 并削弱有效吞吐收益。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct reading of arXiv:2402.12374v3 Sections 1-3.2"
+    },
+    {
+      "id": "together-stripedhyena-state",
+      "claim": "StripedHyena 推理引擎在自回归解码阶段通过 step_fir（固定长度 fir_length-1 滑动窗口）与 step_iir（一阶复数极点状态递推 state = poles * state + x）将单层状态复杂度控制在关于序列长度 O(1) 常数空间；而 MoA 多模型分层扇出则会按层成倍放大总 Token 消耗与最慢节点尾延迟。",
+      "source_ids": ["together-stripedhyena-engine", "together-moa-readme"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态源码审阅，未在长序列基准上独立评测 StripedHyena 与全 Attention 模型的精度取舍。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of togethercomputer/stripedhyena engine.py and togethercomputer/MoA README.md"
+    },
+    {
+      "id": "groq-tsp-microarch-bert",
+      "claim": "Groq 第一代 TSP 芯片采用无硬件缓存、软件显式调度的 220 MiB 片上 SRAM（55 TiB/s 内部带宽、20 TiB/s 320-byte SRF 流带宽），通过 MXM/SXM/VXM 空间流水线在作者 4000 次 Batch-1 BERT-base 实测中实现 128.9 µs 平均延迟与 129.5 µs P99 延迟（仅比均值高 0.4%，唯一波动来自 PCIe Gen4 错误重传）。",
+      "source_ids": ["groq-tsp-bert-paper"],
+      "status": "author-benchmark",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "作者在 14nm TSP 上的 BERT-base 评测（author-benchmark），单芯片仅能驻留百兆字节量级权重与Scratchpad。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct full-text reading of arXiv:2206.11062v1"
+    },
+    {
+      "id": "groq-groqflow-multichip",
+      "claim": "GroqFlow 编译栈按每张芯片约容纳 50M 参数（ceil(P / 50,000,000) 向上取 2 的幂次）计算多芯片数量，采用 --partition-mode=daisy-chain 将大模型切分为多芯片流水线，并在超长程序（--large-program）时征用片上数据 SRAM 切片存放指令。",
+      "source_ids": ["groq-groqflow-build", "groq-groqflow-compile", "groq-groqflow-assemble"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "全片上 SRAM 换取极低单步延迟的代价是单芯片容量极小，大模型必须跨数十张卡串联，增加机架成本与串联故障面。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of groq/groqflow build.py, compile.py, and assemble_multichip.py"
+    },
+    {
+      "id": "cerebras-csl-wse-allreduce",
+      "claim": "Cerebras WSE2/WSE3 的 CSL 片上 AllReduce 在每个 PE 仅 48 KB 本地 SRAM 的约束下，仅使用 1 个可路由颜色（C_ROUTE）、1 对进出队列与 3 个 DSR，通过硬件控制小波（ctrl_11）与拆卸小波（Teardown Wavelet）动态重构片上 2D Mesh 路由器开关完成行归约、列归约与广播，主机到晶圆边缘 I/O 则受限于最多 16 个流式通道。",
+      "source_ids": ["cerebras-csl-allreduce-pe", "cerebras-csl-allreduce-layout", "cerebras-csl-bandwidth-test", "cerebras-csl-gemm-2d"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "仅当权重与状态常驻晶圆 48 KB/PE 分布式 SRAM 时才具备晶圆级带宽优势；跨主机边缘流式换入受限于 H2D/D2H 通道数。",
+      "verified_at": "2026-10-14",
+      "verifier": "Direct fixed-commit reading of Cerebras/sdk-examples allreduce, gemm-collectives_2d, and bandwidth-test"
     }
   ]
 }

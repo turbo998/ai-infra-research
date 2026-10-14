@@ -16,10 +16,13 @@
 | [互连与网络分层](docs/components/interconnect-network.md) | NVLink/NVSwitch、IB/RoCE/RDMA、NCCL 及固定源码分析 |
 | [RDMA 接口生命周期](docs/components/rdma-lifecycle.md) | PD/MR/QP/CQ、WR/WC、缓冲重用、部分提交与错误边界 |
 | [NCCL topology/transport](docs/components/nccl-topology-transport.md) | 固定选型、P2P/SHM/NET、GDR/proxy、IB 完成与错误路径 |
+| [NCCL 图搜索与 Channel 映射](docs/components/nccl-graph-channel-mapping.md) | `ncclTopoCompute` 回溯搜索、`ringIntra/inter`、Rail Plane、PXN 与多通道反证 |
+| [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) | 推理加速（Fireworks / Together）与新型 AI 芯片（Groq TSP / Cerebras WSE）架构剖析 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
-| [每日研究](docs/daily/2026-10-13.md) | 最新有界研究与限制；按北京时间日期增量归档 |
+| [每日研究](docs/daily/2026-10-14.md) | 最新有界研究与限制；按北京时间日期增量归档 |
 | [原创离线实验](experiments/capacity_roofline/README.md) | 可重算的显存 payload 与 Roofline 理论界限 |
 | [Ring cut 离线算例](experiments/ring_cut/README.md) | rank 顺序、跨节点 payload 与共享 NIC 理论下界 |
+| [Rail channel cut 算例](experiments/rail_channel_cut/README.md) | 多 Channel、Multi-Rail 对齐、跨 Rail 偏斜与机内 `PATH_PHB` 瓶颈反证 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -38,6 +41,7 @@ python -m unittest discover -s tests
 python scripts\validate_research.py
 python experiments\capacity_roofline\run.py --check
 python experiments\ring_cut\run.py --check
+python experiments\rail_channel_cut\run.py --check
 python scripts\source_monitor.py
 ```
 

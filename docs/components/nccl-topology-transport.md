@@ -185,7 +185,9 @@ DMA-BUF/peermem 内核、完整 abort/drain 与 port recovery。静态读取的
 默认路径不代表具体部署的有效路径。
 
 下一研究：不运行硬件，先追 graph 如何将可行边变成 channel/rank/NIC
-映射，找出 cut 预算不能代表它的条件；另读 port-failover 状态机，检查
+映射，找出 cut 预算不能代表它的条件（已完成静态拆解与多通道/多 Rail/机内瓶颈反证算例，见
+[NCCL 图搜索与 Channel 映射](nccl-graph-channel-mapping.md) 与
+[`experiments/rail_channel_cut`](../../experiments/rail_channel_cut/README.md)）；另读 port-failover 状态机，检查
 重传、完成计数和 cleanup 的不变量。以后获批硬件时，固定 workload/
 拓扑/版本，对“路径改变是否改善 SLO-goodput”作有失败分母的对照实验；
 若路径没变、CPU proxy 更紧或质量不达标，就反驳仅凭峰值/GDR 名称的收益。

@@ -66,3 +66,31 @@ CUDA stream 完成？
 4 倍只是该共享资源下界比，不能称实际加速比；全机内网络下界 0 不表示
 collective 时间 0。满分须保留 closed-loop、单方向、GB/GiB、独立 NIC/
 多 channel/其他算法的反例及质量/SLO 缺口。用户掌握仍未评估。
+
+## 10. 多 Channel、Multi-Rail 与机内 `PATH_PHB` 反证
+
+8 ranks（A/B 各 4 GPUs），`S = 1 GiB`，`C = 4` Channels，单张 NIC 单向
+`50 GB/s`。为什么 4 张 Rail NIC 对齐（`crossNic = 0`）能把 NIC 下界从
+`0.03758096384 s` 降到 `0.00939524096 s`，但一旦机内 `ringIntra` 某条
+边跨 `PATH_PHB`（`32 GB/s`）且被 4 个 Channel 叠加穿过，联合下界反而变成
+`0.058720256 s`？
+
+答案见 [NCCL 图搜索与 Channel 映射](../components/nccl-graph-channel-mapping.md)
+与 [原创 Rail channel cut](../../experiments/rail_channel_cut/README.md)。
+满分需指出：(1) 每 Channel 每条有向边发送量为 `0.4375 GiB`；(2) `crossNic=1`
+偏斜会让最忙单张 NIC 重回 `0.875 GiB`（`18.79 ms`）；(3) 机内瓶颈边叠加 4 个
+Channel 后的 `1.75 GiB / 32 GB/s = 58.72 ms` 解释了 `ncclTopoCompute`
+优先按 `speedArray` 搜索高 `bwIntra` 的机理。
+
+## 11. GPU HBM 推理栈 vs 片上 SRAM / 晶圆级芯片（Fireworks / Together / Groq / Cerebras）
+
+阅读 [AI Infra 创新公司深挖](../components/ai-infra-innovators.md)：
+(1) 按 `groqflow` 的 `calculate_num_chips`（每芯片 `50M` 参数并向上取 2 的幂次），
+8B 参数模型需要多少张 TSP 芯片串联？为什么单芯片 `220 MiB` SRAM 带来极低确定性尾延迟，
+却在超长上下文或多模型混部时面临容量墙？
+(2) 对比 Fireworks SM100 M3 `KV-outer` 块稀疏 Attention 与 Together Sequoia
+硬件感知推测解码树，说明二者分别在什么序列长度或 Batch 区间会失去收益？
+
+评分看是否明确区分 `fio1x` 与 `fbwAct`、Sequoia 验证延迟的 Roofline 拐点、
+Groq PCIe replay 唯一外部抖动源，以及 Cerebras WSE 单 PE `48 KB` SRAM 与
+主机边缘 `H2D/D2H`（`<= 16` 通道）的边界。用户掌握状态仍为 `not-assessed`。
