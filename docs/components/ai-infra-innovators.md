@@ -180,4 +180,16 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
 2. **Speculative Decoding 拐点分析**：根据 Sequoia 的加速比公式，为什么当目标 GPU 已经处于高 Batch 饱和状态（Compute-bound）时，继续开启大树宽的 Speculative Decoding 反而会降低系统整体吞吐（Goodput）？
 3. **KV-Outer 稀疏 Attention 边界**：在 Fireworks M3 Sparse Attention 中，为什么需要 Stage 1 的 `CountEdges` 对单个 KV 块设置 `replica_threshold = 128` 并做 Stage 2 的 LPT 负载均衡？如果所有 Query 块都集中命中最初的 4 个 System Prompt KV 块（Attention Sink）且不做副本拆分，B200 的 148 个 SM 会发生什么现象？
 
+### 6.3 合成离线实验对照（`experiments/innovator_arch_tradeoffs/`）
+
+为把上述四家创新公司的架构机制转化为可复算的定量边界，本仓库新增了原创标准库 CPU/offline 实验 [`experiments/innovator_arch_tradeoffs/`](../../experiments/innovator_arch_tradeoffs/README.md)（证据等级：`own-offline`，不声称硬件实测）：
+
+1. **Fireworks M3 `KV-Outer` 字节账本精确复现（对齐 `docs/perf-results-b200.md` 与 `b300.md`）**：
+   - 在 `Tq=4096, KV=32768, Hq=16, Hkv=1, topK=16, D=128, BF16, distinct_blocks=16 (M=4096)` 场景下，离线公式精确重算出 `fio1x = 0.295 GB`、`fioAct = 0.546 GB`、`cio = 0.294 GB`，与作者公布的 B200（`fwd_dev = 0.102 ms, 674 TFLOP/s, fbwAct = 5.36 TB/s`）及 B300（`fwd_dev = 0.091 ms, 758 TFLOP/s, fbwAct = 6.02 TB/s`）报告中的分析字节数完全一致；相比无 KV 复用基线（`ioAlt = 4.588 GB`）节省 **`8.40x`** 总前向 HBM I/O。
+   - 完整的 ATen $\to$ CuTe AOT C-ABI $\to$ TMA Swizzle $\to$ SM100 `tcgen05` / `TMEM` 512 线程寄存器重分配（`176/176/96/64`）分派链路见 [张量 Layout/Dtype 到编译器与 SM100 Kernel 的分派链路](kernel-dispatch-layout.md)。
+2. **Together Sequoia 投机树验证的 Roofline 拐点反例**：
+   - 对 `70B FP16`（`140 GB` 权重，H100 级 `3.35 TB/s` HBM、`989 TFLOP/s` 峰值，拐点 `295.22 FLOP/B`），`K = 64` 投机树验证处于 Memory-bound 区间（算术强度 `64 FLOP/B`），期望接受 `4.2` tokens 时净吞吐提升 **`3.88x`**；但若盲目将树宽扩至 `K = 512`（算术强度 `512 FLOP/B > 295.22 FLOP/B`），验证阶段跨过 Roofline 拐点变为 Compute-bound（单步耗时从 `45.29 ms` 飙升至 `78.48 ms`），净加速比反而倒退至 **`2.94x`**。
+3. **Groq LPU 与 Cerebras WSE-3 的单单元 SRAM 容量边界**：
+   - 对 `70B INT8`（`70 GB` 权重，按 `75%` 权重可用率扣除激活/KV/指令区），单颗 Groq TSP/LPU（`220 MiB` SRAM）至少需 **`405` 颗芯片**串联才能实现纯片上 SRAM 驻留；单片 Cerebras WSE-3（`44 GB` 片上 SRAM，可用约 `33 GB`）同样超过单晶圆纯 SRAM 驻留上限（需 `>= 3` 片晶圆或依赖 MemoryX 外部流式权重加载）。
+
 练习状态：`not-assessed`。后续可证伪研究问题已登记至 [`research/queue.json`](../../research/queue.json)。

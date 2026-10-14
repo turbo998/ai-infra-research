@@ -18,10 +18,10 @@ flowchart LR
 | 阶段 | 先修与学习 | 验收 |
 |---|---|---|
 | A. 工作负载语言 | 矩阵形状、attention、KV、前向/反向、精度与质量 | 解释 prefill/decode 为什么是不同资源问题，画张量/状态路径 |
-| B. 单 GPU | SM/warp、kernel、寄存器、shared memory、cache/HBM、coalescing、spill | 用 [GPU/HBM 报告](../components/gpu-hbm.md) 找出“local memory 是片上内存”等误解 |
-| C. 容量与带宽 | 权重/激活/KV/优化器/工作区、GB/GiB、Roofline | 独立复算 [离线实验](../../experiments/capacity_roofline/README.md)，列出它不能证明什么 |
+| B. 单 GPU | SM/warp、kernel、寄存器、shared memory、cache/HBM、coalescing、spill、AOT/TMA/`tcgen05` 分派 | 用 [GPU/HBM 报告](../components/gpu-hbm.md) 与 [Kernel 分派链路](../components/kernel-dispatch-layout.md) 找出“local memory 是片上内存”等误解并解释 64K 寄存器重分配 |
+| C. 容量与带宽 | 权重/激活/KV/优化器/工作区、GB/GiB、Roofline | 独立复算 [离线实验](../../experiments/capacity_roofline/README.md) 与 [Innovator 权衡算例](../../experiments/innovator_arch_tradeoffs/README.md)，列出它不能证明什么 |
 | D. 多 GPU | P2P/NVLink/PCIe、AllReduce/AllGather/ReduceScatter、TP/DP/PP/EP | 从 [分层报告](../components/interconnect-network.md) 推导 Ring 通信量并说明适用条件 |
-| E. 多节点 | MR/PD/QP/CQ、verbs、IB/RoCE、GPUDirect、拓扑/拥塞 | 阅读 [NCCL 固定路径](../components/nccl-topology-transport.md)与 [图搜索/Channel 映射](../components/nccl-graph-channel-mapping.md)，独立复算 [Ring cut](../../experiments/ring_cut/README.md) 与 [Rail channel cut](../../experiments/rail_channel_cut/README.md)，设计区分回退/拥塞/负载不均的诊断证据 |
+| E. 多节点 | MR/PD/QP/CQ、verbs、IB/RoCE、GPUDirect、拓扑/拥塞、Port-Failover | 阅读 [NCCL 固定路径](../components/nccl-topology-transport.md)、[图搜索/Channel 映射](../components/nccl-graph-channel-mapping.md)与 [IB Port-Failover 不变量](../components/nccl-port-recovery-invariants.md)，独立复算 [Ring cut](../../experiments/ring_cut/README.md)、[Rail channel cut](../../experiments/rail_channel_cut/README.md) 与 [IB failover invariants](../../experiments/ib_failover_invariants/README.md)，设计区分回退/拥塞/负载不均的诊断证据 |
 | F. 训练与推理平台 | FSDP/ZeRO、MoE、batching/KV、checkpoint、调度/隔离、创新推理栈与非 GPU 芯片 | 结合 [AI Infra 创新公司深挖](../components/ai-infra-innovators.md)，设计有 SLO/质量门槛、存储层次取舍、通信域、故障域和恢复步骤的系统 |
 | G. 架构专家能力 | 真实 profiling/故障演练、成本/功率、论文质疑 | 带证据评审方案，能提出反例和最小可证伪实验 |
 

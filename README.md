@@ -17,12 +17,16 @@
 | [RDMA 接口生命周期](docs/components/rdma-lifecycle.md) | PD/MR/QP/CQ、WR/WC、缓冲重用、部分提交与错误边界 |
 | [NCCL topology/transport](docs/components/nccl-topology-transport.md) | 固定选型、P2P/SHM/NET、GDR/proxy、IB 完成与错误路径 |
 | [NCCL 图搜索与 Channel 映射](docs/components/nccl-graph-channel-mapping.md) | `ncclTopoCompute` 回溯搜索、`ringIntra/inter`、Rail Plane、PXN 与多通道反证 |
+| [NCCL IB Port-Failover 与异步恢复不变量](docs/components/nccl-port-recovery-invariants.md) | `RDMA_READ` 完成位图探测、`activeQps[]` 选择性重传、有符号完成计数与 `IBV_QPT_UC` 端口恢复 |
+| [张量 Layout/Dtype 与 SM100 Kernel 分派链路](docs/components/kernel-dispatch-layout.md) | ATen 步长置换、CuTe AOT C-ABI、TMA Swizzle、Tile-Ordered Partials 与 SM100 `tcgen05`/`TMEM` 寄存器重分配 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) | 推理加速（Fireworks / Together）与新型 AI 芯片（Groq TSP / Cerebras WSE）架构剖析 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-14.md) | 最新有界研究与限制；按北京时间日期增量归档 |
 | [原创离线实验](experiments/capacity_roofline/README.md) | 可重算的显存 payload 与 Roofline 理论界限 |
 | [Ring cut 离线算例](experiments/ring_cut/README.md) | rank 顺序、跨节点 payload 与共享 NIC 理论下界 |
 | [Rail channel cut 算例](experiments/rail_channel_cut/README.md) | 多 Channel、Multi-Rail 对齐、跨 Rail 偏斜与机内 `PATH_PHB` 瓶颈反证 |
+| [IB failover invariants 算例](experiments/ib_failover_invariants/README.md) | NCCL 端口故障转移的 CQ/RQ 容量放大、选择性重传与有符号事件守恒验证 |
+| [Innovator arch tradeoffs 算例](experiments/innovator_arch_tradeoffs/README.md) | Fireworks KV-Outer 字节账本、Together Sequoia 投机树 Roofline 与 Groq/Cerebras SRAM 边界 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -42,6 +46,8 @@ python scripts\validate_research.py
 python experiments\capacity_roofline\run.py --check
 python experiments\ring_cut\run.py --check
 python experiments\rail_channel_cut\run.py --check
+python experiments\ib_failover_invariants\run.py --check
+python experiments\innovator_arch_tradeoffs\run.py --check
 python scripts\source_monitor.py
 ```
 
