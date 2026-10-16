@@ -9,10 +9,10 @@
 | 2. 内存 | SRAM/L1/L2、HBM、DDR、CXL、KV、量化 | 容量、带宽、访问合并、数据复用、spill 的关系？ | 基础与算术实验；HBM 标准/代际完整比较未完成 |
 | 3. Scale-up | PCIe、NVLink/NVSwitch、P2P、coherence、开放互连 | 通信域、访问语义和拓扑怎样影响 TP/EP？ | [分层与历史结构样例](components/interconnect-network.md)；最新产品规格待核验 |
 | 4. Scale-out | IB、Ethernet/RoCEv2、RDMA、NIC/HCA/DPU、verbs、GPUDirect RDMA、Clos/fat-tree/rail | 注册/队列/完成、超售、拥塞、路由怎样影响 collectives？ | [接口生命周期](components/rdma-lifecycle.md)、[NCCL 核心静态路径](components/nccl-topology-transport.md)、[图搜索/Channel 映射](components/nccl-graph-channel-mapping.md)与 [IB Port-Failover/异步恢复不变量](components/nccl-port-recovery-invariants.md)；硬件实测待授权 |
-| 5. 存储 | NVMe、对象存储、Lustre、checkpoint、预取、GPUDirect Storage | 数据加载、持久化和恢复是否串行化训练？ | Queue 待研究；checkpoint 吞吐/恢复预算 |
+| 5. 存储 | NVMe、对象存储、Lustre、checkpoint、预取、GPUDirect Storage | 数据加载、持久化和恢复是否串行化训练？ | [GDS `cuFile` DMA 与 PyTorch DCP 分布式 Checkpoint/恢复契约](components/storage-checkpoint.md)及 [Checkpoint 恢复离线算例](../experiments/checkpoint_recovery/README.md)已完成；并行文件系统实机压测待授权 |
 | 6. 执行软件 | CUDA/ROCm、compiler、cuBLAS/hipBLAS、CUTLASS/Triton/CuTe-DSL、CSL/GroqAPI | 形状/布局如何决定 dispatch、融合、精度与实际 kernel？ | [张量 Layout/Dtype 到 CuTe AOT 与 SM100 `tcgen05` 分派链路](components/kernel-dispatch-layout.md)及 [FA3 / Fireworks SM100 M3 / CSL / GroqAPI 源码分析](components/ai-infra-innovators.md)已完成 |
-| 7. 训练系统 | DP/DDP、FSDP/ZeRO、TP/PP/CP/EP、NCCL/RCCL、Megatron/DeepSpeed | 状态分片、通信和拓扑如何联合设计？ | Collective 基础已读；训练方案比较待研究 |
-| 8. 推理系统 | vLLM/SGLang/TensorRT-LLM、continuous batching、PagedAttention、speculation、P/D 分离、Fireworks/Together | TTFT、TPOT、质量、KV 传输与成本怎样权衡？ | 显存/带宽基础与 [Sequoia 推测树 / StripedHyena / Prefix Cache 压测分析](components/ai-infra-innovators.md)；vLLM/SGLang 深入对比待推进 |
+| 7. 训练系统 | DP/DDP、FSDP/ZeRO、TP/PP/CP/EP、NCCL/RCCL、Megatron/DeepSpeed | 状态分片、通信和拓扑如何联合设计？ | Collective 与 DCP 存储契约已读；`training-parallelism` 联合状态/通信账本已解锁待推进 |
+| 8. 推理系统 | vLLM/SGLang/TensorRT-LLM、continuous batching、PagedAttention、speculation、P/D 分离、Fireworks/Together | TTFT、TPOT、质量、KV 传输与成本怎样权衡？ | [vLLM V1 统一调度、KV Cache 生命周期与 SLO/Goodput 边界](components/inference-slo.md)、[Inference SLO 离线算例](../experiments/inference_slo_scheduler/README.md)及 [Sequoia / StripedHyena / M3 分析](components/ai-infra-innovators.md)已完成 |
 | 9. 调度与运维 | Kubernetes/Slurm、Operator/device plugin、GPU 分区、quota、DCGM/ROCm tools/Prometheus | 碎片、多租户、拓扑感知、兼容、故障/升级如何处理？ | Queue 待研究；控制面与运维 runbook |
 | 10. 经济性与设施 | 容量/TCO、功率、机架密度、液冷、供电、故障域 | 何时更多 GPU 无效？SLO 如何映射成完整机架与资源预算？ | Queue 待研究；设计约束，不做施工/芯片制造认证 |
 

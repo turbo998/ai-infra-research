@@ -120,3 +120,25 @@ Groq PCIe replay 唯一外部抖动源，以及 Cerebras WSE 单 PE `48 KB` SRAM
 答案：(1) `.permute(0, 2, 1, 3)` 仅重排 `sizes/strides` 元数据，最后一维 `128` 仍保持连续 `stride = 1`，满足 TMA 16B 向量化对齐与 CuTe AOT ABI 省略末维步长的契约；
 (2) `fio1x = 0.295 GB`，`fioAct = 0.546 GB`（因 `Q` 按 tile 重流式读取 `0.268 GB`），`ioAlt = 4.588 GB`（节省 `8.40x`）。SM100 将 $S/P$ 与 $O$ 累加器放入片上 `TMEM`，使 `mma` 与 `load` warps 仅需 `64` 个寄存器，从而把 `176` 个寄存器让给算术密集的 `softmax0/1` warpgroups，且总和 $128\times(176+176+96+64) = 65536$ 恰好占满单 SM 寄存器池。用户掌握状态仍为 `not-assessed`。
 
+## 14. PyTorch DCP 跨 Rank 去重均衡、`BlockingAsyncStager` 与 `_OverlappingCpuLoader` 退回反例
+
+阅读 [数据加载与分布式 Checkpoint/恢复契约](../components/storage-checkpoint.md)
+与 [Checkpoint recovery 算例](../../experiments/checkpoint_recovery/README.md)：
+64 卡（`DP = 8, TP = 4, PP = 2`）训练任务中，每个 `(tp, pp)` 副本组（共 8 组）包含 `35 GiB` 仅跨 TP/PP 分片但跨 DP 完全重复的张量，以及 `87.5 GiB/组` 额外按 `DP = 8` 切分的 ZeRO-1 优化器状态。
+求：(1) 未去重落盘总字节、去重后唯一落盘总字节，以及 `save_to_lowest_rank = True` 与 `False`（均衡指派）下最慢 Rank 的写出字节；
+(2) 为什么为了加速加载而预先把 `state_dict` 放在 Pinned CPU 内存中，在 PyTorch v2.6.0 `FileSystemReader(use_async_cpu_loader=True)` 下反而会比普通 Pageable CPU `state_dict` 更慢？
+
+答案：(1) 未去重 `5,184 GiB`；去重后唯一字节 `8 × (35 + 87.5) = 980 GiB`（`5.29x` 缩减）。若 `save_to_lowest_rank = True`，每组 `dp_rank == 0` 独自承担全部 `35 GiB` 重复分片加自身 `10.9375 GiB` 唯一分片（单 Rank `45.9375 GiB`；若集中在全局 Rank 0 则高达 `297 GiB`），而均衡指派（`save_to_lowest_rank = False`）将每 Rank 写出严格均衡到 `15.3125 GiB`；
+(2) `filesystem.py:259-265` 检查 `any(tensor.is_pinned() for tensor in state_dict.values())`，若为真则静默放弃 `_OverlappingCpuLoader`（磁盘读取与 `non_blocking` H2D 流水线重叠）并退回 `_SerialCpuLoader`（先全量串行读盘再拷贝）。用户掌握状态仍为 `not-assessed`。
+
+## 15. vLLM V1 统一 `token_budget` 调度、100% Prefix Cache 末块重算与 Chunked Prefill / P/D 分离
+
+阅读 [推理调度、KV Cache 生命周期与 SLO/Goodput 边界](../components/inference-slo.md)
+与 [Inference SLO scheduler 算例](../../experiments/inference_slo_scheduler/README.md)：
+(1) 当新到达的 `2,048-token` Prompt 在 `KVCacheManager.get_computed_blocks` 中 100% 命中已缓存的 `128` 个物理块（`block_size = 16`）时，为什么 `vllm/v1/core/sched/scheduler.py:265-275` 必须将 `num_computed_tokens` 减 1 并对第 128 个块执行 `unTouch` + `pop`？
+(2) 在 `32` 条活跃 Decode 流（每流 `2,048` tokens，每步耗费 `32` 个 `token_budget`）运行的实例上，若到达一条未命中缓存的 `8,192-token` 长 Prompt，对比无分块内联 Prefill、`max_num_batched_tokens = 2,048` 的 Chunked Prefill 与 P/D 分离（跨实例 `400 Gbps` RDMA 传输 `2.50 GiB` KV Cache），说明三者对在途 Decode TPOT 与新请求 TTFT 的权衡。
+
+答案：(1) Prefix Cache 中只保存历史块的 Key/Value 张量，不保存末位置的采样 logits；回退 1 个 token（`2047`）使 `num_new_tokens = 1`，并且因为 `2047` 使末块不再填满，必须将其 `ref_cnt` 减 1 归还空闲池并重新分配可写块以完成最后 1 个 token 的前向传播与槽位写回；
+(2) 无分块内联 Prefill 令单步耗时飙升至 `441.91 ms`（严重违反 `50 ms` TPOT SLO）；Chunked Prefill 将单步 Prefill 截断为 `2,016` tokens，使同批次 Decode 最大 TPOT 压回 `45.01 ms`（分 5 步完成 Prefill，TTFT `183.75 ms`）；P/D 分离彻底消除 Prefill 对 Decode 实例的算力挤占（Decode 最大 TPOT `15.11 ms`），但需承担 `2.50 GiB / 50 GB/s = 50.00 ms` 的跨实例 KV 传输延迟（总 TTFT `221.66 ms`）。用户掌握状态仍为 `not-assessed`。
+
+

@@ -1,12 +1,14 @@
 # AI Infra 创新公司深挖：推理加速平台（Fireworks / Together）与新型 AI 芯片（Groq / Cerebras）
 
-状态：2026-10-14，基于固定开源代码提交与同行评审/预印本论文正文的**有界公开研究**。
+状态：2026-10-16（持续更新自 2026-10-14），基于固定开源代码提交与同行评审/预印本论文正文的**有界公开研究**。
 先修：[GPU/HBM 深入研究](gpu-hbm.md)、[互连与网络分层](interconnect-network.md)。
 **严格边界声明**：本文仅依据公开源码（`implementation`）、架构论文（`specification` / `author-benchmark`）及本仓库合成公式推导立论；**未调用任何商业付费 API，未在 B200/H100/Groq LPU/Cerebras WSE 硬件上实测**，作者披露的跑分均显式标注为 `author-benchmark`，绝不冒充本项目独立重测（`own-hardware`）。
 
 证据 ID：`fireworks-m3-sparse-sm100`、`fireworks-b200-author-bench`、`fireworks-locust-cache-bench`、
+`fireworks-m3-ancillary-cute-pipeline`、
 `together-fa3-hopper-async`、`together-sequoia-spec-tree`、`together-stripedhyena-state`、`together-moa-fanout`、
-`groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`。
+`groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`、
+`cerebras-csl-gemv-2d-collectives`。
 来源行范围、commit SHA 与发布日期见 [sources](../../research/sources.json)；主张与证据类型见 [evidence](../../research/evidence.json)。
 
 ---
@@ -66,9 +68,30 @@ M3 采用 **KV-outer（以 KV 块为外循环）** 反向索引与双后端（C+
 
 ### 2.3 `fw-ai/benchmark`：Prefix Cache 控制变量与推理负载生成
 
-在 [`fw-ai/benchmark@94cd111967c7be51a35777c475d7c5d2b66ec94a`](https://github.com/fw-ai/benchmark/blob/94cd111967c7be51a35777c475d7c5d2b66ec94a/llm_bench/load_test.py)（`2026-04-16`，`implementation`）中，`llm_bench/load_test.py` 展示了推理平台压测最容易失真的变量控制：
+在 [`fw-ai/benchmark@94cd111967c7be51a35777c475d7c475d2b66ec94a`](https://github.com/fw-ai/benchmark/blob/94cd111967c7be51a35777c475d7c5d2b66ec94a/llm_bench/load_test.py)（`2026-04-16`，`implementation`）中，`llm_bench/load_test.py` 展示了推理平台压测最容易失真的变量控制：
 - 若每次请求使用完全相同的 prompt，服务端 Prefix Cache（RadixAttention / Prompt Cache）会 100% 命中，测出的 TTFT 只是缓存读取延迟而非真实 Prefill 算力；
 - 该代码通过 `--prompt-cache-max-len` 显式构造 `common_tokens`（共享前缀长度）与每次随机采样的后缀 token 拼接（`TranslationDataset.sample`），并分别上报 `time_to_first_token`（TTFT）、`latency_per_token`（TPOT）、`generation_tokens_per_second` 与 `full_tokens_per_second`。这验证了评估任何商用推理 API 时，**必须显式锁定共享前缀比例（Prefix Cache Hit Ratio）与输出长度分布**。
+
+### 2.4 源码深挖（2026-10-16 新增）：CuTe-DSL 辅助管线如何消除原子争用、D2H 同步与中间归一化开销？
+
+进一阅读固定提交 `fw-ai/minimax-kernels@b60c3f290f3eb7227d23b50f169e5145d3326288` 下的三份核心 CuTe-DSL 源码，可以定位块稀疏 Attention 在 GPU 端落地的三个微观工程瓶颈及其解法：
+
+1. **自适应原子计数私有化与共享内存 Hillis-Steele 扫描（[`build_kvouter_index.py`](https://github.com/fw-ai/minimax-kernels/blob/b60c3f290f3eb7227d23b50f169e5145d3326288/py/minimax_kernels/m3_sparse_attention/build_kvouter_index.py)，`blob: e7edfbf3f279c1e76c0febfdfea997c77b9eda2d`）**：
+   - **问题**：当 `Tq` 很大但 KV 块槽位数 `nbins = Hkv * num_block_slots` 较少（或大量 Query 集中命中热点 Attention Sink 块）时，`edges = Tq * Hkv * topK` 条边对同一个全局 `mCount[h_kv, edge_slot]` 执行 `atomic_add` 会引发严重的 L2 原子串行化。
+   - **源码实现（`L34–59, L266–348, L416–453`）**：`_adaptive_replicas(edges, nbins)` 根据平均争用度动态选取 2 的幂次副本数 $R \in [16, 128]$，使每个副本计数器的期望边数贴近 `_COUNT_TARGET_CONTENTION = 4`：
+     $$R = \text{ clamp}_{[16, 128]}\!\left(2^{\lceil \log_2(\text{edges} / (\text{nbins} \times 4)) \rceil}\right)$$
+   - 在 `_CountEdgesKernel` 中，CTA `bidx` 将原子加分散写入 `mCount[h_kv, edge_slot, bidx % R]`（`sem="relaxed", scope="gpu"`）；紧接着 `_ReduceReplicasKernel` 启动 **`grid = [Hkv * num_block_slots, 1, 1]`（每个 `(hkv, slot)` 独占一个 CTA）**，在 Shared Memory 中对 $R$ 个副本执行 $\log_2 R$ 步 **Hillis-Steele 闭区间前缀扫描**，把每个副本的原值原地改写为其槽位内排他偏移基址（`mCount[h, slot, tidx] = Int32(s[tidx]) - own`），由 `_ScatterRanksKernel` 在一次无锁写入中同时生成 CSR 索引 `kv_to_q_indices_and_ranks` 与供 Combine 收集使用的逆映射表 `inv[h_kv, t, rank] = out`。
+   - **未分配物理页安全重映射（`L145–159`）**：在 Paged KV 模式下，块表未分配槽位填充为 `-1`。若直接把 `-1` 钳制到物理页 `0`，会错误读取共享池中属于其他请求的活跃第 0 页；源码显式回退到**当前序列自身的第 0 个已分配物理页 `mBlockTables[seq_id, 0]`**，再由因果掩码与 `used_kv_lens` 屏蔽越界行。
+
+2. **零 D2H 同步的单 Kernel 负载均衡器（[`sparse_fwd_kvouter_load_balance_schedule.py`](https://github.com/fw-ai/minimax-kernels/blob/b60c3f290f3eb7227d23b50f169e5145d3326288/py/minimax_kernels/m3_sparse_attention/sparse_fwd_kvouter_load_balance_schedule.py)，`blob: 2f1c47a1a44b2dfbb4a8d918ca9f579314f8e585`）**：
+   - 早期 PyTorch 实现需要 `diff + cumsum + arange + 2x searchsorted + gather + where` 共约 **8 次 Kernel 启动**并物化临时张量。
+   - `_LoadBalanceScheduler`（`L47–142`）利用 `kv_to_q_offsets[h]` 本身已是单 KV 头内单调前缀和的性质，在 Host 侧按最大容量上界计算每 Split 配额 $\text{nqps} = \lceil (H_{kv} \cdot T_q \cdot \text{topK}) / \text{num\_splits} \rceil$（无需任何 Device$\to$Host 拷贝），仅启动 **1 个 CuTe Kernel**：每个线程对应一个 Split $s$，先用编译期展开的 $H_{kv}$ 步扫描定位 `head`，再用固定 `_SEARCH_ITERS = 32` 步幂等二分查找定位 `(blk, q)` 起点与终点，复杂度 strictly $O(H_{kv} + \log_2 \text{nbs})$。
+
+3. **Tile-Ordered 逆映射收集与 `exp2` 延迟归一化合并（[`sparse_fwd_kvouter_combine.py`](https://github.com/fw-ai/minimax-kernels/blob/b60c3f290f3eb7227d23b50f169e5145d3326288/py/minimax_kernels/m3_sparse_attention/sparse_fwd_kvouter_combine.py)，`blob: 4d925a73482d27b717cef54497e17f2d6ccaebe5`）**：
+   - 在 Flat（Tile-Ordered）模式下，主计算 Kernel 直接按 KV-outer 顺序紧密写出**未归一化（RAW）**的局部累加器 `O_partial`（形状 `[Hkv * Tq * topK * qhead, D]`）、以 2 为底的最大值 $\tilde{m}_s = \text{row\_max} \cdot \log_2 e$ 以及局部指数和 $l_s$，省去了主 Kernel 末尾的逐行除法。
+   - `FlashAttentionForwardCombine`（`L223–548`）通过 `p = inv[hkv, q, split]` 间接寻址每个 Query 的 `topK` 个局部结果（若 `p < 0` 表示该边被因果掩码丢弃，则向 Shared Memory 填 `0` 以避免 `NaN`），并以 Token-Major 顺序（`idx = q * num_head + head`）排布线程，使同一 Query 的 `qhead` 个 GQA 查询头在 `(hkv * G + p) * qhead + hl` 上命中**连续全局内存行**。
+   - 合并权重在单趟 FP32 归约中同时完成跨 Split 合并与最终 Softmax 归一化（`L424–446`）：
+     $$a_s = 2^{\tilde{m}_s - \tilde{M}}, \quad D = \sum_{s=0}^{\text{topK}-1} a_s \cdot l_s, \quad O = \sum_{s=0}^{\text{topK}-1} \left(\frac{a_s}{D}\right) O_{\text{partial}, s}, \quad \text{LSE} = \ln(D) + \tilde{M}\ln 2$$
 
 ---
 
@@ -159,6 +182,18 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
    - 代码通过片上 48-bit 硬件时间戳计数器（TSC，按固定 **`0.85 GHz`** 换算：`time_us = (cycles / 0.85) * 1e-3`，每个 Wavelet 为 `4 bytes`）测量主机流式吞吐：
      $$B_{\text{io}}\text{ (MB/s)} = \frac{N_{\text{wavelets}} \times 4\text{ bytes}}{T_{\text{send/recv}}\text{ (µs)}} \times N_{\text{loops}}$$
    - **架构含义**：Cerebras WSE 只有在**权重常驻晶圆片上 SRAM、避免频繁从主机流式换入权重**时才能发挥晶圆级带宽优势；一旦模型权重超出单晶圆总 SRAM 容量需要频繁跨晶圆/主机流式加载，系统吞吐会立即退化到边缘 I/O 通道上限。
+
+### 5.3 源码深挖（2026-10-16 新增）：`gemv-collectives_2d/pe.csl` 揭示的晶圆级 Batch-1 Decode 通信拓扑
+
+对比 Cerebras SDK 中的 2D 矩阵乘（`gemm-collectives_2d`）与 2D 矩阵-向量乘（[`benchmarks/gemv-collectives_2d/pe.csl`](https://github.com/Cerebras/sdk-examples/blob/d19f2ca3e51285fc5904c78643b38819a2f26c44/benchmarks/gemv-collectives_2d/pe.csl)，`blob: 64a1c2cf9ff725984254043bf6e3709ba3a90a15`），可以清晰看到晶圆级芯片在 **Batch-1 自回归 Decode（$y = Ax + b$）** 下的真实执行链路：
+- 在 $P_w \times P_h$ 的 PE 网格上，权重矩阵 $A \in \mathbb{R}^{(M_t P_h) \times (N_t P_w)}$ 被静态切分为每个 PE 本地 SRAM 中的 `A_tile`（`[Mt * Nt]f32`），**推理全过程权重 `A_tile` 零移动**。
+- 单次 GEMV 由 5 个硬件任务（`local_task_id` 9–13）通过 `collectives_2d`（`mpi_x` 行通信域与 `mpi_y` 列通信域）串联触发：
+  1. **`main()`（左列 Scatter $b$）**：仅 `px == 0` 的最左列参与 `mpi_y.scatter(0, &b_src, &b_tile, Mt, scatter_x_task_id)`，将偏置向量 $b$ 从 `PE(0,0)` 切分下发至左列各行；其余列直接激活 `scatter_x_task_id`。
+  2. **`scatter_x()`（顶行 Scatter $x$）**：仅 `py == 0` 的最顶行参与 `mpi_x.scatter(0, &x_src, &x_tile, Nt, broadcast_x_down_task_id)`，将输入激活向量 $x$ 从 `PE(0,0)` 沿水平方向切分至顶行各列。
+  3. **`broadcast_x_down()`（全列 Broadcast $x_{\text{tile}}$）**：每列以顶行 `py = 0` 为根执行 `mpi_y.broadcast(0, &x_tile, Nt, compute_task_id)`，使同一列的所有 PE 获得相同的 $N_t$ 维输入向量分片。
+  4. **`compute()`（本地 `fmacs` + 行向 `reduce_fadds`）**：每个 PE 循环 $j \in [0, N_t)$ 执行单指令流式乘加 `@fmacs(dsd_local_prod, dsd_local_prod, dsd_A_offset, x_tile[j])`，最左列 `px == 0` 叠加偏置 `@fadds(dsd_local_prod, dsd_local_prod, dsd_b_tile)`，随后整行向最右列 `Pw - 1` 发起浮点归约：**`mpi_x.reduce_fadds(Pw - 1, &local_prod, &row_sum, Mt, gather_result_task_id)`**。
+  5. **`gather_result()`（最右列 Gather $y$）**：最右列执行 `mpi_y.gather(Ph - 1, &row_sum, &final_result, Mt, EXIT)`，将完整输出向量汇聚至右下角 `PE(Pw-1, Ph-1)`。
+- **架构师核心推论**：在晶圆级 2D Mesh 上，Batch-1 Decode 的本地计算仅有 $N_t$ 条向量指令（`@fmacs` 耗时极短），而激活向量需要在每一层经历 **`scatter_x`（$P_w$ 跳）$\to$ `broadcast_y`（$P_h$ 跳）$\to$ `reduce_fadds_x`（$P_w$ 跳）** 的横纵接力。因此当模型切分跨越数千个 PE 列与行时，**单 Token 最低延迟下界不再由算术单元或 SRAM 读带宽决定，而是由 2D Mesh 横纵集体原语的跨 PE 路由跳数 $\propto (P_w + P_h)$ 决定**。
 
 ---
 

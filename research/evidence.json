@@ -336,6 +336,108 @@
       "limitations": "Python 标准库 CPU/offline 模型，不代表 GPU、Groq LPU 或 Cerebras WSE 实机端到端延迟测量。",
       "verified_at": "2026-10-14",
       "verifier": "python experiments/innovator_arch_tradeoffs/run.py --check and tests/test_innovator_arch_tradeoffs.py"
+    },
+    {
+      "id": "gds-cufile-dma-vs-compat",
+      "claim": "NVIDIA GPUDirect Storage（Release 13.2）通过 cuFile API 与 nvidia-fs.ko 内核驱动将 NVMe/Lustre/NFS DMA 映射直接指向 GPU 显存，消除传统路径的 Page Cache CPU 弹跳；但当未注册显存缓冲区（触发 GPU BAR1 内部复制）、文件偏移/大小/内存地址不满足 4 KiB O_DIRECT 对齐或开启 compat mode 时，会退化回 POSIX pread/pwrite 经主机内存拷贝的慢速路径，且跨 CPU Socket 拓扑会受制于 PCIe Root Complex。",
+      "source_ids": ["nvidia-gds-overview"],
+      "status": "specification",
+      "artifacts": ["docs/components/storage-checkpoint.md"],
+      "limitations": "基于官方架构规范文档审阅，未在物理 NVMe/GDS 节点上执行 gdsio 硬件压测。",
+      "verified_at": "2026-10-16",
+      "verifier": "Direct reading of NVIDIA GPUDirect Storage Overview Guide Release 13.2 (2026-03-12)"
+    },
+    {
+      "id": "pytorch-dcp-save-load-pipeline",
+      "claim": "PyTorch v2.6.0 Distributed Checkpoint（torch.distributed.checkpoint）通过 _DistWrapper 两阶段集体规约协调保存计划：dedup_save_plans 按分片大小降序将跨 DP 重复的 WriteItem 均衡指派给当前负载最小的 Rank，FileSystemWriter 用最小堆做 LPT 多线程分桶、64B 对齐零拷贝拼接并在最后将 .metadata.tmp 原子重命名为 .metadata；async_save 通过 BlockingAsyncStager（锁页内存池 + type_check=False 绕过 copy_ 隐式同步 + cudaStreamSynchronize）将主线程阻塞压缩至 D2H 阶段；加载端 _OverlappingCpuLoader 则受 1 GiB 驻留水位线与 Pinned CPU tensor 隐式退回 _SerialCpuLoader 的双重约束。",
+      "source_ids": [
+        "pytorch-dcp-saver",
+        "pytorch-dcp-filesystem",
+        "pytorch-dcp-planner",
+        "pytorch-dcp-dedup",
+        "pytorch-dcp-staging"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/storage-checkpoint.md"],
+      "limitations": "静态源码审阅，未在多节点 Lustre/Weka 文件系统上实测元数据重命名并发与 OST 争用。",
+      "verified_at": "2026-10-16",
+      "verifier": "Direct fixed-commit reading of pytorch/pytorch v2.6.0 torch/distributed/checkpoint source files"
+    },
+    {
+      "id": "checkpoint-recovery-offline",
+      "claim": "在 64 卡（DP=8, TP=4, PP=2）70B 级合成离线算例中，DCP dedup_save_plans 将全集群落盘字节从 5,184 GiB 降至 980 GiB（5.29x 写放大消除）并把 Rank 0 负载从 297 GiB 均衡至 15.31 GiB（19.40x 倾斜消除）；BlockingAsyncStager 将单次 Checkpoint 的训练步阻塞从 29.069 s 降至 0.659 s（44.11x 停顿缩减），Young-Daly 最优间隔从 52.53 min 缩短至 7.77 min，有效训练吞吐比从 0.8409 提升至 0.9964；同时揭示了当 state_dict 使用 pinned CPU 张量时 _OverlappingCpuLoader 静默退回串行加载使耗时从 7.367 s 增至 9.956 s 的反例。",
+      "source_ids": [
+        "pytorch-dcp-saver",
+        "pytorch-dcp-filesystem",
+        "pytorch-dcp-dedup",
+        "pytorch-dcp-staging",
+        "nvidia-gds-overview"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/checkpoint_recovery/run.py",
+        "experiments/checkpoint_recovery/results.json",
+        "docs/components/storage-checkpoint.md"
+      ],
+      "limitations": "Python 标准库确定性 CPU/offline 仿真，不代表真实并行文件系统或 GDS DMA 硬件测量。",
+      "verified_at": "2026-10-16",
+      "verifier": "python experiments/checkpoint_recovery/run.py --check and tests/test_checkpoint_recovery.py"
+    },
+    {
+      "id": "vllm-v1-scheduler-kv-mechanics",
+      "claim": "vLLM V1（v0.8.2）通过单一 token_budget（max_num_batched_tokens）统一调度 RUNNING 与 WAITING 队列：块分配失败时循环抢占 RUNNING 尾部请求（LIFO），WAITING 准入检查显式计入 num_evictable_computed_blocks 防止新请求覆盖同批次已命中缓存块，100% Prefix Cache 命中时强制回退 1 个 token 重算末块以产生采样 logits（scheduler.py:265-275），且在未绑定 KVConnector 时通过 num_preallocate_tokens=64 减少每次 Decode 的块表追加开销。",
+      "source_ids": [
+        "vllm-v1-scheduler",
+        "vllm-v1-kv-cache-manager",
+        "vllm-v1-block-pool"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/inference-slo.md"],
+      "limitations": "静态源码审阅，未在 GPU 集群上运行线上并发压测。",
+      "verified_at": "2026-10-16",
+      "verifier": "Direct fixed-commit reading of vllm-project/vllm v0.8.2 vllm/v1/core/sched/scheduler.py, kv_cache_manager.py, and block_pool.py"
+    },
+    {
+      "id": "inference-slo-scheduler-offline",
+      "claim": "在 H100 级 70B FP16 TP=4 合成离线算例中，无分块内联 8,192-token Prefill 会制造 441.91 ms 的同批次 Decode TPOT 尖峰；Chunked Prefill 将单步最大 TPOT 压回 45.01 ms（满足 <=50 ms SLO），而 P/D 分离将 Decode 实例最大 TPOT 进一步降至 15.11 ms（代价是每次跨实例迁移 2.5 GiB KV Cache 产生 50 ms RDMA 传输开销）；同时复现了 100% Prefix Cache 命中仍需 1 个 token 末块重算，以及 num_preallocate_tokens=64 在 32 并发下多预留 128 个物理块（0.4 GiB）导致第 33 个请求触发抢占的精确容量边界。",
+      "source_ids": [
+        "vllm-v1-scheduler",
+        "vllm-v1-kv-cache-manager",
+        "vllm-v1-block-pool"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/inference_slo_scheduler/run.py",
+        "experiments/inference_slo_scheduler/results.json",
+        "docs/components/inference-slo.md"
+      ],
+      "limitations": "Python 标准库确定性 CPU/offline 仿真，不代表真实 GPU 推理集群压测数据。",
+      "verified_at": "2026-10-16",
+      "verifier": "python experiments/inference_slo_scheduler/run.py --check and tests/test_inference_slo_scheduler.py"
+    },
+    {
+      "id": "fireworks-m3-ancillary-cute-pipeline",
+      "claim": "Fireworks M3 稀疏注意力的 CuTe-DSL 辅助管线通过三项设计消除预处理与归约开销：(1) build_kvouter_index.py 按 _adaptive_replicas(edges, nbins) 分配 16..128 个私有原子计数副本并在 _ReduceReplicasKernel 中用单 CTA 共享内存 Hillis-Steele 扫描归约，同时将 Paged KV 未分配槽位（-1）重映射到当前序列第 0 个已分配物理页而非全局第 0 页；(2) sparse_fwd_kvouter_load_balance_schedule.py 按静态上界 nqps=ceil(Hkv*Tq*topK/num_splits) 实现零 D2H 同步的单 Kernel 32 步幂等二分查找调度；(3) sparse_fwd_kvouter_combine.py 通过逆映射表 inv[hkv,q,s] 与 a_s=2^(m_s-M)/D 在单趟 FP32 归约中完成跨 Split 合并与延迟 Softmax 归一化。",
+      "source_ids": [
+        "fireworks-minimax-kvouter-index",
+        "fireworks-minimax-kvouter-schedule",
+        "fireworks-minimax-kvouter-combine"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态源码审阅，未在 SM100 B200/B300 硬件上执行 kernel。",
+      "verified_at": "2026-10-16",
+      "verifier": "Direct fixed-commit reading of fw-ai/minimax-kernels build_kvouter_index.py, sparse_fwd_kvouter_load_balance_schedule.py, and sparse_fwd_kvouter_combine.py"
+    },
+    {
+      "id": "cerebras-csl-gemv-2d-collectives",
+      "claim": "Cerebras WSE 的 benchmarks/gemv-collectives_2d/pe.csl 证明：在晶圆级 2D PE 网格上执行矩阵-向量乘（y=Ax+b，对应 Batch-1 Decode 线性投影）时，静态分块权重 A_tile 驻留各 PE 本地 48 KB SRAM 零移动，但输入偏置与激活向量必须串行经历左列 mpi_y.scatter、顶行 mpi_x.scatter、全列 mpi_y.broadcast、本地 Nt 步 @fmacs、全行 mpi_x.reduce_fadds 与右列 mpi_y.gather 五个阶段，因此单步 Decode 最低延迟下界受横纵跨 PE 集体路由跳数 (Pw + Ph) 支配。",
+      "source_ids": ["cerebras-sdk-gemv-2d"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态 CSL 源码分析，未在 Cerebras 模拟器或 WSE 晶圆硬件上实测。",
+      "verified_at": "2026-10-16",
+      "verifier": "Direct fixed-commit reading of Cerebras/sdk-examples benchmarks/gemv-collectives_2d/pe.csl"
     }
   ]
 }
