@@ -153,5 +153,18 @@ Groq PCIe replay 唯一外部抖动源，以及 Cerebras WSE 单 PE `48 KB` SRAM
 (2) `Shard(0)` 下 `all_gather_copy_in` 直接使用 `param_all_gather_outputs` 的底层存储作为接收缓冲（前向 2 层双缓冲 + 反向 2 层预取 + 1 层规约共 `4 × 0.875 = 3.50 GiB`）；而 `Shard(dim != 0)` 无法将分片直接拼入目标布局，必须在每层额外分配 `1` 份完整参数大小的 `all_gather_outputs` 临时缓冲再执行 `chunk + cat` 拷贝，使瞬态缓冲膨胀 `+50%` 至 `5.25 GiB`；
 (3) 未开启首尾配对时，因果掩码令 `Rank 7` 承担 $15/64$ 的全局有效计算（均值的 `1.875x`，首尾比 `15:1`），`_RoundRobinLoadBalancer` 将第 $i$ 与 $2\text{CP}-1-i$ 块配对后各 Rank 严格均衡为 `1.000x`；DeepEP v2 训练态 Compact 布局按唯一目标 EP Rank 去重发送（期望唯一目标 Rank 数 $8\times(1-(7/8)^8) = 5.251$，精确无放回 `4.9998`），将跨节点 All-to-All 载荷从 `512.0 MiB` 压至 `319.99 MiB`（节省 `37.50%`）。用户掌握状态仍为 `not-assessed`。
 
+## 17. Kubernetes Topology Manager、Slurm `topology/block` 反碎片与大规模弹性训练 Goodput
+
+阅读 [AI 集群拓扑感知调度、设备隔离与弹性恢复契约](../components/cluster-orchestration.md)
+与 [Cluster orchestration 算例](../../experiments/cluster_orchestration/README.md)：
+(1) 在双 Socket 双 NUMA（NUMA 0 挂载 GPU 0..3、NUMA 1 挂载 GPU 4..7）的 8-GPU 节点上，为什么申请 `8` 张 GPU 的整机单容器训练 Pod 在 Kubelet `--topology-manager-policy=single-numa-node` 下会被拒绝（`TopologyAffinityError`），而在 `restricted` 下能正常准入？若申请 1 张 GPU (0b01) + 1 张跨 Socket RDMA NIC (0b10)，`restricted` 会放行吗？
+(2) 在 `bblock_node_cnt = 18`、仅开放 `block_levels = [0, 2]`（即 18 节点与 72 节点两档）的 Slurm `topology/block` 集群中，提交 `20` 节点作业会锁定多少个节点的拓扑块？当提交 `16` 节点作业且 4 个基础块空闲节点数为 `[12, 16, 18, 10]` 时，`_choose_best_bblock` 为什么选 `bblock[1]`（16 空闲）而不选 `bblock[2]`（18 空闲）？
+(3) `256` 节点（单节点 `MTBF = 360 h`）同步训练任务，Checkpoint 写出 `30 s`、读取 `45 s`，对比冷节点替换（`600 s`）+ `30 min` 间隔与 `torchelastic` 4 热备节点（`45 s` 重排）+ `15 min` 间隔的集群运行 Goodput 与单配置节点净产出。
+
+答案：(1) 8-GPU 单容器的最佳对齐掩码为 `0b11`（`Count() = 2` 且 `Preferred = true`）；`single-numa-node` 在 `filterSingleNumaHints` 中强制要求 `NUMANodeAffinity.Count() == 1`，因此把 `0b11` 过滤掉并回退到 `defaultAffinity (Preferred = false)` 后拒绝 Pod；而 `restricted` 接受任意 `Preferred == true` 的最小掩码故放行 `0b11`。若 GPU (`0b01`) 与 NIC (`0b10`) 跨 NUMA，按位与结果为空集，落回 `Preferred = false`，在 `single-numa-node` 与 `restricted` 下均被拒绝；
+(2) `20` 节点需 `ceil(20/18) = 2` 个基础块（`raw_level = 1`），因未启用 Level 1 被迫向上吸附至 Level 2（4 个基础块 = `72` 节点）；`16` 节点可装入单个基础块（`required_bblocks = 1`），`_choose_best_bblock` 采用 Best-Fit 选择最小满足块 `bblock[1]`（16 节点），将完整空闲的 `bblock[2]`（18 节点）留给后续满块作业；
+(3) 256 节点聚合 `MTBF = 360 / 256 = 1.40625 h`（`5062.5 s`）。冷替换 + `30 min` 间隔下每次故障损失 `900 + 600 + 45 = 1545 s`，运行 Goodput 仅 `65.89%`；切换至 `4` 热备节点（`45 s` 恢复）+ `15 min` 间隔（接近 Young-Daly 最优 `551.14 s`）后，运行 Goodput 升至 `84.58%`，即便除以 `260` 台总配置节点分母，单配置节点净产出仍达 `83.28%`（净增 `+9.81 pts`）。用户掌握状态仍为 `not-assessed`。
+
+
 
 

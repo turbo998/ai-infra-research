@@ -495,6 +495,71 @@
       "limitations": "静态源码审阅，未在物理 GPU、GroqCard 或 Cerebras WSE 硬件上实测。",
       "verified_at": "2026-10-17",
       "verifier": "Direct fixed-commit reading of Infini-AI-Lab/Sequoia tree_search.py and SpecTree.py, groq/groqflow ignition.py, and Cerebras/sdk-examples gemm-collectives_2d/pe.csl"
+    },
+    {
+      "id": "cluster-orchestration-k8s-slurm-nvml-elastic",
+      "claim": "Kubernetes v1.37.1、Kueue v0.20.2、Slurm 26.05.5-1、NVIDIA k8s-device-plugin v0.20.1 与 PyTorch v2.6.0 torchelastic 共同确立了 AI 集群四层拓扑与容错契约：(1) Kubelet Topology Manager 的 mergePermutation 对 CPU/GPU/RDMA NIC 掩码执行按位与，仅当所有 Provider 掩码完全相等且全部 Preferred 时才置 preferred=true；single-numa-node 强制 Count()==1（会拒绝跨双 NUMA 的整机 8-GPU 单容器 Pod），而 restricted 允许跨 NUMA 的 Preferred 整机分配；(2) Kueue TAS 在节点失联时通过 HasUnhealthyNode 触发增量拓扑重算，但在 ElasticJobsViaWorkloadSlicesWithTAS 下拒绝显式 Required/Preferred 拓扑约束；Slurm topology/block 将基础块数向上取整到允许的 2^L 层级，并通过 _choose_best_bblock 在单块可容纳时选最小可用块（Best-Fit 反碎片）、单块不可容纳时选最大可用块（Largest-Fit）；(3) NVIDIA Device Plugin 默认忽略应用级 XID {13,31,43,45,68,109}，并通过 <parentUUID, GpuInstanceId, ComputeInstanceId> != 0xFFFFFFFF 将 MIG 子实例故障限制在单个切片内；(4) torchelastic 在单 Worker 异常时向本节点全组发送 SIGTERM/SIGKILL 并重跑动态 Rendezvous，而对 num_nodes_waiting() > 0 的热备节点加入免扣 remaining_restarts。",
+      "source_ids": [
+        "k8s-kubelet-topology-policy",
+        "k8s-kubelet-topology-single-numa",
+        "k8s-kubelet-topology-restricted",
+        "kueue-tas-flavorassigner",
+        "nvidia-k8s-device-plugin-health",
+        "nvidia-k8s-device-plugin-allocate",
+        "slurm-topology-block",
+        "slurm-topology-tree",
+        "pytorch-elastic-agent-api",
+        "pytorch-elastic-local-agent"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/cluster-orchestration.md"],
+      "limitations": "静态源码核验，未在生产 Kubernetes/Slurm 集群上注入硬件 XID 或断网故障。",
+      "verified_at": "2026-10-17",
+      "verifier": "Direct fixed-commit reading of kubernetes v1.37.1, kueue v0.20.2, k8s-device-plugin v0.20.1, slurm 26-05-5-1, and pytorch v2.6.0 torchelastic"
+    },
+    {
+      "id": "cluster-orchestration-offline",
+      "claim": "原创离线算例 experiments/cluster_orchestration 验证了三组核心定量边界：(1) 在双 NUMA 节点上，GPU0 (0b01) 与跨 Socket RDMA NIC (0b10) 错位导致按位与掩码为 0，被 single-numa-node 与 restricted 策略拦截；而整机 8-GPU (0b11) 在 restricted 下准入、在 single-numa-node 下因 Count()==2 被拒；(2) Slurm topology/block 在 bblock=18、block_levels=[0,2]（缺失 Level 1）时，20 节点作业被迫从 raw_level=1 向上吸附至 Level 2（72 节点聚合块），且在 16 节点单块可满足时从 [12, 16, 18, 10] 中精准选中 16 节点的 bblock[1] 以保护完整 18 节点空闲块；(3) 在 256 节点（单节点 MTBF=360h，聚合 MTBF=1.406h）同步训练中，冷节点替换（600s）+ 30min Checkpoint 下有效训练吞吐（Goodput）跌至 65.89%，而切换至 Young-Daly 最优附近（900s Checkpoint）并配 4 个 torchelastic 热备节点可将运行 Goodput 提升至 84.58%（扣除 4/260 热备节点分母后单配置节点净产出仍达 83.28%，净增 +9.81 pts）。",
+      "source_ids": [
+        "k8s-kubelet-topology-policy",
+        "k8s-kubelet-topology-single-numa",
+        "k8s-kubelet-topology-restricted",
+        "nvidia-k8s-device-plugin-health",
+        "slurm-topology-block",
+        "pytorch-elastic-agent-api"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/cluster_orchestration/run.py",
+        "experiments/cluster_orchestration/results.json",
+        "docs/components/cluster-orchestration.md"
+      ],
+      "limitations": "Python 标准库确定性 CPU/offline 算例，采用一阶泊松故障率模型，不代表特定生产集群硬件实测。",
+      "verified_at": "2026-10-17",
+      "verifier": "python experiments/cluster_orchestration/run.py --check and tests/test_cluster_orchestration.py"
+    },
+    {
+      "id": "groq-groqflow-multichip-runtime",
+      "claim": "GroqFlow 的 execute.py 与 remote.py 揭示了多芯片确定性流处理器的运行时编排契约：多卡执行前需通过 tsp.bringup_topology 初始化 Chip-to-Chip (C2C) 拓扑（如 DF_A14_2/4/8_CHIP），且由于 MultichipTSPRunner 单次调用仅推进 1 张芯片（1 个流水线阶段），单样本推理必须连续调用 num_chips 次 tsp_runner(**example) 才能排空整条 Daisy-Chain；远端执行则对全部 N 个芯片级二进制文件 output.0.iop..output.{N-1}.iop 逐一校验 MD5 数组后才允许跳过分发。",
+      "source_ids": [
+        "groq-groqflow-execute",
+        "groq-groqflow-remote"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态源码审阅，未在物理 GroqNode 机架上实测。",
+      "verified_at": "2026-10-17",
+      "verifier": "Direct fixed-commit reading of groq/groqflow groqflow/groqmodel/execute.py and remote.py"
+    },
+    {
+      "id": "cerebras-csl-sync-wse3",
+      "claim": "Cerebras SDK 的 benchmarks/bandwidth-test/src/sync/pe.csl 实现了测量微秒级 H2D/D2H 带宽前的全晶圆硬件参考时钟对齐：通过行向奇偶双色（C0/C1）东->西归约、首列奇偶双色（C2/C3）南->北归约至左上角 P(0,0)、再由 P(0,0) 单色（c_bcast）全晶圆多播触发 timestamp.get_timestamp(&tscRefBuffer) 与 unblock_cmd_stream()，消除分布式 PE 间的时钟偏移；同时源码通过 @is_arch(\"wse3\") 分支表明 WSE-3 将路由颜色绑定从 WSE-2 的 fabout_dsd 描述符下沉到了编译期 @initialize_queue。",
+      "source_ids": ["cerebras-sdk-sync-pe"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators.md"],
+      "limitations": "静态 CSL 源码审阅，未在 WSE-2/WSE-3 硬件上执行。",
+      "verified_at": "2026-10-17",
+      "verifier": "Direct fixed-commit reading of Cerebras/sdk-examples benchmarks/bandwidth-test/src/sync/pe.csl"
     }
   ]
 }

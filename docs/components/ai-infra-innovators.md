@@ -7,8 +7,8 @@
 证据 ID：`fireworks-m3-sparse-sm100`、`fireworks-b200-author-bench`、`fireworks-locust-cache-bench`、
 `fireworks-m3-ancillary-cute-pipeline`、
 `together-fa3-hopper-async`、`together-sequoia-spec-tree`、`together-sequoia-dp-spectree-impl`、`together-stripedhyena-state`、`together-moa-fanout`、
-`groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`、
-`cerebras-csl-gemv-2d-collectives`。
+`groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`groq-groqflow-multichip-runtime`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`、
+`cerebras-csl-gemv-2d-collectives`、`cerebras-csl-sync-wse3`。
 来源行范围、commit SHA 与发布日期见 [sources](../../research/sources.json)；主张与证据类型见 [evidence](../../research/evidence.json)。
 
 ---
@@ -165,6 +165,10 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
   - [`groqflow/justgroqit/compile.py:139-145`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/justgroqit/compile.py#L139-L145) 调用 `groq-compiler` 时传入 `--multichip={state.topology}` 与 `--partition-mode=daisy-chain`，将模型按层/子图切分为 $N_{\text{chips}}$ 份独立的 Alan Assembly（`.aa`）文件；
   - [`groqflow/justgroqit/assemble_multichip.py:67-115`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/justgroqit/assemble_multichip.py#L67-L115) 在开启 `--large-program` 时，通过 `--extra-ifetch-slices` 征用原本用于数据的 SRAM 切片（`West 18,19` 与 `East 17,18,19,38`）存放指令，证明**超长静态调度程序会直接挤占片上常量/权重 SRAM 空间**。
   - [`groqflow/justgroqit/ignition.py:129-205`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/justgroqit/ignition.py#L129-L205)（2026-10-17 补充核验，`blob: afc4f1f53dcf89c6bce3debb51d8c597f6bd5ba5`）进一步硬编码了单芯片默认汇编器标志 `--ifetch-from-self` 与 `--ifetch-slice-ordering=round-robin`，并在 `_validate_args`（`L199–204`）中强制规定**自定义 `assembler_flags` 与 `num_chips != 1` 互斥**（多芯片构建完全由编译器统一接管跨卡同步与指令切片分配）。
+  - **多芯片 C2C 拓扑初始化、$N_{\text{chips}}$ 步流水排空与分片 `.iop` 缓存校验（[`groqflow/groqmodel/execute.py:15-101`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/groqmodel/execute.py#L15-L101), `blob: 4e9482e801721f27cfb67f8343d2181d3afdaf5e`；[`groqflow/groqmodel/remote.py:71-150`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/groqmodel/remote.py#L71-L150), `blob: b140b67305783e802c3cefd1f2d8d348c0748fdd`）**：
+    - 在集群/机架侧拉起多卡任务时，`get_multi_tsp_runner`（`execute.py:15–42`）在首次运行或物理链路重配后必须调用 `tsp.bringup_topology(user_config=topo_config[topology])`（如 `DF_A14_2/4/8_CHIP`）完成 **Chip-to-Chip (C2C) 确定性同步链路 Bring-up**；
+    - 更关键的是，`run()` 中的 `forward_multichip(example)`（`execute.py:77–84`）明确揭示了 `MultichipTSPRunner` 的流水线推进语义：单次 `tsp_runner(**example)` 仅将输入推进 **1 张芯片（1 pipeline stage）**，因此对单样本冷启动推理，必须连续调用 **`for _ in range(num_chips): output = tsp_runner(**example)`** 共 $N_{\text{chips}}$ 次才能让张量走完整个 Daisy-Chain 图！
+    - 在远端执行编排器 `RemoteGroqModel`（`remote.py:71–150`）中，单芯片构建生成单个 `output.iop`，而 $N_{\text{chips}} > 1$ 时生成 `N` 个独立的芯片级二进制镜像 `output.0.iop ... output.{N-1}.iop`；调度器在每次执行前通过 `_calc_iop_md5s()` 计算全部 $N$ 个 `.iop` 文件的 MD5 摘要数组并请求 `/storage/cache/check`，唯有全量命中远端芯片缓存（`cache_hit == True`）才跳过多卡二进制分发（`skip_iop_urls=True`）。
 
 ---
 
@@ -189,6 +193,12 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
    - 晶圆内部 PE 间具备极高的 2D Mesh 带宽，但主机与晶圆之间的数据注入/流出（`memcpy_h2d` / `memcpy_d2h`）受限于晶圆边缘的流式 I/O 通道数（代码中约束 `1 <= --channels <= 16`）。
    - 代码通过片上 48-bit 硬件时间戳计数器（TSC，按固定 **`0.85 GHz`** 换算：`time_us = (cycles / 0.85) * 1e-3`，每个 Wavelet 为 `4 bytes`）测量主机流式吞吐：
      $$B_{\text{io}}\text{ (MB/s)} = \frac{N_{\text{wavelets}} \times 4\text{ bytes}}{T_{\text{send/recv}}\text{ (µs)}} \times N_{\text{loops}}$$
+   - **全晶圆硬件屏障同步与 WSE-2 vs WSE-3 队列颜色绑定差异（[`benchmarks/bandwidth-test/src/sync/pe.csl:80-307`](https://github.com/Cerebras/sdk-examples/blob/d19f2ca3e51285fc5904c78643b38819a2f26c44/benchmarks/bandwidth-test/src/sync/pe.csl#L80-L307)，`blob: dc35b1ed763f25ffd73d2556390a4637726d6bc8`）**：
+     - 因为晶圆上数十万个 PE 各自拥有独立的本地 48-bit TSC 计数器，在测量微秒级 H2D/D2H 带宽前，必须将全晶圆 PE 的参考时钟 $T_0$ 对齐。`sync/pe.csl` 实现了一个**零主控开销的三阶段奇偶双色硬件屏障**：
+       1. **`f_sync()`（行向东$\to$西归约）**：每行用两个颜色 `C0, C1` 奇偶交替接力（`P_even` 收 `C0` 发 `C1`，`P_odd` 收 `C1` 发 `C0`，避免同色直通合并），从最右列 `px = width - 1` 逐跳传至最左列 `px = 0`（`L128–142, L217–243`）；
+       2. **`f_sync_y()`（首列南$\to$北归约）**：仅 `px = 0` 的第一列用颜色 `C2, C3` 奇偶交替从底行 `py = height - 1` 向上汇聚至左上角根核心 `P(0,0)`，其余列直接挂起等待广播（`L149–168, L245–270`）；
+       3. **`f_sync_bcast()` $\to$ `f_exit()`（单色全网广播锁存 TSC）**：一旦 `P(0,0)` 收到全网格汇聚信号，立即向 `c_bcast` 注入 1 个 Wavelet，沿首列南向（`tx = {EAST, RAMP, SOUTH}`）与各行东向（`tx = {EAST, RAMP}`）硬件多播树广播至全晶圆，所有 PE 在收到该 Wavelet 的瞬间激活 `f_exit()` 执行 `timestamp.get_timestamp(&tscRefBuffer)` 记录 $T_0$ 并调用 `sys_mod.unblock_cmd_stream()` 解锁主机命令流（`L172–191, L273–307`）。
+     - 同时，`sync/pe.csl:88–123, 206–214` 展示了 **WSE-2 与 WSE-3 的硬件微架构演进**：在 WSE-2 上，`fabric_color` 绑定在输出数据流描述符 `fabout_dsd` 上；而在 **WSE-3（`@is_arch("wse3")`）** 上，`fabout_dsd` 仅指定 `.output_queue`，颜色绑定下沉到编译期队列初始化 `@initialize_queue(oq, .{ .color = c_send })`，解耦了数据流描述符与物理路由颜色。
    - **架构含义**：Cerebras WSE 只有在**权重常驻晶圆片上 SRAM、避免频繁从主机流式换入权重**时才能发挥晶圆级带宽优势；一旦模型权重超出单晶圆总 SRAM 容量需要频繁跨晶圆/主机流式加载，系统吞吐会立即退化到边缘 I/O 通道上限。
 
 ### 5.3 源码深挖（2026-10-16 新增）：`gemv-collectives_2d/pe.csl` 揭示的晶圆级 Batch-1 Decode 通信拓扑
