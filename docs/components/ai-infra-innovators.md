@@ -1,12 +1,12 @@
 # AI Infra 创新公司深挖：推理加速平台（Fireworks / Together）与新型 AI 芯片（Groq / Cerebras）
 
-状态：2026-10-16（持续更新自 2026-10-14），基于固定开源代码提交与同行评审/预印本论文正文的**有界公开研究**。
+状态：2026-10-17（持续更新自 2026-10-14），基于固定开源代码提交与同行评审/预印本论文正文的**有界公开研究**。
 先修：[GPU/HBM 深入研究](gpu-hbm.md)、[互连与网络分层](interconnect-network.md)。
 **严格边界声明**：本文仅依据公开源码（`implementation`）、架构论文（`specification` / `author-benchmark`）及本仓库合成公式推导立论；**未调用任何商业付费 API，未在 B200/H100/Groq LPU/Cerebras WSE 硬件上实测**，作者披露的跑分均显式标注为 `author-benchmark`，绝不冒充本项目独立重测（`own-hardware`）。
 
 证据 ID：`fireworks-m3-sparse-sm100`、`fireworks-b200-author-bench`、`fireworks-locust-cache-bench`、
 `fireworks-m3-ancillary-cute-pipeline`、
-`together-fa3-hopper-async`、`together-sequoia-spec-tree`、`together-stripedhyena-state`、`together-moa-fanout`、
+`together-fa3-hopper-async`、`together-sequoia-spec-tree`、`together-sequoia-dp-spectree-impl`、`together-stripedhyena-state`、`together-moa-fanout`、
 `groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`、
 `cerebras-csl-gemv-2d-collectives`。
 来源行范围、commit SHA 与发布日期见 [sources](../../research/sources.json)；主张与证据类型见 [evidence](../../research/evidence.json)。
@@ -114,6 +114,13 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
 - **硬件感知（Hardware-Aware）树大小拐点**：在目标 GPU 上并行验证一棵含 $N$ 个节点的推测树时，由于当 $N$ 较小时目标模型前向传播完全处于 **Memory-bandwidth bound** 区，验证耗时 $T_{\text{verify}}(N) \approx T_{\text{verify}}(1)$ 几乎不随 $N$ 增长；但当 $N$ 超过目标 GPU 的算术强度拐点（Roofline Ridge Point）后，$T_{\text{verify}}(N)$ 开始随 $N$ 显著上升。因此真实加速比由下式决定：
   $$\text{Speedup}(\mathcal{T}) = \frac{F(\mathcal{T})}{\frac{T_{\text{verify}}(|\mathcal{T}|)}{T_{\text{target}}(1)} + d(\mathcal{T}) \cdot \frac{T_{\text{draft}}(1)}{T_{\text{target}}(1)}}$$
   Sequoia 通过测量目标硬件的 $T_{\text{verify}}(N)$ 阶梯曲线，联合动态规划（`sequoia_tree_construction`）搜索最优 $(N, d)$ 对。
+- **源码深挖（2026-10-17 新增，`Infini-AI-Lab/Sequoia@0ff3ff71475ca148f2dfb7545e0de5caf5c67b39`）**：
+  阅读 [`tree_search.py`](https://github.com/Infini-AI-Lab/Sequoia/blob/0ff3ff71475ca148f2dfb7545e0de5caf5c67b39/tree_search.py)（`blob: e717625933b1abb00bc4c63934ac3564593ee06c`，`L25–128`）与 [`Tree/SpecTree.py`](https://github.com/Infini-AI-Lab/Sequoia/blob/0ff3ff71475ca148f2dfb7545e0de5caf5c67b39/Tree/SpecTree.py)（`blob: 5cf0d15cae6d019ade4fddd5328460877ba1dc44`，`L41–228`）揭示了 Sequoia 树在 GPU 上的精确构建与零冗余 KV 回收机制：
+  1. **三维动态规划递推方程（`dynamic_program`, `tree_search.py:25–54`）**：维护状态张量 $T[m, l, b]$（预算 $m$ 个节点、最大深度 $l$、根节点分支度 $b$ 的最大期望接受长度）与回溯表 `branch_map`：
+     $$T[m, l, 1] = 1 + \alpha_1 \max_{b'} T[m-1, l-1, b'], \qquad T[m, l, b] = \max_{1 \le y < m} \left( T[y, l, b-1] + \alpha_b \max_{b'} T[m-y, l-1, b'] \right)$$
+     其中 $\alpha_b$ 是父节点前 $b-1$ 个候选分支均被拒绝后、第 $b$ 个无放回采样分支被接受的边际概率；随后 `get_optimal_tree_size_and_depth`（`L57–76`）在实测硬件耗时代价 $c = T_{\text{draft}}(1)/T_{\text{target}}(1)$ 与 $t_i = T_{\text{verify}}(b_i)/T_{\text{target}}(1)$ 下最大化 $F(b_i, d) / (c \cdot d + t_i)$。
+  2. **扁平化树掩码与位置编码嵌入（`get_grow_map` & `SpecTree.__init__`, `SpecTree.py:45–65`）**：每个子节点继承父节点的注意力掩码行并点亮自身对角线（`attention_mask[i] = attention_mask[parents[i]]; attention_mask[i, i] = 1`），在送入目标模型前把 `0` 项填充为 `torch.finfo(dtype).min`，并将深度直接映射为位置编码偏移 `position_ids = grow_map["depth"][1:] + len(prefix) - 1`，从而把整棵不规则投机树转化为单次长度为 `tree_size` 的 1D 序列前向传播。
+  3. **残差分布无放回拒绝采样与增量 KV Gather（`SpecTree.accept_step` & `verify`, `SpecTree.py:137–228`）**：验证时对父节点下的候选子节点依次检验 $p[\text{token}] > r \cdot q[\text{token}]$；一旦某个分支被拒绝，立即调用 `self.residual_graph(p, q)` 更新目标残差分布并将草稿分布对应位置置为 `finfo.min`（`L155–156`）。验证结束后，仅对被接受路径 `accept_list` 调用 `kv_cache.gather_kv_incremental(accept_list[ground_truth_len:], ground_truth_len)`（`L226–227`），将树中未命中的旁支 KV 槽位原地覆写回收，完全避免了树分支带来的 KV Cache 碎片或完整重算。
 
 ### 3.3 `StripedHyena` 与 `MoA`：模型状态与系统扇出的两个极端
 
@@ -157,6 +164,7 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
 - **Daisy-Chain 分区编译与大程序指令切片借用**：
   - [`groqflow/justgroqit/compile.py:139-145`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/justgroqit/compile.py#L139-L145) 调用 `groq-compiler` 时传入 `--multichip={state.topology}` 与 `--partition-mode=daisy-chain`，将模型按层/子图切分为 $N_{\text{chips}}$ 份独立的 Alan Assembly（`.aa`）文件；
   - [`groqflow/justgroqit/assemble_multichip.py:67-115`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/justgroqit/assemble_multichip.py#L67-L115) 在开启 `--large-program` 时，通过 `--extra-ifetch-slices` 征用原本用于数据的 SRAM 切片（`West 18,19` 与 `East 17,18,19,38`）存放指令，证明**超长静态调度程序会直接挤占片上常量/权重 SRAM 空间**。
+  - [`groqflow/justgroqit/ignition.py:129-205`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/justgroqit/ignition.py#L129-L205)（2026-10-17 补充核验，`blob: afc4f1f53dcf89c6bce3debb51d8c597f6bd5ba5`）进一步硬编码了单芯片默认汇编器标志 `--ifetch-from-self` 与 `--ifetch-slice-ordering=round-robin`，并在 `_validate_args`（`L199–204`）中强制规定**自定义 `assembler_flags` 与 `num_chips != 1` 互斥**（多芯片构建完全由编译器统一接管跨卡同步与指令切片分配）。
 
 ---
 
@@ -193,7 +201,7 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
   3. **`broadcast_x_down()`（全列 Broadcast $x_{\text{tile}}$）**：每列以顶行 `py = 0` 为根执行 `mpi_y.broadcast(0, &x_tile, Nt, compute_task_id)`，使同一列的所有 PE 获得相同的 $N_t$ 维输入向量分片。
   4. **`compute()`（本地 `fmacs` + 行向 `reduce_fadds`）**：每个 PE 循环 $j \in [0, N_t)$ 执行单指令流式乘加 `@fmacs(dsd_local_prod, dsd_local_prod, dsd_A_offset, x_tile[j])`，最左列 `px == 0` 叠加偏置 `@fadds(dsd_local_prod, dsd_local_prod, dsd_b_tile)`，随后整行向最右列 `Pw - 1` 发起浮点归约：**`mpi_x.reduce_fadds(Pw - 1, &local_prod, &row_sum, Mt, gather_result_task_id)`**。
   5. **`gather_result()`（最右列 Gather $y$）**：最右列执行 `mpi_y.gather(Ph - 1, &row_sum, &final_result, Mt, EXIT)`，将完整输出向量汇聚至右下角 `PE(Pw-1, Ph-1)`。
-- **架构师核心推论**：在晶圆级 2D Mesh 上，Batch-1 Decode 的本地计算仅有 $N_t$ 条向量指令（`@fmacs` 耗时极短），而激活向量需要在每一层经历 **`scatter_x`（$P_w$ 跳）$\to$ `broadcast_y`（$P_h$ 跳）$\to$ `reduce_fadds_x`（$P_w$ 跳）** 的横纵接力。因此当模型切分跨越数千个 PE 列与行时，**单 Token 最低延迟下界不再由算术单元或 SRAM 读带宽决定，而是由 2D Mesh 横纵集体原语的跨 PE 路由跳数 $\propto (P_w + P_h)$ 决定**。
+- **架构师核心推论**：在晶圆级 2D Mesh 上，Batch-1 Decode 的本地计算仅有 $N_t$ 条向量指令（`@fmacs` 耗时极短），而激活向量需要在每一层经历 **`scatter_x`（$P_w$ 跳）$\to$ `broadcast_y`（$P_h$ 跳）$\to$ `reduce_fadds_x`（$P_w$ 跳）** 的横纵接力。对比 [`benchmarks/gemm-collectives_2d/pe.csl`](https://github.com/Cerebras/sdk-examples/blob/d19f2ca3e51285fc5904c78643b38819a2f26c44/benchmarks/gemm-collectives_2d/pe.csl)（2026-10-17 补充核验，`blob: 4f44a0fb9ff03f4707aeb6884d4d741aa8343c0c`，`L79–133`）的 2D SUMMA 算法——在 $P \times P$ 网格上分 $P$ 步同时执行 `mpi_x.broadcast(step, Ap, Mt*Kt)` 与 `mpi_y.broadcast(step, Bp, Kt*Nt)`，只有当 `x_done()`（`@activate(compute_task_id)`）与 `y_done()`（`@unblock(compute_task_id)`）双双完成时才执行 $K_t \times N_t$ 次本地 `@fmacs`——可以看到：**GEMM（Prefill/训练）中每步双广播携带 $O(M_t K_t + K_t N_t)$ 字节并分摊给 $O(M_t K_t N_t)$ 次乘加，算术强度随分块尺寸增长；而 GEMV（Batch-1 Decode）每层无法在 $N_t$ 维上分摊路由延迟，单 Token 最低延迟下界由 2D Mesh 横纵集体原语的跨 PE 路由跳数 $\propto (P_w + P_h)$ 决定**。
 
 ---
 

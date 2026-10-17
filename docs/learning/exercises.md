@@ -141,4 +141,17 @@ Groq PCIe replay 唯一外部抖动源，以及 Cerebras WSE 单 PE `48 KB` SRAM
 答案：(1) Prefix Cache 中只保存历史块的 Key/Value 张量，不保存末位置的采样 logits；回退 1 个 token（`2047`）使 `num_new_tokens = 1`，并且因为 `2047` 使末块不再填满，必须将其 `ref_cnt` 减 1 归还空闲池并重新分配可写块以完成最后 1 个 token 的前向传播与槽位写回；
 (2) 无分块内联 Prefill 令单步耗时飙升至 `441.91 ms`（严重违反 `50 ms` TPOT SLO）；Chunked Prefill 将单步 Prefill 截断为 `2,016` tokens，使同批次 Decode 最大 TPOT 压回 `45.01 ms`（分 5 步完成 Prefill，TTFT `183.75 ms`）；P/D 分离彻底消除 Prefill 对 Decode 实例的算力挤占（Decode 最大 TPOT `15.11 ms`），但需承担 `2.50 GiB / 50 GB/s = 50.00 ms` 的跨实例 KV 传输延迟（总 TTFT `221.66 ms`）。用户掌握状态仍为 `not-assessed`。
 
+## 16. 6D 分布式训练：FSDP2 `Shard(dim != 0)` 瞬态缓冲、CP 因果首尾配对与 DeepEP v2 去重
+
+阅读 [6D 分布式训练状态与通信联合账本](../components/training-parallelism.md)
+与 [Training parallelism 算例](../../experiments/training_parallelism/README.md)：
+(1) 在 `64` 卡（8 节点 × 8 GPU）训练 `70B` 级模型（`L = 80`，单层参数 `0.875 GiB` BF16，选择性重计算单层激活 `0.35 GiB` 在 `S = 8192`）时，为什么纯 `FSDP (DP = 64)` 的单卡峰值显存（`49.00 GiB`）和单步时间（`166.96 ms`）全面劣于 `FSDP (DP = 8) + TP = 8 + SP`（`35.44 GiB`，`55.97 ms`）？
+(2) 若某参数张量第 0 维已被 `ColwiseParallel`（`Shard(0)`）切分，导致 FSDP2 在该参数上采用 `Shard(dim = 1)`，根据 `_fsdp_collectives.py:306-346` 的 `foreach_all_gather_copy_out`，其前向双缓冲瞬态峰值相比 `Shard(dim = 0)` 会增加多少？
+(3) 在 `CP = 8` 因果 Ring Attention 与 `E = 64, EP = 8, top_k = 8` 的 MoE DeepEP v2 训练态 Dispatch 中，`_RoundRobinLoadBalancer` 与 `do_expand = False` 分别消除了多少比例的算力倾斜或跨节点流量？
+
+答案：(1) 纯 `FSDP=64` 虽然把稳态模型状态压至 `17.50 GiB`，但未切分激活（`80 × 0.35 = 28.00 GiB`），且 FSDP AllGather/ReduceScatter 跨越全部 64 卡慢速跨机链路（暴露 `130.91 ms`）；`FSDP=8 + TP=8 + SP` 将激活按 `TP=8` 切分至 `3.50 GiB`，并把 FSDP 通信缩减至 8 个同列 Rail IB 节点、TP+SP 通信锁在机内 `400 GB/s` NVLink；
+(2) `Shard(0)` 下 `all_gather_copy_in` 直接使用 `param_all_gather_outputs` 的底层存储作为接收缓冲（前向 2 层双缓冲 + 反向 2 层预取 + 1 层规约共 `4 × 0.875 = 3.50 GiB`）；而 `Shard(dim != 0)` 无法将分片直接拼入目标布局，必须在每层额外分配 `1` 份完整参数大小的 `all_gather_outputs` 临时缓冲再执行 `chunk + cat` 拷贝，使瞬态缓冲膨胀 `+50%` 至 `5.25 GiB`；
+(3) 未开启首尾配对时，因果掩码令 `Rank 7` 承担 $15/64$ 的全局有效计算（均值的 `1.875x`，首尾比 `15:1`），`_RoundRobinLoadBalancer` 将第 $i$ 与 $2\text{CP}-1-i$ 块配对后各 Rank 严格均衡为 `1.000x`；DeepEP v2 训练态 Compact 布局按唯一目标 EP Rank 去重发送（期望唯一目标 Rank 数 $8\times(1-(7/8)^8) = 5.251$，精确无放回 `4.9998`），将跨节点 All-to-All 载荷从 `512.0 MiB` 压至 `319.99 MiB`（节省 `37.50%`）。用户掌握状态仍为 `not-assessed`。
+
+
 

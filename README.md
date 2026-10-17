@@ -21,9 +21,10 @@
 | [张量 Layout/Dtype 与 SM100 Kernel 分派链路](docs/components/kernel-dispatch-layout.md) | ATen 步长置换、CuTe AOT C-ABI、TMA Swizzle、Tile-Ordered Partials 与 SM100 `tcgen05`/`TMEM` 寄存器重分配 |
 | [数据加载与分布式 Checkpoint/恢复契约](docs/components/storage-checkpoint.md) | NVIDIA GDS (`cuFile`) DMA 路径、PyTorch DCP 两阶段协调、跨 Rank 去重、`BlockingAsyncStager` 与 Young-Daly 预算 |
 | [推理调度、KV Cache 生命周期与 SLO/Goodput 边界](docs/components/inference-slo.md) | vLLM V1 统一 `token_budget` 调度、100% Prefix Cache 末块重算、`FreeKVCacheBlockQueue` 与 Chunked Prefill / P/D 分离 |
+| [6D 分布式训练状态与通信联合账本](docs/components/training-parallelism.md) | TorchTitan `ParallelDims`、PyTorch FSDP2 双缓冲预取、`Shard(dim!=0)` 惩罚、TP+SP、CP Ring Attention 与 DeepEP v2 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) | 推理加速（Fireworks / Together）与新型 AI 芯片（Groq TSP / Cerebras WSE）架构剖析 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
-| [每日研究](docs/daily/2026-10-16.md) | 最新有界研究与限制；按北京时间日期增量归档 |
+| [每日研究](docs/daily/2026-10-17.md) | 最新有界研究与限制；按北京时间日期增量归档 |
 | [原创离线实验](experiments/capacity_roofline/README.md) | 可重算的显存 payload 与 Roofline 理论界限 |
 | [Ring cut 离线算例](experiments/ring_cut/README.md) | rank 顺序、跨节点 payload 与共享 NIC 理论下界 |
 | [Rail channel cut 算例](experiments/rail_channel_cut/README.md) | 多 Channel、Multi-Rail 对齐、跨 Rail 偏斜与机内 `PATH_PHB` 瓶颈反证 |
@@ -31,6 +32,7 @@
 | [Innovator arch tradeoffs 算例](experiments/innovator_arch_tradeoffs/README.md) | Fireworks KV-Outer 字节账本、Together Sequoia 投机树 Roofline 与 Groq/Cerebras SRAM 边界 |
 | [Checkpoint recovery 算例](experiments/checkpoint_recovery/README.md) | PyTorch DCP 跨 Rank 去重均衡、GDS vs POSIX 路径、异步 Stager 与 Young-Daly Goodput 仿真 |
 | [Inference SLO scheduler 算例](experiments/inference_slo_scheduler/README.md) | vLLM V1 `token_budget` 调度、Prefix Cache 末块重算、Chunked Prefill 与 P/D 分离 TTFT/TPOT 权衡 |
+| [Training parallelism 算例](experiments/training_parallelism/README.md) | 6D 并行显存/通信账本、FSDP2 `Shard(dim!=0)` 瞬态峰值、CP 因果倾斜与 DeepEP v2 去重 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -54,6 +56,7 @@ python experiments\ib_failover_invariants\run.py --check
 python experiments\innovator_arch_tradeoffs\run.py --check
 python experiments\checkpoint_recovery\run.py --check
 python experiments\inference_slo_scheduler\run.py --check
+python experiments\training_parallelism\run.py --check
 python scripts\source_monitor.py
 ```
 
