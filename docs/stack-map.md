@@ -14,7 +14,7 @@
 | 7. 训练系统 | DP/DDP、FSDP/ZeRO、TP/PP/CP/EP、NCCL/RCCL、Megatron/DeepSpeed | 状态分片、通信和拓扑如何联合设计？ | [TorchTitan/PyTorch 6D 并行、FSDP2、TP+SP、CP Ring Attention 与 DeepEP v2 联合账本](components/training-parallelism.md)及 [Training parallelism 算例](../experiments/training_parallelism/README.md)已完成；千卡实机训练评测待授权 |
 | 8. 推理系统 | vLLM/SGLang/TensorRT-LLM、continuous batching、PagedAttention、speculation、P/D 分离、Fireworks/Together | TTFT、TPOT、质量、KV 传输与成本怎样权衡？ | [vLLM V1 统一调度、KV Cache 生命周期与 SLO/Goodput 边界](components/inference-slo.md)、[Inference SLO 离线算例](../experiments/inference_slo_scheduler/README.md)及 [Sequoia / StripedHyena / M3 分析](components/ai-infra-innovators.md)已完成 |
 | 9. 调度与运维 | Kubernetes/Slurm、Operator/device plugin、GPU 分区、quota、DCGM/ROCm tools/Prometheus | 碎片、多租户、拓扑感知、兼容、故障/升级如何处理？ | [Kubelet Topology Manager、Kueue TAS、Slurm `topology/block & tree`、NVIDIA Device Plugin XID/MIG 与 `torchelastic`](components/cluster-orchestration.md)及 [Cluster orchestration 算例](../experiments/cluster_orchestration/README.md)已完成；生产集群故障演练待授权 |
-| 10. 经济性与设施 | 容量/TCO、功率、机架密度、液冷、供电、故障域 | 何时更多 GPU 无效？SLO 如何映射成完整机架与资源预算？ | Queue 待研究；设计约束，不做施工/芯片制造认证 |
+| 10. 经济性与设施 | 容量/TCO、功率、机架密度、液冷、供电、故障域 | 何时更多 GPU 无效？SLO 如何映射成完整机架与资源预算？ | [容量、成本与吞吐经济学](components/capacity-economics.md)及 [Capacity economics 算例](../experiments/capacity_economics/README.md)已完成；`rack-power-cooling` 机架功率/液冷与故障域待推进 |
 
 ## 不可混淆的关系
 

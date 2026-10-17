@@ -165,6 +165,19 @@ Groq PCIe replay 唯一外部抖动源，以及 Cerebras WSE 单 PE `48 KB` SRAM
 (2) `20` 节点需 `ceil(20/18) = 2` 个基础块（`raw_level = 1`），因未启用 Level 1 被迫向上吸附至 Level 2（4 个基础块 = `72` 节点）；`16` 节点可装入单个基础块（`required_bblocks = 1`），`_choose_best_bblock` 采用 Best-Fit 选择最小满足块 `bblock[1]`（16 节点），将完整空闲的 `bblock[2]`（18 节点）留给后续满块作业；
 (3) 256 节点聚合 `MTBF = 360 / 256 = 1.40625 h`（`5062.5 s`）。冷替换 + `30 min` 间隔下每次故障损失 `900 + 600 + 45 = 1545 s`，运行 Goodput 仅 `65.89%`；切换至 `4` 热备节点（`45 s` 恢复）+ `15 min` 间隔（接近 Young-Daly 最优 `551.14 s`）后，运行 Goodput 升至 `84.58%`，即便除以 `260` 台总配置节点分母，单配置节点净产出仍达 `83.28%`（净增 `+9.81 pts`）。用户掌握状态仍为 `not-assessed`。
 
+## 18. 训练/推理容量经济学、SLO Goodput 悬崖与四家创新公司 I/O 成本模型
+
+阅读 [容量、成本与吞吐经济学](../components/capacity-economics.md)
+与 [Capacity economics 算例](../../experiments/capacity_economics/README.md)：
+(1) 为什么在 `torchtitan/models/utils.py` 与 `components/metrics.py` 中，`671.1B` 总参数 MoE（路由专家 `664B`、`256` 选 `8`，稠密骨架 `4.8B`、非绑定词表 `0.9B`、路由器 `0.2B`、共享专家 `2.1B`）的单 Token 训练算力比 `70B` 稠密模型低一半以上？为什么开启 FP8 量化训练后 `MetricsProcessor.log` 将 `mfu` 强制置为 `None`？
+(2) 在 `vllm/benchmarks/benchmark_serving.py` 的 Gamma 突发到达（`burstiness = 0.25`，即 $\text{CV}_a^2 = 4.0$）且单次未命中 Prefill 服务耗时 `291.67 ms`、`SLO_TTFT = 600 ms` 场景下，为什么盲目按 92% 利用率配置 Prefill 池会导致 `request_goodput` 跌至 `7.27%`？改用 Kingman 安全水位与 Prefill/Decode 分离（对比混部）以及将 Prefix Cache 命中率从 `12.5%` 提升至 `87.5%` 分别如何改变总 GPU 数与每百万达标输出 Token 成本？
+(3) 结合 Fireworks `prefill_load_test.py`、Together/Sequoia `offload_engine.py`、Groq `groqmodel.py` 与 Cerebras `bandwidth-test/run.py`，分别说明：为什么 Fireworks 预热必须发 `cached_tokens + 1` 个 Token？Sequoia 投机树如何把 PCIe 双缓冲卸载吞吐放大 `5.4x–6.8x`？Groq 为什么在流水线模式下将编译器单级周期乘以 `num_chips_used`？Cerebras 为何必须在晶圆东西边缘划分 `46 KB/PE` 的硬件 FIFO 缓冲列并对参考时钟扣除 `px + py`？
+
+答案：(1) MoE 每 Token 实际参与矩阵乘的参数仅为 `(4.8B - 0.9B) + 0.2B + 2.1B + 664B × 8 / 256 = 26.95B`（单 Token 训练 FLOPs 为 `204.68 GFLOPs`），低于 `70B` 稠密模型的 `68.95B`（`478.12 GFLOPs`），因此每百万训练 Token 成本从 `$0.9456` 降至 `$0.5355`；`gpu_peak_flops` 固定为 BF16 稠密峰值，若在 FP8 下继续用该分母会产生失真虚高，故 TorchTitan 置 `mfu = None`；
+(2) `burstiness = 0.25` 使到达方差放大 `4` 倍，92% 利用率下期望排队等待高达 `4,083.33 ms`（期望 TTFT `4,375.0 ms`），仅 `7.27%` 的请求能满足 `600 ms` SLO；按安全水位 `34.58%` 与 P/D 分离定容（`31` Prefill + `5` Decode 实例 = `288` 卡）比混部（`392` 卡）节省 `104` 张 GPU，进一步将 Prefix Cache 命中率提至 `87.5%`（配 FP8）可把总卡数压至 `40` 张、每百万达标输出 Token 成本从 `$12.3698` 降至 `$1.7180`（下降 `86.1%`）；
+(3) Fireworks 服务端把最后一个 Prompt Token 留给首个 Decode 槽位（仅缓存 `prompt[:-1]`），故需发 `cached_tokens + 1`；Sequoia 的 `OffloadEngine` 受限于 PCIe 权重传输时间，投机树验证在不增加 PCIe 权重搬运字节数的前提下每步接受 `5.4–6.8` 个 Token，等比例放大吞吐；Groq `stats_file` 中的 `total_cycles` 是单张芯片（1 个流水线级）周期，单请求走完 $N$ 张芯片须乘以 `num_chips_used`；Cerebras 为防止计算核心繁忙反压阻塞 100GbE 主机通道，需按 $\lceil W \cdot L_{\text{pe}} \cdot 4 / 46000 \rceil$ 配置 `46 KB/PE` FIFO 缓冲列（外加东西各 3 列 `memcpy` 系统列），并扣除全晶圆广播从 `PE(0,0)` 到 `(px, py)` 的 Manhattan 传播延迟 `px + py`。用户掌握状态仍为 `not-assessed`。
+
+
 
 
 

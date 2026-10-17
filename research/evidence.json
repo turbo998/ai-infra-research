@@ -560,6 +560,106 @@
       "limitations": "静态 CSL 源码审阅，未在 WSE-2/WSE-3 硬件上执行。",
       "verified_at": "2026-10-17",
       "verifier": "Direct fixed-commit reading of Cerebras/sdk-examples benchmarks/bandwidth-test/src/sync/pe.csl"
+    },
+    {
+      "id": "capacity-economics-torchtitan-vllm-slurm",
+      "claim": "TorchTitan v0.3.0、vLLM v0.8.2 与 Slurm 26.05.5-1 共同确立了训练与推理容量经济学的源码契约：(1) TorchTitan 在 models/utils.py 中将 MoE 总参数 nparams 与每 Token 活跃稀疏参数 nparams_sparse_active = router + shared + experts * top_k // num_experts 严格解耦，单 Token 有效训练算力为 6*nparams_for_matmul + 12*L*d_model*S；components/metrics.py 按 non_data_parallel_size 归一化单卡 tps，并在 has_quantization=True 时显式禁用 BF16 MFU（置为 None）以防止将 FP8/MX 吞吐除以 BF16 稠密峰值造成虚高；(2) vLLM benchmark_serving.py 用 Gamma(shape=burstiness, scale=1/(rate*burstiness)) 建模突发到达（CV_a^2 = 1/burstiness），并在 calculate_metrics 中仅将同时满足 TTFT/TPOT/E2EL 阈值的请求计入 request_goodput，配合 disagg_prefill_proxy_server.py 的 max_tokens=1 两阶段转发实现 Prefill 与 Decode 独立扩缩容；(3) Slurm acct_gather_energy/gpu 默认每 30 秒采样并通过梯形法则 (t1-t0)*(W0+W1)/2 积分焦耳能耗，按 saved_usable_gpus 位图隔离步级能耗。",
+      "source_ids": [
+        "torchtitan-models-utils-flops",
+        "torchtitan-metrics",
+        "torchtitan-utils-peak-flops",
+        "vllm-benchmark-serving",
+        "vllm-disagg-prefill-proxy",
+        "slurm-acct-gather-energy-gpu"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/capacity-economics.md"],
+      "limitations": "静态源码审阅，未在生产 GPU 集群或在线服务上采集实机账单与功耗。",
+      "verified_at": "2026-10-18",
+      "verifier": "Direct fixed-commit reading of pytorch/torchtitan v0.3.0, vllm-project/vllm v0.8.2, and SchedMD/slurm 26-05-5-1"
+    },
+    {
+      "id": "fireworks-prefill-load-test-routing",
+      "claim": "Fireworks AI 的 fw-ai/benchmark/llm_bench/prefill_load_test.py 揭示了分布式 Prefix Cache 压测与容量定容的三项机制：(1) RoutingConfig 通过 x-fireworks-generator-worker-service-index (flat % num_servers) 与 x-fireworks-generator-worker-local-index (flat // num_servers) 将请求绑定到确定性 Worker 实例；(2) build_warmup_ids 必须发送 cached_tokens + 1 个 Token 才能预热刚好 cached_tokens 个缓存槽位，因为服务端仅缓存 prompt[:-1] 并把末个 Token 留作首个 Decode 槽位；(3) 单轮动态批大小按 max(1, min_tokens_to_batch // (prompt_tokens - cached_tokens)) 反比于未命中 Token 数缩放，而多 Worker 并发轮次耗时受最慢 Straggler 节点 max(server_durations) 制约。",
+      "source_ids": ["fireworks-prefill-load-test"],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/ai-infra-innovators.md",
+        "docs/components/capacity-economics.md"
+      ],
+      "limitations": "静态源码审阅，未调用线上 Fireworks 推理集群。",
+      "verified_at": "2026-10-18",
+      "verifier": "Direct fixed-commit reading of fw-ai/benchmark llm_bench/prefill_load_test.py"
+    },
+    {
+      "id": "together-sequoia-offload-engine-pcie",
+      "claim": "Together/Infini-AI-Lab 的 Sequoia Engine/offload_engine.py 实现了显存受限下的 CPU-to-GPU 异步层卸载：将前 stay_layers 层常驻 GPU HBM，其余卸载层通过 .detach().pin_memory() 锁页后，利用 2 个预分配 LlamaLayerBuffer 槽位与独立 load_stream 执行 non_blocking=True 的 Ping-Pong 双缓冲拷贝；由于卸载步耗时受限于 max(T_compute, L_off * W_layer / B_PCIe)，Sequoia 投机树验证在不增加 PCIe 权重传输字节数的前提下将单次 PCIe 搬运摊销到多个接受 Token 上。",
+      "source_ids": ["together-sequoia-offload-engine"],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/ai-infra-innovators.md",
+        "docs/components/capacity-economics.md"
+      ],
+      "limitations": "静态源码审阅，未在物理 PCIe GPU 主机上实测。",
+      "verified_at": "2026-10-18",
+      "verifier": "Direct fixed-commit reading of Infini-AI-Lab/Sequoia Engine/offload_engine.py"
+    },
+    {
+      "id": "groq-groqflow-estimate-perf",
+      "claim": "GroqFlow 的 groqflow/groqmodel/groqmodel.py 在 estimate_performance() 中定义了确定性 LPU 的解析延迟方程：片上单级耗时按 on_chip_compute_cycles / 900e6 (900 MHz) 计算，且在默认开启多芯片流水线（未设 --no-multichip-pipelining）时因 stats_file 中的 total_cycles 仅报告单个流水线级周期，必须乘以 num_chips_used 才得到单请求走完多卡的确定性计算延迟，并在此基础上叠加输入与输出两侧各 (bytes / 24e9) + 10 us 的 PCIe 传输延迟。",
+      "source_ids": ["groq-groqflow-groqmodel"],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/ai-infra-innovators.md",
+        "docs/components/capacity-economics.md"
+      ],
+      "limitations": "静态源码审阅，未在物理 GroqCard/GroqNode 上执行。",
+      "verified_at": "2026-10-18",
+      "verifier": "Direct fixed-commit reading of groq/groqflow groqflow/groqmodel/groqmodel.py"
+    },
+    {
+      "id": "cerebras-sdk-bw-fifo-compensated",
+      "claim": "Cerebras SDK 的 benchmarks/bandwidth-test/run.py 与 src/bw_sync_kernel.csl 揭示了晶圆边缘 I/O 的物理面积与计时开销：主机通过 100GbE 最多 16 个通道（每通道 ~7 Gbps，含 ~200 us TCP 开销）连接晶圆，memcpy 框架在计算网格西侧固定占用 3 列、东侧占用 3 列系统 PE，并需额外部署 ceil(W * pe_length * 4 / 46000) 列 46 KB/PE 的硬件 FIFO 缓冲列以吸收计算核心反压；片上带宽核验通过采样 48-bit 硬件时间戳并扣除 2D 网格 Manhattan 广播延迟 time_ref - (px + py)，再按 0.85 GHz 换算真实微秒耗时。",
+      "source_ids": [
+        "cerebras-sdk-bw-run",
+        "cerebras-sdk-bw-sync-kernel"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/ai-infra-innovators.md",
+        "docs/components/capacity-economics.md"
+      ],
+      "limitations": "静态源码审阅，未在物理 WSE 晶圆上执行。",
+      "verified_at": "2026-10-18",
+      "verifier": "Direct fixed-commit reading of Cerebras/sdk-examples benchmarks/bandwidth-test/run.py and src/bw_sync_kernel.csl"
+    },
+    {
+      "id": "capacity-economics-offline-sim",
+      "claim": "原创离线算例 experiments/capacity_economics 验证了三项核心容量与成本定量结论：(1) 671.1B 总参数 MoE（256 选 8，活跃矩阵乘参数 26.95B，单 Token 训练算力 204.68 GFLOPs）相比 70B 稠密模型（单 Token 478.12 GFLOPs）将每百万训练 Token 成本从 $0.9456 降至 $0.5355（FP8 进一步降至 $0.3743，且严格将 FP8 下的 BF16 MFU 标为 None）；(2) 在突发到达（burstiness=0.25, CV_a^2=4.0）的长上下文场景下，盲目按 92% 利用率定容会使期望 TTFT 飙升至 4,375.0 ms、TTFT Goodput 达标率暴跌至 7.27%，而按 Kingman 安全水位与 Prefill/Decode 分离定容（31:5 实例比，288 卡）相比混部（392 卡）直接节省 104 张 GPU（26.5%），且将 Prefix Cache 命中率从 12.5% 提升至 87.5% 可把每百万达标输出 Token 成本从 $12.3698 降至 $1.7180（下降 86.1%）；(3) 精确复算了 Fireworks 动态批大小（从 2 扩至 14）、Sequoia PCIe 双缓冲投机卸载加速比（5.40x–6.80x）、Groq 8/16 卡流水线与非流水线延迟及 Cerebras 46 KB/PE FIFO 西缓冲列（2–12 列）与 Manhattan 补偿带宽。",
+      "source_ids": [
+        "torchtitan-models-utils-flops",
+        "torchtitan-metrics",
+        "torchtitan-utils-peak-flops",
+        "vllm-benchmark-serving",
+        "vllm-disagg-prefill-proxy",
+        "slurm-acct-gather-energy-gpu",
+        "fireworks-prefill-load-test",
+        "together-sequoia-offload-engine",
+        "groq-groqflow-groqmodel",
+        "cerebras-sdk-bw-run",
+        "cerebras-sdk-bw-sync-kernel"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/capacity_economics/run.py",
+        "experiments/capacity_economics/results.json",
+        "experiments/capacity_economics/results.csv",
+        "docs/components/capacity-economics.md",
+        "docs/components/ai-infra-innovators.md"
+      ],
+      "limitations": "Python 标准库确定性 CPU/offline 算例，采用显式合成单价与 Kingman 排队近似，不代表特定云厂商实时报价或硬件实测。",
+      "verified_at": "2026-10-18",
+      "verifier": "python experiments/capacity_economics/run.py --check and tests/test_capacity_economics.py"
     }
   ]
 }

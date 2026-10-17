@@ -23,6 +23,7 @@
 | [推理调度、KV Cache 生命周期与 SLO/Goodput 边界](docs/components/inference-slo.md) | vLLM V1 统一 `token_budget` 调度、100% Prefix Cache 末块重算、`FreeKVCacheBlockQueue` 与 Chunked Prefill / P/D 分离 |
 | [6D 分布式训练状态与通信联合账本](docs/components/training-parallelism.md) | TorchTitan `ParallelDims`、PyTorch FSDP2 双缓冲预取、`Shard(dim!=0)` 惩罚、TP+SP、CP Ring Attention 与 DeepEP v2 |
 | [AI 集群拓扑感知调度、设备隔离与弹性恢复契约](docs/components/cluster-orchestration.md) | Kubelet Topology Manager、Kueue TAS、Slurm `topology/block & tree`、NVIDIA Device Plugin XID/MIG 与 `torchelastic` |
+| [容量、成本与吞吐经济学](docs/components/capacity-economics.md) | TorchTitan 稠密/MoE 参数与 MFU 护栏、vLLM Gamma 突发排队与 P/D 分离 Goodput 定容、Slurm 梯形能耗积分與创新公司 I/O 边界 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) | 推理加速（Fireworks / Together）与新型 AI 芯片（Groq TSP / Cerebras WSE）架构剖析 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-18.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -35,6 +36,7 @@
 | [Inference SLO scheduler 算例](experiments/inference_slo_scheduler/README.md) | vLLM V1 `token_budget` 调度、Prefix Cache 末块重算、Chunked Prefill 与 P/D 分离 TTFT/TPOT 权衡 |
 | [Training parallelism 算例](experiments/training_parallelism/README.md) | 6D 并行显存/通信账本、FSDP2 `Shard(dim!=0)` 瞬态峰值、CP 因果倾斜与 DeepEP v2 去重 |
 | [Cluster orchestration 算例](experiments/cluster_orchestration/README.md) | Kubelet NUMA/PCIe/RDMA 掩码准入、Slurm `topology/block` 反碎片与 Young-Daly/热备弹性训练 Goodput |
+| [Capacity economics 算例](experiments/capacity_economics/README.md) | TorchTitan 稠密/MoE 训练成本、vLLM Gamma 突发排队与 P/D 分离 Goodput、Slurm 焦耳积分及四家创新公司吞吐/I/O 模型 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -60,6 +62,7 @@ python experiments\checkpoint_recovery\run.py --check
 python experiments\inference_slo_scheduler\run.py --check
 python experiments\training_parallelism\run.py --check
 python experiments\cluster_orchestration\run.py --check
+python experiments\capacity_economics\run.py --check
 python scripts\source_monitor.py
 ```
 

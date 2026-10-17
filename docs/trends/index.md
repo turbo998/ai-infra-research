@@ -10,7 +10,7 @@
 | 推理加速平台（Fireworks / Together） | 块稀疏 Attention、Hopper/Blackwell 异步流水线、硬件感知推测解码树与常状态模型直接改变长序列与低延迟成本结构 | [AI Infra 创新公司深挖](../components/ai-infra-innovators.md)（含 M3 反向索引自适应副本/零 D2H 二分调度/延迟归一化合并源码）、[SM100 分派链路](../components/kernel-dispatch-layout.md) 与 [Innovator arch tradeoffs 算例](../../experiments/innovator_arch_tradeoffs/README.md) |
 | 新型全 SRAM / 晶圆级芯片（Groq / Cerebras） | 抛弃片外 HBM 换取 `20–55 TiB/s` 片上 SRAM 流带宽或晶圆级单色 2D Mesh AllReduce，带来确定性低尾延迟与容量悬崖的硬取舍 | [AI Infra 创新公司深挖](../components/ai-infra-innovators.md)；已核验 TSP 论文、`groqflow` 多芯片切分与 `Cerebras/sdk-examples`（AllReduce 与 2D Mesh GEMV 集体原语）CSL 源码 |
 | KV 管理与分离式推理 | 容量、cache、KV 传输和 SLO 需联合设计 | [vLLM V1 统一调度、KV Cache 生命周期与 SLO/Goodput 边界](../components/inference-slo.md) 与 [Inference SLO 离线算例](../../experiments/inference_slo_scheduler/README.md) 已完成；线上集群压测待授权 |
-| 资源效率与可靠性 | 有效工作成本、checkpoint/恢复、机架功率决定系统效率 | [GDS `cuFile` 与 PyTorch DCP 分布式 Checkpoint/恢复契约](../components/storage-checkpoint.md) 及 [Checkpoint 恢复离线算例](../../experiments/checkpoint_recovery/README.md) 已完成；继续推进 `training-parallelism` 与平台/经济性/设施题 |
+| 资源效率与可靠性 | 有效工作成本、checkpoint/恢复、机架功率决定系统效率 | [GDS `cuFile` 与 PyTorch DCP 分布式 Checkpoint/恢复契约](../components/storage-checkpoint.md)、[AI 集群拓扑感知调度与弹性恢复契约](../components/cluster-orchestration.md)、[容量、成本与吞吐经济学](../components/capacity-economics.md) 及 [Capacity economics 算例](../../experiments/capacity_economics/README.md) 已完成；继续推进 `rack-power-cooling` |
 
 这是问题驱动的技术观察表，不是“已掌握所有最新成果”。正文、规范、实现和测量成熟度分别登记。网页 hash 变化只产生监控事件，须人工/代理阅读相关正文才能更新趋势。
 
@@ -27,3 +27,6 @@ Distributed Checkpoint 两阶段保存、跨 Rank 去重均衡、`BlockingAsyncS
 `inference_slo_scheduler` 两套原创标准库离线算例，并深化 Fireworks M3 辅助 CuTe-DSL 管线与 Cerebras 2D
 Mesh GEMV 集体原语源码分析。`hopper-architecture`、`uec-1-1`、`nvlink-overview` 出现动态页面哈希变化
 （仅记录监控信号，不视为新规范发布）；`jedec-directory` 返回 `http_403`（覆盖不完整，保留旧基线与 blocked 状态）。
+
+2026-10-18：完成 `cluster-orchestration`（Kubernetes Topology Manager、Kueue TAS、Slurm `topology/block & tree`、NVIDIA Device Plugin XID/MIG 与 `torchelastic`）与 `capacity-economics`（TorchTitan `v0.3.0` 稠密/MoE 参数与 FP8 MFU 护栏、vLLM `v0.8.2` Gamma 突发排队与 P/D 分离 Goodput 定容、Slurm `26.05.5-1` 梯形法则 GPU 能耗积分），新增 `cluster_orchestration` 与 `capacity_economics` 两套原创标准库离线算例，并深挖 Fireworks `prefill_load_test.py`、Together/Sequoia `offload_engine.py`、Groq `groqmodel.py` 与 Cerebras `bandwidth-test/{run.py,bw_sync_kernel.csl}` 的多芯片/边缘 I/O 成本模型。
+

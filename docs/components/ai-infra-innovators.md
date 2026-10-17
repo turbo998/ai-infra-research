@@ -1,14 +1,14 @@
 # AI Infra 创新公司深挖：推理加速平台（Fireworks / Together）与新型 AI 芯片（Groq / Cerebras）
 
-状态：2026-10-17（持续更新自 2026-10-14），基于固定开源代码提交与同行评审/预印本论文正文的**有界公开研究**。
+状态：2026-10-18（持续更新自 2026-10-14），基于固定开源代码提交与同行评审/预印本论文正文的**有界公开研究**。
 先修：[GPU/HBM 深入研究](gpu-hbm.md)、[互连与网络分层](interconnect-network.md)。
 **严格边界声明**：本文仅依据公开源码（`implementation`）、架构论文（`specification` / `author-benchmark`）及本仓库合成公式推导立论；**未调用任何商业付费 API，未在 B200/H100/Groq LPU/Cerebras WSE 硬件上实测**，作者披露的跑分均显式标注为 `author-benchmark`，绝不冒充本项目独立重测（`own-hardware`）。
 
 证据 ID：`fireworks-m3-sparse-sm100`、`fireworks-b200-author-bench`、`fireworks-locust-cache-bench`、
-`fireworks-m3-ancillary-cute-pipeline`、
-`together-fa3-hopper-async`、`together-sequoia-spec-tree`、`together-sequoia-dp-spectree-impl`、`together-stripedhyena-state`、`together-moa-fanout`、
-`groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`groq-groqflow-multichip-runtime`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`、
-`cerebras-csl-gemv-2d-collectives`、`cerebras-csl-sync-wse3`。
+`fireworks-m3-ancillary-cute-pipeline`、`fireworks-prefill-load-test-routing`、
+`together-fa3-hopper-async`、`together-sequoia-spec-tree`、`together-sequoia-dp-spectree-impl`、`together-sequoia-offload-engine-pcie`、`together-stripedhyena-state`、`together-moa-fanout`、
+`groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`groq-groqflow-multichip-runtime`、`groq-groqflow-estimate-perf`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`、
+`cerebras-csl-gemv-2d-collectives`、`cerebras-csl-sync-wse3`、`cerebras-sdk-bw-fifo-compensated`、`capacity-economics-offline-sim`。
 来源行范围、commit SHA 与发布日期见 [sources](../../research/sources.json)；主张与证据类型见 [evidence](../../research/evidence.json)。
 
 ---
@@ -245,4 +245,89 @@ Together AI 的公开研究布局覆盖了从底层 CUDA/Cutlass Kernel 到解�
 3. **Groq LPU 与 Cerebras WSE-3 的单单元 SRAM 容量边界**：
    - 对 `70B INT8`（`70 GB` 权重，按 `75%` 权重可用率扣除激活/KV/指令区），单颗 Groq TSP/LPU（`220 MiB` SRAM）至少需 **`405` 颗芯片**串联才能实现纯片上 SRAM 驻留；单片 Cerebras WSE-3（`44 GB` 片上 SRAM，可用约 `33 GB`）同样超过单晶圆纯 SRAM 驻留上限（需 `>= 3` 片晶圆或依赖 MemoryX 外部流式权重加载）。
 
+---
+
+## 7. 源码深挖（2026-10-18 新增）：容量经济学、Prefix Cache Worker 路由、PCIe 双缓冲卸载与晶圆边缘 FIFO 反压
+
+为与全栈第 10 层组件 [容量、成本与吞吐经济学](capacity-economics.md) 及实验 [`experiments/capacity_economics/`](../../experiments/capacity_economics/README.md) 形成闭环，本节进一步核验四家创新公司在**容量定容、缓存亲和路由、PCIe 带宽墙摊销与主机边缘 I/O 测量**上的五份一手源码：
+
+### 7.1 Fireworks AI (`fw-ai/benchmark/llm_bench/prefill_load_test.py`)：多 Worker 路由头、`cached_tokens + 1` 预热与动态批大小
+
+在固定提交 `fw-ai/benchmark@94cd111967c7be51a35777c475d7c5d2b66ec94a`（`2026-10-08`）的 [`llm_bench/prefill_load_test.py`](https://github.com/fw-ai/benchmark/blob/94cd111967c7be51a35777c475d7c5d2b66ec94a/llm_bench/prefill_load_test.py)（`blob: 2d1550e3d36455f95274502e85c03c44da7de138`，全文 `L1–648`）中，Fireworks 公开了用于评估多副本 Prefill 集群与 Prefix Cache 吞吐的完整基准测试器：
+
+1. **二维 Worker 显式寻址头（`RoutingConfig`, `L42–60`）**：
+   在包含 `num_servers` 台服务器、每台服务器运行 `num_gens` 个 Generator Worker 的分布式推理池中，若负载均衡器随机分发请求，同一个会话的 Prompt Cache 将在多台 Worker 间反复失效。`RoutingConfig.headers_for(flat)` 将扁平索引 `flat` 映射为两个显式 HTTP 路由头：
+   - `x-fireworks-generator-worker-service-index = str(flat % num_servers)`
+   - `x-fireworks-generator-worker-local-index = str(flat // num_servers)`
+   从而强制将特定前缀预热和压测流量绑定到确定性的 `(srv, gen)` 实例上。
+2. **为什么预热请求必须发送 `cached_tokens + 1` 个 Token？（`build_warmup_ids`, `L128–140`）**：
+   源码在 `L129–130` 注释并实现了一个关键的推理引擎边界：`# Server caches prompt[:-1] (last token is first decode slot), so send cached_tokens + 1 tokens to get exactly cached_tokens cached`。因为在自回归生成中，输入序列的最后一个 Token 需要作为第一步生成（First Decode Slot）的 Query 输入参与 logits 计算，服务端 KV Cache 管理器仅将前缀 `prompt[:-1]` 固化为可复用缓存块。若预热时只发 `cached_tokens` 个 Token，实际写入缓存的只有 `cached_tokens - 1` 个 Token，后续请求会在第 `cached_tokens` 位置发生缓存部分未命中。
+3. **按未缓存 Token 数反比缩放的动态 Batch 与最慢 Worker 木桶效应（`L297–318, L434–441`）**：
+   - 每个请求实际需要 Prefill 矩阵乘计算的 Token 数为 `uncached_tokens = prompt_tokens - cached_tokens`，压测器据此动态计算单轮并发批大小：
+     $$\text{batch\_size} = \max\!\left(1,\; \left\lfloor \frac{\text{min\_tokens\_to\_batch}}{\text{prompt\_tokens} - \text{cached\_tokens}} \right\rfloor\right)$$
+   - 在多 Worker 并发轮次（`run_round`）中，所有 Worker 通过 `asyncio.gather` 同时压测，但整轮墙钟耗时由最慢的 Straggler Worker 决定：`duration = max(server_durations)`（`L306`），而服务端前向传播耗时取各 Worker 求和 `fwp = sum(fwps)`。这证明在多副本推理集群中，**Prefix Cache 命中率的不均匀分布会直接通过最慢 Worker 拖垮整批并发吞吐**。
+
+### 7.2 Together AI / Sequoia (`Infini-AI-Lab/Sequoia/Engine/offload_engine.py`)：锁页内存双缓冲 PCIe 卸载与投机树摊销
+
+当模型权重超出单机 GPU HBM 容量、不得不把部分 Transformer 层卸载到主机 CPU 内存时，传统逐 Token 自回归解码会遭遇灾难性的 PCIe 带宽墙。在固定提交 `Infini-AI-Lab/Sequoia@0ff3ff71475ca148f2dfb7545e0de5caf5c67b39`（`2025-01-28`）的 [`Engine/offload_engine.py`](https://github.com/Infini-AI-Lab/Sequoia/blob/0ff3ff71475ca148f2dfb7545e0de5caf5c67b39/Engine/offload_engine.py)（`blob: 7860ab7308cb94eb78f4e8514147257bdb3fa231`，全文 `L1–393`）中，`OffloadEngine` 展示了如何用“异步双缓冲 + 投机树验证”联合破解这一瓶颈：
+
+1. **常驻层 `stay_layers` + 锁页内存 Ping-Pong 双缓冲（`L66–127, L179–215`）**：
+   - `LlamaLayerBuffer` 为单层权重（`wq, wk, wv, wo, w1, w2, w3` 及 RMSNorm 权重）在 GPU HBM 上预分配固定显存槽位，并在初始化时将卸载到 CPU 的层通过 `.detach().pin_memory()` 锁定在主机页锁定内存（Pinned Memory）中以启用异步 DMA；
+   - 引擎将前 `stay_layers` 层常驻 GPU（`self.layers[:stay_layers]`），仅为剩余 $L_{\text{off}} = L_{\text{total}} - L_{\text{stay}}$ 层在 GPU 上分配 **2 个 `LlamaLayerBuffer`（`self.buffer = [LlamaLayerBuffer(self.device) for _ in range(2)]`）** 与独立的 CUDA 流 `self.load_stream = torch.cuda.Stream(device=device)`；
+   - 在前向循环 `inference()`（`L192–215`）中，当默认流正在计算第 `idx` 层（使用 `self.buffer[idx % 2]`）时，`self.load_stream` 并发执行 `self.buffer[(idx + 1) % 2].sync_copy(self.layers[idx + 1])`（调用 `.copy_(..., non_blocking=True)`），实现跨层 PCIe H2D 传输与 GPU 计算的 Ping-Pong 重叠。
+2. **为什么投机树（Speculative Tree）对 PCIe Offload 具有乘数级成本收益？**：
+   设单层字节数为 $W_{\text{layer}}$、PCIe 有效带宽为 $B_{\text{PCIe}}$，则每步必须从 CPU 搬运 $L_{\text{off}} \cdot W_{\text{layer}}$ 字节，单步耗时下界为：
+   $$T_{\text{step, offload}} = \max\!\left(T_{\text{compute}},\; \frac{L_{\text{off}} \cdot W_{\text{layer}}}{B_{\text{PCIe}}}\right)$$
+   由于 $B_{\text{PCIe}}$（PCIe Gen4/Gen5 约 `24–56 GB/s`）比 HBM3（`3,350 GB/s`）低 **$60\times\text{–}140\times$**，卸载模式下 $T_{\text{step, offload}}$ 几乎完全由 PCIe 传输时间支配，且验证 $K=64$ 个投机树候选 Token 与计算 1 个 Token 所需的 PCIe 权重传输量**完全相同**！因此在 [`experiments/capacity_economics/`](../../experiments/capacity_economics/README.md) 中，当 Sequoia 树每次验证平均接受 $\mathbb{E}[\tau] = 5.4\text{–}6.8$ 个 Token 时，在不增加任何一字节 PCIe 传输的前提下，有效生成吞吐从 `0.55–3.11 tok/s` 直接跃升至 **`2.96–21.16 tok/s`（净加速 `5.4x–6.8x`）**。
+
+### 7.3 Groq (`groq/groqflow/groqflow/groqmodel/groqmodel.py`)：900 MHz 编译器周期、多芯片流水乘子与 PCIe 固定开销方程
+
+在固定提交 `groq/groqflow@720e024414be401a7853931a2622a26446883746`（`2023-12-19`）的 [`groqflow/groqmodel/groqmodel.py`](https://github.com/groq/groqflow/blob/720e024414be401a7853931a2622a26446883746/groqflow/groqmodel/groqmodel.py)（`blob: 9e07c49316833654cc8e1ca5309e8247837b198a`，全文 `L1–460`）中，`GroqModel.estimate_performance()`（`L116–164`）给出了 Groq 官方工具链在无需物理上板时预测端到端性能的精确解析模型：
+
+```python
+# groqflow/groqmodel/groqmodel.py:130-156
+frequency = 900000000  # Hz (900 MHz)
+pcie_latency = 1e-5  # seconds (10 us)
+pcie_bandwidth = 24e9  # bytes per second (24 GB/s)
+
+self.state.info.estimated_pcie_input_latency = (
+    self.state.info.compiled_model_input_bytes / pcie_bandwidth
+) + pcie_latency
+self.state.info.deterministic_compute_latency = on_chip_compute_cycles / frequency
+
+# When pipelined, the reported cycle is the duration of a single pipelining stage
+# Note: Models are pipelined by default
+if not "--no-multichip-pipelining" in self.state.config.compiler_flags:
+    self.state.info.deterministic_compute_latency *= self.state.num_chips_used
+
+self.state.info.estimated_pcie_output_latency = (
+    self.state.info.compiled_model_output_bytes / pcie_bandwidth
+) + pcie_latency
+```
+
+这段源码从工程上证实了三个关键事实：
+1. **单级周期与多卡端到端延迟的乘数关系**：当模型跨 $N_{\text{chips}}$ 张 LPU 编译且默认启用多芯片流水线（未传 `--no-multichip-pipelining`）时，编译器 `stats_file` 中的 `total_cycles` 仅代表**单个流水线级（单张芯片）的周期数**。因此，单次推理走完 $N_{\text{chips}}$ 张芯片的确定性片上计算延迟必须乘以 `self.state.num_chips_used`（与 4.2 节 `execute.py` 中连续调用 $N_{\text{chips}}$ 次 `tsp_runner` 严格对应）！
+2. **吞吐与延迟的分离**：在持续满载流水线模式下，系统每秒可完成的样本吞吐取决于单级周期 $f / \text{total\_cycles}$，但单个 Token Step 的端到端延迟取决于 $N_{\text{chips}} \cdot (\text{total\_cycles} / f)$。
+3. **PCIe 往返延迟下界**：每次与主机交互固定叠加输入与输出两次 `10 µs`（共 `20 µs`）PCIe 事务延迟及 `24 GB/s` 带宽项。
+
+### 7.4 Cerebras (`Cerebras/sdk-examples/benchmarks/bandwidth-test/`)：100GbE 16 通道边缘 I/O、46 KB/PE FIFO 反压缓冲列与 Manhattan 时钟补偿
+
+在固定提交 `Cerebras/sdk-examples@d19f2ca3e51285fc5904c78643b38819a2f26c44`（`2026-04-27`）的 [`benchmarks/bandwidth-test/run.py`](https://github.com/Cerebras/sdk-examples/blob/d19f2ca3e51285fc5904c78643b38819a2f26c44/benchmarks/bandwidth-test/run.py)（`blob: fd1d87d73f1cb650e68688507be58e62d92e3790`，全文 `L1–402`）与 [`src/bw_sync_kernel.csl`](https://github.com/Cerebras/sdk-examples/blob/d19f2ca3e51285fc5904c78643b38819a2f26c44/benchmarks/bandwidth-test/src/bw_sync_kernel.csl)（`blob: 3060e774cc14e05d523a1d5d7e11140aafc0c376`，全文 `L1–145`）中，源码注释与实现完整披露了晶圆级芯片与外部主机通信的物理瓶颈与面积开销：
+
+1. **100 Gbps 以太网边缘链路与 16 通道切分（`run.py:16–64`）**：
+   主机与 WSE 之间通过 `100 Gbps` 以太网连接，数据被切分到最多 `16` 个并行 I/O 通道（`--channels`，单通道峰值约 `7 Gbps` $\approx 875\text{ MB/s}$），且每次主机侧 `memcpy_h2d` / `memcpy_d2h` 调用都带有约 **`200 µs` 的 TCP 事务开销**。
+2. **反压（Backpressure）与 `46 KB/PE` 硬件 FIFO 缓冲列开销（`run.py:34–64, 92–122`）**：
+   - 若目标计算 PE 正在执行繁重计算而无法及时响应 I/O Wavelet，反压会沿片上织物一路回传并阻塞主机 I/O 通道；
+   - 为解耦主机传输与片上计算，编译器在计算网格西侧（H2D 入口）与东侧（D2H 出口）插入专门的缓冲列 `--width-west-buf` 与 `--width-east-buf`，其中每个缓冲 PE 将自身几乎全部的 **`46 KB` SRAM 配置为硬件 FIFO**：
+     $$C_{\text{buf}} = \left\lceil \frac{W \cdot L_{\text{pe}} \cdot 4\text{ bytes}}{46{,}000\text{ bytes}} \right\rceil$$
+   - 同时，`memcpy` 运行时框架自身还必须在西侧占用 `3` 列系统 PE、在东侧占用 `2 + 1 = 3` 列系统 PE（`run.py:92–95`）：
+     $$\texttt{core\_fabric\_offset\_x} = x_{\text{offset}} + 3 + C_{\text{west}}, \qquad W_{\min} = \texttt{core\_fabric\_offset\_x} + W + 2 + 1 + C_{\text{east}}$$
+     例如在 [`experiments/capacity_economics/`](../../experiments/capacity_economics/README.md) 的场景 2（$W = 256, L_{\text{pe}} = 512$，单次传输 `524,288 bytes`）中，仅为了无阻塞缓冲一次 H2D/D2H 传输，西侧与东侧就各需 **12 列 FIFO 缓冲 PE + 3 列系统 PE**，使最小织物宽度从 `256` 膨胀至 **`287` 列（额外消耗 `12.1%` 的晶圆列宽）**！
+3. **48-Bit 时间戳 `f32` 位重解释与 2D Manhattan 波前延迟补偿（`bw_sync_kernel.csl:74–144` & `run.py:216–244, 336–378`）**：
+   - 在 `bw_sync_kernel.csl` 中，每个 PE 通过 `timestamp.get_timestamp(&tscStartBuffer)` 采样 3 个 `u16` 字（48-bit 周期计数器），并通过 `bitcast` 将相邻 `u16` 拼接打包进 `f32` 数组传回主机；
+   - 由于 `sync/pe.csl` 的全晶圆同步广播波前从左上角 `PE(0,0)` 沿东北$\to$东南方向逐跳扩散，坐标为 `(px, py)` 的 PE 收到广播信号并锁存 `time_ref` 的时刻比 `PE(0,0)` 晚了恰巧 `px + py` 个周期。因此 `run.py:240–244` 显式执行 **Manhattan 波前补偿**：
+     $$T_{\text{ref, comp}}(p_y, p_x) = T_{\text{ref}}(p_y, p_x) - (p_x + p_y)$$
+     再计算全网格最早开始周期 $\min(T_{\text{start}} - T_{\text{ref, comp}})$ 与最晚结束周期 $\max(T_{\text{end}} - T_{\text{ref, comp}})$ 之差 `cycles_send`，按 `0.85 GHz` 换算微秒并得出真实片上边缘带宽。
+
 练习状态：`not-assessed`。后续可证伪研究问题已登记至 [`research/queue.json`](../../research/queue.json)。
+
