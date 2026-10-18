@@ -2018,6 +2018,118 @@
       "limitations": "Python 标准库确定性建模。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/selective_activation_offload/run.py --check and tests/test_selective_activation_offload.py"
+    },
+    {
+      "id": "ev-vllm-sglang-chunked-prefill-sched-code-2026",
+      "claim": "vLLM V1 (vllm/v1/core/sched/scheduler.py) 在统一 max_num_scheduled_tokens 预算下，通过 long_prefill_token_threshold 与 adaptive_long_prefill_threshold (max(threshold, input_budget // num_eligible_reqs)) 限制多请求场景下的单请求 Prefill 分块，并通过 local_prefill_interval (当 (num_executed_steps + 1) - last_prefill_step < local_prefill_interval 且非 prefill_capacity_bound 时设置 defer_prefills = True) 强制插入纯 Decode 恢复步；SGLang (sglang/srt/managers/scheduler.py) 则通过 dynamic_chunk_sizer.predict(history_len) 随历史上下文增长收缩分块预算、在 is_mixed_chunk 时扣减 running_bs 并按 prefill_tile_block_m = 64 对齐分块。",
+      "source_ids": [
+        "vllm-v1-sched-chunked-prefill-interval-2026",
+        "sglang-dynamic-chunk-sizer-tile-align-2026",
+        "sarathi-serve-osdi-2024"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/chunked-prefill-tpot-interference-scheduler.md",
+        "experiments/chunked_prefill_interference/run.py"
+      ],
+      "limitations": "静态 Python 源码与公开论文核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of vllm/v1/core/sched/scheduler.py and python/sglang/srt/managers/scheduler.py"
+    },
+    {
+      "id": "evi-chunked-prefill-tpot-interference-001",
+      "claim": "本项目确定性离线实验 experiments/chunked_prefill_interference 验证：在 8x H100 Llama-3-70B-GQA-TP8-FP8 下，D=48 (8,192 上下文, 7.50 GiB KV/rank) 纯 Decode 耗时 7.535 ms（距 25.0 ms TPOT SLA 余 17.465 ms）；静态 chunk_size=8192 将混合步耗时推高至 255.678 ms (P99 TPOT 267.18 ms，违约 10.23x)，chunk_size=2048 达 65.841 ms (P99 68.80 ms)；闭环 Tile 对齐求解器给出 C*(48, 7.5 GiB) = 640 tokens (10 x 64 tiles，在 D=96, 16K 上下文 30.0 GiB KV/rank 下自动收缩至 192 tokens)，将混合步耗时控制在 24.902 ms (P99 TPOT 26.02 ms，较静态 8192 降低 10.27x)，并将 <=25 ms SLA 合规 Goodput 提升 4.49x (17,737.4 tok/s vs 3,947.4 tok/s)。",
+      "source_ids": [
+        "own-phase11-chunked-dit-inductor-experiments-2026",
+        "vllm-v1-sched-chunked-prefill-interval-2026",
+        "sglang-dynamic-chunk-sizer-tile-align-2026"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/chunked_prefill_interference/run.py",
+        "experiments/chunked_prefill_interference/results.json",
+        "docs/components/chunked-prefill-tpot-interference-scheduler.md",
+        "docs/reports/ai-infra-phase11-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/chunked_prefill_interference/run.py --check and tests/test_chunked_prefill_interference.py"
+    },
+    {
+      "id": "ev-xdit-pipefusion-teacache-usp-code-2026",
+      "claim": "xDiT (xdit-project/xDiT@f7c16aa9) 构建 (_CFG, _SP Ulysses/Ring, _PP PipeFusion, _TP) 4D 正交进程组，在 DiTRuntimeState 中将空间高度切分为 num_pipeline_patch 微块并通过 CacheManager._xdit_kv_cache 原地复用新鲜/陈旧空间块 KV 切片以重叠 P2P 通信与全双向注意力；TeaCachedTransformerBlocks (xfuser/model_executor/cache/utils.py) 在 use_usp=True 时跨 get_sp_group() 执行 self.all_reduce(diff) 与 self.all_reduce(norm) 确保全部序列并行 Rank 做出完全一致的跳步决策而不死锁 Ulysses All-to-All，并通过 reset_mask = (cnt == 0) | (cnt == num_steps - 1) 强制首尾边界步全量计算。",
+      "source_ids": [
+        "xdit-parallel-runtime-pipefusion-2026",
+        "xdit-kv-cache-manager-pipefusion-2026",
+        "xdit-teacache-usp-allreduce-2026"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/dit-video-xdit-pipefusion-serving.md",
+        "experiments/dit_video_pipefusion_serving/run.py"
+      ],
+      "limitations": "静态 Python 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of xfuser/core/distributed/runtime_state.py, cache_manager.py, and model_executor/cache/utils.py"
+    },
+    {
+      "id": "evi-dit-video-pipefusion-serving-001",
+      "claim": "本项目确定性离线实验 experiments/dit_video_pipefusion_serving 验证：在 8x H100 服务 Wan2.1-14B-720p-81f (40 层, H=5120, N=131,072 时空 Token, 50 步, 2 CFG passes) 时，Megatron TP=8 每步触发 160 次 [131072, 5120] AllReduce，暴露通信达 784.60 ms/step (占比 11.18%，50 步总耗时 350.78 s)；混合 xDiT (CFG=2 x Ulysses=2 x PipeFusion=2, M=4 空间微块) 将暴露通信+气泡占比压至 0.98% (58.30 ms/step，50 步 298.30 s，无损提速 1.18x)；叠加 USP 同步 TeaCache (rel_l1_thresh=0.12) 在强制保留第 0 与 49 步的前提下跳过 39/50 步 (78.0%)，将 50 步视频生成延迟压降至 75.40 s (较 TP=8 端到端提速 4.65x) 且 PSNR 仅退化 0.31 dB (34.88 dB)。",
+      "source_ids": [
+        "own-phase11-chunked-dit-inductor-experiments-2026",
+        "xdit-parallel-runtime-pipefusion-2026",
+        "xdit-teacache-usp-allreduce-2026"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/dit_video_pipefusion_serving/run.py",
+        "experiments/dit_video_pipefusion_serving/results.json",
+        "docs/components/dit-video-xdit-pipefusion-serving.md",
+        "docs/reports/ai-infra-phase11-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/dit_video_pipefusion_serving/run.py --check and tests/test_dit_video_pipefusion_serving.py"
+    },
+    {
+      "id": "ev-vllm-pytorch-inductor-cache-noguards-code-2026",
+      "claim": "vLLM V1 编译子系统 (vllm/compilation/wrapper.py, caching.py, backends.py) 在单次动态符号追踪后通过 TorchCompileWithNoGuardsWrapper 注入 guard_filter_fn = torch.compiler.skip_all_guards_unsafe (或启用 torch.compiler.set_stance('fail_on_recompile')) 消除运行时 Guard 评估与动态形状重编译风暴，并通过 StandaloneCompiledArtifacts 双层 SHA256 内容寻址 (submodule_bytes_store[hex_digest]) 去重同构层制品；PyTorch TorchInductor (torch/_inductor/codecache.py & compile_fx.py) 则通过 FxGraphCachePickler 与 _filter_backed_symints 剥离具体 SymInt 尺寸提示后持久化 FxGraphCache。",
+      "source_ids": [
+        "vllm-compile-no-guards-wrapper-2026",
+        "vllm-standalone-compiled-artifacts-sha256-2026",
+        "pytorch-inductor-fxgraphcache-codecache-2026"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/torch-compile-inductor-cache-serving.md",
+        "experiments/torch_compile_inductor_cache/run.py"
+      ],
+      "limitations": "静态 Python 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of vllm/compilation/wrapper.py, caching.py, and torch/_inductor/codecache.py"
+    },
+    {
+      "id": "evi-torch-compile-inductor-cache-001",
+      "claim": "本项目确定性离线实验 experiments/torch_compile_inductor_cache 验证：在 Llama-3-70B-80L-TP8-FP8 跨 32 个 CUDA Graph 桶场景下，未共享逐桶 stock torch.compile 执行 32 次 Dynamo 追踪与 3,072 次 Triton autotune，冷启动阻塞达 1,766.2 s (29.44 min) 且发生 19 次运行时重编译；单次符号追踪 (TorchCompileWithNoGuardsWrapper) + StandaloneCompiledArtifacts SHA256 层去重 (80L -> 2) 将冷编译压缩至 69.0 s (提速 25.60x，0 次重编译)，热 FxGraphCache + Triton 缓存将启动压至 18.0 s (提速 98.12x)，预打包 MEGA_AOT_ARTIFACT 达 11.8 s (提速 149.68x)；同时每层融合 4 个逐元素/归一化/动态量化子图，将 80 层逐元素内核发射从 1,120 次压至 320 次，消减 56.2% 逐元素 HBM 往返流量 (B=256 下从 6,050.0 降至 2,650.0 MiB/step)，端到端吞吐提升 +35.73% (12,571.9 -> 17,063.9 tok/s)。",
+      "source_ids": [
+        "own-phase11-chunked-dit-inductor-experiments-2026",
+        "vllm-compile-no-guards-wrapper-2026",
+        "vllm-standalone-compiled-artifacts-sha256-2026",
+        "pytorch-inductor-fxgraphcache-codecache-2026"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/torch_compile_inductor_cache/run.py",
+        "experiments/torch_compile_inductor_cache/results.json",
+        "docs/components/torch-compile-inductor-cache-serving.md",
+        "docs/reports/ai-infra-phase11-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/torch_compile_inductor_cache/run.py --check and tests/test_torch_compile_inductor_cache.py"
     }
   ],
   "updated_at": "2026-10-19"

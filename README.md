@@ -53,7 +53,10 @@
 | [1M–4M 超长序列训练的 2D 混合上下文并行 (`USP = Ulysses × ZigZag Ring-Attention`)](docs/components/context-parallel-usp-zigzag-ring.md) | `feifeibear/long-context-attention` (`b92a1f4c`) 与 `NVIDIA/Megatron-LM` (`ce852bfb`) 源码、消除 GQA `8x` KV 复制与 `49.2%` 因果气泡、实现 `CP=64` 下 `2.82x–2.87x` 吞吐提速 |
 | [零开销结构化受限解码：`XGrammar` 自适应位掩码缓存与 vLLM V1 异步重叠](docs/components/structured-decoding-xgrammar-bitmask.md) | `mlc-ai/xgrammar` (`7e6b29a4`) `AdaptiveTokenMask`（`97.4%` 词表预分类、`32.0x` `int32` 位集压缩）与 `vLLM V1` 异步 CPU 流水线（`BS=64` 暴露开销 `56.4 us`、吞吐 `3.67x`） |
 | [算子级选择性激活重计算 (`SAC` 背包价值比) 与 NUMA 绑定 PCIe Gen5 零气泡卸载](docs/components/selective-activation-checkpoint-offload.md) | `pytorch/torchtitan` (`7c4b8e91`) `SAC` + `NUMA AffinityMode.NODE` 与 `Megatron-LM` 残差卸载规划器、70B `16K` 激活显存削减 `86.94%` (`467.81->61.09 GiB`) 且步耗时仅 `+2.53%` |
-| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9](docs/reports/ai-infra-phase9-benchmark-cards.html) · [Phase 10 7-Card 报告](docs/reports/ai-infra-phase10-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 45 个研究问题与 39 个可复现实验坐标 |
+| [动态 Token 预算分块预填充 (`Chunked Prefill`) 与 Decode P99 TPOT 干扰控制](docs/components/chunked-prefill-tpot-interference-scheduler.md) | `vLLM V1` (`local_prefill_interval` / `long_prefill_token_threshold`) 与 `SGLang` (`dynamic_chunk_sizer` / `prefill_tile_block_m=64`) 源码、闭环求解 $C^*(48, 7.5\text{GiB})=640$ 将 P99 TPOT 压降 `10.27x` (`26.02 ms`) 并提升 SLA Goodput `4.49x` |
+| [DiT 视频生成混合并行 (`xDiT`: `CFG × Ulysses × PipeFusion`) 与 `TeaCache` 残差跳步](docs/components/dit-video-xdit-pipefusion-serving.md) | `xdit-project/xDiT` (`f7c16aa9`) 4D 进程组、`_xdit_kv_cache` 空间微块流水与 `use_usp=True` `all_reduce` 防死锁 `TeaCache`、50 步 `Wan2.1-14B` 720p-81f 延迟降低 `4.65x` (`350.78->75.40 s`, `-0.31 dB` PSNR) |
+| [`torch.compile` (`TorchInductor` / `FxGraphCache` / `MEGA_AOT`) 冷启动消除与融合](docs/components/torch-compile-inductor-cache-serving.md) | `vLLM` `TorchCompileWithNoGuardsWrapper` (`skip_all_guards_unsafe`) + `StandaloneCompiledArtifacts` 双层 SHA256 去重 (`80L->2`)、冷启动从 `29.44 min` 压至 `18.0 s / 11.8 s` (`98x–149x`) 并减少 `56.2%` 逐元素 HBM 流量 |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9](docs/reports/ai-infra-phase9-benchmark-cards.html) · [Phase 10](docs/reports/ai-infra-phase10-benchmark-cards.html) · [Phase 11 7-Card 报告](docs/reports/ai-infra-phase11-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 48 个研究问题与 42 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -96,6 +99,9 @@
 | [2D USP & ZigZag Ring 算例](experiments/context_parallel_usp_zigzag/README.md) | `1M–4M` 序列 `CP=64` 下 `Ulysses=8 × ZigZag-Ring=8` 对称配对 `[r, 2R-1-r]`（因果失衡 `0.16%`、无 GQA KV 冗余复制、较朴素 Ring 提速 `2.82x–2.87x`）仿真 |
 | [Structured decoding XGrammar 算例](experiments/structured_decoding_xgrammar/README.md) | `128,256` 词表下 `AdaptiveTokenMask`（`97.4%` 预分类、`3,335` 动态 Token、`32.0x` `int32` 位掩码压缩）与异步重叠（`BS=64` 暴露 `56.4 us`、吞吐 `3.67x`）仿真 |
 | [Selective activation offload 算例](experiments/selective_activation_offload/README.md) | 算子级 `SAC` 背包价值比排序 + NUMA 绑定 Pinned PCIe Gen5 (`56.0 GB/s`) 双缓冲卸载（削减 `86.94%` 激活显存至 `61.09 GiB`、步耗时仅 `+2.53%`）仿真 |
+| [Chunked prefill interference 算例](experiments/chunked_prefill_interference/README.md) | `8x H100` `Llama-3-70B` 混批 L2/尾波干扰模型、闭环求解 $C^*(48, 7.5\text{GiB})=640$（P99 TPOT 从 `267.18 ms` 压至 `26.02 ms`、SLA Goodput `4.49x`）与 `D=96, 16K` 收缩至 `192` 仿真 |
+| [DiT video PipeFusion serving 算例](experiments/dit_video_pipefusion_serving/README.md) | `Wan2.1-14B-720p-81f` (`131K` 时空 Token) 下 `TP=8` (`11.18%` 暴露通信) vs `xDiT (CFG=2 × Ulysses=2 × PipeFusion=2)` (`0.98%`) + USP 同步 `TeaCache` (`75.40 s`, `4.65x`, `-0.31 dB` PSNR) 仿真 |
+| [TorchInductor compile cache 算例](experiments/torch_compile_inductor_cache/README.md) | `Llama-3-70B` 32 桶冷启动消除（`TorchCompileWithNoGuardsWrapper` + SHA256 `80L->2` 去重 + `FxGraphCache`/`MEGA_AOT` 提速 `98x–149x`）与逐元素融合（`-56.2%` HBM 流量、`+35.73%` 吞吐）仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -151,6 +157,9 @@ python experiments\gpu_ecc_predictive_drain\run.py --check
 python experiments\context_parallel_usp_zigzag\run.py --check
 python experiments\structured_decoding_xgrammar\run.py --check
 python experiments\selective_activation_offload\run.py --check
+python experiments\chunked_prefill_interference\run.py --check
+python experiments\dit_video_pipefusion_serving\run.py --check
+python experiments\torch_compile_inductor_cache\run.py --check
 python scripts\source_monitor.py
 ```
 
