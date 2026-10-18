@@ -50,7 +50,10 @@
 | [PyTorch FSDP2 (`fully_shard` 逐参数 `DTensor`) 与 `SymmetricMemory` `Async-TP` 5D 正交并行架构](docs/components/fsdp2-dtensor-async-tp-composability.md) | `pytorch/pytorch` (`1eba9b3a`) `fully_shard` 逐参数 `DTensor`（分配器碎片 `<1.5%`、省 `6.72–9.65 GiB/GPU`）与 `SymmetricMemory` 双流 `Async-TP=8`（隐藏 `91.27%–97.09%` 通信气泡、5D 单步 `1.322x` 提速） |
 | [NCCL 零拷贝用户缓冲区注册 (`ncclCommWindowRegister`)、`CUMEM` NVLS 多播与免 SM 抢占通信](docs/components/nccl-zero-copy-user-buffer-registration.md) | `NVIDIA/nccl` (`3e46c089`) `register.cc`/`coll_reg.cc`/`allocator.cc` 零拷贝注册、2-CTA 消除并发 GEMM `+16.46%–47.18%` 尾波膨胀、省 `576 MiB–2.305 GiB/GPU` FIFO HBM 与 P99 延迟 `2.07x–3.74x` 提速 |
 | [GPU HBM3e ECC 行重映射 (`Row Remapping`)、`Xid 63/64/94/95` 故障演化与预测性无损排空](docs/components/gpu-ecc-row-remapping-predictive-failure.md) | `NVIDIA/DCGM` (`64df9f89`) `BANK_REMAP_AVAIL_LOW/NONE` (`388/389`) 与 `m_devastatingXids` 源码、5 态马尔可夫风险模型与 10K-GPU 预测性微检查点排空（非计划中断削减 `89.04%`、ETTR `99.93%`） |
-| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9 7-Card 报告](docs/reports/ai-infra-phase9-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 42 个研究问题与 36 个可复现实验坐标 |
+| [1M–4M 超长序列训练的 2D 混合上下文并行 (`USP = Ulysses × ZigZag Ring-Attention`)](docs/components/context-parallel-usp-zigzag-ring.md) | `feifeibear/long-context-attention` (`b92a1f4c`) 与 `NVIDIA/Megatron-LM` (`ce852bfb`) 源码、消除 GQA `8x` KV 复制与 `49.2%` 因果气泡、实现 `CP=64` 下 `2.82x–2.87x` 吞吐提速 |
+| [零开销结构化受限解码：`XGrammar` 自适应位掩码缓存与 vLLM V1 异步重叠](docs/components/structured-decoding-xgrammar-bitmask.md) | `mlc-ai/xgrammar` (`7e6b29a4`) `AdaptiveTokenMask`（`97.4%` 词表预分类、`32.0x` `int32` 位集压缩）与 `vLLM V1` 异步 CPU 流水线（`BS=64` 暴露开销 `56.4 us`、吞吐 `3.67x`） |
+| [算子级选择性激活重计算 (`SAC` 背包价值比) 与 NUMA 绑定 PCIe Gen5 零气泡卸载](docs/components/selective-activation-checkpoint-offload.md) | `pytorch/torchtitan` (`7c4b8e91`) `SAC` + `NUMA AffinityMode.NODE` 与 `Megatron-LM` 残差卸载规划器、70B `16K` 激活显存削减 `86.94%` (`467.81->61.09 GiB`) 且步耗时仅 `+2.53%` |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9](docs/reports/ai-infra-phase9-benchmark-cards.html) · [Phase 10 7-Card 报告](docs/reports/ai-infra-phase10-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 45 个研究问题与 39 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -90,6 +93,9 @@
 | [FSDP2 DTensor & Async-TP 算例](experiments/fsdp2_async_tp_composability/README.md) | `FSDP2` 逐参数 `DTensor`（碎片率 `1.15%–1.42%`、省 `6.72–9.65 GiB/GPU`）与 `SymmetricMemory` 2-Stream `Async-TP=8`（隐藏 `91.27%–97.09%` 气泡、5D 单步 `1.322x` 提速）仿真 |
 | [NCCL zero-copy registration 算例](experiments/nccl_zero_copy_registration/README.md) | `132-SM` H100 上 `16–32` 通信 CTA 造成的 `+16.46%–47.18%` GEMM 尾波劣化 vs `ncclCommWindowRegister` + `CUMEM` NVLS 2-CTA 零拷贝（`0.00%` 劣化、省 `576 MiB–2.305 GiB/GPU`、P99 `2.07x–3.74x`）仿真 |
 | [GPU ECC predictive drain 算例](experiments/gpu_ecc_predictive_drain/README.md) | HBM3e 5 态马尔可夫退化（`BANK_REMAP_AVAIL_LOW/NONE` 72h 故障风险 `68.4%/91.2%`）与 10K-GPU 30 天预测性微检查点排空（非计划中断削减 `89.04%`、ETTR `99.93%`）仿真 |
+| [2D USP & ZigZag Ring 算例](experiments/context_parallel_usp_zigzag/README.md) | `1M–4M` 序列 `CP=64` 下 `Ulysses=8 × ZigZag-Ring=8` 对称配对 `[r, 2R-1-r]`（因果失衡 `0.16%`、无 GQA KV 冗余复制、较朴素 Ring 提速 `2.82x–2.87x`）仿真 |
+| [Structured decoding XGrammar 算例](experiments/structured_decoding_xgrammar/README.md) | `128,256` 词表下 `AdaptiveTokenMask`（`97.4%` 预分类、`3,335` 动态 Token、`32.0x` `int32` 位掩码压缩）与异步重叠（`BS=64` 暴露 `56.4 us`、吞吐 `3.67x`）仿真 |
+| [Selective activation offload 算例](experiments/selective_activation_offload/README.md) | 算子级 `SAC` 背包价值比排序 + NUMA 绑定 Pinned PCIe Gen5 (`56.0 GB/s`) 双缓冲卸载（削减 `86.94%` 激活显存至 `61.09 GiB`、步耗时仅 `+2.53%`）仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -142,6 +148,9 @@ python experiments\multi_lora_serving\run.py --check
 python experiments\fsdp2_async_tp_composability\run.py --check
 python experiments\nccl_zero_copy_registration\run.py --check
 python experiments\gpu_ecc_predictive_drain\run.py --check
+python experiments\context_parallel_usp_zigzag\run.py --check
+python experiments\structured_decoding_xgrammar\run.py --check
+python experiments\selective_activation_offload\run.py --check
 python scripts\source_monitor.py
 ```
 

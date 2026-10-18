@@ -1864,6 +1864,160 @@
       "limitations": "Python 标准库确定性马尔可夫与集群可用性建模。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/gpu_ecc_predictive_drain/run.py --check and tests/test_gpu_ecc_predictive_drain.py"
+    },
+    {
+      "id": "ev-usp-hybrid-2d-cp-2026",
+      "claim": "feifeibear/long-context-attention (yunchang/hybrid/attn_layer.py, blob 127674aa) 将上下文并行拆分为正交的 PROCESS_GROUP.ULYSSES_PG 与 PROCESS_GROUP.RING_PG：节点内通过 SeqAllToAll4D (scatter_idx=2, gather_idx=1) 在 NVLink 域内按头切分 (U <= H_kv 避免 GQA KV 复制)，并将跨节点 Ring P2P 的每卡 KV 传输体积压缩 U 倍。",
+      "source_ids": [
+        "yunchang-usp-hybrid-attn-code",
+        "megatron-cp-zigzag-thd-layout-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/context-parallel-usp-zigzag-ring.md",
+        "experiments/context_parallel_usp_zigzag/run.py"
+      ],
+      "limitations": "上游 Python 源码契约核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of yunchang/hybrid/attn_layer.py and megatron/core/context_parallel/layout.py"
+    },
+    {
+      "id": "ev-zigzag-ring-causal-balance-2026",
+      "claim": "yunchang/ring/zigzag_ring_flash_attn.py (blob 7fde3608) 与 Megatron-LM megatron/core/context_parallel/layout.py (blob d6680d04) 通过将序列切分为 2*R 个子块并向 Rank r 分配对称对 [r, 2*R - 1 - r]，配合 step==0 (causal=True)、1<=step<=rank (q x k0, causal=False) 与 step>rank (q1 x k, causal=False) 三分支调度，使每个 Ring Step 各卡因果计算面积恒定为 2*(S/2R)^2，消除朴素连续 Ring 的 ~50% 因果空转气泡。",
+      "source_ids": [
+        "yunchang-zigzag-ring-flash-attn-code",
+        "megatron-cp-zigzag-thd-layout-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/context-parallel-usp-zigzag-ring.md",
+        "experiments/context_parallel_usp_zigzag/run.py"
+      ],
+      "limitations": "上游源码与精确代数证明。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/context_parallel_usp_zigzag/run.py --check"
+    },
+    {
+      "id": "ev-usp-zigzag-sim-2026",
+      "claim": "本项目确定性离线实验 experiments/context_parallel_usp_zigzag 验证：在 CP=64 (8x8 H100, GQA H_q=64, H_kv=8) 下，2D usp_zigzag_8x8 将因果负载失衡从朴素 Ring 的 49.22% 压至 0.16%，在 S=1M 下将单层注意力步耗时从 2,057.24 ms 降至 717.39 ms (提速 2.87x，注意力效率 99.51%)，在 S=4M 下从 32,320.25 ms 降至 11,449.91 ms (提速 2.82x，注意力效率 99.76%)。",
+      "source_ids": [
+        "yunchang-usp-hybrid-attn-code",
+        "yunchang-zigzag-ring-flash-attn-code",
+        "megatron-cp-zigzag-thd-layout-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/context_parallel_usp_zigzag/run.py",
+        "experiments/context_parallel_usp_zigzag/results.json",
+        "docs/components/context-parallel-usp-zigzag-ring.md",
+        "docs/reports/ai-infra-phase10-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/context_parallel_usp_zigzag/run.py --check and tests/test_context_parallel_usp_zigzag.py"
+    },
+    {
+      "id": "ev-xgrammar-adaptive-token-mask-2026",
+      "claim": "mlc-ai/xgrammar (cpp/compiled_grammar_impl.h, blob 5a42c02f & cpp/grammar_matcher.cc, blob 7af9fa03) 通过 AdaptiveTokenMask 按 ParserState 预计算 accepted_indices、rejected_indices (USE_BITSET_THRESHOLD=1000) 并仅在运行时校验 ~2.6% 的 uncertain_indices，同时将掩码打包为 ceil(vocab_size/32) 个 int32 字 (128,256 词表仅 4,008 int32 = 16,032 B/req，较 513,024 B FP32 掩码压缩 32.0x)。",
+      "source_ids": [
+        "xgrammar-adaptive-token-mask-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/structured-decoding-xgrammar-bitmask.md",
+        "experiments/structured_decoding_xgrammar/run.py"
+      ],
+      "limitations": "静态 C++ 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of cpp/compiled_grammar_impl.h and cpp/grammar_matcher.cc"
+    },
+    {
+      "id": "ev-vllm-v1-structured-output-overlap-2026",
+      "claim": "vllm-project/vllm (vllm/v1/structured_output/__init__.py, blob dc3a236a) 预分配形状为 (max_batch_size * (1 + max_num_spec_tokens), ceil(vocab_size / 32)) 的 int32 _grammar_bitmask，通过 executor_for_fillmask 线程池分块并行生成位掩码并与 GPU Decode 步异步重叠，同时支持 TraverseDraftTreeRecursive DFS Rollback(1) 投机树验证。",
+      "source_ids": [
+        "xgrammar-adaptive-token-mask-code",
+        "vllm-v1-structured-output-xgrammar-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/structured-decoding-xgrammar-bitmask.md",
+        "experiments/structured_decoding_xgrammar/run.py"
+      ],
+      "limitations": "静态 Python/C++ 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of vllm/v1/structured_output/__init__.py"
+    },
+    {
+      "id": "ev-structured-decoding-xgrammar-sim-2026",
+      "claim": "本项目确定性离线实验 experiments/structured_decoding_xgrammar 验证：在 V=128,256 词表下，xgrammar_async_overlap 将 BS=32 的单步暴露结构化约束开销压至 37.7 us (TPOT 劣化仅 +1.76%)，在 BS=64 下为 56.4 us (TPOT 劣化 +2.26%，较朴素动态 FSM 的 9.357 ms TPOT 实现 3.67x 批次吞吐提升，达 25,104.2 tok/s)。",
+      "source_ids": [
+        "xgrammar-adaptive-token-mask-code",
+        "vllm-v1-structured-output-xgrammar-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/structured_decoding_xgrammar/run.py",
+        "experiments/structured_decoding_xgrammar/results.json",
+        "docs/components/structured-decoding-xgrammar-bitmask.md",
+        "docs/reports/ai-infra-phase10-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/structured_decoding_xgrammar/run.py --check and tests/test_structured_decoding_xgrammar.py"
+    },
+    {
+      "id": "ev-torchtitan-remat-saved-hooks-2026",
+      "claim": "pytorch/torchtitan (torchtitan/distributed/activation_remat.py, blob f7687e76 & offloading.py, blob 8a7d1cea) 提供基于 save_regions / recompute_regions 的区域重算与 saved_tensors_hooks (区分 CHECKPOINT_INPUT、SAVE_OUTPUT、BACKWARD)，并要求通过 maybe_apply_numa_binding(AffinityMode.NODE) 将进程绑定至 GPU 本地 PCIe Root Complex NUMA 节点。",
+      "source_ids": [
+        "torchtitan-activation-remat-offload-code",
+        "megatron-residual-recompute-plan-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/selective-activation-checkpoint-offload.md",
+        "experiments/selective_activation_offload/run.py"
+      ],
+      "limitations": "静态 Python 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of torchtitan/distributed/activation_remat.py and offloading.py"
+    },
+    {
+      "id": "ev-operator-knapsack-eta-ranking-2026",
+      "claim": "基于算子重计算价值比 eta_op = Bytes_Saved / Recompute_FLOPs 排序，Transformer 逐元素算子 (ResidualAdd 1.0e9、SwiGLU 6.67e8、RMSNorm 5.0e8、RoPE 3.33e8 Bytes/GFLOP) 占据单层 51.8% (3,104 MiB) 激活显存但重算 FLOPs 不足 0.02%，其 eta_op 比线性 GEMM 算子 (3.49e4-1.22e5 Bytes/GFLOP) 高出 3,000-28,000 倍。",
+      "source_ids": [
+        "torchtitan-activation-remat-offload-code",
+        "megatron-residual-recompute-plan-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "docs/components/selective-activation-checkpoint-offload.md",
+        "experiments/selective_activation_offload/run.py",
+        "experiments/selective_activation_offload/results.json"
+      ],
+      "limitations": "确定性代数推导与算子剖析。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/selective_activation_offload/run.py --check"
+    },
+    {
+      "id": "ev-selective-activation-offload-sim-2026",
+      "claim": "本项目确定性离线实验 experiments/selective_activation_offload 验证：在 80 层 70B 模型 (T=16,384 tokens/rank) 上，算子级背包 SAC 结合 NUMA 绑定 Pinned PCIe Gen5 (56 GB/s) 双缓冲异步卸载可将总激活 HBM 从 467.81 GiB 削减 86.94% 至 61.09 GiB，且步耗时仅增加 +2.53% (暴露 PCIe 停顿仅 10.61 ms，对比全量重计算的 +33.33% 与未绑定可分页 Gen4 的 +81.83%)。",
+      "source_ids": [
+        "torchtitan-activation-remat-offload-code",
+        "megatron-residual-recompute-plan-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/selective_activation_offload/run.py",
+        "experiments/selective_activation_offload/results.json",
+        "docs/components/selective-activation-checkpoint-offload.md",
+        "docs/reports/ai-infra-phase10-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/selective_activation_offload/run.py --check and tests/test_selective_activation_offload.py"
     }
   ],
   "updated_at": "2026-10-19"
