@@ -966,6 +966,113 @@
       "limitations": "Python 标准库确定性协议验证与带宽解析算例。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/confidential_gpu_overhead/run.py --check and tests/test_confidential_gpu_overhead.py"
+    },
+    {
+      "id": "ev-sonic-cpo-nccl-ras-impl-2026",
+      "claim": "SONiC xcvrd (dd8f83a4) 与 NCCL RAS (3e46c089) 源码揭示了共封装光学 (CPO) 的共享故障爆炸半径与集群带外恢复机制：(1) SONiC CpoTopology 定义了 optical_engine (OE) 与 external_laser_source (ELSFP, 8 lasers) 对多物理端口的共享映射，当单端口触发 ModuleLowPwr/deinit 时，CpoManagerTask.deinit_oe_sibling_pports() 会遍历 get_oe_sibling_pports() 同步关停同颗 OE 上所有兄弟端口的激光与数据通路；(2) NCCL RAS 在独立 TCP 28028 端口维护监控网格，对端连续 60s 无响应标记为 DEAD，并支持通过 ncclras -D 自动扫描 Xid/SXid、NVLink 与 rdma_topo。",
+      "source_ids": [
+        "sonic-xcvrd-cpo-topology-manager-src",
+        "nccl-ras-diagnostics-userguide-doc"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/optical-interconnect-cpo-ocs.md",
+        "docs/reports/ai-infra-phase4-benchmark-cards.html"
+      ],
+      "limitations": "静态源码与官方文档审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of sonic-platform-daemons xcvrd/cpo and NVIDIA/nccl ras.rst"
+    },
+    {
+      "id": "ev-optical-cpo-ocs-offline-2026",
+      "claim": "原创离线算例 experiments/optical_cpo_ocs_fabric 定量证明：在 100,000-GPU 800G 3-Tier Clos 集群（450,000 等效光模块）中，传统 PAM4 DSP 可插拔方案消耗 7.92 MW（22.0 pJ/bit）、日均发生 32.0 次光学闪断，使同步训练 Goodput 跌至 70.31%；CPO + ELSFP 将光学功耗降至 2.16 MW（6.0 pJ/bit，立省 5.76 MW）、日均闪断降至 7.2 次（Goodput 91.32%），但单只 8 端口 ELSFP 故障会产生 6.4 Tbps 共享爆炸半径；引入无源 MEMS/Piezo OCS 消去 Spine 光电转换后，总光学功耗进一步降至 0.72 MW（节省 7.20 MW，Goodput 96.93%），但 15.0 ms MEMS 镜面切换耗时仅适用于作业级/故障重编排。",
+      "source_ids": [
+        "sonic-xcvrd-cpo-topology-manager-src",
+        "nccl-ras-diagnostics-userguide-doc"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/optical_cpo_ocs_fabric/run.py",
+        "experiments/optical_cpo_ocs_fabric/results.json",
+        "experiments/optical_cpo_ocs_fabric/results.csv",
+        "docs/components/optical-interconnect-cpo-ocs.md",
+        "docs/reports/ai-infra-phase4-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/optical_cpo_ocs_fabric/run.py --check and tests/test_optical_cpo_ocs_fabric.py"
+    },
+    {
+      "id": "ev-3fs-lmcache-gds-impl-2026",
+      "claim": "DeepSeek 3FS (22fca045)、LMCache (663757e3) 与 NVIDIA gds-nvidia-fs (52f3e7ea) 源码定义了零拷贝 AI 存储管线契约：(1) 3FS 为规避 Linux FUSE 内核自旋锁的 400K 4KiB IOPS 上限，在 /dev/shm 分配 hf3fs_iov 并通过 <mount>/3fs-virt/iovs/ 编码符号链接向本地守护进程注册 IB MR，后端采用 FoundationDB SSI 元数据与 CRAQ + BIBD 链式复制（写路径由 Target 发起 RDMA Read 拉取）；(2) LMCache Hf3fsConnector (connector.cpp) 采用临时文件写后 rename 与 64-bit chunk_hash 分片，但在调用者缓冲区与 iov.base 之间仍执行了一次主机 std::memcpy；(3) nvidia-fs (nvfs-dma.c/nvfs-pci.c) 通过 nvidia_p2p_get_pages 实现 BAR1 P2P DMA，但对跨 Root Port (BASE_PCI_DISTANCE_CROSSRP) 及启用 PCI_EXT_CAP_ID_ACS 重定向的拓扑施加严厉惩罚。",
+      "source_ids": [
+        "deepseek-3fs-usrbio-craq-src",
+        "lmcache-hf3fs-cufile-connector-src",
+        "nvidia-gds-nvfs-p2p-dma-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/storage-gds-3fs-kv-tiering.md",
+        "docs/reports/ai-infra-phase4-benchmark-cards.html"
+      ],
+      "limitations": "静态 C++/C/Python 源码审阅；3FS 180 节点 6.6 TiB/s 聚合读吞吐单列为 author-benchmark。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of deepseek-ai/3FS, LMCache and NVIDIA/gds-nvidia-fs"
+    },
+    {
+      "id": "ev-storage-gds-3fs-offline-2026",
+      "claim": "原创离线算例 experiments/storage_gds_kv_checkpoint 定量验证：传统 POSIX Page Cache 缓冲读因 2.5x 主机 DDR 往返拷贝仅达 32.0 GB/s（占用 53.3% DDR 带宽与 88.0% PCIe RC 负载，100 GiB KV 恢复 P99 达 5.536 s，1 TiB Checkpoint 写 P99 达 56.694 s）；本地 NVMe GDS cuFile BAR1 P2P 提升至 54.4 GB/s（RC 负载降至 5.0%，KV 恢复 P99 2.132 s）；而消除 LMCache 主机 memcpy 的 3FS USRBIO + GPUDirect RDMA BAR1 零拷贝路径跑满双 400G 网卡达 90.0 GB/s 读 / 64.0 GB/s 写，将 100 GiB KV 恢复 P99 压至 1.265 s（提速 4.38x），将 1 TiB Checkpoint 写 P99 压至 17.986 s（提速 3.15x）。",
+      "source_ids": [
+        "deepseek-3fs-usrbio-craq-src",
+        "lmcache-hf3fs-cufile-connector-src",
+        "nvidia-gds-nvfs-p2p-dma-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/storage_gds_kv_checkpoint/run.py",
+        "experiments/storage_gds_kv_checkpoint/results.json",
+        "experiments/storage_gds_kv_checkpoint/results.csv",
+        "docs/components/storage-gds-3fs-kv-tiering.md",
+        "docs/reports/ai-infra-phase4-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性存储总线排队算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/storage_gds_kv_checkpoint/run.py --check and tests/test_storage_gds_kv_checkpoint.py"
+    },
+    {
+      "id": "ev-firecracker-uffd-verl-agent-impl-2026",
+      "claim": "Firecracker (e786ba84) 与 verl ToolAgentLoop (4b26c788) 源码确立了万级 Agent 沙箱与多轮 RL Rollout 的协同边界：(1) Firecracker on_demand_handler.rs 通过 UDS SCM_RIGHTS 接收 userfaultfd 并调用 uffd.copy 按需填页，当并发气球回收触发 UFFD_EVENT_REMOVE 导致 uffd.copy 返回 -EAGAIN 时，必须先排空 Remove 队列否则 Guest vCPU 死锁；(2) verl ToolAgentLoop 通过 Sticky Session 路由、直接传递 prompt_ids/response_mask（避免多轮重分词漂移破坏 Prefix KV Cache）及 Ray TokenBucketWorker 控制沙箱并发。",
+      "source_ids": [
+        "firecracker-uffd-snapshot-handler-src",
+        "verl-tool-agent-loop-sandbox-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/agentic-sandbox-coscheduling.md",
+        "docs/reports/ai-infra-phase4-benchmark-cards.html"
+      ],
+      "limitations": "静态 Rust/Python 源码与文档审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of firecracker uffd examples/docs and verl experimental/agent_loop"
+    },
+    {
+      "id": "ev-agentic-sandbox-coscheduler-offline-2026",
+      "claim": "原创离线算例 experiments/agentic_sandbox_coscheduler 证明：对于 32,768 Token 上下文（4.0 GiB KV Cache），GDS 零拷贝卸载盈亏平衡阈值为 t_tool >= 2.56 s，丢弃重算阈值为 t_tool >= 8.00 s；在 500 VMs/s Firecracker UFFD 缺页风暴（50.33 GB/s 需求）下，未限流的 GDS KV 卸载可用带宽跌至 4.07 GB/s，往返 Swap 延迟从 0.160 s 暴增 13.4x 至 2.139 s（消耗 136.92 GiB·s，劣于直接驻留 HBM 的 120.0 GiB·s）；引入 35% 宿主机 I/O 令牌桶限流后，GDS Swap 稳定在 0.246 s（15.75 GiB·s），使 8-GPU 节点在 30 s 与 60 s 工具调用下的并发活跃 Rollout 分别提升 13.23x 与 25.58x。",
+      "source_ids": [
+        "firecracker-uffd-snapshot-handler-src",
+        "verl-tool-agent-loop-sandbox-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/agentic_sandbox_coscheduler/run.py",
+        "experiments/agentic_sandbox_coscheduler/results.json",
+        "experiments/agentic_sandbox_coscheduler/results.csv",
+        "docs/components/agentic-sandbox-coscheduling.md",
+        "docs/reports/ai-infra-phase4-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/agentic_sandbox_coscheduler/run.py --check and tests/test_agentic_sandbox_coscheduler.py"
     }
   ]
 }
