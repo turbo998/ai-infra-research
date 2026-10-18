@@ -329,5 +329,15 @@ self.state.info.estimated_pcie_output_latency = (
      $$T_{\text{ref, comp}}(p_y, p_x) = T_{\text{ref}}(p_y, p_x) - (p_x + p_y)$$
      再计算全网格最早开始周期 $\min(T_{\text{start}} - T_{\text{ref, comp}})$ 与最晚结束周期 $\max(T_{\text{end}} - T_{\text{ref, comp}})$ 之差 `cycles_send`，按 `0.85 GHz` 换算微秒并得出真实片上边缘带宽。
 
+### 7.5 机柜级功率密度、冷却介质与单 Token 能耗画像对比（`experiments/rack_power_cooling/`）
+
+结合全栈第 11 层组件 [机架功率密度、液冷/风冷边界与机柜级故障域](rack-power-cooling.md) 及实验 [`experiments/rack_power_cooling/`](../../experiments/rack_power_cooling/README.md)（证据等级：`own-offline`），三类硬件路线在数据中心机柜交付层面的热力学与能效边界对比如下：
+
+| 架构与机柜形态 | 单柜墙插功率 $P_{\text{wall}}$ | 冷却介质与最小流量要求 | `batch=1` 极低延迟能耗 (`J/token`) | 高并发满载能耗 (`J/token`) | 机柜级基础设施与故障域约束 |
+|---|---|---|---|---|---|
+| **NVIDIA GB200 NVL72 液冷机柜** (`innovator_gb200_nvl72_liquid_rack_profile`) | `126.383 kW` | 纯水冷板液冷（$\Delta T=12^\circ\text{C}$）需 **`151.49 LPM`**（或 88% 液冷 `133.31 LPM` + 12% 风冷 `1,798.6 CFM`） | `35.1064 J/token` | **`1.7553 J/token`** | 强依赖机房一次侧冷水与 CDU 供液（进液 $>45^\circ\text{C}$ 触发 `HW_THERMAL` 腰斩降频）；18 颗 NVSwitch + `nvidia-imex-ctl` 构成 72-GPU 机柜级 MNNVL 故障域 |
+| **Groq LPU v1 风冷机柜** (`innovator_groq_lpu_air_rack_profile`) | `32.000 kW` | 纯风冷（$\Delta T=15^\circ\text{C}$）需 **`3,795.0 CFM`**（0 LPM 液冷） | **`13.3333 J/token`** | `3.3333 J/token` | 可直接部署于传统 30–35kW 风冷机房，无需 CDU/分集水器改造；但受限于 `220 MiB/chip` SRAM，70B 模型需跨机柜 Daisy-Chain 串联，单卡故障中断整条流水线 |
+| **Cerebras CS-3 (WSE-3) 液冷晶圆单元** (`innovator_cerebras_cs3_wse3_liquid_cell_profile`) | `25.000 kW` | 密闭纯水液冷（$\Delta T=10^\circ\text{C}$）需 **`35.96 LPM`** | `13.8889 J/token` | **`1.7361 J/token`** | 单晶圆热流密度极高，内置液冷与冗余电源模块；主机与晶圆间受限于 `100GbE × 16` 通道与西/东侧 `46 KB/PE` FIFO 反压缓冲列 |
+
 练习状态：`not-assessed`。后续可证伪研究问题已登记至 [`research/queue.json`](../../research/queue.json)。
 

@@ -24,6 +24,8 @@
 | [6D 分布式训练状态与通信联合账本](docs/components/training-parallelism.md) | TorchTitan `ParallelDims`、PyTorch FSDP2 双缓冲预取、`Shard(dim!=0)` 惩罚、TP+SP、CP Ring Attention 与 DeepEP v2 |
 | [AI 集群拓扑感知调度、设备隔离与弹性恢复契约](docs/components/cluster-orchestration.md) | Kubelet Topology Manager、Kueue TAS、Slurm `topology/block & tree`、NVIDIA Device Plugin XID/MIG 与 `torchelastic` |
 | [容量、成本与吞吐经济学](docs/components/capacity-economics.md) | TorchTitan 稠密/MoE 参数与 MFU 护栏、vLLM Gamma 突发排队与 P/D 分离 Goodput 定容、Slurm 梯形能耗积分與创新公司 I/O 边界 |
+| [机架功率、液冷热力学与机柜级故障域](docs/components/rack-power-cooling.md) | 126kW 冷板液冷 vs 40kW 风冷 CDU/CFM 边界、Slurm `power_save.c` 令牌桶浪涌控制、RAPL/XCC 能耗积分与 DCGM `v4.6.1` MNNVL/IMEX 故障域 |
+| [端到端 AI Infra 综合架构案例](docs/architectures/end-to-end-ai-infra-case.md) | 含工作负载数据流、Rail-Optimized 多轨与 126kW 液冷机柜拓扑、跨层故障自愈状态机三视图及全栈预算/反例/验收清单的综合架构方案 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) | 推理加速（Fireworks / Together）与新型 AI 芯片（Groq TSP / Cerebras WSE）架构剖析 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-18.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -37,6 +39,7 @@
 | [Training parallelism 算例](experiments/training_parallelism/README.md) | 6D 并行显存/通信账本、FSDP2 `Shard(dim!=0)` 瞬态峰值、CP 因果倾斜与 DeepEP v2 去重 |
 | [Cluster orchestration 算例](experiments/cluster_orchestration/README.md) | Kubelet NUMA/PCIe/RDMA 掩码准入、Slurm `topology/block` 反碎片与 Young-Daly/热备弹性训练 Goodput |
 | [Capacity economics 算例](experiments/capacity_economics/README.md) | TorchTitan 稠密/MoE 训练成本、vLLM Gamma 突发排队与 P/D 分离 Goodput、Slurm 焦耳积分及四家创新公司吞吐/I/O 模型 |
+| [Rack power & cooling 算例](experiments/rack_power_cooling/README.md) | 126kW NVL72 液冷 vs 40kW 风冷 vs PG25 退化热力学、Slurm 令牌桶浪涌限流与 RAPL 回绕、DCGM MNNVL/IMEX 故障状态机及 Groq/Cerebras 机柜画像 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -63,6 +66,7 @@ python experiments\inference_slo_scheduler\run.py --check
 python experiments\training_parallelism\run.py --check
 python experiments\cluster_orchestration\run.py --check
 python experiments\capacity_economics\run.py --check
+python experiments\rack_power_cooling\run.py --check
 python scripts\source_monitor.py
 ```
 

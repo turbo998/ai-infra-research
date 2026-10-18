@@ -177,7 +177,13 @@ Groq PCIe replay 唯一外部抖动源，以及 Cerebras WSE 单 PE `48 KB` SRAM
 (2) `burstiness = 0.25` 使到达方差放大 `4` 倍，92% 利用率下期望排队等待高达 `4,083.33 ms`（期望 TTFT `4,375.0 ms`），仅 `7.27%` 的请求能满足 `600 ms` SLO；按安全水位 `34.58%` 与 P/D 分离定容（`31` Prefill + `5` Decode 实例 = `288` 卡）比混部（`392` 卡）节省 `104` 张 GPU，进一步将 Prefix Cache 命中率提至 `87.5%`（配 FP8）可把总卡数压至 `40` 张、每百万达标输出 Token 成本从 `$12.3698` 降至 `$1.7180`（下降 `86.1%`）；
 (3) Fireworks 服务端把最后一个 Prompt Token 留给首个 Decode 槽位（仅缓存 `prompt[:-1]`），故需发 `cached_tokens + 1`；Sequoia 的 `OffloadEngine` 受限于 PCIe 权重传输时间，投机树验证在不增加 PCIe 权重搬运字节数的前提下每步接受 `5.4–6.8` 个 Token，等比例放大吞吐；Groq `stats_file` 中的 `total_cycles` 是单张芯片（1 个流水线级）周期，单请求走完 $N$ 张芯片须乘以 `num_chips_used`；Cerebras 为防止计算核心繁忙反压阻塞 100GbE 主机通道，需按 $\lceil W \cdot L_{\text{pe}} \cdot 4 / 46000 \rceil$ 配置 `46 KB/PE` FIFO 缓冲列（外加东西各 3 列 `memcpy` 系统列），并扣除全晶圆广播从 `PE(0,0)` 到 `(px, py)` 的 Manhattan 传播延迟 `px + py`。用户掌握状态仍为 `not-assessed`。
 
+## 19. 高密液冷机柜热力学、Slurm 令牌桶浪涌控制与 DCGM MNNVL/IMEX 故障域
 
+阅读 [机架功率密度、液冷/风冷边界与机柜级故障域](../components/rack-power-cooling.md)、[端到端 AI Infra 综合架构案例](../architectures/end-to-end-ai-infra-case.md) 与 [Rack power & cooling 算例](../../experiments/rack_power_cooling/README.md)：
+(1) 单台 72x 1200W GPU + 36x 300W CPU + 18x 400W NVSwitch + `14.4 kW` 辅助负载的高密机柜（$\eta_{\text{PSU}} = 0.94$，$f_{\text{liq}} = 0.88$），在纯水进液 $T_{\text{in}} = 32^\circ\text{C}, \Delta T = 12^\circ\text{C}$ 与切换 PG25 防冻液且一次侧退化至 $T_{\text{in}} = 45^\circ\text{C}, \Delta T = 10^\circ\text{C}$ 两种工况下，所需冷却液流量（LPM）、GPU 结温 $T_j$（$R_{\theta} = 0.028\,\text{K/W}$）与 DCGM 时钟状态分别是什么？
+(2) 在 Slurm `power_save.c` 中，唤醒 `64` 台 `10.2 kW` 节点时，设置 `ResumeRate = 12`、`power_save_interval = 15s` 如何通过令牌桶限制初始突发功率与爬坡斜率？なぜ `acct_gather_energy_rapl.c` 对 Xeon 服务器 DRAM 必须使用 $0.5^{16}\,\text{J}$ 单位，且丢失 `/dev/cpu/#/msr` 权限会发生什么？
+(3) 在 NVIDIA DCGM `v4.6.1` `DcgmHealthWatch.cpp` 中，为什么 Blackwell 架构上 `DCGM_FI_DEV_NVLINK_RECOVERY_SUCCESSFUL_TOTAL > 0` 仅判为 `WARN`，而 `DCGM_FI_IMEX_DOMAIN_STATUS = DEGRADED` 会直接判为 `FAIL` 并影响整个机柜 MNNVL Clique？
 
-
-
+答案：(1) 机柜 IT 负载 `118.80 kW`、墙插功率 `126.383 kW`（液冷 `111.217 kW` + 风冷 `15.166 kW / 1,798.6 CFM`）。纯水 $32^\circ\text{C}/\Delta T=12^\circ\text{C}$ 下需 `133.31 LPM`，GPU $T_j = 44.0 + 1200 \times 0.028 = 77.6^\circ\text{C}$（距 `83°C` `MAX_OP` 裕度 `+5.4°C`，`NOMINAL_NO_THERMAL_THROTTLE`）；切换 PG25 且 $T_{\text{in}}=45^\circ\text{C}/\Delta T=10^\circ\text{C}$ 后，因比热容下降与温差收窄，流量升至 `165.62 LPM`（`+24.2%`），且 $T_j = 55.0 + 33.6 = 88.6^\circ\text{C} > 87.0^\circ\text{C}$，触发 `DCGM_CLOCKS_EVENT_REASON_HW_THERMAL` 硬件频率腰斩；
+(2) `power_save_rl_setup` 计算初始令牌数 `max_tokens = max(1, (12 × 15) // 60) = 3`、`refill_period = 60000 // 12 = 5000 ms`，使初始瞬态功率阶跃从不限流的 `652.8 kW` 压至 `30.6 kW`，后续斜率严格限制在 `122.4 kW/min`（总唤醒耗时 `305.0 s`）；Xeon 服务器 DRAM 固定采用 $0.5^{16} \approx 15.2588\,\mu\text{J}$ 而不跟随 `MSR_RAPL_POWER_UNIT` 的 Package 单位，且 `_get_MSR_fd` 打开 `/dev/cpu/#/msr` 失败会直接调用 `slurm_drain_node()` 将节点 Drain 下线；
+(3) Blackwell 支持硬件链路层透明自愈，`RECOVERY_SUCCESSFUL > 0` 不破坏上层通信语义故仅报 `WARN`（避免误杀）；而 `IMEX` 守护进程与 Domain 维护机柜级多节点 NVLink 跨节点虚拟地址导入导出，一旦 `DEGRADED/DOWN` 会导致跨节点 P2P 与集合通信失效，必须隔离或重切分整个 MNNVL Clique。用户掌握状态仍为 `not-assessed`。

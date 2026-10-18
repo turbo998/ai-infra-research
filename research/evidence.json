@@ -660,6 +660,68 @@
       "limitations": "Python 标准库确定性 CPU/offline 算例，采用显式合成单价与 Kingman 排队近似，不代表特定云厂商实时报价或硬件实测。",
       "verified_at": "2026-10-18",
       "verifier": "python experiments/capacity_economics/run.py --check and tests/test_capacity_economics.py"
+    },
+    {
+      "id": "dcgm-thermal-power-and-mnnvl-imex-health-implementation",
+      "claim": "NVIDIA DCGM v4.6.1 在 modules/health/DcgmHealthWatch.cpp、modules/policy/DcgmPolicyManager.cpp 与 dcgmlib/dcgm_fields.h 中定义了机柜级热、功率与多节点 NVLink (MNNVL) 故障状态机：(1) MonitorThermal 与 MonitorPower 按 60 秒窗口检查 DCGM_FI_DEV_THERMAL_VIOLATION (241) 与 POWER_VIOLATION (240) 微秒增量并产生 WARN，而 MonitorCpuThermal 在 Grace CPU 末态温度 >= CRITICAL (1112) 或 MonitorCpuPower 达到 POWER_LIMIT (1131) 时直接产生 FAIL；(2) MonitorImex 检查 MNNVL 跨节点内存交换域 DCGM_FI_IMEX_DOMAIN_STATUS (1502) 与 DAEMON_STATUS (1503)，一旦出现 DEGRADED/DOWN 或非 READY(5) 态即置 NVLink 健康为 FAIL；(3) MonitorNVLinkErrorFields 在 Blackwell 及更新架构上将 DCGM_FI_DEV_NVLINK_RECOVERY_SUCCESSFUL_TOTAL > 0 降级为 WARN，仅在 RECOVERY_FAILED_TOTAL > 0 时置 FAIL。",
+      "source_ids": [
+        "nvidia-dcgm-healthwatch-src",
+        "nvidia-dcgm-policymanager-src",
+        "nvidia-dcgm-fields-header-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/rack-power-cooling.md",
+        "docs/architectures/end-to-end-ai-infra-case.md"
+      ],
+      "limitations": "静态 C/C++ 源码审阅，未在物理 GB200 NVL72 机柜注入故障。",
+      "verified_at": "2026-10-18",
+      "verifier": "Direct fixed-commit reading of NVIDIA/DCGM v4.6.1 DcgmHealthWatch.cpp, DcgmPolicyManager.cpp and dcgm_fields.h"
+    },
+    {
+      "id": "slurm-power-save-token-bucket-and-rapl-xcc-energy-implementation",
+      "claim": "SchedMD Slurm 26.05.5-1 在 src/slurmctld/power_save.c 与 acct_gather_energy 插件中实现了集群功率浪涌控制与多源能耗积分：(1) power_save_rl_setup 按 max_tokens = max(1, (rate * max(1, power_save_interval, power_save_min_interval)) // 60) 与 refill_period_msec = 60000 // rate 初始化上下电令牌桶，并由 _pick_exc_nodes 维持 max(0, exc_node_cnt - active_count) 台空闲暖备节点；(2) acct_gather_energy_rapl.c 处理 32-bit MSR 能量寄存器回绕，对 Xeon 服务器 DRAM 强制使用 0.5^16 J (15.2588 uJ) 单位，且在 /dev/cpu/#/msr 打开失败时直接调用 slurm_drain_node；(3) acct_gather_energy_xcc.c 对 SD650v2 40B 响应退化为梯形法则瓦数积分，而 acct_gather_energy_pm_counters.c 直接读取 /sys/cray/pm_counters/energy 单调焦耳累加器。",
+      "source_ids": [
+        "slurm-power-save-src",
+        "slurm-rapl-energy-src",
+        "slurm-xcc-energy-src",
+        "slurm-pm-counters-energy-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/rack-power-cooling.md",
+        "docs/architectures/end-to-end-ai-infra-case.md"
+      ],
+      "limitations": "静态 C 源码审阅，未在物理 Slurm 集群执行。",
+      "verified_at": "2026-10-18",
+      "verifier": "Direct fixed-commit reading of SchedMD/slurm slurm-26-05-5-1 power_save.c and acct_gather_energy plugins"
+    },
+    {
+      "id": "rack-power-cooling-and-fault-domain-offline-model",
+      "claim": "原创离线算例 experiments/rack_power_cooling 验证了高密机柜热力学、Slurm 浪涌限流与 DCGM MNNVL 故障域定量边界：(1) 72x 1200W GPU + 36x 300W CPU + 18x 400W NVSwitch 机柜（IT 负载 118.8 kW，PSU 效率 94% 下墙插功率 126.383 kW）在 88% 纯水液冷（T_in=32°C, dT=12°C）下需 133.31 LPM 冷却水与 1,798.6 CFM 风量，GPU 结温 77.6°C（距 83°C MAX_OP 裕度 +5.4°C）；若切换 PG25 且进液升至 45°C（dT=10°C），所需流量增至 165.62 LPM 且结温达 88.6°C，越过 87°C 触发 DCGM_CLOCKS_EVENT_REASON_HW_THERMAL；(2) Slurm ResumeRate=12/min 将唤醒 64 台 10.2 kW 节点的瞬时阶跃从 652.8 kW 压制为初始突发 30.6 kW（max_tokens=3）与 122.4 kW/min 斜率（耗时 305.0 s）；(3) 对比了 GB200 NVL72 液冷（126.383 kW, 151.49 LPM）、Groq LPU 风冷（32.0 kW, 3,795.0 CFM, batch=1 13.33 J/tok）与 Cerebras CS-3 液冷（25.0 kW, 35.96 LPM, 高并发 1.74 J/tok）。",
+      "source_ids": [
+        "nvidia-dcgm-healthwatch-src",
+        "nvidia-dcgm-policymanager-src",
+        "nvidia-dcgm-fields-header-src",
+        "slurm-power-save-src",
+        "slurm-rapl-energy-src",
+        "slurm-xcc-energy-src",
+        "slurm-pm-counters-energy-src",
+        "groq-groqflow-groqmodel",
+        "cerebras-sdk-bw-run"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/rack_power_cooling/run.py",
+        "experiments/rack_power_cooling/results.json",
+        "experiments/rack_power_cooling/results.csv",
+        "docs/components/rack-power-cooling.md",
+        "docs/components/ai-infra-innovators.md",
+        "docs/architectures/end-to-end-ai-infra-case.md"
+      ],
+      "limitations": "Python 标准库 1D 稳态热阻与焓平衡模型，不替代 3D CFD 或实机 CDU/机柜测试。",
+      "verified_at": "2026-10-18",
+      "verifier": "python experiments/rack_power_cooling/run.py --check and tests/test_rack_power_cooling.py"
     }
   ]
 }
