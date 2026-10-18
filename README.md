@@ -56,7 +56,10 @@
 | [动态 Token 预算分块预填充 (`Chunked Prefill`) 与 Decode P99 TPOT 干扰控制](docs/components/chunked-prefill-tpot-interference-scheduler.md) | `vLLM V1` (`local_prefill_interval` / `long_prefill_token_threshold`) 与 `SGLang` (`dynamic_chunk_sizer` / `prefill_tile_block_m=64`) 源码、闭环求解 $C^*(48, 7.5\text{GiB})=640$ 将 P99 TPOT 压降 `10.27x` (`26.02 ms`) 并提升 SLA Goodput `4.49x` |
 | [DiT 视频生成混合并行 (`xDiT`: `CFG × Ulysses × PipeFusion`) 与 `TeaCache` 残差跳步](docs/components/dit-video-xdit-pipefusion-serving.md) | `xdit-project/xDiT` (`f7c16aa9`) 4D 进程组、`_xdit_kv_cache` 空间微块流水与 `use_usp=True` `all_reduce` 防死锁 `TeaCache`、50 步 `Wan2.1-14B` 720p-81f 延迟降低 `4.65x` (`350.78->75.40 s`, `-0.31 dB` PSNR) |
 | [`torch.compile` (`TorchInductor` / `FxGraphCache` / `MEGA_AOT`) 冷启动消除与融合](docs/components/torch-compile-inductor-cache-serving.md) | `vLLM` `TorchCompileWithNoGuardsWrapper` (`skip_all_guards_unsafe`) + `StandaloneCompiledArtifacts` 双层 SHA256 去重 (`80L->2`)、冷启动从 `29.44 min` 压至 `18.0 s / 11.8 s` (`98x–149x`) 并减少 `56.2%` 逐元素 HBM 流量 |
-| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9](docs/reports/ai-infra-phase9-benchmark-cards.html) · [Phase 10](docs/reports/ai-infra-phase10-benchmark-cards.html) · [Phase 11 7-Card 报告](docs/reports/ai-infra-phase11-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 48 个研究问题与 42 个可复现实验坐标 |
+| [Prefill-Decode 解耦架构下 EAGLE-3 / MTP 投机解码零停顿种子交接](docs/components/disaggregated-speculative-decoding-pd.md) | `sgl-project/sglang` (`da414add`) `_draft_extend_for_prefill` + `CaptureHiddenMode.LAST` + `req_to_token` DSA 物理槽位重映射、仅增 `+1.25%` Draft KV + `8.62 KiB/rank` 种子将 `4K–128K` 首步投机锁定在 `13.435 ms`（`128K` 下较 Decode 重算快 `18.45x`） |
+| [万卡同步训练灰故障 (`Grey Failure / Slow Straggler`) 双端遥测根因定位与热备替换](docs/components/grey-failure-straggler-detection.md) | `NVIDIA/Megatron-LM` (`ce852bfb`) `StragglerDetector` (`Rtt/Clk`) 与 `NVIDIA/nccl` (`3e46c089`) `ncclProfileKernelCh` `pTimer` 差分矩阵、消除单慢卡 `32.94%–63.00%` MFU 坍塌并在 `3.70 s` `100%` 归因 + `4.20 s` 热备切换（30 天 Goodput 从 `71.35%` 升至 `98.83%`） |
+| [四级 KV Cache 缓存层次 (`HBM3e -> DDR5 -> CXL/Mooncake -> NVMe GDS`) 与重计算盈亏平衡](docs/components/tiered-kv-cache-offload-hierarchy.md) | `LMCache/LMCache` (`663757e3`) `StorageManager` 级联回写 + `GdsBackend` `cuFile` 与 `vLLM V1` `MooncakeStoreConnector`、推导 $L_{\text{breakeven}} = 25 / 46 / 123\text{ tokens}$（对比 POSIX Disk `6,940`）并将 1,000 并发 Agent P99 TTFT 降低 `18.91x`（`4,387.91->231.99 ms`）、Token 成本降低 `66.6%` |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9](docs/reports/ai-infra-phase9-benchmark-cards.html) · [Phase 10](docs/reports/ai-infra-phase10-benchmark-cards.html) · [Phase 11](docs/reports/ai-infra-phase11-benchmark-cards.html) · [Phase 12 7-Card 报告](docs/reports/ai-infra-phase12-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 51 个研究问题与 45 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -102,6 +105,9 @@
 | [Chunked prefill interference 算例](experiments/chunked_prefill_interference/README.md) | `8x H100` `Llama-3-70B` 混批 L2/尾波干扰模型、闭环求解 $C^*(48, 7.5\text{GiB})=640$（P99 TPOT 从 `267.18 ms` 压至 `26.02 ms`、SLA Goodput `4.49x`）与 `D=96, 16K` 收缩至 `192` 仿真 |
 | [DiT video PipeFusion serving 算例](experiments/dit_video_pipefusion_serving/README.md) | `Wan2.1-14B-720p-81f` (`131K` 时空 Token) 下 `TP=8` (`11.18%` 暴露通信) vs `xDiT (CFG=2 × Ulysses=2 × PipeFusion=2)` (`0.98%`) + USP 同步 `TeaCache` (`75.40 s`, `4.65x`, `-0.31 dB` PSNR) 仿真 |
 | [TorchInductor compile cache 算例](experiments/torch_compile_inductor_cache/README.md) | `Llama-3-70B` 32 桶冷启动消除（`TorchCompileWithNoGuardsWrapper` + SHA256 `80L->2` 去重 + `FxGraphCache`/`MEGA_AOT` 提速 `98x–149x`）与逐元素融合（`-56.2%` HBM 流量、`+35.73%` 吞吐）仿真 |
+| [Disaggregated speculative PD 算例](experiments/disaggregated_speculative_pd/README.md) | `8x H100 TP=8` PD 解耦下 Scheme A (`232.0 ms` Decode 重算气泡) vs Scheme B (`+30.0%` RDMA 膨胀) vs Scheme C SGLang 零停顿交接（`+1.25%` Draft KV + `8.62 KiB/rank` 种子、首步投机恒定 `13.435 ms`、`18.45x` 提速）仿真 |
+| [Grey failure straggler detector 算例](experiments/grey_failure_straggler_detector/README.md) | `16,384x H100` 下单慢卡（`900MHz` `1.5x` GEMM 或 `3.0x` 光模块 FEC 重传）拖垮 `32.94%–63.00%` MFU vs 双端遥测 `3.70 s` `100%` 归因 + `4.20 s` 热备切换（30 天 Goodput 从 `71.35%` 升至 `98.83%`）仿真 |
+| [Tiered KV cache hierarchy 算例](experiments/tiered_kv_cache_hierarchy/README.md) | `HBM3e -> DDR5 -> CXL/Mooncake -> NVMe GDS` 四级 KV 换入 vs 二次方重计算盈亏平衡（$L_{\text{be}} = 25 / 46 / 123$ vs `6,940` POSIX Disk）与 1,000 并发 Agent 会话 P99 TTFT `18.91x` 降幅仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -160,6 +166,9 @@ python experiments\selective_activation_offload\run.py --check
 python experiments\chunked_prefill_interference\run.py --check
 python experiments\dit_video_pipefusion_serving\run.py --check
 python experiments\torch_compile_inductor_cache\run.py --check
+python experiments\disaggregated_speculative_pd\run.py --check
+python experiments\grey_failure_straggler_detector\run.py --check
+python experiments\tiered_kv_cache_hierarchy\run.py --check
 python scripts\source_monitor.py
 ```
 

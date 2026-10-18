@@ -2130,6 +2130,112 @@
       "limitations": "Python 标准库确定性建模。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/torch_compile_inductor_cache/run.py --check and tests/test_torch_compile_inductor_cache.py"
+    },
+    {
+      "id": "evi-disagg-speculative-pd-impl-001",
+      "component": "serving_systems",
+      "claim": "In sgl-project/sglang (commit da414adda71957676dcbb434a60326bd3a14600a), EagleDraftWorker._draft_extend_for_prefill (eagle_worker_v2.py, blob a91fca46) seeds the first draft-decode loop from the last prefill position, while build_eagle_disagg_draft_input (eagle_disaggregation.py, blob f8b5a23b) sets CaptureHiddenMode.LAST, constructs exact one-hot rejection proposals via pd_first_draft_proposal, and remaps request-relative DSA indices to decode-local physical KV slots via req_to_token.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-eagle-disagg-2026",
+        "sglang-eagle-worker-v2-2026"
+      ],
+      "artifacts": [
+        "docs/components/disaggregated-speculative-decoding-pd.md"
+      ],
+      "verifier": "static source inspection of sgl-project/sglang eagle_disaggregation.py and eagle_worker_v2.py",
+      "verified_at": "2026-10-19",
+      "limitations": "Static source inspection; RDMA transfer overlap and decode contention evaluated in own-offline simulator."
+    },
+    {
+      "id": "evi-disagg-speculative-pd-sim-001",
+      "component": "serving_systems",
+      "claim": "In own-offline simulation on 8x H100 TP=8 (Llama-3-70B-FP8 + 1L EAGLE-3/MTP draft, 400Gbps RoCEv2/rank), shipping only Target KV (Scheme A) incurs a 58.741 ms (32K) to 232.001 ms (128K) Decode-side draft warmup stall (247.901 ms 1st step at 128K, 0.174x vs AR), and shipping full-sequence BF16 hidden states (Scheme B) inflates RDMA traffic by +30.0%, whereas SGLang zero-stall handover (Scheme C: +1.25% Draft KV + 8.62 KiB/rank LAST seed) bounds 1st speculative step latency to 13.435 ms across 4K-128K (3.21x vs AR and 18.45x faster than Scheme A at 128K).",
+      "status": "own-offline",
+      "source_ids": [
+        "sglang-eagle-disagg-2026",
+        "sglang-eagle-worker-v2-2026"
+      ],
+      "artifacts": [
+        "experiments/disaggregated_speculative_pd/run.py",
+        "experiments/disaggregated_speculative_pd/results.json",
+        "docs/components/disaggregated-speculative-decoding-pd.md"
+      ],
+      "verifier": "python experiments\\disaggregated_speculative_pd\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic analytical model; does not replace multi-node 400G RoCE hardware profiling."
+    },
+    {
+      "id": "evi-grey-failure-straggler-impl-001",
+      "component": "distributed_training",
+      "claim": "In NVIDIA/Megatron-LM (commit ce852bfb93f364f64a556602fc71a5d9ed2c377e, megatron/core/utils.py blob efbfdfa3 & README_STRAGGLER.md blob fe9062c8), StragglerDetector isolates per-rank local CUDA kernel time (delta/Rtt) and dataloader time (batch_delta/DRtt) alongside NVML clock/temp/power metrics, while NVIDIA/nccl (commit 3e46c089f4ae4732722a419eb6096aead7e47a30, comm.h blob baaa3842 & profiler_v5.h blob be5705d2) exposes GPU-resident progress counters (hostCountersBlock/deviceCountersBlock) and per-channel ncclProfileKernelCh pTimer timestamps.",
+      "status": "implementation",
+      "source_ids": [
+        "megatron-straggler-detector-2026",
+        "nccl-profiler-v5-progress-counters-2026"
+      ],
+      "artifacts": [
+        "docs/components/grey-failure-straggler-detection.md"
+      ],
+      "verifier": "static source inspection of NVIDIA/Megatron-LM StragglerDetector and NVIDIA/nccl profiler_v5.h",
+      "verified_at": "2026-10-19",
+      "limitations": "Static source inspection; 16,384-GPU fleet MFU loss and automated hot-spare swap modeled in own-offline simulator."
+    },
+    {
+      "id": "evi-grey-failure-straggler-sim-001",
+      "component": "distributed_training",
+      "claim": "In own-offline simulation of 16,384x H100 synchronous training (TP=8, PP=16, DP=128, healthy step 1,850.0 ms at 54.0% MFU), a single 900 MHz thermal-throttled GPU (1.50x GEMM) or 3.00x optical FEC degraded port drags cluster MFU down by 32.94% or 33.22% (63.00% under compound fault, wasting 10,321.9 GPUs), while dual-sided telemetry classification achieves 100.0% root-cause accuracy in 3.70s and triggers a 4.20s NVRx hot-spare swap, lifting 30-day Goodput from 71.35% to 98.83% (+27.48 pts).",
+      "status": "own-offline",
+      "source_ids": [
+        "megatron-straggler-detector-2026",
+        "nccl-profiler-v5-progress-counters-2026"
+      ],
+      "artifacts": [
+        "experiments/grey_failure_straggler_detector/run.py",
+        "experiments/grey_failure_straggler_detector/results.json",
+        "docs/components/grey-failure-straggler-detection.md"
+      ],
+      "verifier": "python experiments\\grey_failure_straggler_detector\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic synchronous pipeline + collective stall simulator; not a physical 16,384-GPU cluster run."
+    },
+    {
+      "id": "evi-tiered-kv-cache-impl-001",
+      "component": "serving_systems",
+      "claim": "In LMCache/LMCache (commit 663757e38a1cc98fa1f6c0d76af8965c4fbb53e7, storage_manager.py blob 97748fa2 & gds_backend.py blob 83c31e70) and vllm-project/vllm (commit e0adacc9a67a5f2b2d8ba508f7f522bc1ff83c6d, mooncake/store/connector.py blob a1e28b97 & simple_cpu_offload_connector.py blob 49afa017), StorageManager cascades across LocalCPUBackend, NIXL/Mooncake shared memory pools, and GPUDirect Storage cuFile GdsBackend with automatic write-back promotion into pinned host memory.",
+      "status": "implementation",
+      "source_ids": [
+        "lmcache-storage-manager-2026",
+        "lmcache-gds-nixl-backend-2026",
+        "vllm-mooncake-store-connector-2026",
+        "vllm-simple-cpu-offload-connector-2026"
+      ],
+      "artifacts": [
+        "docs/components/tiered-kv-cache-offload-hierarchy.md"
+      ],
+      "verifier": "static source inspection of LMCache StorageManager/GdsBackend and vLLM KVConnectorBase_V1 implementations",
+      "verified_at": "2026-10-19",
+      "limitations": "Static source inspection; breakeven sequence lengths and 1,000-agent TTFT evaluated in own-offline simulator."
+    },
+    {
+      "id": "evi-tiered-kv-cache-sim-001",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of Llama-3-70B-FP8 on 8x H100 TP=8 (160 KiB/tok node KV), quadratic 64K prefill recompute takes 3,077.12 ms, whereas swapping 64K KV takes 24.32 ms from pinned DDR5 (126.53x faster, L_breakeven=25 tokens), 30.48 ms from CXL/Mooncake pool (100.96x, L_breakeven=46 tokens), and 208.29 ms from NVMe RAID0 GDS (14.77x, L_breakeven=123 tokens vs 6,940 tokens on POSIX disk), cutting 1,000-session Agentic P99 TTFT by 18.91x (4,387.91 -> 231.99 ms) and token cost by 66.6%.",
+      "status": "own-offline",
+      "source_ids": [
+        "lmcache-storage-manager-2026",
+        "lmcache-gds-nixl-backend-2026",
+        "vllm-mooncake-store-connector-2026",
+        "vllm-simple-cpu-offload-connector-2026"
+      ],
+      "artifacts": [
+        "experiments/tiered_kv_cache_hierarchy/run.py",
+        "experiments/tiered_kv_cache_hierarchy/results.json",
+        "docs/components/tiered-kv-cache-offload-hierarchy.md"
+      ],
+      "verifier": "python experiments\\tiered_kv_cache_hierarchy\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic analytical breakeven and multi-turn session model; not a physical CXL 3.0 + NVMe RAID0 hardware trace."
     }
   ],
   "updated_at": "2026-10-19"

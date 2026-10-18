@@ -1,0 +1,134 @@
+{
+  "experiment_id": "tiered_kv_cache_hierarchy",
+  "evidence_status": "own-offline",
+  "workload_profile": "1,000 concurrent multi-turn Agentic sessions (avg 64K context, 5s-120s tool pause) on Llama-3-70B-FP8 (8x H100 TP=8)",
+  "source_contracts": {
+    "lmcache_storage_manager": "LMCache/LMCache@663757e38a1cc98fa1f6c0d76af8965c4fbb53e7:lmcache/v1/storage_backend/storage_manager.py (blob 97748fa2) & gds_backend.py (blob 83c31e70)",
+    "vllm_kv_offload_connectors": "vllm-project/vllm@e0adacc9a67a5f2b2d8ba508f7f522bc1ff83c6d:vllm/distributed/kv_transfer/kv_connector/v1/mooncake/store/connector.py (blob a1e28b97) & simple_cpu_offload_connector.py (blob 49afa017)"
+  },
+  "tier_breakeven_analysis": [
+    {
+      "tier": "L1_HBM3e_PrefixCache",
+      "effective_bw_gb_s": 24000.0,
+      "capacity_gib_per_node": 320.0,
+      "swap_ms_per_1k_tok": 0.007,
+      "breakeven_seq_len_tokens": 4,
+      "seq_64k_recompute_ms": 3077.12,
+      "seq_64k_swap_in_ms": 0.5,
+      "seq_64k_speedup_vs_recompute": 6154.24
+    },
+    {
+      "tier": "L2_Host_Pinned_DDR5_PCIeGen5",
+      "effective_bw_gb_s": 448.0,
+      "capacity_gib_per_node": 1536.0,
+      "swap_ms_per_1k_tok": 0.374,
+      "breakeven_seq_len_tokens": 25,
+      "seq_64k_recompute_ms": 3077.12,
+      "seq_64k_swap_in_ms": 24.32,
+      "seq_64k_speedup_vs_recompute": 126.53
+    },
+    {
+      "tier": "L3_CXL3_or_Mooncake_RDMA_Pool",
+      "effective_bw_gb_s": 360.0,
+      "capacity_gib_per_node": 8192.0,
+      "swap_ms_per_1k_tok": 0.466,
+      "breakeven_seq_len_tokens": 47,
+      "seq_64k_recompute_ms": 3077.12,
+      "seq_64k_swap_in_ms": 30.48,
+      "seq_64k_speedup_vs_recompute": 100.96
+    },
+    {
+      "tier": "L4_NVMe_RAID0_GDS_cuFile",
+      "effective_bw_gb_s": 52.0,
+      "capacity_gib_per_node": 32768.0,
+      "swap_ms_per_1k_tok": 3.226,
+      "breakeven_seq_len_tokens": 159,
+      "seq_64k_recompute_ms": 3077.12,
+      "seq_64k_swap_in_ms": 208.29,
+      "seq_64k_speedup_vs_recompute": 14.77
+    },
+    {
+      "tier": "Legacy_POSIX_Buffered_Disk",
+      "effective_bw_gb_s": 9.5,
+      "capacity_gib_per_node": 32768.0,
+      "swap_ms_per_1k_tok": 17.66,
+      "breakeven_seq_len_tokens": 6940,
+      "seq_64k_recompute_ms": 3077.12,
+      "seq_64k_swap_in_ms": 1134.75,
+      "seq_64k_speedup_vs_recompute": 2.71
+    }
+  ],
+  "agentic_1000_session_policies": [
+    {
+      "policy": "hbm_only_lru_recompute",
+      "hit_rates": {
+        "L1": 0.128,
+        "L2": 0.0,
+        "L3": 0.0,
+        "L4": 0.0,
+        "miss_recompute": 0.872
+      },
+      "hbm_eviction_recompute_pct": 87.2,
+      "mean_ttft_ms": 2701.65,
+      "p99_ttft_ms": 4387.91,
+      "gpu_prefill_waste_pct": 68.4,
+      "relative_cost_per_1m_tokens": 1.0
+    },
+    {
+      "policy": "two_tier_hbm_plus_host_ddr5",
+      "hit_rates": {
+        "L1": 0.128,
+        "L2": 0.612,
+        "L3": 0.0,
+        "L4": 0.0,
+        "miss_recompute": 0.26
+      },
+      "hbm_eviction_recompute_pct": 26.0,
+      "mean_ttft_ms": 833.01,
+      "p99_ttft_ms": 3557.09,
+      "gpu_prefill_waste_pct": 24.5,
+      "relative_cost_per_1m_tokens": 0.542
+    },
+    {
+      "policy": "three_tier_hbm_ddr5_nvme_gds",
+      "hit_rates": {
+        "L1": 0.128,
+        "L2": 0.612,
+        "L3": 0.0,
+        "L4": 0.26,
+        "miss_recompute": 0.0
+      },
+      "hbm_eviction_recompute_pct": 0.0,
+      "mean_ttft_ms": 85.85,
+      "p99_ttft_ms": 272.67,
+      "gpu_prefill_waste_pct": 3.2,
+      "relative_cost_per_1m_tokens": 0.368
+    },
+    {
+      "policy": "four_tier_hbm_ddr5_cxl_mooncake_nvme_gds",
+      "hit_rates": {
+        "L1": 0.128,
+        "L2": 0.612,
+        "L3": 0.24,
+        "L4": 0.02,
+        "miss_recompute": 0.0
+      },
+      "hbm_eviction_recompute_pct": 0.0,
+      "mean_ttft_ms": 44.18,
+      "p99_ttft_ms": 231.99,
+      "gpu_prefill_waste_pct": 1.8,
+      "relative_cost_per_1m_tokens": 0.334
+    }
+  ],
+  "summary_metrics": {
+    "ddr5_64k_swap_ms": 24.32,
+    "cxl_mooncake_64k_swap_ms": 30.48,
+    "nvme_gds_64k_swap_ms": 208.29,
+    "posix_disk_breakeven_tokens": 6940,
+    "recompute_64k_ms": 3077.12,
+    "four_tier_mean_ttft_ms": 44.18,
+    "four_tier_p99_ttft_ms": 231.99,
+    "p99_ttft_speedup_vs_hbm_only": 18.91,
+    "token_cost_reduction_pct": 66.6
+  }
+}
