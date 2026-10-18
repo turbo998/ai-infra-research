@@ -38,7 +38,10 @@
 | [FP8 细粒度分块缩放与 Blackwell NVFP4 预训练数值稳定性机制](docs/components/fp8-nvfp4-pretraining-numerics.md) | DeepSeek `1x128`/`128x128` + WGMMA 128 步晋升、`TransformerEngine` NVFP4 (`1x16 E2M1` + `16x16 RHT` + `cvt.rs` 随机舍入) 与离群通道 SQNR 账本 |
 | [万卡同步训练容错与静默数据损坏（SDC）防御：NVRx 进程内热重启与 ABFT](docs/components/fault-tolerant-training-resilience.md) | `NVIDIA/nvidia-resiliency-ext` `inprocess.Wrapper` 热备切换 (`19.8s`)、`CliqueReplicationStrategy` 内存副本、`64K` 卡 `90.30%` ETTR 与正交 ABFT 单步拦截 |
 | [132kW–600kW 液冷机柜毫秒级功率阶跃（`dP/dt`）与 OCP ORv3 超级电容削峰](docs/components/rack-power-transient-smoothing.md) | `DCGM` Field 1425-1438 固件功率平滑、`3,014.7–13,926.4 MW/s` 同步冲击、ORv3 `87.1 F` (`43.9 kJ`) 超级电容选型与 `264.91x` 斜率压缩 |
-| [Phase 2 & 3 7-Card 报告](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4 7-Card 报告](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5 7-Card 报告](docs/reports/ai-infra-phase5-benchmark-cards.html) | 自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全栈前沿子系统实测/离线坐标与架构取舍 |
+| [网内计算 SHARP 集合通信、NVLS 多播硬件归约与位级漂移边界](docs/components/in-network-collectives-sharp.md) | `NVIDIA/nccl` (`3e46c089`) `nvls.cc`/`collnet.cc` 代价模型、`16K` 卡 `NVLS + SHARP` `27.91x` 加速、`64` 组硬件树溢出回退与 `FP32` 累加消除 `BF16` 非结合律位级漂移 |
+| [Hopper 与 Blackwell 跨代异构集群非对称流水线编排与跨代 KV 转码](docs/components/heterogeneous-cluster-scheduling.md) | `NVIDIA/Megatron-LM` (`b607c1b7`) `PipelineParallelLayerLayout` DSL、异构 `H100+B200` `1:3` 非对称 VPP 切分（气泡从 `43.87%` 压至 `0.28%`）与 `SM100 FP4 -> SM90 FP8` 紧凑 KV RDMA 转码 (`3.86x`) |
+| [10 万卡 AI Factory 全栈 CapEx / OpEx / ETTR / Token 经济学帕累托模型](docs/components/ai-factory-tco-pareto.md) | 联立光互连、SHARP 集合通信、FP8/NVFP4、NVRx/3FS 与 ORv3 超级电容的十万卡 3 年 TCO 帕累托模型（有效算力产出提升 `7.36x`、每百万 Token 成本降低 `12.65x` 至 `$1.4307`） |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6 7-Card 报告](docs/reports/ai-infra-phase6-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 33 个研究问题与 27 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -66,6 +69,9 @@
 | [FP8 & NVFP4 numerics 算例](experiments/fp8_nvfp4_numerics/README.md) | `100x` 离群通道下 Delayed Scaling vs DeepSeek `1x128` vs NVFP4 `1x16 + RHT + SR` 的 SQNR、小梯度归零偏差与 WGMMA 晋升误差 |
 | [Megascale fault tolerance 算例](experiments/megascale_fault_tolerance/README.md) | `4K–64K` GPU 规模下 Slurm+PFS vs `NVRx` 进程内热备 + 对等内存恢复的 ETTR（`18.58%` vs `90.30%`）与 BF16 比特翻转 ABFT 校验 |
 | [Rack power transients 算例](experiments/rack_power_transients/README.md) | `132kW` NVL72 至 `600kW` Rubin Ultra 机柜毫秒级功率阶跃 `dP/dt`、ORv3 超级电容（`87.1 F` / `2675.3 F`）与固件平滑协同算例 |
+| [SHARP in-network collectives 算例](experiments/sharp_in_network_collectives/README.md) | `64–16,384` 卡 `Ring` / `Tree` / `NVLS_TREE` / `NVLS + SHARP` AllReduce 带宽（`27.91x` 加速）、`64` 组硬件树饱和回退与 `BF16`/`FP32` 位级漂移 |
+| [Heterogeneous cluster scheduler 算例](experiments/heterogeneous_cluster_scheduler/README.md) | `H100 + B200` 跨代异构 `PP=16, VPP=2` 非对称切分（`1.78x` 加速、`0.28%` 气泡）与 `128K` 跨代 `SM100 FP4 -> SM90 FP8` KV RDMA 转码 (`3.86x`) |
+| [AI Factory TCO simulator 算例](experiments/ai_factory_tco_simulator/README.md) | 10 万卡 AI Factory 四代全栈配置（Gen-1 Legacy / Gen-2 Hopper / Gen-3 Het / Gen-3 Full Blackwell）3 年 TCO、有效算力天与 `$/1M Tokens` 帕累托仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -106,6 +112,9 @@ python experiments\agentic_sandbox_coscheduler\run.py --check
 python experiments\fp8_nvfp4_numerics\run.py --check
 python experiments\megascale_fault_tolerance\run.py --check
 python experiments\rack_power_transients\run.py --check
+python experiments\sharp_in_network_collectives\run.py --check
+python experiments\heterogeneous_cluster_scheduler\run.py --check
+python experiments\ai_factory_tco_simulator\run.py --check
 python scripts\source_monitor.py
 ```
 
