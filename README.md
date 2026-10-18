@@ -41,7 +41,10 @@
 | [网内计算 SHARP 集合通信、NVLS 多播硬件归约与位级漂移边界](docs/components/in-network-collectives-sharp.md) | `NVIDIA/nccl` (`3e46c089`) `nvls.cc`/`collnet.cc` 代价模型、`16K` 卡 `NVLS + SHARP` `27.91x` 加速、`64` 组硬件树溢出回退与 `FP32` 累加消除 `BF16` 非结合律位级漂移 |
 | [Hopper 与 Blackwell 跨代异构集群非对称流水线编排与跨代 KV 转码](docs/components/heterogeneous-cluster-scheduling.md) | `NVIDIA/Megatron-LM` (`b607c1b7`) `PipelineParallelLayerLayout` DSL、异构 `H100+B200` `1:3` 非对称 VPP 切分（气泡从 `43.87%` 压至 `0.28%`）与 `SM100 FP4 -> SM90 FP8` 紧凑 KV RDMA 转码 (`3.86x`) |
 | [10 万卡 AI Factory 全栈 CapEx / OpEx / ETTR / Token 经济学帕累托模型](docs/components/ai-factory-tco-pareto.md) | 联立光互连、SHARP 集合通信、FP8/NVFP4、NVRx/3FS 与 ORv3 超级电容的十万卡 3 年 TCO 帕累托模型（有效算力产出提升 `7.36x`、每百万 Token 成本降低 `12.65x` 至 `$1.4307`） |
-| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6 7-Card 报告](docs/reports/ai-infra-phase6-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 33 个研究问题与 27 个可复现实验坐标 |
+| [vLLM v1 分段/可中断 CUDA Graph 编译池与 SGLang Graph Runner 边界](docs/components/cuda-graph-piecewise-compilation.md) | `vLLM` `PiecewiseBackend` / `Breakable CUDAGraph`（`@eager_break_during_capture` 外置不变式、`global_graph_pool` + `weak_ref_tensors` `73.63x` 显存压缩）与非对齐 Batch (`BS=33/257`) 反超 Full Graph 机制 |
+| [多模态视觉/视频大模型 Encode-Prefill-Decode (EPD) 三阶段解耦与 EncoderCacheManager](docs/components/multimodal-encoder-disaggregation.md) | `vLLM` 引用计数 `EncoderCacheManager`（多轮 `mm_hash` 锁存与 FIFO `freeable` 回收）、`SGLang` 分块 Prefill 切片与 `1E/3P/4D` EPD 降低 P99 TPOT `3.54x` (`58.64 -> 16.58 ms`) |
+| [EAGLE-3 / DeepSeek MTP 树状掩码投机解码验证与高并发屋脊线坍塌边界](docs/components/eagle3-speculative-tree-verification.md) | `SGLang` `TreeMaskMode` 非因果树验证、PD 首轮 `one-hot q(X)=1` 验证与 `AdaptiveSpeculativeParams` 分桶 EMA 控制器（解决 `BS=32` `0.889x` 坍塌并恢复至 `2.422x`） |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7 7-Card 报告](docs/reports/ai-infra-phase7-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 36 个研究问题与 30 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -72,6 +75,9 @@
 | [SHARP in-network collectives 算例](experiments/sharp_in_network_collectives/README.md) | `64–16,384` 卡 `Ring` / `Tree` / `NVLS_TREE` / `NVLS + SHARP` AllReduce 带宽（`27.91x` 加速）、`64` 组硬件树饱和回退与 `BF16`/`FP32` 位级漂移 |
 | [Heterogeneous cluster scheduler 算例](experiments/heterogeneous_cluster_scheduler/README.md) | `H100 + B200` 跨代异构 `PP=16, VPP=2` 非对称切分（`1.78x` 加速、`0.28%` 气泡）与 `128K` 跨代 `SM100 FP4 -> SM90 FP8` KV RDMA 转码 (`3.86x`) |
 | [AI Factory TCO simulator 算例](experiments/ai_factory_tco_simulator/README.md) | 10 万卡 AI Factory 四代全栈配置（Gen-1 Legacy / Gen-2 Hopper / Gen-3 Het / Gen-3 Full Blackwell）3 年 TCO、有效算力天与 `$/1M Tokens` 帕累托仿真 |
+| [CUDA Graph piecewise capture 算例](experiments/cuda_graph_piecewise_capture/README.md) | `488` 算子 CPU 发射墙、`32` 桶 `global_graph_pool` `73.63x` 显存压缩、B200 `BS=1` `1.92x` 提速与非对齐 `BS=33/257` Piecewise 反超 Full Graph 仿真 |
+| [Multimodal encoder disaggregation 算例](experiments/multimodal_encoder_disaggregation/README.md) | `Qwen2.5-VL-72B` 共置 ViT 干扰（P99 TPOT `58.64 ms`）vs `1E/3P/4D` 三阶段 EPD + `EncoderCacheManager`（P99 TPOT `16.58 ms`、`2.70x` RPS）仿真 |
+| [EAGLE-3 speculative tree 算例](experiments/eagle3_speculative_tree/README.md) | H100 FP8 `Q_ridge=229.6` 下树状投机解码在 `BS=1` (`2.605x`) 与 `BS=32` (`0.889x` 坍塌) 的屋脊线相变及自适应收缩恢复 (`2.422x`) 仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -115,6 +121,9 @@ python experiments\rack_power_transients\run.py --check
 python experiments\sharp_in_network_collectives\run.py --check
 python experiments\heterogeneous_cluster_scheduler\run.py --check
 python experiments\ai_factory_tco_simulator\run.py --check
+python experiments\cuda_graph_piecewise_capture\run.py --check
+python experiments\multimodal_encoder_disaggregation\run.py --check
+python experiments\eagle3_speculative_tree\run.py --check
 python scripts\source_monitor.py
 ```
 

@@ -1480,6 +1480,114 @@
       "limitations": "3 年直线折旧与固定电价 $0.065/kWh 的全栈乘性帕累托仿真模型。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/ai_factory_tco_simulator/run.py --check and tests/test_ai_factory_tco_simulator.py"
+    },
+    {
+      "id": "ev-vllm-sglang-piecewise-cudagraph-code-2026",
+      "claim": "根据 vllm-project/vllm (commit 82a24bb82dd9344cce7a43195bb51a2390adf00a, published_at: 2026-10-18) 与 sgl-project/sglang (commit 0f4aedfecc3e1e420292541af4e9da8909b9b4f7, published_at: 2026-10-18) 源码核验：vLLM 通过 PiecewiseBackend (blob 576cd941) 与 Breakable CUDA Graph (blob b70fe70d) 将动态 Attention/All2All 拆出图外，在 CUDAGraphWrapper (blob 2dea34e0) 中使用共享 global_graph_pool (blob c4cfeabd) 并在捕获出口执行 output = weak_ref_tensors(output) 释放张量强引用，使跨 Batch 桶捕获可在同一 CUDA Stream 上原地复用私有显存池；且 @eager_break_during_capture 必须置于 @maybe_transfer_kv_layer 最外层，以确保 PD 分离的 wait_for_layer_load/save_kv_layer 运行在 Eager 段而非被固化进静态图中。",
+      "source_ids": [
+        "vllm-piecewise-breakable-cudagraph-code",
+        "sglang-cuda-graph-config-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/cuda-graph-piecewise-compilation.md",
+        "docs/reports/ai-infra-phase7-benchmark-cards.html"
+      ],
+      "limitations": "vLLM 与 SGLang 上游源码核验；未在物理 GPU 集群上运行实机 benchmark。",
+      "verified_at": "2026-10-19",
+      "verifier": "python scripts/validate_research.py"
+    },
+    {
+      "id": "ev-cuda-graph-piecewise-offline-2026",
+      "claim": "本项目原创离线实验 experiments/cuda_graph_piecewise_capture (seed=42) 证明：在 60 层 MoE 模型（Eager 488 算子 × 4.1 us = 2.001 ms/step CPU 发射开销）与 32 个捕获桶（BS=1..512）下，vLLM 共享 global_graph_pool + weak_ref_tensors 将 32 桶私有池显存从不共享的 76.55 GiB 压缩 73.63x 至 1.04 GiB；在 B200 NVFP4 BS=1 下，Piecewise CUDA Graph 将端到端 TPOT 从 3.025 ms 压降至 1.575 ms（提速 1.92x）；在非对齐批次（H100 BS=33 向上 Padding 至桶 40，B200 BS=257 Padding 至桶 288）下，Full CUDA Graph 因强制 Attention 读取 7 个或 31 个空槽位的虚拟 KV Cache，导致 H100 BS=33 劣化至 7.954 ms（0.90x 慢于 Eager），而 Piecewise CUDA Graph 仅对高算术强度 MLP 做桶对齐、保持 Eager Attention 精确按 unpadded_bs 执行，在 H100 BS=33（7.165 ms vs 7.954 ms）和 B200 BS=257（14.786 ms vs 16.232 ms，快 1.446 ms）上全面反超 Full CUDA Graph。",
+      "source_ids": [
+        "vllm-piecewise-breakable-cudagraph-code",
+        "sglang-cuda-graph-config-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/cuda_graph_piecewise_capture/run.py",
+        "experiments/cuda_graph_piecewise_capture/results.json",
+        "experiments/cuda_graph_piecewise_capture/results.csv",
+        "docs/components/cuda-graph-piecewise-compilation.md",
+        "docs/reports/ai-infra-phase7-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性 CPU 发射墙、显存池生命周期与分桶 Padding 解析模型。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/cuda_graph_piecewise_capture/run.py --check and tests/test_cuda_graph_piecewise_capture.py"
+    },
+    {
+      "id": "ev-vllm-sglang-multimodal-cache-code-2026",
+      "claim": "根据 vllm-project/vllm (commit 82a24bb82dd9344cce7a43195bb51a2390adf00a) vllm/v1/core/encoder_cache_manager.py (blob 24cf609d) 与 sgl-project/sglang (commit 0f4aedfecc3e1e420292541af4e9da8909b9b4f7) python/sglang/srt/managers/mm_utils.py (blob d4a8346a) 源码核验：vLLM V1 EncoderCacheManager 以 mm_hash 为键维护 self.cached[mm_hash] 请求引用集合与 self.freeable OrderedDict FIFO 回收池，free_encoder_input 在单次 Prefill 消费后不减少引用计数，而是保持 mm_hash 锁定直至整条多轮请求生命周期结束调用 free(request)，从而避免 Chunked Prefill 或多轮复现同一图像时发生中途误驱逐与重复 ViT 前向；SGLang MultiModalStaticCache 则配合 get_embedding_Single_chunk 按 req.extend_prefix_len 与 extend_input_len 对多模态 Embedding 执行分块 Prefill 精确张量切片。",
+      "source_ids": [
+        "vllm-encoder-cache-manager-code",
+        "sglang-multimodal-embedding-cache-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/multimodal-encoder-disaggregation.md",
+        "docs/reports/ai-infra-phase7-benchmark-cards.html"
+      ],
+      "limitations": "vLLM 与 SGLang 多模态缓存源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "python scripts/validate_research.py"
+    },
+    {
+      "id": "ev-multimodal-epd-disagg-offline-2026",
+      "claim": "本项目原创离线实验 experiments/multimodal_encoder_disaggregation (seed=42) 证明：在 8x H100 服务 Qwen2.5-VL-72B（每请求 3,072 视觉 Token = 48.0 MB Embedding，ViT 计算量 42.0 TFLOPS）下，传统共置架构（0E/0P/8D）因重计算 ViT 抢占 SM 导致 P99 Decode TPOT 飙升至 58.64 ms（劣化 3.54x）、LLM 权重 HBM 空转浪费率达 38.4%、可持续吞吐仅 5.40 RPS；采用三阶段 EPD 解耦 + EncoderCacheManager（1E/3P/4D 配比，4.0 GiB 缓存池在 4 轮对话下综合命中率 92.0%，同机 CUDA IPC 传输 48.0 MB 仅需 0.132 ms，跨机 RDMA 1.072 ms）可将 P99 TPOT 压降至 16.58 ms（降低 3.54x），TTFT 较两阶段 P/D 共置 ViT 缩短 1.49x（50.81 ms vs 75.82 ms），HBM 空转浪费降至 4.2%，可持续吞吐提升 2.70x 至 14.60 RPS。",
+      "source_ids": [
+        "vllm-encoder-cache-manager-code",
+        "sglang-multimodal-embedding-cache-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/multimodal_encoder_disaggregation/run.py",
+        "experiments/multimodal_encoder_disaggregation/results.json",
+        "experiments/multimodal_encoder_disaggregation/results.csv",
+        "docs/components/multimodal-encoder-disaggregation.md",
+        "docs/reports/ai-infra-phase7-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性 EPD 三阶段排队、RDMA/IPC 传输与 EncoderCacheManager 容量仿真。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/multimodal_encoder_disaggregation/run.py --check and tests/test_multimodal_encoder_disaggregation.py"
+    },
+    {
+      "id": "ev-sglang-eagle3-adaptive-code-2026",
+      "claim": "根据 sgl-project/sglang (commit 0f4aedfecc3e1e420292541af4e9da8909b9b4f7) python/sglang/srt/speculative/eagle_utils.py (blob 149b7e56)、eagle_disaggregation.py (blob f8b5a23b) 与 adaptive_spec_params.py (blob 268ceaea) 源码核验：EAGLE 树状验证支持 FULL_MASK/QLEN_ONLY/QLEN_ONLY_BITPACKING 三种非因果掩码模式并通过 target_probs/draft_probs 拒绝采样一次性回填接受的 KV 槽位；在 PD 分离首轮解码中，pd_first_draft_proposal 构造 one-hot 草稿分布 q(X)=1 以免除跨节点传输完整词表概率的带宽开销；AdaptiveSpeculativeParams 按对齐后 Batch 桶（DEFAULT_ADAPTIVE_CONFIG: BS=1 候选 [1,3,5,7]、BS=8 [0,1,3]、BS=32 [0,1]、BS=64 [0]）路由至独立 AdaptiveStepSlot，基于 EMA 实际有效吞吐率与非对称迟滞（up=0.03, down=-0.25）动态收缩草稿步数，且在启用 Attention DP、TBO 或 PDMux 时通过 validate_args 强制拦截以防死锁。",
+      "source_ids": [
+        "sglang-eagle-speculative-tree-code",
+        "sglang-adaptive-spec-params-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/eagle3-speculative-tree-verification.md",
+        "docs/reports/ai-infra-phase7-benchmark-cards.html"
+      ],
+      "limitations": "SGLang EAGLE 与自适应投机控制器上游源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "python scripts/validate_research.py"
+    },
+    {
+      "id": "ev-eagle3-speculative-tree-offline-2026",
+      "claim": "本项目原创离线实验 experiments/eagle3_speculative_tree (seed=42) 证明：在 H100 SXM FP8（TP=8，单卡活跃权重 9.2 GB，算术强度拐点 Q_ridge = 229.6 有效查询 Token/步）下，代码/数学场景（alpha=0.86）在 BS=1 时采用宽树草稿 tree_s5_k6_v32（N_verify=32）可获得 E[tau]=5.364 tokens/step 与 2.605x 端到端加速（tree_s6_k8_v64 达 2.647x）；但当并发升至 BS=32 时，固定 tree_s5_k6_v32 使单步查询 Token 暴涨至 1,024（拐点的 4.460x），验证进入严重算力受限区（耗时 47.349 ms），净吞吐比自回归基线倒退至 0.889x（通用对话 alpha=0.74 在 BS=16 下固定 tree_s6_k8_v64 坍塌至 0.660x）；采用随并发度动态收缩树宽的自适应策略，在 BS=32 自动切换为链式草稿 chain_s5_k1_v6（查询 Token 降至 192，拐点的 0.836x），可将加速比恢复至 2.422x（9,871.8 tok/s vs 3,625.2 tok/s）。",
+      "source_ids": [
+        "sglang-eagle-speculative-tree-code",
+        "sglang-adaptive-spec-params-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/eagle3_speculative_tree/run.py",
+        "experiments/eagle3_speculative_tree/results.json",
+        "experiments/eagle3_speculative_tree/results.csv",
+        "docs/components/eagle3-speculative-tree-verification.md",
+        "docs/reports/ai-infra-phase7-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库树状马尔可夫接受率与 GPU 算术强度屋脊线解析模型。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/eagle3_speculative_tree/run.py --check and tests/test_eagle3_speculative_tree.py"
     }
   ]
 }
