@@ -221,5 +221,17 @@ Groq PCIe replay 唯一外部抖动源，以及 Cerebras WSE 单 PE `48 KB` SRAM
 (2) `hf3fs_iovcreate` 在 `/dev/shm` 创建共享内存并在 `<mount>/3fs-virt/iovs/` 创建编码块大小与队列深度的符号链接，由本地 `fuse.hf3fs` 守护进程代管 IB `ibv_reg_mr`，后续 `hf3fs_submit_ios` 完全在用户态无锁共享环投递；`LMCache` 的 `connector.cpp` 在调用者 Tensor 与 `/dev/shm` `iov.base` 之间执行了一次 `std::memcpy`（消耗 `24%` DDR 带宽与 `75%` RC 负载，吞吐 `48.0 GB/s`），直接将 GPU BAR1 映射进 `hf3fs_iov` 并关闭 PCIe Switch ACS 重定向后，吞吐达 `90.0 GB/s`（RC 负载仅 `6.0%`，`100 GiB` KV 恢复 `1.265 s`）；
 (3) 无争用 GDS 往返 Swap `0.160 s`，故 $t_{\text{BE,gds}} = (16.0 \times 0.160) / 4.0 = 2.56\text{ s}$；Prefill 重算耗时 `0.500 s`，故 $t_{\text{BE,recomp}} = (16.0 \times 0.500) / 4.0 = 8.00\text{ s}$；在 `500 VMs/s` UFFD 唤醒下，按需缺页抢走 `50.33 GB/s` 带宽，使未限流 GDS 可用带宽跌至 `4.07 GB/s`、Swap 时间拉长 `13.4x` 至 `2.139 s`（烧掉 `136.92 GiB·s`），而 35% 宿主机 I/O 令牌桶限流将 Swap 稳在 `0.246 s`（`15.75 GiB·s`，活跃 Rollout 提升 `13.23x–25.58x`）；`uffd.copy()` 返回 `-EAGAIN` 是因为并发气球驱动 `MADV_DONTNEED` 产生了 `UFFD_EVENT_REMOVE`，Handler 必须先从 UFFD 队列排空并处理所有挂起的 `Remove` 事件后再重试。用户掌握状态仍为 `not-assessed`。
 
+## 23. FP8/NVFP4 预训练数值稳定性（`1x128` 分块 / `16x16 RHT` / 随机舍入）、万卡 NVRx 容错/ABFT 与 600kW 机柜功率阶跃缓冲
+
+阅读 [FP8 细粒度分块缩放与 Blackwell NVFP4 预训练数值稳定性](../components/fp8-nvfp4-pretraining-numerics.md)、[万卡同步训练容错与静默数据损坏（SDC）防御](../components/fault-tolerant-training-resilience.md) 与 [132kW–600kW 液冷机柜毫秒级功率阶跃与 OCP ORv3 超级电容削峰](../components/rack-power-transient-smoothing.md)：
+(1) 在 `NVIDIA/TransformerEngine`（`nvfp4.rst`、`core_nvfp4.cuh`）与 `deepseek-ai/DeepGEMM`（`sm90_fp8_gemm_1d2d.cuh`）中：为什么 `100x` 激活离群通道会使 Tensor-wise FP8 Delayed Scaling 的非离群通道 SQNR 跌至 `21.49 dB`，而 DeepSeek `1x128` 分块缩放恢复至 `31.94 dB`？为什么 NVFP4（`1x16 E2M1`）在 Wgrad 上必须配合 `16x16` 随机哈达玛变换（`RHT`）与硬件随机舍入指令 `cvt.rs.satfinite.e2m1x4`（对比 `RTN` 的 `38.89%` 偏差）？
+(2) 在单卡 `MTBF = 12,000 h` 的 `65,536` 卡同步训练集群中，集群联合 `MTBF` 是多少分钟？为什么传统 Slurm 整作业重启 + PFS Checkpoint 的有效训练时间比（`ETTR`）暴跌至 `18.58%`，而 `NVRx` `inprocess.Wrapper`（`19.8 s` 热恢复）+ `CliqueReplicationStrategy`（`40.0 s` 周期）能维持 `90.30%`？为什么有限 `BF16` 权重的 `16` 种单比特翻转对 `NaN/Inf` 看门狗的即时检出率为 `0.0%`，而正交行列 ABFT 校验和能以 `0.0732%` 算力开销实现 `100%` 单步拦截？
+(3) 在 `16,384` 卡 `GB200 NVL72`（`132 kW/rack`，单步摆幅 `66.24 kW` 于 `5.0 ms` 内完成）中，未缓冲的全集群同步阶跃斜率 `dP/dt` 高达多少 `MW/s`？若用 OCP ORv3 超级电容缓冲架（`CBU`，工作在 `48V -> 36V`）将单柜斜率限制在 `0.05 kW/ms`，单柜需多少 `kJ` 可用能量与多少 `Farads` 电容量？为什么通信等待期 `Dummy Burn Kernel` 不应作为首选？
+
+答案：(1) Tensor-wise 缩放因子被单个 `100x` 离群通道撑大 `100` 倍，导致其余正常通道 `37.5%` 的激活值下溢归零（`21.49 dB`），而 `1x128` 分块将离群点隔离在单个 Tile 内，其余通道保持 `31.94 dB`（`+10.45 dB`）；Wgrad 沿 Token 维规约时离群点落入同一 `1x16` 微块（`18.19 dB`），`16x16 RHT` 将峰值因子从 `3.048` 压至 `1.410`、恢复 `35.06 dB`（`+16.87 dB`），且硬件随机舍入（`SR`）满足 $\mathbb{E}[Q(x)]=x$，将亚网格小梯度的范数偏差从 `RTN` 的 `38.89%` 压至 `1.25%`（降低 `31.1x`）；
+(2) `65,536` 卡联合 `MTBF = (12000 × 60) / 65536 = 10.99 min`（`659.2 s`）；Slurm + PFS 单次重启高达 `960.0 s`（接近整个集群 MTBF）且落盘阻塞 `95 s`，故 `ETTR` 跌至 `18.58%`；`NVRx inprocess.Wrapper` 通过 `AbortTorchDistributed` 与 `ShiftRanks` 激活 `reserve_fn` 热备节点（`18.0 s`）并从对等节点 RAM 拉取分片（`1.8 s`），将 Young-Daly 最优周期压至 `40.0 s`、维持 `90.30%` `ETTR`（`+71.72 pts`）；有限 `BF16`（如 `0.375`, `exp=125`）翻转任意 1 个比特后指数仍 `< 255`（全为有限数），故 `isnan/isinf` 检出率为 `0.0%`，而正交 ABFT 利用 $Ce = A(Be)$ 在 `1` 步内 `100%` 捕获；
+(3) `228` 台 `GB200 NVL72` 机柜同步阶跃斜率高达 `3,014.7 MW/s`（`600 kW` Rubin Ultra 机柜更达 `13,926.4 MW/s`）；将单柜 `66.24 kW` 阶跃展宽至 `1,324.8 ms`（`0.05 kW/ms`）需可用能量 $E = 0.5 \times 66.24 \times (1.3248 - 0.005) / 0.997 = 43.88\text{ kJ}$，对应电容量 $C = 2 \times 43,880 / (48^2 - 36^2) = 87.1\text{ Farads}$（结合 `15 ms` DCGM 固件平滑将集群斜率压至 `11.38 MW/s`，削减 `264.91x`）；而 `Dummy Burn` 白白浪费 `+5.88%` 至 `+7.40%` 全集群总电耗且斜率仍达 `1,191.2 MW/s`。用户掌握状态仍为 `not-assessed`。
+
+
 
 

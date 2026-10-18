@@ -1073,6 +1073,92 @@
       "limitations": "Python 标准库确定性算例。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/agentic_sandbox_coscheduler/run.py --check and tests/test_agentic_sandbox_coscheduler.py"
+    },
+    {
+      "id": "ev-te-nvfp4-deepgemm-impl-2026",
+      "claim": "NVIDIA TransformerEngine (eb3c860a) 与 DeepSeek DeepGEMM (1fc9c669) 源码定义了 Hopper/Blackwell 超低精度预训练数值稳定性机制：(1) DeepGEMM sm90_fp8_gemm_1d2d.cuh 采用 1x128 激活 / 128x128 权重分块缩放，并每 BLOCK_K=128 步将 WGMMA 13-bit 尾数累加器晋升至 CUDA Core FP32 寄存器 (final_accum += scale * accum)；(2) TransformerEngine nvfp4.rst 与 core_nvfp4.cuh 采用 1x16 E2M1 + E4M3 微块解码缩放 + FP32 全局编码缩放二级体系，对 Wgrad 施加 16x16 随机哈达玛变换 (RHT) 平摊离群通道，对权重采用 16x16 2D 分块保证前反向量化一致，并通过 PTX cvt.rs.satfinite.e2m1x4.f32 执行硬件 4 元素随机舍入 (Stochastic Rounding)。",
+      "source_ids": [
+        "transformer-engine-nvfp4-rht-sr-src",
+        "deepgemm-sm90-sm100-fp8-fp4-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/fp8-nvfp4-pretraining-numerics.md",
+        "docs/reports/ai-infra-phase5-benchmark-cards.html"
+      ],
+      "limitations": "静态 CUDA/C++/RST 源码与文档审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of NVIDIA/TransformerEngine and deepseek-ai/DeepGEMM"
+    },
+    {
+      "id": "ev-fp8-nvfp4-numerics-offline-2026",
+      "claim": "原创离线算例 experiments/fp8_nvfp4_numerics 定量证明：(1) 在 100x 激活离群通道下，Tensor-wise FP8 Delayed Scaling 非离群通道 SQNR 跌至 21.49 dB（37.5% 下溢归零），而 DeepSeek 1x128 分块缩放恢复至 31.94 dB（净增 +10.45 dB）；(2) 在 Wgrad 规约轴离群点下，16x16 RHT 将微块峰值因子从 3.048 压至 1.410，使 NVFP4 Wgrad SQNR 从 18.19 dB 跃升至 35.06 dB（+16.87 dB）；(3) 针对 E2M1 亚网格小梯度，随机舍入 (SR) 将就近舍入 (RTN) 的 38.89% 范数偏差降至 1.25%（降低 31.1x）；(4) DeepGEMM 每 128 步晋升 FP32 将 K=4096 累加相对误差从 0.0346% 降至 0.0056%（降低 6.18x）。",
+      "source_ids": [
+        "transformer-engine-nvfp4-rht-sr-src",
+        "deepgemm-sm90-sm100-fp8-fp4-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/fp8_nvfp4_numerics/run.py",
+        "experiments/fp8_nvfp4_numerics/results.json",
+        "experiments/fp8_nvfp4_numerics/results.csv",
+        "docs/components/fp8-nvfp4-pretraining-numerics.md",
+        "docs/reports/ai-infra-phase5-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性数值量化算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/fp8_nvfp4_numerics/run.py --check and tests/test_fp8_nvfp4_numerics.py"
+    },
+    {
+      "id": "ev-nvrx-fault-tolerance-impl-2026",
+      "claim": "NVIDIA Resiliency Extension (NVRx, b944b820) 源码定义了万卡同步训练进程内热恢复与内存级分片复制契约：inprocess.Wrapper (wrap.py) 与 rank_assignment.py 通过 reserve_fn 维护预热 Standby Ranks，故障时经 MonitorThread、AbortTorchDistributed 与 ChainedGPU/Nic/NVLHealthCheck 隔离坏卡并在同一 OS 进程内完成 ShiftRanks 重建；LocalCheckpointManager (local_manager.py) 与 CliqueReplicationStrategy (strategies.py) 将分布式优化器分片写入本地 RAM/NVMe 并通过 RDMA 在对等节点 Clique 间复制与生成 ExchangePlan 快速拉取恢复。",
+      "source_ids": [
+        "nvidia-resiliency-ext-inprocess-ckpt-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/fault-tolerant-training-resilience.md",
+        "docs/reports/ai-infra-phase5-benchmark-cards.html"
+      ],
+      "limitations": "静态 Python 源码审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of NVIDIA/nvidia-resiliency-ext"
+    },
+    {
+      "id": "ev-megascale-fault-tolerance-offline-2026",
+      "claim": "原创离线算例 experiments/megascale_fault_tolerance 验证：在单卡 MTBF=12,000h 下，65,536 卡集群联合 MTBF 仅 10.99 分钟，传统 Slurm 整作业重排 + PFS Checkpoint（重启 960s，落盘 95s）的有效训练时间比 (ETTR) 跌至 18.58%，而 NVRx 进程内热备（重启 18.0s + 对等节点内存恢复 1.8s = 19.8s，异步快照阻塞 1.2s，最优周期 40.0s）将 64K 卡 ETTR 维持在 90.30%（净增 +71.72 pts，16K 卡下为 95.01% vs 54.86%）；此外，有限 BF16 权重的全部 16 种单比特翻转均产生有限浮点数（NaN/Inf 看门狗即时检出率 0.0%，扩散 ~250 步），而正交行列 ABFT 校验和以 0.0732% 算力开销实现单步 100.0% 拦截。",
+      "source_ids": [
+        "nvidia-resiliency-ext-inprocess-ckpt-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/megascale_fault_tolerance/run.py",
+        "experiments/megascale_fault_tolerance/results.json",
+        "experiments/megascale_fault_tolerance/results.csv",
+        "docs/components/fault-tolerant-training-resilience.md",
+        "docs/reports/ai-infra-phase5-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性泊松容错与 BF16 比特翻转算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/megascale_fault_tolerance/run.py --check and tests/test_megascale_fault_tolerance.py"
+    },
+    {
+      "id": "ev-rack-power-transients-offline-2026",
+      "claim": "核验 NVIDIA DCGM dcgm_fields.h (64df9f89, Field IDs 1425-1438 Power Smoothing Ceiling/Floor/Preset Profile/Circuitry Lifetime) 并结合原创算例 experiments/rack_power_transients 证明：16,384 卡 GB200 NVL72 (132 kW/rack) 在 5.0 ms 同步微步切换中产生 66.24 kW/rack 阶跃与 3,014.7 MW/s 集群斜率（600 kW Rubin Ultra NVL144 达 13,926.4 MW/s），引发 4.77V 母线压降与电网跳闸风险；通信等待期 Dummy Burn 浪费 5.88%–7.40% 总电耗；而采用 OCP ORv3 超级电容缓冲架（132 kW 机柜需 43.88 kJ / 87.1 Farads @ 48V->36V；600 kW 机柜需 1,348.36 kJ / 2,675.3 Farads）配合 15 ms 固件斜率平滑，可将 16K 卡集群上游 dP/dt 压至 11.38 MW/s（削减 264.91x，压降 0.46V，训练耗时仅增 0.85%）。",
+      "source_ids": [
+        "nvidia-dcgm-power-smoothing-fields-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/rack_power_transients/run.py",
+        "experiments/rack_power_transients/results.json",
+        "experiments/rack_power_transients/results.csv",
+        "docs/components/rack-power-transient-smoothing.md",
+        "docs/reports/ai-infra-phase5-benchmark-cards.html"
+      ],
+      "limitations": "静态 C 头文件审阅与 Python 标准库确定性功率积分算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/rack_power_transients/run.py --check and tests/test_rack_power_transients.py"
     }
   ]
 }

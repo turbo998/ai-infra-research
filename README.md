@@ -35,7 +35,10 @@
 | [共封装光学（CPO）、线性直驱（LPO）与光路交换（OCS）十万卡功耗/故障模型](docs/components/optical-interconnect-cpo-ocs.md) | SONiC `CpoManagerTask` (`OE`/`ELSFP` 兄弟端口级联关停)、NCCL RAS 28028 带外监控与十万卡 800G DSP/LPO/CPO/OCS 功耗与 Goodput |
 | [DeepSeek 3FS (`hf3fs_usrbio`)、GPUDirect Storage (`cuFile`) 与多级 KV/Checkpoint 管线](docs/components/storage-gds-3fs-kv-tiering.md) | 3FS `/dev/shm` + `3fs-virt/iovs` 符号链接注册、CRAQ+BIBD 链式复制、LMCache `Hf3fsConnector` `memcpy` 瓶颈与 `nvidia-fs` BAR1 P2P / PCIe ACS 惩罚 |
 | [Agentic RL 万级 MicroVM 沙箱（Firecracker UFFD）与 GPU KV Cache 协同调度](docs/components/agentic-sandbox-coscheduling.md) | Firecracker UFFD `-EAGAIN` 排空 `UFFD_EVENT_REMOVE`、`verl` `ToolAgentLoop` Token-in-Token-out、`2.56s`/`8.00s` Break-Even 与 35% 宿主机 I/O 令牌桶 |
-| [Phase 2 & 3 7-Card 4:5 视觉基准报告](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4 7-Card 4:5 视觉基准报告](docs/reports/ai-infra-phase4-benchmark-cards.html) | 自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全栈前沿子系统实测/离线坐标与架构取舍 |
+| [FP8 细粒度分块缩放与 Blackwell NVFP4 预训练数值稳定性机制](docs/components/fp8-nvfp4-pretraining-numerics.md) | DeepSeek `1x128`/`128x128` + WGMMA 128 步晋升、`TransformerEngine` NVFP4 (`1x16 E2M1` + `16x16 RHT` + `cvt.rs` 随机舍入) 与离群通道 SQNR 账本 |
+| [万卡同步训练容错与静默数据损坏（SDC）防御：NVRx 进程内热重启与 ABFT](docs/components/fault-tolerant-training-resilience.md) | `NVIDIA/nvidia-resiliency-ext` `inprocess.Wrapper` 热备切换 (`19.8s`)、`CliqueReplicationStrategy` 内存副本、`64K` 卡 `90.30%` ETTR 与正交 ABFT 单步拦截 |
+| [132kW–600kW 液冷机柜毫秒级功率阶跃（`dP/dt`）与 OCP ORv3 超级电容削峰](docs/components/rack-power-transient-smoothing.md) | `DCGM` Field 1425-1438 固件功率平滑、`3,014.7–13,926.4 MW/s` 同步冲击、ORv3 `87.1 F` (`43.9 kJ`) 超级电容选型与 `264.91x` 斜率压缩 |
+| [Phase 2 & 3 7-Card 报告](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4 7-Card 报告](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5 7-Card 报告](docs/reports/ai-infra-phase5-benchmark-cards.html) | 自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全栈前沿子系统实测/离线坐标与架构取舍 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -60,6 +63,9 @@
 | [Optical CPO/OCS fabric 算例](experiments/optical_cpo_ocs_fabric/README.md) | 十万卡 800G 集群 DSP/LPO/CPO/OCS 功耗（`7.92 MW` vs `0.72 MW`）、`OE`/`ELSFP` 共享爆炸半径与同步训练 Goodput 模型 |
 | [Storage GDS & 3FS KV/Checkpoint 算例](experiments/storage_gds_kv_checkpoint/README.md) | POSIX Page Cache vs `O_DIRECT` vs GDS BAR1 P2P vs 3FS `USRBIO` 在 `100 GiB` KV 恢复与 `1 TiB` Checkpoint 下的吞吐与 PCIe RC 争用 |
 | [Agentic sandbox co-scheduler 算例](experiments/agentic_sandbox_coscheduler/README.md) | 万级 Firecracker UFFD 缺页风暴与 `verl` `ToolAgentLoop` GPU KV 驻留/重算/GDS 卸载（`2.56s`/`8.00s` 阈值与 35% I/O 令牌桶）协同调度 |
+| [FP8 & NVFP4 numerics 算例](experiments/fp8_nvfp4_numerics/README.md) | `100x` 离群通道下 Delayed Scaling vs DeepSeek `1x128` vs NVFP4 `1x16 + RHT + SR` 的 SQNR、小梯度归零偏差与 WGMMA 晋升误差 |
+| [Megascale fault tolerance 算例](experiments/megascale_fault_tolerance/README.md) | `4K–64K` GPU 规模下 Slurm+PFS vs `NVRx` 进程内热备 + 对等内存恢复的 ETTR（`18.58%` vs `90.30%`）与 BF16 比特翻转 ABFT 校验 |
+| [Rack power transients 算例](experiments/rack_power_transients/README.md) | `132kW` NVL72 至 `600kW` Rubin Ultra 机柜毫秒级功率阶跃 `dP/dt`、ORv3 超级电容（`87.1 F` / `2675.3 F`）与固件平滑协同算例 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -97,6 +103,9 @@ python experiments\confidential_gpu_overhead\run.py --check
 python experiments\optical_cpo_ocs_fabric\run.py --check
 python experiments\storage_gds_kv_checkpoint\run.py --check
 python experiments\agentic_sandbox_coscheduler\run.py --check
+python experiments\fp8_nvfp4_numerics\run.py --check
+python experiments\megascale_fault_tolerance\run.py --check
+python experiments\rack_power_transients\run.py --check
 python scripts\source_monitor.py
 ```
 
