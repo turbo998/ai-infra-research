@@ -10,6 +10,7 @@
 `groq-tsp-microarch-bert`、`groq-groqflow-multichip`、`groq-groqflow-multichip-runtime`、`groq-groqflow-estimate-perf`、`cerebras-csl-wse-allreduce`、`cerebras-wse-io-roofline`、
 `cerebras-csl-gemv-2d-collectives`、`cerebras-csl-sync-wse3`、`cerebras-sdk-bw-fifo-compensated`、`capacity-economics-offline-sim`。
 来源行范围、commit SHA 与发布日期见 [sources](../../research/sources.json)；主张与证据类型见 [evidence](../../research/evidence.json)。
+> **v2 进阶深挖延伸**：关于自适应 EAGLE-3 投机步长控制、PD 分离首轮草稿 One-Hot 无损拒绝采样、Blackwell NVFP4 `128x4`/`8x4` 缩放因子对齐与 4-Token V-Scale 交织重排，以及 Groq / Cerebras / Fireworks-Together B200 / GB200 NVL72 的 2026 延迟-成本帕累托前沿，请继续阅读 [AI Infra 创新者架构深挖 v2](ai-infra-innovators-v2.md) 与 [Innovator Pareto v2 算例](../../experiments/innovator_pareto_v2/README.md)。
 
 ---
 

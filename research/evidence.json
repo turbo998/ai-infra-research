@@ -722,6 +722,149 @@
       "limitations": "Python 标准库 1D 稳态热阻与焓平衡模型，不替代 3D CFD 或实机 CDU/机柜测试。",
       "verified_at": "2026-10-18",
       "verifier": "python experiments/rack_power_cooling/run.py --check and tests/test_rack_power_cooling.py"
+    },
+    {
+      "id": "ev-linux-bnxt-re-pacing-2026",
+      "claim": "Linux v7.0 Broadcom RoCE 驱动 (drivers/infiniband/hw/bnxt_re/main.c) 与 NCCL v2.28.9 (src/transport/net_ib/p2p.cc) 揭示了当前公开开源生态中 RoCEv2 硬件门铃限速与多 QP 喷洒的真实实现边界：(1) bnxt_re 在硬件门铃 FIFO 占用超阈值触发 pacing alert 时，通过 do_pacing_algorithm 将 pacing_step 指数倍增（pacing_step << 1）以防止 PCIe/MMIO 门铃溢出丢包；(2) NCCL 通过 qpsPerDev 轮询分片大消息并在最后一个 QP 挂载 IBV_SEND_SIGNALED 以利用多路径 ECMP，但截至 2026-10-19，UEC 1.1 完整传输层规范与 Google Falcon 硬件传输在主线 Linux kernel 中仍无开源规范正文或内核驱动落地。",
+      "source_ids": [
+        "uec-1-1",
+        "linux-bnxt-re-db-pacing-src",
+        "nccl-ib-pkt-spray-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/uec-transport-congestion.md",
+        "docs/trends/uec-1-1.md"
+      ],
+      "limitations": "静态内核与 NCCL 源码审阅；UEC 1.1 完整规范正文仍未公开可抓。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of torvalds/linux v7.0 bnxt_re/main.c and NVIDIA/nccl v2.28.9 p2p.cc"
+    },
+    {
+      "id": "ev-uec-congestion-sim-2026",
+      "claim": "原创离线算例 experiments/uec_fabric_congestion 定量对比了 ECMP Flow-Hash + DCQCN、4-QP Packet Spraying、RTT-Gradient (TIMELY/Swift) 与 UEC-Style Per-Packet Spraying + Selective Retransmit + Credits 在 32-to-1 Incast 与 15% 慢轨劣化下的表现：(1) 传统 ECMP + DCQCN 因单队列哈希碰撞触发 PFC PAUSE 风暴（260.0 us 停顿，尾延迟 1,182.5 us，有效吞吐仅 47.35%）；(2) 4-QP 喷洒在无按序重排容忍时因单慢轨引发 312.5 us 乱序阻塞窗口，而结合选择性重传与接收端信用控制可将 99th 尾延迟压至 356.25 us（降低 69.9%）、有效吞吐提升至 91.05%。",
+      "source_ids": [
+        "uec-1-1",
+        "linux-bnxt-re-db-pacing-src",
+        "nccl-ib-pkt-spray-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/uec_fabric_congestion/run.py",
+        "experiments/uec_fabric_congestion/results.json",
+        "experiments/uec_fabric_congestion/results.csv",
+        "docs/components/uec-transport-congestion.md",
+        "docs/trends/uec-1-1.md"
+      ],
+      "limitations": "Python 标准库确定性离散事件与流体近似模型，不代表特定商用 UEC 交换芯片实测。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/uec_fabric_congestion/run.py --check and tests/test_uec_fabric_congestion.py"
+    },
+    {
+      "id": "ev-mooncake-nixl-sglang-disagg-impl",
+      "claim": "Mooncake (51d7c496)、NVIDIA NIXL (f6de431e) 与 SGLang (4ec19ca2) 共同构成了生产级 Prefill/Decode 分离与分层 KV 路由的三大支柱：(1) Mooncake Transfer Engine 按拓扑矩阵优先选择 preferred_hca（故障或非活跃时回退 same_numa_hca）执行多轨 RDMA Write-Imm 零拷贝分片，Conductor 通过 DeadlineMlu 与 DecidePromotionPerEntry (recent_hits * entry_size / promotion_cost) 调度分层缓存晋升；(2) NIXL 通过 nixlBasicDesc/nixlBlobDesc 统一 VRAM/DRAM/BLK/OBJ 四级存储的零拷贝跨节点寻址；(3) SGLang 在 DecodePrefixMatch 中截断 Decode 侧已命中的公共前缀以节省 RDMA 带宽，并通过 HiCacheRestoreGatedKVReceiver 与延迟释放树锁防止异步 RDMA 写入期间的 Use-After-Free。",
+      "source_ids": [
+        "mooncake-transfer-engine-rdma-src",
+        "mooncake-conductor-scheduler-src",
+        "nvidia-nixl-types-libfabric-src",
+        "sglang-disagg-decode-hicache-src"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/disaggregated-kv-routing.md"],
+      "limitations": "静态 C++/Python 源码审阅，未在多节点 RoCE/IB 集群上实测。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of kvcache-ai/Mooncake, ai-dynamo/nixl, and sgl-project/sglang disaggregated KV routing sources"
+    },
+    {
+      "id": "ev-disagg-kv-routing-offline-2026",
+      "claim": "原创离线算例 experiments/disaggregated_kv_routing 验证了 PD 分离 KV 传输的四个定量边界：(1) 在 S=32768、单请求 4.0 GiB KV Cache 下，单轨 400GbE 全量重传耗时 88.248 ms，而 4 轨 RoCEv2 + 75% DecodePrefixMatch 截断将传输耗时压至 5.524 ms（提速 15.98x）；(2) 若 Page=1 Token 导致 65,536 个非连续小 IOV 描述符，MMIO 门铃开销高达 11.796 ms（占传输总时长 62%），聚合成 64-Token Block 可消除 98.4% 门铃开销；(3) 单轨拥塞降速至 25% 若不开启 RailMonitor 摘除，木桶效应使整体吞吐跌至 32.0 GB/s，动态摘除劣轨至 3 条健康轨反而恢复至 127.5 GB/s（快 3.98x）；(4) 55% DRAM + 30% NVMe HiCache 联合命中将 TTFT P99 从 1,685.4 ms 压至 312.8 ms。",
+      "source_ids": [
+        "mooncake-transfer-engine-rdma-src",
+        "mooncake-conductor-scheduler-src",
+        "nvidia-nixl-types-libfabric-src",
+        "sglang-disagg-decode-hicache-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/disaggregated_kv_routing/run.py",
+        "experiments/disaggregated_kv_routing/results.json",
+        "experiments/disaggregated_kv_routing/results.csv",
+        "docs/components/disaggregated-kv-routing.md"
+      ],
+      "limitations": "Python 标准库确定性解析与排队算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/disaggregated_kv_routing/run.py --check and tests/test_disaggregated_kv_routing.py"
+    },
+    {
+      "id": "ev-deepep-hybrid-ep-impl-2026",
+      "claim": "DeepSeek DeepEP (commit b5a33eef, 2026-10-15) 在 token.cuh、hybrid_dispatch.cuh、hybrid_combine.cuh 与 prefetch_weights.cuh 中定义了大规模 MoE EP 的底层硬件契约：(1) TokenLayout 对 Hidden、FP8 UE8M0 缩放因子（每 4 个打包进 sf_pack_t）与路由元数据分别做 32B TMA 对齐、总和做 64B RDMA 对齐并附加 32B mbarrier（H=7168, topk=8 下 FP8 每 Token 精确为 7,328 B，BF16 为 14,496 B）；(2) Hybrid Dispatch/Combine 通过 ptx::deduplicate 先在 Scale-Out 阶段对目标节点做位掩码去重（每目标节点最多发 1 份 RDMA 拷贝），再由远端转发 Warp 通过 NVLink SM P2P 分发到机内目标 Rank，并通过 warpgroup_reg_realloc 将 Scale-Up Warp 压至 40 寄存器、给 Forward Warp 让出 216 寄存器；(3) EPLB 在线负载均衡将专家权重切分为 <= 32 KiB SMEM 任务块，由 lb_prefetch_weights 通过 atomicAdd(chunk_idx_counter, 1) 与 TMA 异步搬运消除热门专家重排停顿。",
+      "source_ids": [
+        "deepep-layout-compiled-src",
+        "deepep-hybrid-dispatch-combine-src"
+      ],
+      "status": "implementation",
+      "artifacts": ["docs/components/moe-expert-parallel-alltoall.md"],
+      "limitations": "静态 CUDA/C++ 源码审阅，未在物理 H800/B200 集群执行。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of deepseek-ai/DeepEP commit b5a33eefda39485f438dc764695b71ba7b9249b6"
+    },
+    {
+      "id": "ev-moe-ep-alltoall-offline-2026",
+      "claim": "原创离线算例 experiments/moe_ep_alltoall 验证了 DeepEP 的四项核心定量结论：(1) 在 DeepSeek-V3 规模（64 GPU, 8 节点, 256 专家, topk=8, B=4096）下，TokenLayout FP8 + Hybrid 2-Tier 去重将单卡跨节点 RDMA 发送量从 80.51 MiB (BF16 朴素全发) 压至 21.84 MiB（降低 72.87%），All-to-All 步延迟从 7.359 ms 降至 1.242 ms（提速 5.93x）；(2) 当专家路由呈 Zipf s=1.15 倾斜时，Capacity Factor=1.25 导致高达 24.47% 的有效专家槽位丢弃，而引入 32 个 EPLB 冗余专家副本（每 GPU +1 热门副本）在不丢 Token 的前提下将最慢 GPU 负载倾斜比从 4.49x 压至 1.38x（步时间提速 2.57x）；(3) EPLB 搬运 16 个专家（每个 441 MiB，切分为 14,112 个 32 KiB TMA 块）仅需 3.841 ms，可完全隐藏在 32.0 ms 训练步计算阴影内（隐藏率 100%）。",
+      "source_ids": [
+        "deepep-layout-compiled-src",
+        "deepep-hybrid-dispatch-combine-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/moe_ep_alltoall/run.py",
+        "experiments/moe_ep_alltoall/results.json",
+        "experiments/moe_ep_alltoall/results.csv",
+        "docs/components/moe-expert-parallel-alltoall.md"
+      ],
+      "limitations": "Python 标准库确定性算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/moe_ep_alltoall/run.py --check and tests/test_moe_ep_alltoall.py"
+    },
+    {
+      "id": "ev-sglang-adaptive-eagle3-2026",
+      "claim": "SGLang (commit 4ec19ca2, 2026-10-18) 在 adaptive_spec_params.py、adaptive_runtime_state.py 与 eagle_disaggregation.py 中确立了自适应投机解码与 PD 分离投机交接的源码契约：(1) DEFAULT_ADAPTIVE_CONFIG 按运行 Batch Size 将候选步长收紧为 BS=1->[1,3,5,7]、BS=8->[0,1,3]、BS=32->[0,1]、BS=64->[0]，由 AdaptiveStepSlot 基于 EMA 接受长度与迟滞阈值动态升降档，并通过 SpecRuntimeState 预捕获三阶段 CUDA Graph 实现零重编译切换；(2) adaptive_unsupported_reason 显式禁止在 Attention DP、TBO 或 PDMux 下启用自适应步长以防跨 Rank 集合通信死锁；(3) pd_first_draft_proposal 在 Decode 首轮验证时为 Prefill 传来的草稿 Token 构造 One-Hot 提案分布 q(X)=1.0，使接受概率 min(1, p(X)/1)=p(X) 严格保真目标分布 p，免除了跨节点 RDMA 传输完整词表分布张量。",
+      "source_ids": ["sglang-adaptive-spec-eagle-src"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators-v2.md"],
+      "limitations": "静态 Python 源码审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of sgl-project/sglang adaptive_spec_params.py, adaptive_runtime_state.py and eagle_disaggregation.py"
+    },
+    {
+      "id": "ev-sglang-nvfp4-swizzle-2026",
+      "claim": "SGLang (commit 4ec19ca2, 2026-10-18) 在 fp4_utils.py 与 nvfp4_kv_cache.py 中定义了 Blackwell NVFP4 块缩放与 KV Cache 重排契约：(1) _flashinfer_fp4_quantize_fake 按 sf_vec_size=16 量化，并将缩放因子对齐至 128x4 (sf_rows=round_up(M,128), sf_cols=round_up(K//16,4)) 或 8x4，揭示了微批次 M=8 误用 128x4 布局会产生 1500% 缩放因子 Padding 膨胀的陷阱；(2) nvfp4_v_scale_swizzle_indices 按 4-Token 交织重排 V-Scale 坐标 (swizzled_token = (t//4)*4 + s//(scale_dim//4), swizzled_scale = (s%(scale_dim//4))*4 + t%4)，强制要求 page_size % 4 == 0 且 head_dim % 64 == 0。",
+      "source_ids": ["sglang-nvfp4-quant-swizzle-src"],
+      "status": "implementation",
+      "artifacts": ["docs/components/ai-infra-innovators-v2.md"],
+      "limitations": "静态 Python 源码审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of sgl-project/sglang fp4_utils.py and nvfp4_kv_cache.py"
+    },
+    {
+      "id": "ev-innovator-pareto-v2-2026",
+      "claim": "原创离线算例 experiments/innovator_pareto_v2 验证了三组核心定量结论：(1) Adaptive EAGLE-3 在 BS=1 (accept=0.82) 与 BS=8 (accept=0.62) 下相比 nospec 分别提速 2.76x 与 2.03x，而在 BS=64 高并发低接受率 (0.25) 下自动收敛至 steps=0，相比盲目固定 steps=5 (TPOT 47.626 ms) 提速 3.96x (TPOT 12.017 ms)；(2) M=8, K=7168 在 128x4 Swizzle 下缩放因子从 3,584 B 膨胀至 57,344 B (+1500%，等效位宽劣化至 12.0 bits)，切换至 8x4 Swizzle 恢复 4.5 bits/elem (较 BF16 压缩 3.56x)；(3) 2026 延迟-成本帕累托前沿清晰分化为 Cerebras WSE-3 (17,153.4 tok/s, $0.3205/1M) 与 Groq LPU (9,361.0 tok/s, $0.6723/1M) 统治的单流极速象限，以及 Fireworks/Together B200 NVFP4+EAGLE3 ($0.0476/1M) 与 NVIDIA GB200 NVL72 Disaggregated MoE (1.47M tok/s/rack, $0.0454/1M) 统治的大吞吐低成本象限。",
+      "source_ids": [
+        "sglang-adaptive-spec-eagle-src",
+        "sglang-nvfp4-quant-swizzle-src",
+        "groq-groqflow-groqmodel",
+        "cerebras-sdk-bw-run"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/innovator_pareto_v2/run.py",
+        "experiments/innovator_pareto_v2/results.json",
+        "experiments/innovator_pareto_v2/results.csv",
+        "docs/components/ai-infra-innovators-v2.md"
+      ],
+      "limitations": "Python 标准库确定性解析算例，不替代物理硬件实测。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/innovator_pareto_v2/run.py --check and tests/test_innovator_pareto_v2.py"
     }
   ]
 }
