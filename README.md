@@ -47,7 +47,10 @@
 | [SM90 Hopper 与 SM100 Blackwell Warp-Specialized Ping-Pong 算子与 TMEM 工程](docs/components/warp-specialized-kernel-engineering.md) | `CUTLASS` SM90 `setmaxnreg` (`24/240 regs`, `2.303x` 提速)、`FA3` FP8 Ping-Pong (`1.468x`) 与 SM100 `256 KB` `TMEM` + `2-CTA` (`-50%` L2 流量、`94.20%` SOL) |
 | [Zero-Bubble (ZB-H1/ZB-H2/ZB-V) 与 DeepSeek-V3 双向 DualPipe/DualPipeV 流水线编排](docs/components/zero-bubble-dualpipe-scheduling.md) | `B/W` 梯度拆分、`ZB-V` (`1.26%` 气泡、`1x` 参数)、`DualPipe`/`DualPipeV` 异向 `F&B` 重叠（暴露通信压至 `0.45%–0.53%`、`1.447x` 提速）与 `rollback_adamw` (`6.94e-18`) |
 | [千级多租户 Serverless Multi-LoRA 服务架构：S-LoRA 统一分页与 Punica SGMV](docs/components/multi-lora-serving-architecture.md) | `vLLM` `LoRAKernelMeta` 稳定排序、`Triton SGMV` (`_BI_SPLIT_K=8`, 64 LoRA `36.50x` 提速)、`S-LoRA` 统一分页（碎片率 `31.4%->1.6%`）与秩拐点 `r*=64` |
-| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8 7-Card 报告](docs/reports/ai-infra-phase8-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 39 个研究问题与 33 个可复现实验坐标 |
+| [PyTorch FSDP2 (`fully_shard` 逐参数 `DTensor`) 与 `SymmetricMemory` `Async-TP` 5D 正交并行架构](docs/components/fsdp2-dtensor-async-tp-composability.md) | `pytorch/pytorch` (`1eba9b3a`) `fully_shard` 逐参数 `DTensor`（分配器碎片 `<1.5%`、省 `6.72–9.65 GiB/GPU`）与 `SymmetricMemory` 双流 `Async-TP=8`（隐藏 `91.27%–97.09%` 通信气泡、5D 单步 `1.322x` 提速） |
+| [NCCL 零拷贝用户缓冲区注册 (`ncclCommWindowRegister`)、`CUMEM` NVLS 多播与免 SM 抢占通信](docs/components/nccl-zero-copy-user-buffer-registration.md) | `NVIDIA/nccl` (`3e46c089`) `register.cc`/`coll_reg.cc`/`allocator.cc` 零拷贝注册、2-CTA 消除并发 GEMM `+16.46%–47.18%` 尾波膨胀、省 `576 MiB–2.305 GiB/GPU` FIFO HBM 与 P99 延迟 `2.07x–3.74x` 提速 |
+| [GPU HBM3e ECC 行重映射 (`Row Remapping`)、`Xid 63/64/94/95` 故障演化与预测性无损排空](docs/components/gpu-ecc-row-remapping-predictive-failure.md) | `NVIDIA/DCGM` (`64df9f89`) `BANK_REMAP_AVAIL_LOW/NONE` (`388/389`) 与 `m_devastatingXids` 源码、5 态马尔可夫风险模型与 10K-GPU 预测性微检查点排空（非计划中断削减 `89.04%`、ETTR `99.93%`） |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9 7-Card 报告](docs/reports/ai-infra-phase9-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 42 个研究问题与 36 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -84,6 +87,9 @@
 | [Warp-specialized kernels 算例](experiments/warp_specialized_kernels/README.md) | SM90 `setmaxnreg` (`24/240 regs`, `2.303x` 提速)、FA3 FP8 Ping-Pong (`1.468x`)、SM100 `256 KB` TMEM + `2-CTA` (`-50%` L2 流量、`94.20%` SOL) 与 CLC 尾波仿真 |
 | [Zero-Bubble & DualPipe 算例](experiments/zero_bubble_dualpipe/README.md) | `PP=16, M=64` 下 `1F1B` / `Interleaved` / `ZB-H1/H2/V` (`1.26%` 气泡) / `DualPipe` & `DualPipeV` (`0.45%–0.53%` 暴露通信、`1.447x` 提速) 与 `rollback_adamw` (`6.94e-18`) 仿真 |
 | [Multi-LoRA serving 算例](experiments/multi_lora_serving/README.md) | `Llama-3-70B` 64 并发 LoRA 下 Punica `SGMV` (`36.50x` 提速)、`S-LoRA` 统一分页（碎片 `31.4%->1.6%`、KV 容量 `+154.7%`）、Zipf 预取与秩拐点 `r*=64` 仿真 |
+| [FSDP2 DTensor & Async-TP 算例](experiments/fsdp2_async_tp_composability/README.md) | `FSDP2` 逐参数 `DTensor`（碎片率 `1.15%–1.42%`、省 `6.72–9.65 GiB/GPU`）与 `SymmetricMemory` 2-Stream `Async-TP=8`（隐藏 `91.27%–97.09%` 气泡、5D 单步 `1.322x` 提速）仿真 |
+| [NCCL zero-copy registration 算例](experiments/nccl_zero_copy_registration/README.md) | `132-SM` H100 上 `16–32` 通信 CTA 造成的 `+16.46%–47.18%` GEMM 尾波劣化 vs `ncclCommWindowRegister` + `CUMEM` NVLS 2-CTA 零拷贝（`0.00%` 劣化、省 `576 MiB–2.305 GiB/GPU`、P99 `2.07x–3.74x`）仿真 |
+| [GPU ECC predictive drain 算例](experiments/gpu_ecc_predictive_drain/README.md) | HBM3e 5 态马尔可夫退化（`BANK_REMAP_AVAIL_LOW/NONE` 72h 故障风险 `68.4%/91.2%`）与 10K-GPU 30 天预测性微检查点排空（非计划中断削减 `89.04%`、ETTR `99.93%`）仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -133,6 +139,9 @@ python experiments\eagle3_speculative_tree\run.py --check
 python experiments\warp_specialized_kernels\run.py --check
 python experiments\zero_bubble_dualpipe\run.py --check
 python experiments\multi_lora_serving\run.py --check
+python experiments\fsdp2_async_tp_composability\run.py --check
+python experiments\nccl_zero_copy_registration\run.py --check
+python experiments\gpu_ecc_predictive_drain\run.py --check
 python scripts\source_monitor.py
 ```
 

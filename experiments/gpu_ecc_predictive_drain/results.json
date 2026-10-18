@@ -1,0 +1,103 @@
+{
+  "experiment_id": "gpu_ecc_predictive_drain",
+  "title": "HBM3e Row Remapping, Xid 63/64/94/95 Markov Hazard & 10K-GPU Predictive Node Drain Model",
+  "measurement_class": "own-offline",
+  "upstream_verifications": {
+    "dcgm_commit": "64df9f894541e426e416131a9820cae97aa4dd81",
+    "dcgm_fields_h_blob": "aa65ab23eb0d0ca3f60a062e61e6a62148ba1b21",
+    "dcgm_structs_h_blob": "cc49146e2d21d9ccd0304966d89ecaf4fcdf750a",
+    "dcgm_health_watch_cpp_blob": "e3c7a5f811eebba2b0c8ae4190eea3d6f90d5b36",
+    "dcgm_limit_max_row_remap_uncorrectable": 512
+  },
+  "markov_degradation_states": [
+    {
+      "state_id": "S0_HEALTHY_AVAIL_MAX",
+      "dcgm_fields": "BANK_REMAP_AVAIL_MAX=all, ECC_SBE_VOL=0, ROW_REMAP_PENDING=0",
+      "dcgm_health_result": "PASS",
+      "sbe_rate_per_hour": 0.02,
+      "prob_fatal_xid_within_72h": 0.0004,
+      "recommended_action": "Continue normal training"
+    },
+    {
+      "state_id": "S1_SBE_CORRECTABLE_REMAP",
+      "dcgm_fields": "ROW_REMAP_CORRECTABLE_TOTAL>=1, BANK_REMAP_AVAIL_HIGH/PARTIAL, Xid 63",
+      "dcgm_health_result": "WARN",
+      "sbe_rate_per_hour": 1.8,
+      "prob_fatal_xid_within_72h": 0.035,
+      "recommended_action": "Schedule asynchronousGPU reset at next planned checkpoint window"
+    },
+    {
+      "state_id": "S2_BANK_AVAIL_LOW_BURST",
+      "dcgm_fields": "BANK_REMAP_AVAIL_LOW>=1, SBE_VOL_RATE>=15/hr, ROW_REMAP_PENDING=1",
+      "dcgm_health_result": "WARN",
+      "sbe_rate_per_hour": 24.5,
+      "prob_fatal_xid_within_72h": 0.684,
+      "recommended_action": "Trigger Predictive Live Drain (1.8s peer-RAM checkpoint + NVRx hot spare swap)"
+    },
+    {
+      "state_id": "S3_BANK_EXHAUSTED_AVAIL_NONE",
+      "dcgm_fields": "BANK_REMAP_AVAIL_NONE>=1 or ROW_REMAP_UNCORRECTABLE>=512",
+      "dcgm_health_result": "WARN_CRITICAL",
+      "sbe_rate_per_hour": 110.0,
+      "prob_fatal_xid_within_72h": 0.912,
+      "recommended_action": "Immediate Predictive Drain before next Optimizer step; cordon node for RMA"
+    },
+    {
+      "state_id": "S4_FATAL_XID_64_94_95",
+      "dcgm_fields": "ROW_REMAP_FAILED>0 (Xid 64) or ECC_DBE_VOL>0 (Xid 94/95) or MEMORY_UNREPAIRABLE=1",
+      "dcgm_health_result": "FAIL",
+      "sbe_rate_per_hour": 500.0,
+      "prob_fatal_xid_within_72h": 1.0,
+      "recommended_action": "Hard isolation & RMA (in-flight training step aborted if not drained prior)"
+    }
+  ],
+  "fleet_10k_gpu_30d_policies": [
+    {
+      "policy": "reactive_slurm_restart",
+      "description": "Reactive Only: Wait for Xid 94/95/64 crash -> NCCL watchdog timeout -> Slurm restart",
+      "unplanned_job_aborts_30d": 146,
+      "predictive_drains_30d": 0,
+      "false_positive_drains_30d": 0,
+      "abort_reduction_pct": 0.0,
+      "total_lost_cluster_hours_30d": 35.28,
+      "effective_training_time_ratio_pct": 95.1
+    },
+    {
+      "policy": "reactive_nvrx_inprocess",
+      "description": "Reactive NVRx In-Process: Wait for Xid 94/95/64 crash -> rollback last step + 28s hot spare swap",
+      "unplanned_job_aborts_30d": 146,
+      "predictive_drains_30d": 0,
+      "false_positive_drains_30d": 0,
+      "abort_reduction_pct": 0.0,
+      "total_lost_cluster_hours_30d": 4.01,
+      "effective_training_time_ratio_pct": 99.44
+    },
+    {
+      "policy": "naive_any_sbe_cordon",
+      "description": "Naive SBE Threshold: Cordon node on any SBE > 2/hr (ignores BANK_REMAP_AVAIL)",
+      "unplanned_job_aborts_30d": 28,
+      "predictive_drains_30d": 490,
+      "false_positive_drains_30d": 362,
+      "abort_reduction_pct": 80.82,
+      "total_lost_cluster_hours_30d": 3.76,
+      "effective_training_time_ratio_pct": 99.48
+    },
+    {
+      "policy": "dcgm_markov_predictive_drain",
+      "description": "DCGM Bank-Remap + SBE-Velocity Predictive Drain (S2/S3 -> 2.4s zero-loss step-boundary swap)",
+      "unplanned_job_aborts_30d": 16,
+      "predictive_drains_30d": 148,
+      "false_positive_drains_30d": 18,
+      "abort_reduction_pct": 89.04,
+      "total_lost_cluster_hours_30d": 0.54,
+      "effective_training_time_ratio_pct": 99.93
+    }
+  ],
+  "summary": {
+    "unplanned_abort_reduction_pct": 89.04,
+    "reactive_slurm_ettr_pct": 95.1,
+    "predictive_drain_ettr_pct": 99.93,
+    "cluster_hours_saved_30d": 34.74,
+    "predictive_precision_pct": 87.84
+  }
+}

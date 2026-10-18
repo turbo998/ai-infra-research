@@ -1718,6 +1718,153 @@
       "limitations": "Python 标准库确定性解析与 Zipf 预取仿真模型。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/multi_lora_serving/run.py --check and tests/test_multi_lora_serving.py"
+    },
+    {
+      "id": "ev-pytorch-fsdp2-dtensor-2026",
+      "claim": "在 pytorch/pytorch (commit 1eba9b3aa3c4, _fully_shard.py blob bbdaf77bed39) 中，fully_shard 废弃了 FSDP1 单一 FlatParameter，将每个 nn.Parameter 独立封装为沿 dim-0 切分的 DTensor，支持 reshard_after_forward: Union[bool, int] 节点内混合分片 (HSDP/ZeRO-2+) 以及 set_modules_to_forward_prefetch / set_modules_to_backward_prefetch 显式双缓冲预取。",
+      "source_ids": [
+        "pytorch-fsdp2-fully-shard-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/fsdp2-dtensor-async-tp-composability.md"
+      ],
+      "limitations": "静态 Python 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of torch/distributed/fsdp/_fully_shard/_fully_shard.py"
+    },
+    {
+      "id": "ev-pytorch-symm-mem-async-tp-2026",
+      "claim": "在 pytorch/pytorch (commit 1eba9b3aa3c4, _symmetric_memory/__init__.py blob 44294523a2da) 中，_pipelined_multi_all_gather_and_consume 通过 get_symm_mem_workspace 与 channel 0/1 硬件原子屏障，先完成本地分片 copy_shard 与第 0 块 shard_consumer，随后在 current_stream 与 backend_stream 双流上交错执行远端 NVLink P2P 拉取与子 GEMM；_fused_matmul_reduce_scatter_impl 则通过 _pipelined_produce_and_all2all 实现分块产出与归约重叠。",
+      "source_ids": [
+        "pytorch-symmetric-memory-async-tp-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/fsdp2-dtensor-async-tp-composability.md"
+      ],
+      "limitations": "静态 Python 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of torch/distributed/_symmetric_memory/__init__.py"
+    },
+    {
+      "id": "ev-fsdp2-async-tp-sim-2026",
+      "claim": "本项目确定性离线实验 experiments/fsdp2_async_tp_composability 验证：在异构 VLM+LoRA 与 405B Interleaved 1F1B + FP8 场景下，FSDP2 DTensor 将分配器碎片率从 FSDP1 FlatParameter 的 18.6%–21.8% 压至 1.15%–1.42%（每 GPU 节省 6.72–9.65 GiB HBM，Unshard 重打包提速 16.0x–16.77x）；SymmetricMemory Async-TP=8 在 2K–16K tokens 下隐藏 91.27%–97.09% 的 TP 暴露通信气泡（单层提速 +20.53%–22.13%），1,024 卡 5D 并行步耗时降低 1.322x (4820 -> 3645 ms)。",
+      "source_ids": [
+        "pytorch-fsdp2-fully-shard-code",
+        "pytorch-symmetric-memory-async-tp-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/fsdp2_async_tp_composability/run.py",
+        "experiments/fsdp2_async_tp_composability/results.json",
+        "docs/components/fsdp2-dtensor-async-tp-composability.md",
+        "docs/reports/ai-infra-phase9-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/fsdp2_async_tp_composability/run.py --check and tests/test_fsdp2_async_tp_composability.py"
+    },
+    {
+      "id": "ev-nccl-user-buffer-reg-2026",
+      "claim": "在 NVIDIA/nccl (commit 3e46c089f4ae, register.cc blob 8ea5b4fa0601 & coll_reg.cc blob d41a33894b17) 中，ncclCommRegister 对用户缓冲区执行页对齐与 cuMemGetAddressRange 物理段校验（排除 hasSysmemSegment），并在 regCache.slots 中维护 NET_REG_COMPLETE、NVLS_REG_COMPLETE、COLLNET_REG_COMPLETE 与 IPC_REG_COMPLETE 状态位；ncclNvlsLocalRegisterBuffer / ncclNvlsGraphRegisterBuffer 将用户缓冲区直接绑定至 NVSwitch 多播组。",
+      "source_ids": [
+        "nccl-user-buffer-register-code",
+        "nccl-coll-reg-nvls-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/nccl-zero-copy-user-buffer-registration.md"
+      ],
+      "limitations": "静态 C++ 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of src/register/register.cc, src/register/coll_reg.cc, and src/transport/nvls.cc"
+    },
+    {
+      "id": "ev-nccl-cumem-nvls-2026",
+      "claim": "在 NVIDIA/nccl (commit 3e46c089f4ae, allocator.cc blob 417dd64bc825 & nvls.cc blob 155f6adf3022) 中，ncclMemAlloc 通过 cuMemCreate 优先分配 CU_MEM_HANDLE_TYPE_FABRIC 物理块并由 ncclSpace 奇偶切割区间树管理子块；注册缓冲区后 ncclNvlsRegResourcesQuery 根据 compCap 与 nHeads 裁剪所需通信 CTA 通道数。",
+      "source_ids": [
+        "nccl-cumem-fabric-allocator-code",
+        "nccl-coll-reg-nvls-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/nccl-zero-copy-user-buffer-registration.md"
+      ],
+      "limitations": "静态 C++ 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of src/allocator.cc and src/transport/nvls.cc"
+    },
+    {
+      "id": "ev-nccl-zero-copy-sim-2026",
+      "claim": "本项目确定性离线实验 experiments/nccl_zero_copy_registration 验证：在 H100 (132 SMs) 并发运行 1,024-CTA GEMM 时，未注册 NCCL 占用 16–32 个通信 CTA 会触发 Wave Quantization 尾波膨胀（8 waves -> 9–11 waves），导致并发 GEMM 耗时劣化 +16.46% 至 +47.18%；而 ncclCommWindowRegister + CUMEM NVLS 零拷贝仅需 2 个 CTA，保持 8 waves (0.00% GEMM 劣化)，每卡节省 576.0 MiB–2.305 GiB 内部 FIFO 缓冲池，并将 256 KiB–256 MiB 集合通信 P99 延迟降低 2.07x–3.74x。",
+      "source_ids": [
+        "nccl-user-buffer-register-code",
+        "nccl-coll-reg-nvls-code",
+        "nccl-cumem-fabric-allocator-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/nccl_zero_copy_registration/run.py",
+        "experiments/nccl_zero_copy_registration/results.json",
+        "docs/components/nccl-zero-copy-user-buffer-registration.md",
+        "docs/reports/ai-infra-phase9-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/nccl_zero_copy_registration/run.py --check and tests/test_nccl_zero_copy_registration.py"
+    },
+    {
+      "id": "ev-dcgm-row-remap-fields-2026",
+      "claim": "在 NVIDIA/DCGM (commit 64df9f894541, dcgm_fields.h blob aa65ab23eb0d & dcgm_structs.h blob cc49146e2d21) 中，定义了 HBM Bank 冗余行可用性五级分桶字段 DCGM_FI_DEV_BANK_REMAP_AVAIL_MAX/HIGH/PARTIAL/LOW/NONE (385..389)、行重映射计数器 DCGM_FI_DEV_ROW_REMAP_UNCORRECTABLE/CORRECTABLE/FAILED/PENDING (393..396) 及硬阈值常量 DCGM_LIMIT_MAX_ROW_REMAP_UNCORRECTABLE = 512。",
+      "source_ids": [
+        "nvidia-dcgm-row-remap-fields-code",
+        "nvidia-dcgm-structs-limits-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/gpu-ecc-row-remapping-predictive-failure.md"
+      ],
+      "limitations": "静态 C 头文件核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of dcgmlib/dcgm_fields.h and dcgmlib/dcgm_structs.h"
+    },
+    {
+      "id": "ev-dcgm-healthwatch-xid-2026",
+      "claim": "在 NVIDIA/DCGM (commit 64df9f894541, DcgmHealthWatch.cpp blob e3c7a5f811ee) 中，BuildXidMappings 将 Xid 48 (DBE)、Xid 74 (NVLink)、Xid 79 (Fallen Off Bus)、Xid 95 (Uncontained ECC -> FAIL)、Xid 94 (Contained ECC -> WARN) 与 Xid 140 列入全局强制监控 m_devastatingXids，并将 Xid 63 (Pending Page Retirements -> WARN) 与 Xid 64 (Row Remap Failure -> FAIL) 列入内存子系统监控。",
+      "source_ids": [
+        "nvidia-dcgm-healthwatch-xid-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/gpu-ecc-row-remapping-predictive-failure.md"
+      ],
+      "limitations": "静态 C++ 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of modules/health/DcgmHealthWatch.cpp"
+    },
+    {
+      "id": "ev-gpu-ecc-predictive-drain-sim-2026",
+      "claim": "本项目确定性离线实验 experiments/gpu_ecc_predictive_drain 验证：基于 DCGM BANK_REMAP_AVAIL_LOW/NONE (388/389) + SBE 突增速率 (>=15/hr) + ROW_REMAP_PENDING (396) 的马尔可夫预测性无损排空策略，可在 10,000 卡集群 30 天运行期内将非计划训练中断次数从 146 次削减至 16 次 (-89.04%，排空准确率 87.84%，较盲目 SBE>2/hr 策略减少 344 次误报驱逐)，将累计损失集群小时从 35.28h 降至 0.54h，有效训练时间比 (ETTR) 从 95.10% 提升至 99.93%。",
+      "source_ids": [
+        "nvidia-dcgm-row-remap-fields-code",
+        "nvidia-dcgm-structs-limits-code",
+        "nvidia-dcgm-healthwatch-xid-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/gpu_ecc_predictive_drain/run.py",
+        "experiments/gpu_ecc_predictive_drain/results.json",
+        "docs/components/gpu-ecc-row-remapping-predictive-failure.md",
+        "docs/reports/ai-infra-phase9-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性马尔可夫与集群可用性建模。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/gpu_ecc_predictive_drain/run.py --check and tests/test_gpu_ecc_predictive_drain.py"
     }
-  ]
+  ],
+  "updated_at": "2026-10-19"
 }
