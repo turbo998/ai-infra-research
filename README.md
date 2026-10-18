@@ -29,6 +29,10 @@
 | [UEC 1.1 与 RoCEv2 多轨拥塞控制/喷洒路由对比](docs/components/uec-transport-congestion.md) | Linux `bnxt_re` 硬件门铃退避、NCCL 多 QP 喷洒、ECMP+DCQCN PFC 风暴反证与 UEC 风格选择性重传/信用控制模型 |
 | [Prefill/Decode 分离与分层 KV 缓存路由契约](docs/components/disaggregated-kv-routing.md) | Mooncake 多轨 RDMA Write-Imm 切片与 `DeadlineMlu`、NVIDIA NIXL 非连续描述符、SGLang `DecodePrefixMatch` 与 HiCache 门控 |
 | [大规模 MoE 专家并行与 DeepEP 双层去重/EPLB](docs/components/moe-expert-parallel-alltoall.md) | DeepEP `TokenLayout` 64B 对齐、`ptx::deduplicate` NVLink+RDMA 二级去重、`warpgroup_reg_realloc` 与在线 EPLB TMA 权重搬运 |
+| [超长上下文混合注意力：FlashMLA、Ring/Ulysses CP 与 Mamba 检查点池](docs/components/long-context-hybrid-attention.md) | DeepSeek FlashMLA V3.2 (`656B`) / V4.1 (`528B` FP8, `288B` FP4)、Hopper 2-CTA DSM Crossover、Ring vs Ulysses CP 与 SGLang `Int8CheckpointStore` |
+| [大规模推理强化学习引擎（RLVR / GRPO）：verl 权重重分片与 CuMem 休眠](docs/components/rl-post-training-engine.md) | `verl` `BucketedWeightSender` (`512 MiB` IPC/SHM)、`NCCLCheckpointEngine` `multi_sender`、Count-Only `DeltaShardedCheckpointEngine` 与 vLLM `CuMemAllocator` |
+| [机密计算 GPU（CC-On / PPCIE）：SPDM/RIM 远程证明与 Bounce Buffer 边界](docs/components/confidential-gpu-tee.md) | `NVIDIA/nvtrust` Driver/VBIOS RIM 索引互斥与 `MSR 35` 豁免、8-GPU+4-NVSwitch 双向 PDI 拓扑门禁与 Bounce Buffer vs PPCIE 吞吐 |
+| [Phase 2 & 3 7-Card 4:5 视觉基准报告](docs/reports/ai-infra-phase3-benchmark-cards.html) | 自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总 7 大前沿子系统实测/离线坐标与架构取舍 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -47,6 +51,9 @@
 | [Disaggregated KV routing 算例](experiments/disaggregated_kv_routing/README.md) | 多轨 RDMA Write-Imm KV 切片、小页门铃开销、慢轨动态摘除与 DRAM/NVMe HiCache 晋升排队模型 |
 | [MoE EP All-to-All 算例](experiments/moe_ep_alltoall/README.md) | DeepEP `TokenLayout` 字节对齐、NVLink+RDMA 二级去重、Zipf 专家倾斜/冗余副本与 EPLB 在线权重搬运重叠 |
 | [Innovator Pareto v2 算例](experiments/innovator_pareto_v2/README.md) | SGLang 自适应 EAGLE-3 步长控制、NVFP4 `128x4` vs `8x4` 缩放对齐/V-Scale 重排与 2026 四大推理流派帕累托前沿 |
+| [Long-context hybrid attention 算例](experiments/long_context_attention/README.md) | `1M` 上下文 FlashMLA V4.1 (`528B`/`288B`) + DSA、Hopper 2-CTA DSM 反量化、Ring vs Ulysses CP 与 SGLang `Int8CheckpointStore` |
+| [RL rollout resharding 算例](experiments/rl_rollout_resharding/README.md) | `verl` 5 种权重重分片通道（CUDA IPC / SHM / 单发与多发 NCCL / 稀疏 Delta）、vLLM `CuMemAllocator` 休眠级别与 Long-CoT 气泡消除 |
+| [Confidential GPU overhead 算例](experiments/confidential_gpu_overhead/README.md) | `NVIDIA/nvtrust` RIM 索引互斥/`MSR 35` 豁免、PPCIE 8-GPU+4-NVSwitch 双向 PDI 门禁与 Bounce Buffer vs PPCIE 延迟模型 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -78,6 +85,9 @@ python experiments\uec_fabric_congestion\run.py --check
 python experiments\disaggregated_kv_routing\run.py --check
 python experiments\moe_ep_alltoall\run.py --check
 python experiments\innovator_pareto_v2\run.py --check
+python experiments\long_context_attention\run.py --check
+python experiments\rl_rollout_resharding\run.py --check
+python experiments\confidential_gpu_overhead\run.py --check
 python scripts\source_monitor.py
 ```
 

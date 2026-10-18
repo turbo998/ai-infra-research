@@ -865,6 +865,107 @@
       "limitations": "Python 标准库确定性解析算例，不替代物理硬件实测。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/innovator_pareto_v2/run.py --check and tests/test_innovator_pareto_v2.py"
+    },
+    {
+      "id": "ev-flashmla-sglang-hybrid-attn-2026",
+      "claim": "DeepSeek FlashMLA (0f11e178) 与 SGLang (4ec19ca2) 揭示了百万 Token 超长上下文与混合线性注意力的底层契约：(1) FlashMLA V4.1 KVCacheFormat 将单 Token KV 压至 528 B (FP8 e4m3 + 16 B ue8m0) 或 288 B (FP4 e2m1 + 32 B e4m3)，在 Hopper SM90 上通过 2-CTA Cluster st.async DSM Crossover 将每 CTA FP8 反量化周期从 50.0 cycles 砍半至 25.0 cycles（低于 34.0 cycles Tensor Core MMA），作者实测 H800 稀疏解码达 410 TFLOPS；(2) SGLang MambaSlotAllocator 按活跃请求分配全层状态槽（Slot 0 为哑槽），并通过 MambaCheckpointPool / Int8CheckpointStore 沿 d_v 轴做对称 int8 量化（QMAX=127，单次存储量化、命中 Copy-on-Write 单次反量化），使 Radix 前缀树可缓存的 Mamba 检查点槽位数翻倍。",
+      "source_ids": [
+        "flashmla-kv-format-interface-src",
+        "flashmla-hopper-fp8-dsm-doc",
+        "sglang-mamba-checkpoint-pool-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/long-context-hybrid-attention.md",
+        "docs/reports/ai-infra-phase3-benchmark-cards.html"
+      ],
+      "limitations": "静态 CUDA/Python 源码审阅与作者公布 H800 基准说明。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of deepseek-ai/FlashMLA and sgl-project/sglang hybrid Mamba/MLA sources"
+    },
+    {
+      "id": "ev-long-context-attention-offline-2026",
+      "claim": "原创离线算例 experiments/long_context_attention 证明：(1) 61 层 1M Token 下，FlashMLA V4.1 FP8 (31.4531 GiB) 与 FP4 (17.1562 GiB) 较 GQA-8 BF16 (244.0 GiB) 分别压缩 7.76x 与 14.22x，配合 DSA (topk=2048) 将单步 Decode KV HBM 读取耗时从 40.9364 ms 降至 0.0103 ms / 0.0056 ms；(2) CP=8 下 Ring Attention 传输 MLA (h_kv=1) 每层仅需 1,008.0 MiB 且与计算完全重叠，而纯 Ulysses 因 CP > h_kv 被迫 8 倍复制 KV 头导致每层暴露 7,616.0 MiB All-to-All；(3) SGLang Int8CheckpointStore 将 16 GiB 池容量从 351 提升至 661 槽（1.8832x），在 2,048 间隔下 Token 130,000 处分支仅需重算 976 Tokens（29.79 ms）。",
+      "source_ids": [
+        "flashmla-kv-format-interface-src",
+        "flashmla-hopper-fp8-dsm-doc",
+        "sglang-mamba-checkpoint-pool-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/long_context_attention/run.py",
+        "experiments/long_context_attention/results.json",
+        "experiments/long_context_attention/results.csv",
+        "docs/components/long-context-hybrid-attention.md",
+        "docs/reports/ai-infra-phase3-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/long_context_attention/run.py --check and tests/test_long_context_attention.py"
+    },
+    {
+      "id": "ev-verl-vllm-cumem-rollout-2026",
+      "claim": "volcengine/verl (4b26c788) 与 vLLM (25f560a6) 构成了 RLVR/GRPO 权重同步与显存复用的核心实现：(1) BucketedWeightSender 通过 512 MiB 分桶与 CUDA IPC 句柄重建（修正 list_args[6]=device_id 并由 drop_tied_alias_updates 过滤绑定词表别名）完成共置零拷贝权重刷新；(2) 分离式 NCCLCheckpointEngine 使用 cupy.zeros 规避 expandable_segments RDMA 注册冲突并支持 multi_sender NVLink 中继，而 DeltaShardedCheckpointEngine 强制 _GatherQueue 按条目数（Count-Only）触发集合通信以防 FSDP/EP 跨 Rank 稀疏度不一致引发 NCCL 死锁；(3) vLLM CuMemAllocator 通过 python_unmap_and_release 释放物理页并在 wake_up 时重映射回同一虚拟地址 ptr。",
+      "source_ids": [
+        "verl-bucketed-delta-weight-transfer-src",
+        "vllm-cumem-allocator-sleep-src"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/rl-post-training-engine.md",
+        "docs/reports/ai-infra-phase3-benchmark-cards.html"
+      ],
+      "limitations": "静态 Python 源码审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of volcengine/verl checkpoint/rollout engines and vllm/device_allocator/cumem.py"
+    },
+    {
+      "id": "ev-rl-rollout-resharding-offline-2026",
+      "claim": "原创离线算例 experiments/rl_rollout_resharding 定量验证：(1) 671B BF16 模型（1,249.8349 GiB）在单发 NCCL 跨节点同步下需 31.8222 s，开启 8-Actor NVLink multi_sender 降至 3.9778 s（8.00x），开启 12% 稀疏 DeltaFlush 降至 2.0620 s（15.43x，接收端峰值暂存严格受限于 1,120.0 MiB），共置 512 MiB CUDA IPC 仅需 0.0835 s（381.10x）；(2) 共置无休眠峰值显存达 106.0312 GiB（在 80 GiB 卡上 OOM），启用 CuMemAllocator Sleep Level 2 将训练期峰值压至 58.5000 GiB 且休眠/唤醒切换仅需 0.0380 s（较 Level 1 的 0.9118 s 快 24.0x）；(3) 异步有界陈旧度调度将 32K Long-CoT 空闲气泡从 77.73% 压至 8.50%（提速 4.1095x）。",
+      "source_ids": [
+        "verl-bucketed-delta-weight-transfer-src",
+        "vllm-cumem-allocator-sleep-src"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/rl_rollout_resharding/run.py",
+        "experiments/rl_rollout_resharding/results.json",
+        "experiments/rl_rollout_resharding/results.csv",
+        "docs/components/rl-post-training-engine.md",
+        "docs/reports/ai-infra-phase3-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/rl_rollout_resharding/run.py --check and tests/test_rl_rollout_resharding.py"
+    },
+    {
+      "id": "ev-nvtrust-tee-ppcie-verifier-2026",
+      "claim": "NVIDIA nvtrust (a8090b65) 源码定义了机密计算 GPU (CC-On / PPCIE) 的远程证明与拓扑门禁不变量：(1) Local GPU Verifier (verifier.py) 强制校验 Driver RIM 与 VBIOS RIM 活跃度量索引互斥（冲突即抛 InvalidMeasurementIndexError），并在 OPAQUE_FIELD_ID_NVDEC0_STATUS == DISABLED 时自动豁免 MSR 35；(2) PPCIE Verifier (verification.py, validate_topology.py) 强校验 8 GPU + 4 NVSwitch 规模，剔除 DISABLED_PDI (0000000000000000) 后交叉验证 x-nvidia-gpu-switch-pdis 与 x-nvidia-switch-gpu-pdis 完全闭合，任一阶段失败立即调用 set_gpu_ready_state(False) 锁定硬件。",
+      "source_ids": ["nvidia-nvtrust-gpu-ppcie-verifier-src"],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/confidential-gpu-tee.md",
+        "docs/reports/ai-infra-phase3-benchmark-cards.html"
+      ],
+      "limitations": "静态 Python 源码审阅。",
+      "verified_at": "2026-10-19",
+      "verifier": "Direct fixed-commit reading of NVIDIA/nvtrust local_gpu_verifier and ppcie-verifier-sdk-cpp"
+    },
+    {
+      "id": "ev-confidential-gpu-overhead-offline-2026",
+      "claim": "原创离线算例 experiments/confidential_gpu_overhead 验证了 RIM/PDI 证明状态机与 Bounce Buffer 数据面开销：(1) 完整复现 NVDEC0 禁用豁免 MSR 35、Driver/VBIOS 索引冲突拒绝及伪造第 5 颗 NVSwitch PDI (SW99) 触发 Fail-Closed 锁卡；(2) 在 1 GiB Host KV 卸载加载 + 64 MiB/tok TP AllReduce 负载下，单卡 CC-On 软件 Bounce Buffer 使 TTFT 恶化 2.038x (212.31 ms vs 104.17 ms)、TPOT 恶化 2.366x (27.60 ms vs 11.67 ms)，而 8-GPU + 4-NVSwitch PPCIE 模式恢复 372 GB/s 加密 NVLink，将 TPOT 压回 11.6811 ms（与非机密基线仅差 0.11%，较单卡 CC-On 提速 2.363x）。",
+      "source_ids": ["nvidia-nvtrust-gpu-ppcie-verifier-src"],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/confidential_gpu_overhead/run.py",
+        "experiments/confidential_gpu_overhead/results.json",
+        "experiments/confidential_gpu_overhead/results.csv",
+        "docs/components/confidential-gpu-tee.md",
+        "docs/reports/ai-infra-phase3-benchmark-cards.html"
+      ],
+      "limitations": "Python 标准库确定性协议验证与带宽解析算例。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/confidential_gpu_overhead/run.py --check and tests/test_confidential_gpu_overhead.py"
     }
   ]
 }

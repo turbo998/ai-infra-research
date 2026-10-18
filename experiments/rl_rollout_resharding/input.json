@@ -1,0 +1,96 @@
+{
+  "weight_transfer_section": {
+    "model_params_billions": 671.0,
+    "active_params_billions": 37.0,
+    "rollout_tp_ep_group_gpus": 64,
+    "bucket_size_mb": 512,
+    "transfer_modes": [
+      {
+        "id": "colocated_cuda_ipc_bucketed_512mb",
+        "label": "Colocated ZMQ + CUDA IPC Bucketed (512 MiB buffer, zero host copy)",
+        "transport": "colocated_cuda_ipc",
+        "effective_bw_gbps": 320.0,
+        "fixed_control_overhead_ms": 0.45
+      },
+      {
+        "id": "colocated_shm_fallback_512mb",
+        "label": "Colocated Shared Memory Fallback (D2H + H2D via /dev/shm)",
+        "transport": "colocated_shm_fallback",
+        "effective_bw_gbps": 24.0,
+        "fixed_control_overhead_ms": 1.2
+      },
+      {
+        "id": "disaggregated_nccl_single_sender",
+        "label": "Disaggregated NCCL Broadcast (Single Actor Rank 0 Sender, 45 GB/s RDMA)",
+        "transport": "disaggregated_nccl_single",
+        "effective_bw_gbps": 45.0,
+        "fixed_control_overhead_ms": 0.8
+      },
+      {
+        "id": "disaggregated_nccl_multi_sender_nvlink",
+        "label": "Disaggregated NCCL Multi-Sender Relay (8 NVLink Actor Senders, 8x45 GB/s)",
+        "transport": "disaggregated_nccl_multi_sender",
+        "effective_bw_gbps": 45.0,
+        "nvlink_local_senders": 8,
+        "fixed_control_overhead_ms": 0.8
+      },
+      {
+        "id": "disaggregated_delta_sparse_indices",
+        "label": "Disaggregated DeltaShardedCheckpointEngine (12% changed params, int32+bf16)",
+        "transport": "disaggregated_delta_indices",
+        "effective_bw_gbps": 45.0,
+        "nvlink_local_senders": 8,
+        "changed_param_fraction": 0.12,
+        "max_entry_elems": 16777216,
+        "fixed_control_overhead_ms": 0.8
+      }
+    ]
+  },
+  "cumem_sleep_section": {
+    "gpu_hbm_capacity_gib": 80.0,
+    "trainer_fsdp_states_gib_per_gpu": 58.5,
+    "rollout_weights_gib_per_gpu": 19.53125,
+    "rollout_kv_cache_gib_per_gpu": 28.0,
+    "pcie_pinned_memcpy_bw_gbps": 48.0,
+    "cumem_unmap_map_overhead_ms": 38.0,
+    "sleep_regimes": [
+      {
+        "id": "no_sleep_co_resident",
+        "label": "No Sleep (Trainer FSDP + Rollout Weights + Rollout KV Co-Resident)"
+      },
+      {
+        "id": "sleep_level_1_offload_weights",
+        "label": "vLLM CuMem Sleep Level 1 (Offload Weights to Pinned CPU, Discard KV)"
+      },
+      {
+        "id": "sleep_level_2_discard_all_direct_refit",
+        "label": "vLLM CuMem Sleep Level 2 (Unmap Weights & KV, Direct IPC Weight Refit)"
+      }
+    ]
+  },
+  "straggler_section": {
+    "decode_tokens_per_sec_per_req": 64.0,
+    "prompt_group_response_lengths": [
+      {"count": 32, "response_tokens": 2048},
+      {"count": 16, "response_tokens": 6144},
+      {"count": 12, "response_tokens": 14336},
+      {"count": 4, "response_tokens": 32768}
+    ],
+    "schedulers": [
+      {
+        "id": "sync_barrier_grpo",
+        "label": "Synchronous Step Barrier GRPO (Waits for 32K Long-CoT Straggler)"
+      },
+      {
+        "id": "partial_rollout_checkpoint_recycle",
+        "label": "Partial Rollout Truncation & Prefix KV Recycle (Cap at 16K/step)",
+        "truncation_cap_tokens": 16384
+      },
+      {
+        "id": "async_continuous_staleness_bounded",
+        "label": "Async Staleness-Bounded Continuous Rollout (Queue Drain Bubble 8.5%)",
+        "async_queue_drain_bubble_fraction": 0.085
+      }
+    ]
+  }
+}
