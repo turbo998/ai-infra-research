@@ -44,7 +44,10 @@
 | [vLLM v1 分段/可中断 CUDA Graph 编译池与 SGLang Graph Runner 边界](docs/components/cuda-graph-piecewise-compilation.md) | `vLLM` `PiecewiseBackend` / `Breakable CUDAGraph`（`@eager_break_during_capture` 外置不变式、`global_graph_pool` + `weak_ref_tensors` `73.63x` 显存压缩）与非对齐 Batch (`BS=33/257`) 反超 Full Graph 机制 |
 | [多模态视觉/视频大模型 Encode-Prefill-Decode (EPD) 三阶段解耦与 EncoderCacheManager](docs/components/multimodal-encoder-disaggregation.md) | `vLLM` 引用计数 `EncoderCacheManager`（多轮 `mm_hash` 锁存与 FIFO `freeable` 回收）、`SGLang` 分块 Prefill 切片与 `1E/3P/4D` EPD 降低 P99 TPOT `3.54x` (`58.64 -> 16.58 ms`) |
 | [EAGLE-3 / DeepSeek MTP 树状掩码投机解码验证与高并发屋脊线坍塌边界](docs/components/eagle3-speculative-tree-verification.md) | `SGLang` `TreeMaskMode` 非因果树验证、PD 首轮 `one-hot q(X)=1` 验证与 `AdaptiveSpeculativeParams` 分桶 EMA 控制器（解决 `BS=32` `0.889x` 坍塌并恢复至 `2.422x`） |
-| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7 7-Card 报告](docs/reports/ai-infra-phase7-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 36 个研究问题与 30 个可复现实验坐标 |
+| [SM90 Hopper 与 SM100 Blackwell Warp-Specialized Ping-Pong 算子与 TMEM 工程](docs/components/warp-specialized-kernel-engineering.md) | `CUTLASS` SM90 `setmaxnreg` (`24/240 regs`, `2.303x` 提速)、`FA3` FP8 Ping-Pong (`1.468x`) 与 SM100 `256 KB` `TMEM` + `2-CTA` (`-50%` L2 流量、`94.20%` SOL) |
+| [Zero-Bubble (ZB-H1/ZB-H2/ZB-V) 与 DeepSeek-V3 双向 DualPipe/DualPipeV 流水线编排](docs/components/zero-bubble-dualpipe-scheduling.md) | `B/W` 梯度拆分、`ZB-V` (`1.26%` 气泡、`1x` 参数)、`DualPipe`/`DualPipeV` 异向 `F&B` 重叠（暴露通信压至 `0.45%–0.53%`、`1.447x` 提速）与 `rollback_adamw` (`6.94e-18`) |
+| [千级多租户 Serverless Multi-LoRA 服务架构：S-LoRA 统一分页与 Punica SGMV](docs/components/multi-lora-serving-architecture.md) | `vLLM` `LoRAKernelMeta` 稳定排序、`Triton SGMV` (`_BI_SPLIT_K=8`, 64 LoRA `36.50x` 提速)、`S-LoRA` 统一分页（碎片率 `31.4%->1.6%`）与秩拐点 `r*=64` |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8 7-Card 报告](docs/reports/ai-infra-phase8-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 39 个研究问题与 33 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
 | [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
@@ -78,6 +81,9 @@
 | [CUDA Graph piecewise capture 算例](experiments/cuda_graph_piecewise_capture/README.md) | `488` 算子 CPU 发射墙、`32` 桶 `global_graph_pool` `73.63x` 显存压缩、B200 `BS=1` `1.92x` 提速与非对齐 `BS=33/257` Piecewise 反超 Full Graph 仿真 |
 | [Multimodal encoder disaggregation 算例](experiments/multimodal_encoder_disaggregation/README.md) | `Qwen2.5-VL-72B` 共置 ViT 干扰（P99 TPOT `58.64 ms`）vs `1E/3P/4D` 三阶段 EPD + `EncoderCacheManager`（P99 TPOT `16.58 ms`、`2.70x` RPS）仿真 |
 | [EAGLE-3 speculative tree 算例](experiments/eagle3_speculative_tree/README.md) | H100 FP8 `Q_ridge=229.6` 下树状投机解码在 `BS=1` (`2.605x`) 与 `BS=32` (`0.889x` 坍塌) 的屋脊线相变及自适应收缩恢复 (`2.422x`) 仿真 |
+| [Warp-specialized kernels 算例](experiments/warp_specialized_kernels/README.md) | SM90 `setmaxnreg` (`24/240 regs`, `2.303x` 提速)、FA3 FP8 Ping-Pong (`1.468x`)、SM100 `256 KB` TMEM + `2-CTA` (`-50%` L2 流量、`94.20%` SOL) 与 CLC 尾波仿真 |
+| [Zero-Bubble & DualPipe 算例](experiments/zero_bubble_dualpipe/README.md) | `PP=16, M=64` 下 `1F1B` / `Interleaved` / `ZB-H1/H2/V` (`1.26%` 气泡) / `DualPipe` & `DualPipeV` (`0.45%–0.53%` 暴露通信、`1.447x` 提速) 与 `rollback_adamw` (`6.94e-18`) 仿真 |
+| [Multi-LoRA serving 算例](experiments/multi_lora_serving/README.md) | `Llama-3-70B` 64 并发 LoRA 下 Punica `SGMV` (`36.50x` 提速)、`S-LoRA` 统一分页（碎片 `31.4%->1.6%`、KV 容量 `+154.7%`）、Zipf 预取与秩拐点 `r*=64` 仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -124,6 +130,9 @@ python experiments\ai_factory_tco_simulator\run.py --check
 python experiments\cuda_graph_piecewise_capture\run.py --check
 python experiments\multimodal_encoder_disaggregation\run.py --check
 python experiments\eagle3_speculative_tree\run.py --check
+python experiments\warp_specialized_kernels\run.py --check
+python experiments\zero_bubble_dualpipe\run.py --check
+python experiments\multi_lora_serving\run.py --check
 python scripts\source_monitor.py
 ```
 

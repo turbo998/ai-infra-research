@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Infra Phase 8 Benchmark Report — SM90/SM100 Warp-Specialized Kernels, Zero-Bubble/DualPipe &amp; Multi-LoRA Serving</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --subtle: #64748b;
+    --border: #e2e8f0;
+    --surface: #f8fafc;
+    --dark-box: #0f172a;
+    --blue: #3b82f6;
+    --blue-dark: #1d4ed8;
+    --slate-bar: #cbd5e1;
+    --green-bg: #ecfdf5;
+    --green-border: #10b981;
+    --green-ink: #065f46;
+    --amber-bg: #fffbeb;
+    --amber-border: #f59e0b;
+    --amber-ink: #92400e;
+    --red-bg: #fef2f2;
+    --red-border: #ef4444;
+    --red-ink: #991b1b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+  }
+  .deck-header {
+    max-width: 900px;
+    width: 100%;
+    color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 12px;
+  }
+  .deck-header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .deck-header span { font-size: 13px; color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .card {
+    width: 900px;
+    height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 40px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+    position: relative;
+    overflow: hidden;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--subtle);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+  .badge-pill {
+    background: #eff6ff;
+    color: var(--blue-dark);
+    border: 1px solid #bfdbfe;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 11px;
+  }
+  .headline {
+    font-size: 27px;
+    line-height: 1.24;
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    margin: 14px 0 8px;
+  }
+  .accent-grad {
+    background: linear-gradient(90deg, #1d4ed8 0%, #0ea5e9 55%, #10b981 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .workbench-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.08fr 1.12fr;
+    gap: 16px;
+    flex: 1;
+    margin: 8px 0 16px;
+  }
+  .wb-col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .wb-col h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--subtle);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .scenario-item {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .scenario-item .title { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .scenario-item .meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .kv-box {
+    background: var(--dark-box);
+    color: #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.48;
+    white-space: pre-wrap;
+  }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .stat-pill {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .decision-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .decision-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .task-badge {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #e0e7ff;
+    color: #3730a3;
+  }
+  .act-auto {
+    background: var(--green-bg);
+    color: var(--green-ink);
+    border: 1px solid var(--green-border);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .act-confirm {
+    background: var(--amber-bg);
+    color: var(--amber-ink);
+    border: 1px solid var(--amber-border);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .act-human {
+    background: var(--red-bg);
+    color: var(--red-ink);
+    border: 1px solid var(--red-border);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .bar-track {
+    width: 100%;
+    height: 9px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #0ea5e9);
+    border-radius: 999px;
+  }
+  .quote-box {
+    background: #f1f5f9;
+    border-left: 4px solid var(--blue);
+    padding: 12px 16px;
+    border-radius: 0 10px 10px 0;
+    font-size: 12.5px;
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    margin-bottom: 12px;
+  }
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.matrix th {
+    background: #f1f5f9;
+    color: var(--ink);
+    text-align: left;
+    padding: 9px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid #cbd5e1;
+  }
+  table.matrix td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink);
+    vertical-align: middle;
+  }
+  .miss-mark {
+    color: #dc2626;
+    font-weight: 800;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .pass-mark {
+    color: #059669;
+    font-weight: 800;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .dual-callout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .callout-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px 15px;
+    font-size: 12px;
+    line-height: 1.48;
+  }
+  .callout-box strong { color: var(--ink); display: block; margin-bottom: 4px; }
+  .code-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    justify-content: center;
+  }
+  .dark-code {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11.8px;
+    line-height: 1.5;
+    border: 1px solid #1e293b;
+    white-space: pre-wrap;
+  }
+  .flow-arrow {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--blue-dark);
+    letter-spacing: 0.06em;
+  }
+  .latency-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+    justify-content: center;
+  }
+  .lat-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+  }
+  .lat-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .bar-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .bar-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11.5px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .bar-label { width: 175px; color: var(--muted); flex-shrink: 0; }
+  .bar-rect-primary {
+    height: 14px;
+    background: #3b82f6;
+    border-radius: 4px;
+  }
+  .bar-rect-base {
+    height: 14px;
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  .fit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    flex: 1;
+    margin: 10px 0 16px;
+  }
+  .fit-card-good {
+    background: var(--green-bg);
+    border: 2px solid var(--green-border);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .fit-card-bad {
+    background: var(--red-bg);
+    border: 2px solid var(--red-border);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .fit-card-good h3 { color: var(--green-ink); font-size: 17px; }
+  .fit-card-bad h3 { color: var(--red-ink); font-size: 17px; }
+  .fit-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 12.8px;
+    line-height: 1.48;
+  }
+  .footer-dark {
+    background: var(--dark-box);
+    color: #cbd5e1;
+    border-radius: 12px;
+    padding: 13px 18px;
+    font-size: 11.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-dark strong { color: #fff; }
+</style>
+</head>
+<body>
+<header class="deck-header">
+  <div>
+    <h1>AI Infra Phase 8 Benchmark Deck (7-Card 4:5 Portrait Standard)</h1>
+    <p>SM90/SM100 Warp-Specialized Kernels &amp; TMEM · Zero-Bubble &amp; DeepSeek DualPipe/DualPipeV · 1,000+ Tenant Serverless Multi-LoRA Serving (S-LoRA + vLLM Punica)</p>
+  </div>
+  <div class="deck-meta">
+    <span class="badge">CSP: default-src 'none'</span>
+    <span class="badge">Provenance: own-offline + source-code</span>
+    <span class="badge">Verified: 2026-10-19</span>
+  </div>
+</header>
+
+<main class="deck-grid">
+  <!-- CARD 1 -->
+  <section class="card">
+    <div class="card-top">
+      <span class="card-idx">1 / 7 · HANDS-ON · KERNELS · PIPELINE · MULTI-LORA</span>
+      <span class="card-tag">PHASE 8 OVERVIEW</span>
+    </div>
+    <h2 class="card-title">Blackwell <span class="accent">TMEM + 2-CTA</span> Cuts L2 Traffic 50%, <span class="accent">DualPipe</span> Hits 1.447x Speedup, and <span class="accent">S-LoRA + SGMV</span> Scales 64-Adapter Throughput 36.5x</h2>
+    <p class="card-sub">All metrics derived deterministically from sealed offline verifiers (<code>warp_specialized_kernels</code>, <code>zero_bubble_dualpipe</code>, <code>multi_lora_serving</code>) cross-checked against upstream CUTLASS, FlashAttention-3, DualPipe, Zero-Bubble, and vLLM commits.</p>
+    <div class="wb-grid">
+      <div class="wb-col">
+        <div class="wb-hdr">1. SM90/SM100 Kernels</div>
+        <div class="kv-row"><span>128x256 Reg Reconfig</span><strong>24 / 240 regs (2.303x)</strong></div>
+        <div class="kv-row"><span>FA3 FP8 Ping-Pong</span><strong>1.468x (91.9% hidden)</strong></div>
+        <div class="kv-row"><span>SM100 TMEM per SM</span><strong>256.0 KB (1-warp UMMA)</strong></div>
+        <div class="kv-row"><span>SM100 2-CTA L2 Save</span><strong>-50.0% (94.2% SOL)</strong></div>
+      </div>
+      <div class="wb-col">
+        <div class="wb-hdr">2. Zero-Bubble &amp; DualPipe</div>
+        <div class="kv-row"><span>1F1B Bubble (PP16,M64)</span><strong>14.97%</strong></div>
+        <div class="kv-row"><span>ZB-V Bubble (PP16,M64)</span><strong>1.26% (1x Param)</strong></div>
+        <div class="kv-row"><span>DualPipe Exposed Comm</span><strong>0.45% (1.447x vs 1F1B)</strong></div>
+        <div class="kv-row"><span>Post-Val Rollback Gain</span><strong>+7.39% (err 6.9e-18)</strong></div>
+      </div>
+      <div class="wb-col">
+        <div class="wb-hdr">3. Multi-LoRA Serving</div>
+        <div class="kv-row"><span>64 Active LoRAs SGMV</span><strong>15171.3 tok/s (36.5x)</strong></div>
+        <div class="kv-row"><span>S-LoRA Unified Frag</span><strong>1.6% vs 31.4% slab</strong></div>
+        <div class="kv-row"><span>KV Token Pool Gain</span><strong>+154.7% (131,712 tok)</strong></div>
+        <div class="kv-row"><span>Rank Crossover r*</span><strong>r* = 64 (P99 TTFT -27.8%)</strong></div>
+      </div>
+    </div>
+    <div class="callout-dark">
+      <strong>Provenance &amp; Hardware Contract:</strong> <code>own-offline</code> analytical + discrete-event models anchored to <code>NVIDIA/cutlass@78e4622</code>, <code>Dao-AIlab/flash-attention@965c921</code>, <code>deepseek-ai/DualPipe@030ce43</code>, <code>sail-sg/zero-bubble@39f2c18</code>, and <code>vllm-project/vllm@82a24bb</code>.
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div class="card-top">
+      <span class="card-idx">2 / 7 · SCENARIO: DEEPSEEK-V3 &amp; LLAMA-3-70B FULL-STACK</span>
+      <span class="card-tag">SINGLE-CASE DEEP DIVE</span>
+    </div>
+    <h2 class="card-title">3 Architectural Decisions Unlock <span class="accent">2.30x Kernel SOL</span>, <span class="accent">0.45% Exposed MoE Comm</span>, and <span class="accent">15,171 tok/s</span> at 64 Concurrent LoRAs</h2>
+    <div class="quote-box">
+      <strong>Input Workload Contract:</strong> (A) SM90/SM100 <code>128x256x64</code> FP8 GEMM &amp; FA3 Forward; (B) <code>PP=16, M=64</code> MoE Training (<code>F=10ms, B_dgrad=10ms, W=9ms, Comm=9.5ms</code>); (C) <code>8x H100</code> serving <code>1,000</code> Zipf(<code>s=1.2</code>) adapters (<code>BS=256</code>).
+    </div>
+    <div class="decision-stack">
+      <div class="decision-card">
+        <div class="dec-hdr">
+          <span class="badge-type">choice · kernel</span>
+          <strong>SM90 setmaxnreg (24/240) + Ping-Pong &amp; SM100 TMEM 2-CTA</strong>
+          <span class="pill-act">Act automatically</span>
+        </div>
+        <p>Deallocating TMA Producer Warpgroup to <code>24 regs</code> and expanding 2 MMA Warpgroups to <code>240 regs</code> eliminates <code>72 regs/thread</code> of local-memory spill, lifting <code>128x256</code> SOL from <code>38.30%</code> to <code>88.20%</code> (<code>2.303x</code>). On SM100, <code>256 KB TMEM</code> + <code>2-CTA MMA</code> reaches <code>94.20%</code> SOL.</p>
+        <div class="bar-row"><span>SM100 2-CTA Square Prefill SOL</span><div class="bar-track"><div class="bar-fill" style="width:94.2%"></div></div><strong>94.2%</strong></div>
+      </div>
+      <div class="decision-card">
+        <div class="dec-hdr">
+          <span class="badge-type">choice · pipeline</span>
+          <strong>DualPipeV Bidirectional F&amp;B Overlap + Post-Validation Rollback</strong>
+          <span class="pill-act">Act automatically</span>
+        </div>
+        <p>Splitting <code>B_dgrad</code> and <code>W_wgrad</code> (<code>WeightGradStore</code>) while pairing opposite-direction <code>F&amp;B</code> chunks hides <code>98%+</code> of cross-node <code>EP All-to-All</code> inside compute, cutting exposed comm from <code>21.17%</code> (1F1B) to <code>0.45%–0.53%</code> and step time from <code>2,906.4 ms</code> to <code>2,008.7 ms</code>.</p>
+        <div class="bar-row"><span>Communication Hidden Ratio</span><div class="bar-track"><div class="bar-fill" style="width:98.5%"></div></div><strong>98.5%</strong></div>
+      </div>
+      <div class="decision-card">
+        <div class="dec-hdr">
+          <span class="badge-type">score · serving</span>
+          <strong>S-LoRA Unified Paging + Punica Triton SGMV (r &le; 64)</strong>
+          <span class="pill-act">Act automatically</span>
+        </div>
+        <p>Unified paging of KV + dynamic-rank LoRA at stride <code>H</code> slashes external fragmentation from <code>31.4%</code> to <code>1.6%</code> (<code>+154.7%</code> KV token capacity), while Queue-Lookahead PCIe Gen5 prefetching achieves a <code>95.64%</code> hit rate.</p>
+        <div class="bar-row"><span>Zipf(1.2) Async Prefetch Hit Rate</span><div class="bar-track"><div class="bar-fill" style="width:95.64%"></div></div><strong>95.6%</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div class="card-top">
+      <span class="card-idx">3 / 7 · WHAT I TESTED</span>
+      <span class="card-tag">FULL EVALUATION MATRIX</span>
+    </div>
+    <h2 class="card-title">9-Scenario Evaluation Matrix: Naive Uniform Regs, 1F1B &amp; Unfused LoRA Fail Strict Production Gates</h2>
+    <table class="matrix-table">
+      <thead>
+        <tr><th>SCENARIO</th><th>QUESTION / TASK</th><th>MODEL / ARCH ANSWER</th><th>ACTION</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>SM90 Uniform 168 Regs</td><td>128x256x64 FP32 Accum</td><td>✕ 87 spilled regs/thread (38.30% SOL)</td><td><span class="pill-hum">Reject</span></td></tr>
+        <tr><td>SM90 setmaxnreg 24/240</td><td>128x256x64 Ping-Pong</td><td>✓ 64,512 regs total, 88.20% SOL (2.303x)</td><td><span class="pill-act">Deploy</span></td></tr>
+        <tr><td>FA3 FP8 Ping-Pong 2-WG</td><td>OrderedSequenceBarrier&lt;2,2&gt;</td><td>✓ 91.91% Softmax hidden (1.468x speedup)</td><td><span class="pill-act">Deploy</span></td></tr>
+        <tr><td>SM100 Blackwell TMEM</td><td>256KB TMEM + 2-CTA UMMA</td><td>✓ 1-warp (32t) issue, -50% L2, 94.20% SOL</td><td><span class="pill-act">Deploy</span></td></tr>
+        <tr><td>Standard 1F1B (PP=16)</td><td>64 MBs + MoE EP All-to-All</td><td>✕ 14.97% bubble + 21.17% exposed comm</td><td><span class="pill-hum">Reject</span></td></tr>
+        <tr><td>Zero-Bubble ZB-V (PP=16)</td><td>B/W Split V-Shape (1x Param)</td><td>✓ 1.26% bubble, 13.60 GiB act (1.355x)</td><td><span class="pill-act">Deploy (Dense)</span></td></tr>
+        <tr><td>DeepSeek DualPipe / V</td><td>Bidirectional F&amp;B Overlap</td><td>✓ 4.39% bubble, 0.45% comm (1.447x)</td><td><span class="pill-act">Deploy (MoE)</span></td></tr>
+        <tr><td>Unfused Multi-LoRA (64)</td><td>Per-Adapter Base GEMM Split</td><td>✕ 615.94 ms/step (415.6 tok/s collapse)</td><td><span class="pill-hum">Reject</span></td></tr>
+        <tr><td>S-LoRA + Punica SGMV</td><td>64 Active LoRAs + Unified Page</td><td>✓ 16.87 ms/step (15,171.3 tok/s, 36.50x)</td><td><span class="pill-act">Deploy (r&le;64)</span></td></tr>
+      </tbody>
+    </table>
+    <div class="dual-callout">
+      <div class="callout-box">
+        <strong>Threshold Gate:</strong> Require Kernel SOL &ge; 85%, Pipeline Exposed Comm &le; 2%, and Multi-LoRA Fragmentation &le; 3%.
+      </div>
+      <div class="callout-box">
+        <strong>Failure Analysis:</strong> Static max-rank slabs waste 31.4% HBM; rank <code>r &gt; 64</code> SGMV exceeds merged-weight cost (+46.2% at r=96).
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div class="card-top">
+      <span class="card-idx">4 / 7 · UNDER THE HOOD</span>
+      <span class="card-tag">SOURCE-CODE CONTRACTS</span>
+    </div>
+    <h2 class="card-title">Exact Upstream Kernel &amp; Scheduler Mechanics: From <span class="accent">CUTLASS TMEM</span> to <span class="accent">DualPipe</span> &amp; <span class="accent">vLLM SGMV</span></h2>
+    <pre class="code-dark"><code>// 1. NVIDIA/cutlass (78e4622): sm90_gemm_tma_warpspecialized_pingpong.hpp (L143-149, L851)
+static constexpr uint32_t RegsPerThread =
+  size&lt;0&gt;(TileShape{}) * size&lt;1&gt;(TileShape{}) * sizeof(ElementAccumulator) / (128 * 4);
+static constexpr bool HeavyRegisterPressure = RegsPerThread &gt;= 208;
+static constexpr uint32_t LoadRegisterRequirement = !HeavyRegisterPressure ? 40 : 24;
+static constexpr uint32_t MmaRegisterRequirement  = !HeavyRegisterPressure ? 232 : 240;
+// sm100_gemm_tma_warpspecialized.hpp (L728-766): 1-Warp UMMA + 256KB TMEM + 2-CTA Cluster
+tmem_allocator.allocate(ArchTag::kTmemCapacityColumns, &amp;shared_storage.tmem_base_ptr);</code></pre>
+    <div class="arrow-down">↓</div>
+    <pre class="code-dark"><code># 2. deepseek-ai/DualPipe (030ce43) &amp; sail-sg/zero-bubble (39f2c18):
+# Step 4 Main Loop (dualpipe.py L381-396): Bidirectional F0&amp;B1 + F1&amp;B0 Overlap
+for i in range(half_num_chunks - num_ranks + half_rank + 1):
+    self._forward_backward_chunk(0, 1)  # Overlaps F0 comm with B1 compute
+    self._forward_backward_chunk(1, 0)  # Overlaps F1 comm with B0 compute
+# Post-Validation Rollback (zbpp_optimizer_helper.py L143-147):
+# p.add_(update).div_(1 - lr * decay); v.addcmul_(g,g,beta2-1).div_(beta2)
+
+# 3. vllm-project/vllm (82a24bb): LoRAKernelMeta + _lora_shrink_kernel (_BI_SPLIT_K = 8)
+_, token_indices_sorted_by_lora_ids = torch.sort(token_lora_mapping, stable=True)
+lora_ids, num_tokens_per_lora = torch.unique(token_lora_mapping, sorted=True, return_counts=True)</code></pre>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div class="card-top">
+      <span class="card-idx">5 / 7 · ROBUSTNESS CHECK</span>
+      <span class="card-tag">PERTURBATION &amp; SCALING</span>
+    </div>
+    <h2 class="card-title">Sensitivity Across Tile Pressure, Pipeline Depth, Adapter Skew, and Rank Crossover (<span class="accent">r* = 64</span>)</h2>
+    <table class="matrix-table">
+      <thead>
+        <tr><th>PARAMETER / PERTURBATION</th><th>BASELINE</th><th>OPTIMIZED / PERTURBED</th><th>CHANGE / DELTA</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>SM90 Tile 128x192 Regs</td><td>49.30% SOL (Uniform 168)</td><td>86.50% SOL (setmaxnreg 40/232)</td><td><strong>+37.20 pts (+1.755x)</strong></td></tr>
+        <tr><td>SM90 Tile 128x256 Regs</td><td>38.30% SOL (Uniform 168)</td><td>88.20% SOL (setmaxnreg 24/240)</td><td><strong>+49.90 pts (+2.303x)</strong></td></tr>
+        <tr><td>B200 Wave Quant (256 tiles)</td><td>86.49% Static Grid (2 waves)</td><td>97.15% CLC Dynamic Persistent</td><td><strong>+10.66 pts</strong></td></tr>
+        <tr><td>Pipeline Bubble (PP=16, M=64)</td><td>14.97% (Standard 1F1B)</td><td>1.26% (ZB-V) / 4.39% (DualPipe)</td><td><strong>-13.71 pts / -10.58 pts</strong></td></tr>
+        <tr><td>Exposed Comm (PP=16, M=64)</td><td>21.17% (Standard 1F1B)</td><td>0.45% (DualPipe) / 0.53% (DualPipeV)</td><td><strong>-20.72 pts (1.447x step)</strong></td></tr>
+        <tr><td>Post-Validation Optimizer Step</td><td>1,999.0 ms (Sync Pre-Step)</td><td>1,851.23 ms (Async Post-Val)</td><td><strong>+7.39% throughput</strong></td></tr>
+        <tr><td>Multi-LoRA Memory Pool (32 GiB)</td><td>31.4% Frag (51,712 KV tok)</td><td>1.6% Frag (131,712 KV tok)</td><td><strong>+154.7% KV capacity</strong></td></tr>
+        <tr><td>Zipf(1.2) Cold Adapter Misses</td><td>54.32 ms P99 TTFT (Reactive)</td><td>39.22 ms P99 TTFT (Async Prefetch)</td><td><strong>-27.8% P99 TTFT</strong></td></tr>
+        <tr><td>LoRA Rank Scaling (r=64 vs r=96)</td><td>16,357.8 tok/s @ r=64 (&ge;16.25k)</td><td>14,962.0 tok/s @ r=96 (&lt;16.25k)</td><td><strong>Crossover r* = 64</strong></td></tr>
+      </tbody>
+    </table>
+    <div class="callout-dark">
+      <strong>Key Invariant:</strong> <code>rollback_adamw</code> restores exact pre-step weights and Adam moments with max FP error <code>6.94e-18</code>, proving zero numerical drift on Inf/NaN recovery.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div class="card-top">
+      <span class="card-idx">6 / 7 · LATENCY &amp; THROUGHPUT SCALING</span>
+      <span class="card-tag">PAIRED BAR COMPARISON</span>
+    </div>
+    <h2 class="card-title">Paired Scaling Bars: Optimized Phase 8 Architecture (<span class="accent">Blue</span>) vs Baseline (<span class="accent">Slate</span>)</h2>
+    <div class="bars-container">
+      <div class="bar-group">
+        <div class="bar-label">1. SM90 128x256 GEMM SOL% (setmaxnreg 24/240 vs Uniform 168)</div>
+        <div class="bar-pair">
+          <div class="bar-line"><span class="b-tag">Optimized</span><div class="b-track"><div class="b-fill-pri" style="width:88.2%"></div></div><strong>88.20% SOL (2.30x)</strong></div>
+          <div class="bar-line"><span class="b-tag">Baseline</span><div class="b-track"><div class="b-fill-sec" style="width:38.3%"></div></div><strong>38.30% SOL</strong></div>
+        </div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label">2. Square Prefill 4K GEMM SOL% (SM100 TMEM 2-CTA vs SM90 1-CTA)</div>
+        <div class="bar-pair">
+          <div class="bar-line"><span class="b-tag">SM100 2-CTA</span><div class="b-track"><div class="b-fill-pri" style="width:94.2%"></div></div><strong>94.20% SOL (4,239 TFLOPS)</strong></div>
+          <div class="bar-line"><span class="b-tag">SM90 1-CTA</span><div class="b-track"><div class="b-fill-sec" style="width:87.5%"></div></div><strong>87.50% SOL (1,731 TFLOPS)</strong></div>
+        </div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label">3. PP=16, M=64 MoE Step Time (DualPipe F&amp;B Overlap vs Standard 1F1B)</div>
+        <div class="bar-pair">
+          <div class="bar-line"><span class="b-tag">DualPipe</span><div class="b-track"><div class="b-fill-pri" style="width:69.1%"></div></div><strong>2,008.71 ms (0.45% comm)</strong></div>
+          <div class="bar-line"><span class="b-tag">1F1B Base</span><div class="b-track"><div class="b-fill-sec" style="width:100.0%"></div></div><strong>2,906.41 ms (21.17% comm)</strong></div>
+        </div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label">4. PP=16 Dense Step Time (Zero-Bubble ZB-V vs Standard 1F1B)</div>
+        <div class="bar-pair">
+          <div class="bar-line"><span class="b-tag">ZB-V (1x)</span><div class="b-track"><div class="b-fill-pri" style="width:73.8%"></div></div><strong>2,145.68 ms (1.26% bubble)</strong></div>
+          <div class="bar-line"><span class="b-tag">1F1B Base</span><div class="b-track"><div class="b-fill-sec" style="width:100.0%"></div></div><strong>2,906.41 ms (14.97% bubble)</strong></div>
+        </div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label">5. 64 Active LoRAs Step Latency (Punica SGMV vs Unfused Batch Split)</div>
+        <div class="bar-pair">
+          <div class="bar-line"><span class="b-tag">Punica SGMV</span><div class="b-track"><div class="b-fill-pri" style="width:4.5%"></div></div><strong>16.87 ms (15,171.3 tok/s, 36.5x)</strong></div>
+          <div class="bar-line"><span class="b-tag">Unfused</span><div class="b-track"><div class="b-fill-sec" style="width:100.0%"></div></div><strong>615.94 ms (415.6 tok/s)</strong></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div class="card-top">
+      <span class="card-idx">7 / 7 · MY TAKE</span>
+      <span class="card-tag">ARCHITECT READINESS</span>
+    </div>
+    <h2 class="card-title">Production Fit vs Anti-Patterns for Kernel Engineering, Pipeline Parallelism &amp; Multi-LoRA</h2>
+    <div class="fit-grid">
+      <div class="fit-good">
+        <h3>✅ Good fit</h3>
+        <ul>
+          <li><strong>SM90 Ping-Pong + setmaxnreg (24/240):</strong> Essential for large-M GEMM and FlashAttention-3 where SFU <code>exp2</code> or Epilogue quant can overlap with peer WGMMA.</li>
+          <li><strong>SM100 TMEM + 2-CTA UMMA:</strong> Default choice on B200/GB200 to free general registers and cut L2 traffic by <code>50%</code> via TMA multicast.</li>
+          <li><strong>DualPipeV for Cross-Node MoE:</strong> Matches DualPipe's <code>&lt;0.6%</code> exposed communication while cutting cluster parameter copies from <code>2x</code> back to <code>1x</code>.</li>
+          <li><strong>S-LoRA Unified Paging + Punica SGMV:</strong> Ideal for 1,000+ tenant Serverless LoRA when rank <code>r &le; 64</code>.</li>
+        </ul>
+      </div>
+      <div class="fit-bad">
+        <h3>⛔ Not for</h3>
+        <ul>
+          <li><strong>Ping-Pong on Skinny-M (M &le; 128):</strong> Splitting 2 Consumer Warpgroups across separate tiles starves small grids; use Cooperative / Stream-K instead.</li>
+          <li><strong>DualPipe on Memory-Starved Dense Models:</strong> DualPipe requires <code>2x</code> weight copies (unless folded via DualPipeV) and <code>PP+1</code> activation chunks; use <code>ZB-V</code> for dense training.</li>
+          <li><strong>SGMV for High-Rank Heavy Adapters (r &ge; 96):</strong> Above <code>r* = 64</code>, SGMV gather/scatter overhead exceeds <code>+32.6%</code>; route to merged-weight dedicated instances.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout-dark">
+      <strong>Readiness &amp; Verification:</strong> 100% reproducible via <code>python experiments/warp_specialized_kernels/run.py --check</code>, <code>python experiments/zero_bubble_dualpipe/run.py --check</code>, and <code>python experiments/multi_lora_serving/run.py --check</code>. License: Apache-2.0 / MIT.
+    </div>
+  </section>
+</main>
+</body>
+</html>

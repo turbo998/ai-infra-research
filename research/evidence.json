@@ -1588,6 +1588,136 @@
       "limitations": "Python 标准库树状马尔可夫接受率与 GPU 算术强度屋脊线解析模型。",
       "verified_at": "2026-10-19",
       "verifier": "python experiments/eagle3_speculative_tree/run.py --check and tests/test_eagle3_speculative_tree.py"
+    },
+    {
+      "id": "ev-cutlass-sm90-pingpong-setmaxnreg-code-2026",
+      "claim": "在 NVIDIA/cutlass (commit 78e4622, sm90_gemm_tma_warpspecialized_pingpong.hpp 143-149行与851行) 与 FlashAttention-3 (commit 965c921, flash_fwd_kernel_sm90.h) 中，SM90 Ping-Pong 算子将 384 线程切分为 1 个 Producer Warpgroup 与 2 个 Consumer Warpgroups；当 Tile 累加器压力 RegsPerThread >= 208 时自动触发 HeavyRegisterPressure 分支，调用 setmaxnreg 将 Load Warpgroup 寄存器缩减至 24 regs/thread、2 个 MMA Warpgroups 扩充至 240 regs/thread（总计 64,512 <= 65,536），并通过 OrderedSequenceBarrier<2,2> 使两个 Consumer Warpgroup 交替重叠 WGMMA 主循环与 Softmax exp2 SFU / Epilogue。",
+      "source_ids": [
+        "cutlass-sm90-pingpong-gemm-code",
+        "flashattention3-sm90-fwd-kernel-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/warp-specialized-kernel-engineering.md"
+      ],
+      "limitations": "静态 C++/CUDA 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of NVIDIA/cutlass sm90_gemm_tma_warpspecialized_pingpong.hpp and Dao-AIlab/flash-attention flash_fwd_kernel_sm90.h"
+    },
+    {
+      "id": "ev-cutlass-sm100-tmem-2cta-code-2026",
+      "claim": "在 NVIDIA/cutlass (commit 78e4622, sm100_gemm_tma_warpspecialized.hpp 170-209行与728-766行) 中，Blackwell SM100 (tcgen05) 引入每 SM 256 KB (128行 x 512列 x FP32) 的专用 Tensor Memory (TMEM) 放置 MMA 累加器，彻底解耦通用寄存器文件 (RMEM)；同时将 MMA 发射从 SM90 的 128 线程 Warpgroup 缩减为单个 Warp (NumMMAThreads = 32)，配合 2-CTA Cluster MMA 与 CLC (Cluster Launch Control) 动态持久调度消除多播重复加载与尾波量化损失。",
+      "source_ids": [
+        "cutlass-sm100-tmem-warpspec-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/warp-specialized-kernel-engineering.md"
+      ],
+      "limitations": "静态 C++/CUDA 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of NVIDIA/cutlass sm100_gemm_tma_warpspecialized.hpp"
+    },
+    {
+      "id": "ev-warp-specialized-kernels-offline-2026",
+      "claim": "本项目原创离线实验 experiments/warp_specialized_kernels 验证：在 SM90 128x256x64 FP8 GEMM (FP32 累加器需 256 regs/thread) 下，setmaxnreg (24/240 regs) 相较均匀分配 (168 regs/thread, 87 regs 溢出至本地内存) 获得 2.303x 加速 (SOL 从 38.30% 提升至 88.20%)；FA3 FP8 Ping-Pong 掩盖 91.91% 的 1,360-cycle Softmax/Epilogue 开销，获得 1.468x 加速；SM100 TMEM + 2-CTA Cluster MMA 将每级流水线 L2 流量降低 50.0% (48 KB -> 24 KB)，使 4K Square Prefill SOL 从 H100 的 87.50% (1,731.6 TFLOPS) 提升至 B200 的 94.20% (4,239.0 TFLOPS)。",
+      "source_ids": [
+        "cutlass-sm90-pingpong-gemm-code",
+        "cutlass-sm100-tmem-warpspec-code",
+        "flashattention3-sm90-fwd-kernel-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/warp_specialized_kernels/run.py",
+        "experiments/warp_specialized_kernels/results.json",
+        "docs/components/warp-specialized-kernel-engineering.md",
+        "docs/reports/ai-infra-phase8-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库周期与寄存器/带宽解析模型。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/warp_specialized_kernels/run.py --check and tests/test_warp_specialized_kernels.py"
+    },
+    {
+      "id": "ev-deepseek-dualpipe-dualpipev-code-2026",
+      "claim": "在 deepseek-ai/DualPipe (commit 030ce43, dualpipe.py 331-471行 & dualpipev.py 1-428行) 中，DualPipe 通过两端双向相向馈入微批次，并在 Step 4 主循环中调用 _forward_backward_chunk 将两个异向微批次的 Forward 与 Backward 结对融合，使一侧的计算天然掩盖另一侧的跨节点 EP All-to-All 与 PP P2P 通信，配合 WeightGradStore (split_bw=True) 填平排空气泡；DualPipeV 进一步采用 V-Shape 折返布局，在 PP/2 台设备上无需 2x 参数副本即可保持双向 F&B 重叠。",
+      "source_ids": [
+        "deepseek-dualpipe-scheduler-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/zero-bubble-dualpipe-scheduling.md"
+      ],
+      "limitations": "静态 Python 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of deepseek-ai/DualPipe dualpipe.py and dualpipev.py"
+    },
+    {
+      "id": "ev-zero-bubble-pp-rollback-code-2026",
+      "claim": "在 sail-sg/zero-bubble-pipeline-parallelism (commit 39f2c18, zbv.py & zbpp_optimizer_helper.py 133-147行) 中，ZB-V 将 2*PP 个虚拟 chunk 按 V 字形分配至 PP 个 Stage（1x 参数副本且峰值激活显存严格受限于 PP 个微批次）；为消除优化器步前的全流水线同步屏障，zbpp_optimizer_helper.py 实现了先执行本地 AdamW step、同时异步 AllReduce 检验 Inf/NaN，若异常则通过 rollback_adamw 原地代数逆操作精确还原参数 p 与动量 m/v 的后验回滚协议。",
+      "source_ids": [
+        "zero-bubble-pp-scheduler-rollback-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/zero-bubble-dualpipe-scheduling.md"
+      ],
+      "limitations": "静态 Python 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of sail-sg/zero-bubble-pipeline-parallelism zbv.py and zbpp_optimizer_helper.py"
+    },
+    {
+      "id": "ev-zero-bubble-dualpipe-offline-2026",
+      "claim": "本项目原创离线实验 experiments/zero_bubble_dualpipe 验证：在 PP=16, M=64 (F=10ms, B_dgrad=10ms, W=9ms, Comm=9.5ms) 下，标准 1F1B 气泡率为 14.97%、通信暴露占比 21.17% (步耗时 2,906.41 ms)；ZB-V 将纯计算气泡压至 1.26% 且保持 13.60 GiB (16 chunks) 激活显存；DualPipe 与 DualPipeV 将通信暴露占比压至 0.45% 与 0.53%，端到端步耗时降至 2,008.71 ms 与 2,010.23 ms (较 1F1B 提速 1.447x / 1.446x)；Post-Validation Rollback 最大浮点往返误差仅 6.94e-18，在 PP=16 下带来 +7.39% 吞吐增益。",
+      "source_ids": [
+        "deepseek-dualpipe-scheduler-code",
+        "zero-bubble-pp-scheduler-rollback-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/zero_bubble_dualpipe/run.py",
+        "experiments/zero_bubble_dualpipe/results.json",
+        "docs/components/zero-bubble-dualpipe-scheduling.md",
+        "docs/reports/ai-infra-phase8-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库流水线调度与数值往返验证模型。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/zero_bubble_dualpipe/run.py --check and tests/test_zero_bubble_dualpipe.py"
+    },
+    {
+      "id": "ev-vllm-punica-sgmv-lora-code-2026",
+      "claim": "在 vllm-project/vllm (commit 82a24bb, lora_kernel_metadata.py, lora_shrink_op.py & lora_expand_op.py) 中，LoRAKernelMeta 通过 torch.sort(stable=True) 与 torch.unique 将混合 Batch 的 Token 按适配器 ID 聚簇；_lora_shrink_kernel 启用 _BI_SPLIT_K = 8 在 K 维 8 路切分并通过 tl.atomic_add 归约以打满低并发 SM；lora_expand_op 对同秩 GQA Q/K/V 切片单核融合，异秩时自动回退至逐切片安全路径。",
+      "source_ids": [
+        "vllm-punica-triton-sgmv-lora-code",
+        "vllm-lora-lru-model-manager-code"
+      ],
+      "status": "implementation",
+      "artifacts": [
+        "docs/components/multi-lora-serving-architecture.md"
+      ],
+      "limitations": "静态 Python/Triton 源码核验。",
+      "verified_at": "2026-10-19",
+      "verifier": "Source inspection of vllm/lora/ops/triton_ops/ and vllm/lora/punica_wrapper/"
+    },
+    {
+      "id": "ev-multi-lora-serving-offline-2026",
+      "claim": "本项目原创离线实验 experiments/multi_lora_serving (seed=42) 验证：在 Llama-3-70B (TP=4, Batch=256 tokens, r=16) 下，当并发活跃 LoRA 达 64 个时，Punica 共享基座 GEMM + Triton SGMV 吞吐达 15,171.3 tok/s (16.87 ms)，较按适配器拆批 (415.6 tok/s) 提速 36.50x (128 活跃 LoRA 时提速 61.76x)；S-LoRA 统一分页池将外部碎片率从静态 max_rank=128 Slab 的 31.4% 降至 1.6%，可用 KV Token 容量提升 +154.7% (131,712 vs 51,712)；Zipf(s=1.2) 下异步队列前瞻预取将命中率提升至 95.64%、P99 TTFT 降低 27.8% (54.32 -> 39.22 ms)；SGMV 相对合并权重多实例池的秩盈亏拐点为 r* = 64。",
+      "source_ids": [
+        "vllm-punica-triton-sgmv-lora-code",
+        "vllm-lora-lru-model-manager-code"
+      ],
+      "status": "own-offline",
+      "artifacts": [
+        "experiments/multi_lora_serving/run.py",
+        "experiments/multi_lora_serving/results.json",
+        "docs/components/multi-lora-serving-architecture.md",
+        "docs/reports/ai-infra-phase8-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "limitations": "Python 标准库确定性解析与 Zipf 预取仿真模型。",
+      "verified_at": "2026-10-19",
+      "verifier": "python experiments/multi_lora_serving/run.py --check and tests/test_multi_lora_serving.py"
     }
   ]
 }
