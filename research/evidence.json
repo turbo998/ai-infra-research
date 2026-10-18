@@ -2236,6 +2236,98 @@
       "verifier": "python experiments\\tiered_kv_cache_hierarchy\\run.py --check",
       "verified_at": "2026-10-19",
       "limitations": "Deterministic analytical breakeven and multi-turn session model; not a physical CXL 3.0 + NVMe RAID0 hardware trace."
+    },
+    {
+      "id": "evi-batch-invariant-determinism-impl-001",
+      "component": "numerics_and_reliability",
+      "claim": "In Dao-AILab/flash-attention (commit 965c9212e6be33c821ee9f2b461564c5c91a2503, flash_api.cpp blob 9964e0fe lines 333-345 & flash_fwd_launch_template.h blob b71ddf2d lines 41-175), num_splits_heuristic dynamically changes params.num_splits (1..128) as batch_size varies, dispatching different Log_max_splits tree reductions in flash_fwd_splitkv_combine_kernel; locking num_splits=1 or a batch-invariant split tile size aligns kBlockN and reduction tree order for bitwise identical numerics across batch sizes.",
+      "status": "implementation",
+      "source_ids": [
+        "flashattn-splitkv-heuristic-api-2026",
+        "flashattn-splitkv-combine-launch-2026",
+        "flashattn-splitkv-kernel-combine-2026"
+      ],
+      "artifacts": [
+        "docs/components/batch-invariant-deterministic-inference.md"
+      ],
+      "verifier": "static source inspection of Dao-AILab/flash-attention flash_api.cpp, flash_fwd_launch_template.h, and flash_fwd_kernel.h",
+      "verified_at": "2026-10-19",
+      "limitations": "Static source inspection; multi-layer logit ULP drift and CoT trajectory divergence modeled in own-offline simulator."
+    },
+    {
+      "id": "evi-batch-invariant-determinism-sim-001",
+      "component": "numerics_and_reliability",
+      "claim": "In own-offline evaluation of Llama-3-70B-FP8 (80 layers, L_kv=16,384, temperature=0) on 8x H100 TP=8, dynamic Split-KV (num_splits=64 at BS=1 vs 1 at BS=33/128) and dynamic Split-K GEMM produce 8 ULPs (BS=33) to 12 ULPs (BS=128) 80-layer logit drift and 96.55%-99.36% 1,000-step CoT trajectory divergence, whereas Batch-Invariant Deterministic Kernels guarantee 0 ULP bitwise identity and 0.00% CoT divergence across all batch sizes at a +4.21% (BS=128) to +8.57% (BS=1) TPOT overhead.",
+      "status": "own-offline",
+      "source_ids": [
+        "flashattn-splitkv-heuristic-api-2026",
+        "flashattn-splitkv-combine-launch-2026",
+        "flashattn-splitkv-kernel-combine-2026"
+      ],
+      "artifacts": [
+        "experiments/batch_invariant_deterministic_inference/run.py",
+        "experiments/batch_invariant_deterministic_inference/results.json",
+        "docs/components/batch-invariant-deterministic-inference.md",
+        "docs/reports/ai-infra-phase13-benchmark-cards.html"
+      ],
+      "verifier": "python experiments\\batch_invariant_deterministic_inference\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic IEEE-754 FP32/BF16 non-associative reduction tree simulator; not a physical multi-node GPU trace."
+    },
+    {
+      "id": "evi-nccl-flight-recorder-ras-impl-001",
+      "component": "distributed_training",
+      "claim": "In pytorch/pytorch (commit faf5b996e4c60be9560e79f9d9a8daa02876e099, FlightRecorder.hpp blob 8bb4fd25 lines 96-195) and NVIDIA/nccl (commit 3e46c089f4ae4732722a419eb6096aead7e47a30, src/ras/client_support.cc blob 2bb94508 lines 1520-1825), FlightRecorder records per-PG collective_seq_id_, p2p_seq_id_, and CUDA start/complete events while NCCL RAS rasClientRunComms sorts per-rank collOpCounts[collIdx] and applies rasCountIsOutlier under RAS_ACE_MISMATCH to distinguish missing-entry ranks from in-flight transport hangs.",
+      "status": "implementation",
+      "source_ids": [
+        "pytorch-c10d-flight-recorder-2026",
+        "nccl-ras-client-support-2026"
+      ],
+      "artifacts": [
+        "docs/components/nccl-flight-recorder-hang-diagnosis.md"
+      ],
+      "verifier": "static source inspection of PyTorch c10d::FlightRecorder and NVIDIA NCCL RAS client_support.cc",
+      "verified_at": "2026-10-19",
+      "limitations": "Static source inspection; 16,384-GPU Wait-For DAG triage latency and cluster goodput simulated offline."
+    },
+    {
+      "id": "evi-nccl-flight-recorder-ras-sim-001",
+      "component": "distributed_training",
+      "claim": "In own-offline evaluation of a 16,384-GPU synchronous training cluster (TP=8, PP=16, DP=128) across 4 silent collective hang classes (MoE step mismatch, async checkpoint host deadlock, lost RoCEv2 Write-Imm CQE, and PP P2P send/recv asymmetry), combining FlightRecorder sequence logs with NCCL RAS Wait-For DAG triage pinpoints the exact Patient-Zero rank with 100% accuracy and 0 false-positive victim kills in 389.4-584.2 ms (mean 463.52 ms), speeding up recovery 46.11x (20.384 s vs 940.0 s blind restart) and lifting 30-day Goodput from 97.74% to 99.93% (+258,825.3 GPU-hours saved).",
+      "status": "own-offline",
+      "source_ids": [
+        "pytorch-c10d-flight-recorder-2026",
+        "nccl-ras-client-support-2026"
+      ],
+      "artifacts": [
+        "experiments/nccl_flight_recorder_hang_triage/run.py",
+        "experiments/nccl_flight_recorder_hang_triage/results.json",
+        "docs/components/nccl-flight-recorder-hang-diagnosis.md",
+        "docs/reports/ai-infra-phase13-benchmark-cards.html"
+      ],
+      "verifier": "python experiments\\nccl_flight_recorder_hang_triage\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic Wait-For DAG and RAS counter triage simulator; not a physical 16,384-GPU hardware fault injection."
+    },
+    {
+      "id": "evi-vera-rubin-nvl144-hbm4-sim-001",
+      "component": "hardware_architecture",
+      "claim": "In own-offline cross-generation roofline and TCO modeling for a 1-Trillion parameter MoE (64B active, 80 layers, 256 experts top-8, BS=128, L_kv=32,768 MLA), transitioning from Hopper H100 NVL8 (3.35 TB/s HBM3, 8-node 400G RoCE EP=64, 31.20 ms EP comm, 37.66 ms TPOT, $12.3263/1M tokens) and Blackwell GB200 NVL72 (8.0 TB/s HBM3e, 1.8 TB/s NVLink-5, 4.31 ms TPOT, $1.7934/1M tokens) to Vera Rubin VR200 NVL144 (2048-bit HBM4 @ 13.5 TB/s, 3.6 TB/s NVLink-6, 1.6T CPO) shifts the FP4 ridge point to 1,185.2 FLOP/Byte, compresses 80-layer EP All-to-All to 1.48 ms, reduces 1T MoE TPOT to 2.28 ms (16.52x faster than H100, 1.89x faster than GB200), balances 1M-context PD ratio to 1P:1D, and lowers amortized cost to $1.2272/1M tokens (10.04x reduction vs H100).",
+      "status": "own-offline",
+      "source_ids": [
+        "hopper-architecture",
+        "cutlass-sm100-tmem-warpspec-code",
+        "sonic-xcvrd-cpo-topology-manager-src"
+      ],
+      "artifacts": [
+        "experiments/vera_rubin_hbm4_nvl144_roofline/run.py",
+        "experiments/vera_rubin_hbm4_nvl144_roofline/results.json",
+        "docs/components/vera-rubin-nvl144-hbm4-architecture.md",
+        "docs/reports/ai-infra-phase13-benchmark-cards.html"
+      ],
+      "verifier": "python experiments\\vera_rubin_hbm4_nvl144_roofline\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Analytical cross-generation roofline and rack-scale TCO projection based on published HBM4/NVLink-6/NVL144 architecture parameters; physical VR200 silicon not yet benchmarked."
     }
   ],
   "updated_at": "2026-10-19"
