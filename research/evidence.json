@@ -2881,6 +2881,117 @@
       "verifier": "python experiments\\dynamo_kv_aware_router\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic discrete-event queueing and LRU cache simulator across 16 workers."
+    },
+    {
+      "id": "ev-sm100-blackwell-fmha-fa4-impl-2026",
+      "component": "kernel_engineering",
+      "claim": "In NVIDIA/cutlass (commit 78e46228a1bfc5c972e2f9a634223af784cd6949, 77_blackwell_fmha mainloop blob 0c2007b6 & kernel blob 987fa2b4) and Dao-AILab/flash-attention (commit e7a6402a9ff099de5eb628ce207a88a3f0aa5378, flash_fwd_sm100.py blob c5add6c3, softmax.py blob 39ff9486, utils.py blob 2cb3427f), SM100 FMHA allocates all 512 TMEM columns (S0 [0,128), S1 [128,256), O0 [256,384), O1 [384,512)) with P0/P1 aliased at S0+32/S1+32 (sP=nullptr, saving 64 KiB SMEM), fits 16 warps in 65,280 / 61,184 / 54,016 registers per SM, and offloads MUFU.EX2 to packed FFMA2 degree-3 Horner polynomials (ex2_emulation_2) with lazy rescale_threshold=4.0.",
+      "status": "implementation",
+      "source_ids": [
+        "cutlass-77-blackwell-fmha-collective-2026",
+        "dao-ailab-fa4-sm100-cute-softmax-2026"
+      ],
+      "artifacts": [
+        "docs/components/sm100-blackwell-fmha-tmem-fa4.md",
+        "docs/reports/ai-infra-phase19-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of NVIDIA/cutlass 77_blackwell_fmha and Dao-AILab/flash-attention flash_fwd_sm100.py / softmax.py / utils.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static CUDA C++ / CuTe Python verification."
+    },
+    {
+      "id": "ev-exp-sm100-blackwell-fmha-fa4-2026",
+      "component": "kernel_engineering",
+      "claim": "In own-offline evaluation of SM100 B200 (148 SMs @ 1.83 GHz) and SM103 B300 FMHA (128x128x128 tile), pure hardware MUFU.EX2 caps both BF16 and FP8 at 1,997.0 TFLOPS (90.0% BF16 SOL, 45.0% FP8 SOL); FlashAttention-4 FFMA2 ex2_emulation_2 (max rel error 8.8e-5) + lazy rescale_threshold=4.0 lifts B200 BF16 to 2,125.3 TFLOPS (95.8% SOL, 1.382x over SM90-scaled 1,537.5 TFLOPS) and B200 FP8 (ex2_emu_freq=8, 32.5% offload) to 2,790.1 TFLOPS (62.9% SOL, 1.397x over hw exp2), while SM103 B300 native exp2 + tcgen05.ld.red reaches 3,200.0 TFLOPS (72.1% SOL).",
+      "status": "own-offline",
+      "source_ids": [
+        "cutlass-77-blackwell-fmha-collective-2026",
+        "dao-ailab-fa4-sm100-cute-softmax-2026"
+      ],
+      "artifacts": [
+        "experiments/sm100_blackwell_fmha_fa4/run.py",
+        "experiments/sm100_blackwell_fmha_fa4/results.json",
+        "docs/components/sm100-blackwell-fmha-tmem-fa4.md",
+        "docs/reports/ai-infra-phase19-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\sm100_blackwell_fmha_fa4\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic TMEM column layout, register file, polynomial error, and cycle roofline simulator."
+    },
+    {
+      "id": "ev-sglang-hiradix-mla-dedup-impl-2026",
+      "component": "serving_systems",
+      "claim": "In sgl-project/sglang (commit 0ce41c5a06f829bb74e3d582c82d8d51837742df, mla_host_dedup.py blob 08145441, l2_transfer.py blob 76d85ede, storage_prefetch.py blob e319332f, hicache_storage.py blob f93600cf), MLAHostDedupBroadcaster allocates the Host DRAM KV pool only on TP Rank 0 (is_dummy_rank=True on Ranks 1..7) and broadcasts loaded layers in 4,096-token chunks via dist.broadcast inside on_layer_done, while StoragePrefetchRetries cancels speculative L3 retries when waiting_queue[0] is blocked and PoolHitPolicy.TRAILING_PAGES exposes restorable_prefix_pages for hybrid models.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-mla-host-dedup-l2-transfer-2026",
+        "sglang-storage-prefetch-hicache-2026"
+      ],
+      "artifacts": [
+        "docs/components/sglang-hiradix-cache-mla-dedup-prefetch.md",
+        "docs/reports/ai-infra-phase19-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of sgl-project/sglang mla_host_dedup.py, l2_transfer.py, storage_prefetch.py, and hicache_storage.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "ev-exp-sglang-hiradix-mla-dedup-2026",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of DeepSeek-V3/V4 MLA+DSA on 8x GPU TP=8 with 512 GiB Host DDR5, MLAHostDedupBroadcaster expands unique host-cached prefix capacity 8.0x (from 1,591,170 to 12,729,364 tokens) using a 168.7 MiB GPU staging buffer and cuts 32K L2->L1 load latency from 41.02 ms (contended 8-rank PCIe) to 25.31 ms (1.621x speedup via 61-layer PCIe+NVLink pipeline); StoragePrefetchRetries reduces L3 miss queue-head wait time by 94.81% (54.0 ms -> 2.8 ms), and cross-rank set intersection selects legal hybrid prefix page 32 whereas min(max_i)=44 fails on Ranks 0 & 1.",
+      "status": "own-offline",
+      "source_ids": [
+        "sglang-mla-host-dedup-l2-transfer-2026",
+        "sglang-storage-prefetch-hicache-2026"
+      ],
+      "artifacts": [
+        "experiments/sglang_hiradix_cache_controller/run.py",
+        "experiments/sglang_hiradix_cache_controller/results.json",
+        "docs/components/sglang-hiradix-cache-mla-dedup-prefetch.md",
+        "docs/reports/ai-infra-phase19-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\sglang_hiradix_cache_controller\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic TP=8 memory, layerwise pipeline, L3 retry queue, and hybrid prefix intersection simulator."
+    },
+    {
+      "id": "ev-pytorch-dcp-async-stager-impl-2026",
+      "component": "storage",
+      "claim": "In pytorch/pytorch (commit 9d25673f3afae8ccf49013450584293e28aa764d, state_dict_saver.py blob ed544386, staging.py blob 67f805be, _state_dict_stager.py blob deb43f1a), StateDictStager caches pinned+shared CPU UntypedStorage objects in a WeakIdKeyDictionary (_cached_storage_mapping), executes non-blocking D2H copies on a dedicated _staging_stream with pin_memory_min_bytes=5, and _ReplicationStager exchanges staged state_dicts with partner_rank = (rank + world_size // 2) % world_size using deadlock-free rank < partner send/recv ordering.",
+      "status": "implementation",
+      "source_ids": [
+        "pytorch-dcp-state-dict-saver-staging-2026",
+        "pytorch-dcp-state-dict-stager-weakref-2026"
+      ],
+      "artifacts": [
+        "docs/components/pytorch-dcp-async-stager-replication.md",
+        "docs/reports/ai-infra-phase19-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of pytorch/pytorch state_dict_saver.py, staging.py, and _state_dict_stager.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "ev-exp-pytorch-dcp-async-stager-2026",
+      "component": "storage",
+      "claim": "In own-offline evaluation of 512-GPU FSDP2 checkpointing (14.2 GB/rank across 820 large tensors and 140 tiny <5B scalars, saving 58.8 ms ioctl overhead via pin_memory_min_bytes=5), synchronous dcp.save stalls GPUs for 91.221 s (88.755% Goodput) and uncached pinned staging stalls for 3.993 s due to 3.737 s cudaHostRegister overhead (slower than 1.675 s unpinned async_save); persistent DefaultStager(StagingOptions(True,True,True,True)) overlaps the 0.256 s D2H copy with next-step compute to cut exposed GPU stall to 0.048 s (99.95% reduction vs sync, 83.2x faster than uncached pin, 99.993% Goodput), while _ReplicationStager achieves 0.765 s stall (99.894% Goodput) across disjoint racks.",
+      "status": "own-offline",
+      "source_ids": [
+        "pytorch-dcp-state-dict-saver-staging-2026",
+        "pytorch-dcp-state-dict-stager-weakref-2026"
+      ],
+      "artifacts": [
+        "experiments/async_dcp_checkpoint_stager/run.py",
+        "experiments/async_dcp_checkpoint_stager/results.json",
+        "docs/components/pytorch-dcp-async-stager-replication.md",
+        "docs/reports/ai-infra-phase19-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\async_dcp_checkpoint_stager\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic D2H PCIe, cudaHostRegister, Lustre I/O, and half-world ring partner simulator."
     }
   ],
   "updated_at": "2026-10-20"

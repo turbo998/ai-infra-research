@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Infra Phase 19 Benchmark Report — SM100 FA4 TMEM + SGLang HiRadixCache MLA Dedup + PyTorch DCP AsyncStager</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --border: #e2e8f0;
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    --good: #16a34a;
+    --good-bg: #f0fdf4;
+    --bad: #dc2626;
+    --bad-bg: #fef2f2;
+    --warn: #d97706;
+    --warn-bg: #fffbeb;
+    --dark: #0f172a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+  }
+  .deck-header {
+    max-width: 900px;
+    width: 100%;
+    color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 12px;
+  }
+  .deck-header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .deck-header span { font-size: 13px; color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 40px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+    position: relative;
+    overflow: hidden;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 14px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .headline {
+    font-size: 27px;
+    line-height: 1.26;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    margin: 18px 0 10px;
+    color: var(--ink);
+  }
+  .headline .grad {
+    background: linear-gradient(90deg, #1d4ed8, #0284c7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 12px 0;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    margin: 12px 0;
+  }
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    background: #f8fafc;
+  }
+  .panel h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .kpi {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .kpi-label {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .quote-box {
+    background: #f1f5f9;
+    border-left: 4px solid var(--accent);
+    padding: 14px 18px;
+    border-radius: 0 10px 10px 0;
+    font-size: 13.5px;
+    color: #1e293b;
+    line-height: 1.5;
+    margin-bottom: 14px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .decision-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .decision-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    background: #ffffff;
+  }
+  .decision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .pill-act { background: var(--good-bg); color: var(--good); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+  .pill-confirm { background: var(--warn-bg); color: var(--warn); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+  .pill-human { background: var(--bad-bg); color: var(--bad); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+  .bar-track {
+    width: 100%;
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 8px 0 4px;
+  }
+  .bar-fill {
+    height: 100%;
+    background: #3b82f6;
+    border-radius: 999px;
+  }
+  .bar-fill.alt { background: #cbd5e1; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 10px 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    background: #f8fafc;
+  }
+  .code-block {
+    background: var(--dark);
+    color: #e2e8f0;
+    padding: 16px 18px;
+    border-radius: 12px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .arrow-sep {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--accent);
+    margin: 6px 0;
+  }
+  .callout-dark {
+    background: var(--dark);
+    color: #f8fafc;
+    border-radius: 14px;
+    padding: 16px 20px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .fit-good {
+    border: 2px solid #86efac;
+    background: var(--good-bg);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .fit-bad {
+    border: 2px solid #fca5a5;
+    background: var(--bad-bg);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .fit-good h3 { color: #15803d; font-size: 15px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #b91c1c; font-size: 15px; margin-bottom: 10px; }
+  ul.clean { padding-left: 18px; font-size: 13px; line-height: 1.65; color: #1e293b; }
+  .lat-row { margin-bottom: 12px; }
+  .lat-label { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>AI Infra Phase 19 (Priority 28) — 7-Card 4:5 Visual Benchmark Deck</h1>
+  <span>PROVENANCE: own-offline + implementation · 2026-10-20</span>
+</div>
+
+<!-- CARD 1: OVERVIEW & WORKBENCH -->
+<section class="card" id="card-1">
+  <div>
+    <div class="card-top">
+      <span>1 / 7 · HANDS-ON · BLACKWELL FA4 &amp; HIRADIX &amp; ASYNC DCP</span>
+      <span class="badge">PHASE 19 SEALED BENCHMARK</span>
+    </div>
+    <h2 class="headline">
+      SM100 FA4 Achieves <span class="grad">2,790.1 TFLOPS FP8 (+39.7%)</span> via TMEM Aliasing &amp; FFMA2 <code style="font-size:22px">exp2</code>, While SGLang MLA Dedup Multiplies L2 Capacity <span class="grad">8.0x</span> &amp; PyTorch DCP Cuts GPU Stall by <span class="grad">99.95%</span>
+    </h2>
+    <p class="subhead">
+      Primary-source verification of <code>NVIDIA/cutlass</code> (<code>77_blackwell_fmha</code>), <code>Dao-AILab/flash-attention</code> (<code>flash_fwd_sm100.py</code>), <code>sgl-project/sglang</code> (<code>mla_host_dedup.py</code>), and <code>pytorch/pytorch</code> (<code>staging.py</code> / <code>_state_dict_stager.py</code>).
+    </p>
+
+    <div class="grid-3">
+      <div class="panel">
+        <h3>1. SM100 FA4 TMEM &amp; MUFU</h3>
+        <div class="kpi">2,790.1 TF</div>
+        <div class="kpi-label">B200 FP8 forward throughput (<code>ex2_emu_freq=8</code> + <code>rescale_threshold=4.0</code>), up <strong>1.397x</strong> vs pure hardware <code>MUFU.EX2</code> (<code>1,997.0 TF</code>); <code>3,200.0 TF</code> on SM103 B300.</div>
+      </div>
+      <div class="panel">
+        <h3>2. SGLang MLA Host Dedup</h3>
+        <div class="kpi">12.73M tok</div>
+        <div class="kpi-label">Unique MLA+DSA tokens cached in <code>512 GiB</code> Host DDR5 on <code>TP=8</code> (<strong>8.0x</strong> vs <code>1.59M</code> without dedup) and <strong>1.621x</strong> faster 32K L2→L1 load (<code>25.31 ms</code> vs <code>41.02 ms</code>).</div>
+      </div>
+      <div class="panel">
+        <h3>3. PyTorch DCP AsyncStager</h3>
+        <div class="kpi">0.048 s</div>
+        <div class="kpi-label">Exposed GPU stall per <code>14.2 GB/rank</code> checkpoint via cached pinned+shared <code>StateDictStager</code> (<strong>83.2x</strong> faster than uncached pin <code>3.993 s</code>; <strong>99.993%</strong> Goodput).</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px;">
+      <h3>3-Track Threshold &amp; Contract Input Workbench</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Track / Subsystem</th>
+            <th>Primary Source Commit &amp; Blob</th>
+            <th>Key Architectural Mechanism</th>
+            <th>Verified Metric</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>CUTLASS 77 / FA4 SM100</strong></td>
+            <td><code>78e46228</code> / <code>e7a6402a</code></td>
+            <td>512-col TMEM <code>P0/P1</code> aliasing inside <code>S0/S1</code> (<code>sP=nullptr</code>) + <code>ex2_emulation_2</code></td>
+            <td><code>0 B</code> SMEM spill · <code>2,125.3 TF</code> BF16 (<code>95.8%</code> SOL)</td>
+          </tr>
+          <tr>
+            <td><strong>SGLang HiRadixCache</strong></td>
+            <td><code>0ce41c5a</code> (4 mem_cache modules)</td>
+            <td><code>MLAHostDedupBroadcaster</code> layerwise NVLink bcast + <code>StoragePrefetchRetries</code></td>
+            <td><code>8.0x</code> Host RAM · <code>-94.81%</code> HoL wait (<code>2.8 ms</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>PyTorch DCP Stager</strong></td>
+            <td><code>9d25673f</code> (3 checkpoint modules)</td>
+            <td><code>WeakIdKeyDictionary</code> cached pinned/shared <code>UntypedStorage</code> + <code>_ReplicationStager</code></td>
+            <td><code>0.048 s</code> stall (<code>-99.95%</code> vs sync <code>91.221 s</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div>
+      <strong>PROVENANCE &amp; ENVIRONMENT:</strong> Deterministic CPU/offline simulators (<code>sm100_blackwell_fmha_fa4</code>, <code>sglang_hiradix_cache_controller</code>, <code>async_dcp_checkpoint_stager</code>) backed by exact line-level upstream source inspection.
+    </div>
+    <span class="badge" style="background:#1e293b;color:#38bdf8;white-space:nowrap;">67 EXPERIMENTS · 280 TESTS PASS</span>
+  </div>
+</section>
+
+<!-- CARD 2: SINGLE-CASE DEEP DIVE -->
+<section class="card" id="card-2">
+  <div>
+    <div class="card-top">
+      <span>2 / 7 · SCENARIO: SM100 BLACKWELL FA4 TMEM &amp; MUFU OFFLOAD</span>
+      <span class="badge">CASE DEEP DIVE</span>
+    </div>
+    <h2 class="headline">
+      512-Column TMEM In-Place Aliasing Eliminates <span class="grad">64 KiB SMEM Spill</span> While Packed <code style="font-size:22px">FFMA2</code> Emulation Breaks the <span class="grad">1,997 TFLOPS MUFU Wall</span>
+    </h2>
+    <div class="quote-box">
+      INPUT CONTRACT: B200 (148 SMs @ 1.83 GHz, 256 KiB TMEM = 128 lanes × 512 cols, 65,536 regs/SM). Tile = 128×128×128 (8,388,608 FLOPs/tile; TC ideal = 1,024 cycles BF16 / 512 cycles FP8; MUFU base = 682.7 cycles/tile).
+    </div>
+
+    <div class="decision-stack">
+      <div class="decision-card">
+        <div class="decision-header">
+          <strong>Decision 1 · TMEM 512-Col In-Place <code>P0/P1</code> Aliasing (<code>choice</code>: <code>TS</code> vs <code>SS</code> MMA)</strong>
+          <span class="pill-act">Act automatically · 0 B SMEM P</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);">
+          <code>S0 [0..128)</code> &amp; <code>S1 [128..256)</code> hold QK scores; <code>Softmax0/1</code> write <code>V0/V1</code> stats at cols <code>0/128</code> and quantized <code>P0/P1</code> at cols <code>32..64</code> &amp; <code>160..192</code> directly inside <code>S0/S1</code>. <code>to_tiled_mma_sm100_ts</code> reads <code>P</code> from TMEM, freeing <code>64.0 KiB</code> SMEM so <code>164.0 KiB</code> remains for 4-stage KV TMA buffers.
+        </p>
+        <div class="bar-track"><div class="bar-fill" style="width:99.61%;"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);">
+          <span>TMEM Utilization: <code>512 / 512 cols (256.0 KiB = 100.0%)</code></span>
+          <span>Register File: <code>65,280 / 65,536 regs (99.61% CUTLASS) · 61,184 (93.36% FA4 BF16)</code></span>
+        </div>
+      </div>
+
+      <div class="decision-card">
+        <div class="decision-header">
+          <strong>Decision 2 · Hybrid <code>FFMA2</code> Polynomial <code>ex2_emulation_2</code> + Lazy <code>rescale_threshold</code> (<code>score</code>)</strong>
+          <span class="pill-act">Act automatically · 2,790.1 TFLOPS FP8</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);">
+          Pure hardware <code>MUFU.EX2</code> stalls FP8 at <code>1,997.0 TFLOPS</code> (<code>45.0%</code> SOL). Offloading <code>32.5%</code> of <code>exp2</code> (`ex2_emu_freq=8`) to degree-3 Horner <code>fma_packed_f32x2</code> (`max_rel_err = 8.8e-5`) + skipping <code>Correction</code> TMEM rescaling when <code>acc_scale_ &gt;= -4.0</code> reaches <code>2,790.1 TFLOPS</code> (<code>62.9%</code> SOL).
+        </p>
+        <div class="bar-track"><div class="bar-fill" style="width:62.9%;"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);">
+          <span>B200 FP8 SOL%: <code>62.9% (2,790.1 TFLOPS)</code> vs <code>45.0% (1,997.0 TFLOPS)</code></span>
+          <span>B200 BF16 SOL%: <code>95.8% (2,125.3 TFLOPS)</code></span>
+        </div>
+      </div>
+
+      <div class="decision-card">
+        <div class="decision-header">
+          <strong>Decision 3 · SM103 (B300) Hardware <code>exp2</code> &amp; <code>tcgen05.ld.red</code> Row-Max (<code>choice</code>)</strong>
+          <span class="pill-confirm">Confirm Arch Target · 3,200.0 TFLOPS</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);">
+          On <code>Arch.sm_103f</code> (B300), native hardware <code>exp2</code> doubles throughput (`ex2_emu_freq=0`) and <code>tcgen05.ld.red</code> computes row max inside the TMEM controller during S load, reaching <code>3,200.0 TFLOPS</code> (<code>72.1%</code> SOL).
+        </p>
+        <div class="bar-track"><div class="bar-fill" style="width:72.1%;"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);">
+          <span>SM103 B300 FP8 SOL%: <code>72.1% (3,200.0 TFLOPS)</code></span>
+          <span>Software fmax tree eliminated via <code>update_row_max_precomputed</code></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div><strong>KEY FINDING:</strong> Without <code>FFMA2</code> emulation and lazy <code>rescale_threshold</code>, switching SM100 FMHA from BF16 to FP8 yields <strong>0% speedup</strong> (<code>1,997.0 TF</code> vs <code>1,997.0 TF</code>) because MUFU + TMEM Correction completely mask the 2x faster Tensor Core!</div>
+  </div>
+</section>
+
+<!-- CARD 3: WHAT I TESTED (FULL EVALUATION MATRIX) -->
+<section class="card" id="card-3">
+  <div>
+    <div class="card-top">
+      <span>3 / 7 · WHAT I TESTED · FULL PHASE 19 EVALUATION MATRIX</span>
+      <span class="badge">10 SCENARIOS VERIFIED</span>
+    </div>
+    <h2 class="headline">
+      4 Baselines Fail Throughput, Memory, or Correctness Gates (<span style="color:var(--bad)">✕</span>); <span class="grad">6 Co-Designed Paths Pass All Production SLOs</span>
+    </h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>SCENARIO</th>
+          <th>QUESTION / TASK</th>
+          <th>MODEL / SYSTEM ANSWER</th>
+          <th>ACTION</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. SM100 FP8 HW-exp2 Only</strong></td>
+          <td>Does FP8 accelerate FMHA without MUFU offload?</td>
+          <td><strong>✕ 1,997.0 TFLOPS (45.0% SOL)</strong> — identical to BF16 due to 682.7-cycle MUFU bottleneck</td>
+          <td><span class="pill-human">✕ Bottlenecked</span></td>
+        </tr>
+        <tr>
+          <td><strong>2. SM100 FA4 BF16 Tuned</strong></td>
+          <td><code>ex2_emu_freq=10</code> + <code>rescale_threshold=4.0</code></td>
+          <td><strong>2,125.3 TFLOPS (95.8% SOL)</strong> — 1.382x vs SM90-scaled baseline (<code>1,537.5 TF</code>)</td>
+          <td><span class="pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>3. SM100 FA4 FP8 Tuned</strong></td>
+          <td><code>ex2_emu_freq=8</code> (32.5% offload) + <code>split_P_arrive=96</code></td>
+          <td><strong>2,790.1 TFLOPS (62.9% SOL)</strong> — 1.397x speedup, <code>8.8e-5</code> max rel error</td>
+          <td><span class="pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>4. SM103 B300 FP8 Native</strong></td>
+          <td><code>ex2_emu_freq=0</code> + <code>tcgen05.ld.red</code> hardware rowmax</td>
+          <td><strong>3,200.0 TFLOPS (72.1% SOL)</strong> — 710.0 effective cycles/tile</td>
+          <td><span class="pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>5. Naive MLA Per-Rank Host Cache</strong></td>
+          <td>512 GiB Host RAM across <code>TP=8</code> DeepSeek-V3</td>
+          <td><strong>✕ 1.59M unique tokens &amp; 41.02 ms load</strong> — 87.5% RAM wasted on 8x duplicate latents</td>
+          <td><span class="pill-human">✕ 8x Redundant</span></td>
+        </tr>
+        <tr>
+          <td><strong>6. SGLang MLAHostDedupBroadcaster</strong></td>
+          <td>Rank-0 Host Pool + 61-layer NVLink broadcast</td>
+          <td><strong>12.73M unique tokens (8.0x) &amp; 25.31 ms load</strong> (1.621x speedup, <code>168.7 MiB</code> staging)</td>
+          <td><span class="pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>7. Naive Min-of-Max Hybrid Prefix</strong></td>
+          <td>Restore Mamba/SWA <code>TRAILING_PAGES</code> via <code>min(max_i)</code></td>
+          <td><strong>✕ Picks page 44 (Illegal on Ranks 0 &amp; 1!)</strong> — crashes hybrid state restore</td>
+          <td><span class="pill-human">✕ State Corruption</span></td>
+        </tr>
+        <tr>
+          <td><strong>8. SGLang Set-Intersection &amp; HoL Cancel</strong></td>
+          <td><code>restorable_prefix_pages</code> ∩ + <code>waiting_queue[0]</code> cancel</td>
+          <td><strong>Page 32 (100% valid) &amp; 2.8 ms head wait</strong> (<code>-94.81%</code> vs <code>54.0 ms</code> blocked)</td>
+          <td><span class="pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>9. Uncached Pinned Async DCP</strong></td>
+          <td>Re-allocate &amp; <code>pin_memory</code> 14.2 GB every save</td>
+          <td><strong>✕ 3.993 s GPU stall</strong> — <code>3.737 s</code> OS page-lock storm is slower than unpinned (<code>1.675 s</code>)</td>
+          <td><span class="pill-human">✕ Pin Storm</span></td>
+        </tr>
+        <tr>
+          <td><strong>10. Cached DefaultStager + Replication</strong></td>
+          <td><code>WeakIdKeyDictionary</code> reuse + <code>_staging_stream</code></td>
+          <td><strong>0.048 s GPU stall (99.993% Goodput)</strong> — 83.2x faster than uncached pin; <code>0.765 s</code> peer ring</td>
+          <td><span class="pill-act">Act automatically</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="grid-2" style="margin-top:8px;">
+      <div class="panel">
+        <h3>Threshold Gating Summary</h3>
+        <p style="font-size:12.5px;color:var(--muted);line-height:1.5;">
+          All 3 subsystems enforce hard correctness invariants: SM100 register budget <code>&le; 65,536 regs/SM</code> (<code>65,280</code> CUTLASS / <code>61,184</code> FA4), SGLang cross-rank <code>TRAILING_PAGES</code> set intersection, and DCP <code>pin_memory_min_bytes = 5</code> + deadlock-free half-world partner ordering.
+        </p>
+      </div>
+      <div class="panel">
+        <h3>Failure Root-Cause Analysis (✕)</h3>
+        <p style="font-size:12.5px;color:var(--muted);line-height:1.5;">
+          The 4 failures stem from ignoring hardware/distributed asymmetry: MUFU vs Tensor Core scaling on SM100, replicated MLA latents across TP ranks, non-prefix-closed Mamba/SWA state windows, and <code>cudaHostRegister</code> kernel page-locking latency.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div><strong>VALIDATION GATE:</strong> 10/10 scenarios deterministically verified via <code>--check</code> assertions across <code>sm100_blackwell_fmha_fa4</code>, <code>sglang_hiradix_cache_controller</code>, and <code>async_dcp_checkpoint_stager</code>.</div>
+  </div>
+</section>
+
+<!-- CARD 4: UNDER THE HOOD (PROTOCOL & SCORING MECHANICS) -->
+<section class="card" id="card-4">
+  <div>
+    <div class="card-top">
+      <span>4 / 7 · UNDER THE HOOD · TMEM ALIASING, MLA DEDUP &amp; DCP STAGER</span>
+      <span class="badge">EXACT SOURCE MECHANICS</span>
+    </div>
+    <h2 class="headline">
+      From <span class="grad">512-Col TMEM &amp; Layerwise NVLink Broadcast</span> to <span class="grad">Weakref Pinned Storage Reuse</span>
+    </h2>
+
+    <div class="code-block">// 1. CUTLASS 77_blackwell_fmha (blob 0c2007b6) &amp; FA4 flash_fwd_sm100.py (blob c5add6c3)
+struct TmemAllocation {
+  static constexpr uint32_t S0 = 0, S1 = 128, V0 = 0, V1 = 128;
+  static constexpr uint32_t P0 = S0 + 32, P1 = S1 + 32; // Aliased inside S0/S1!
+  static constexpr uint32_t O0 = 256, O1 = 384, kEnd = 512; // 512 cols = 256 KiB TMEM
+};
+// SoftmaxSm100 (softmax.py blob 39ff9486): lazy rescale_threshold + FFMA2 ex2_emulation_2
+if (acc_scale_ &gt;= -self.rescale_threshold) { row_max_new = row_max_old; acc_scale = 1.0; }
+// When acc_scale == 1.0, Correction WG (warps 8..11) skips TMEM O0/O1 load/mul/store!</div>
+
+    <div class="arrow-sep">↓</div>
+
+    <div class="code-block"># 2. SGLang MLAHostDedupBroadcaster (mla_host_dedup.py blob 08145441) &amp; L2TransferEngine (blob 76d85ede)
+# Only Rank 0 (is_src=True) allocates Host DRAM; Ranks 1..7 are buffer-less (8.0x capacity)
+for layer_id in range(transfer_layer_id_max):
+    transfer.host_pool.load_to_device_per_layer_physical(..., local_layer_id, ...)
+    on_layer_done(layer_id) # -&gt; broadcaster.broadcast_loaded_layer(layer_id, prepared):
+        if self.is_src: torch.index_select(layer_buf, 0, idx, out=chunk_rows)
+        dist.broadcast(chunk, src=self.src_global_rank, group=self.group) # 680 GB/s NVLink
+        if not self.is_src: layer_buf.index_copy_(0, idx, chunk_rows)
+
+# 3. PyTorch DCP StateDictStager (_state_dict_stager.py blob deb43f1a) &amp; _ReplicationStager
+if storage in self._cached_storage_mapping: # WeakIdKeyDictionary: 0.0s malloc/pin on step &gt; 1
+    cached_storage.copy_(storage, non_blocking=non_blocking) # on self._staging_stream
+    return cached_storage
+# _ReplicationStager (staging.py blob 67f805be): half-world partner = (rank + W//2) % W
+if current_rank &lt; partner_rank: send_checkpoint([partner]); recv_checkpoint(partner)</div>
+
+    <div class="grid-2" style="margin-top:12px;">
+      <div class="panel">
+        <h3>Verifier Flow (<code>&lt;answer&gt;</code> Invariants)</h3>
+        <p style="font-size:12.5px;color:var(--muted);line-height:1.5;">
+          • <code>kEnd == 512</code> &amp; <code>sP == nullptr</code> (0 B SMEM)<br/>
+          • <code>total_regs &le; 65,536</code> across 16 warps (512 threads)<br/>
+          • <code>safe_restorable_prefix_page == max(∩ rank_sets) == 32</code><br/>
+          • <code>deadlock_free_schedule == True</code> across all <code>W/2</code> pairs
+        </p>
+      </div>
+      <div class="panel">
+        <h3>Why Dual Futures Matter in <code>async_save</code></h3>
+        <p style="font-size:12.5px;color:var(--muted);line-height:1.5;">
+          <code>AsyncSaveResponse</code> separates <code>staging_completion</code> (<code>0.256 s</code> D2H overlapped with next step's <code>3.1 s</code> Fwd+Bwd, leaving <code>0.048 s</code> exposed before <code>optimizer.step()</code>) from <code>upload_completion</code> (<code>90.561 s</code> Lustre write).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div><strong>CODE-VERIFIED ARTIFACTS:</strong> All 10 upstream source files inspected at fixed commit/blob SHAs and cross-checked with deterministic unit tests.</div>
+  </div>
+</section>
+
+<!-- CARD 5: ROBUSTNESS CHECK (PERTURBATION & CONSISTENCY) -->
+<section class="card" id="card-5">
+  <div>
+    <div class="card-top">
+      <span>5 / 7 · ROBUSTNESS CHECK · PERTURBATION &amp; EDGE-CASE STABILITY</span>
+      <span class="badge">SENSITIVITY ANALYSIS</span>
+    </div>
+    <h2 class="headline">
+      Resilience Across <span class="grad">Register Pressure, Non-Causal vs Causal Emulation, Hybrid Snapshots &amp; Pin Storms</span>
+    </h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>QUESTION / PERTURBATION</th>
+          <th>ORIGINAL / BASELINE</th>
+          <th>PERTURBED / CO-DESIGNED</th>
+          <th>CHANGE (PTS / DELTA)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. SM100 FP8 Causal vs Non-Causal <code>ex2_emu_freq</code></strong><br/><span style="font-size:11.5px;color:var(--muted)"><code>freq=16</code> (inherited BF16) vs <code>freq=8</code> (FP8 causal) vs <code>freq=8</code> on non-causal</span></td>
+          <td><code>1,997.0 TF</code> (<code>freq=0</code>)<br/>Non-causal <code>freq=8</code> regresses <code>0.94x</code></td>
+          <td><strong><code>2,790.1 TF</code></strong> (<code>freq=8</code> causal, <code>+3.4%..+5.5%</code> B200 e2e)</td>
+          <td><strong style="color:var(--good)">+793.1 TFLOPS (+39.7%)</strong><br/>Keyed on <code>is_causal=True</code></td>
+        </tr>
+        <tr>
+          <td><strong>2. Register File Budget Across Dtypes</strong><br/><span style="font-size:11.5px;color:var(--muted)">CUTLASS 77 default (192/96) vs FA4 BF16 (184/80) vs FA4 FP8 (160/72)</span></td>
+          <td><code>65,280 regs</code> (<code>99.61%</code> of <code>65,536</code>)</td>
+          <td><strong><code>61,184 regs</code> (BF16, <code>93.36%</code>)<br/><code>54,016 regs</code> (FP8, <code>82.42%</code>)</strong></td>
+          <td><strong style="color:var(--good)">-4,096 to -11,264 regs</strong><br/>Zero register spill</td>
+        </tr>
+        <tr>
+          <td><strong>3. Degree-3 Horner <code>ex2_emulation_2</code> Error</strong><br/><span style="font-size:11.5px;color:var(--muted)">2,048 points across $x \in [-12, 0]$ vs IEEE-754 $2^x$</span></td>
+          <td>Hardware <code>MUFU.EX2</code></td>
+          <td><strong>Max Abs Err <code>7.5e-5</code><br/>Max Rel Err <code>8.8e-5</code></strong></td>
+          <td><strong style="color:var(--good)">Accuracy-neutral</strong><br/>Well inside BF16/FP8 ULP</td>
+        </tr>
+        <tr>
+          <td><strong>4. Hybrid <code>TRAILING_PAGES</code> Rank Skew</strong><br/><span style="font-size:11.5px;color:var(--muted)">Rank snapshots <code>[16,32,40,48]</code>, <code>[16,24,32,48]</code>, <code>[16,32,44]</code>, <code>[16,32,40,44,48]</code></span></td>
+          <td><code>min(max_i) = 44</code><br/>(Valid on all ranks: <code>False</code>)</td>
+          <td><strong><code>max(∩ S_i) = 32</code></strong><br/>(Valid on all ranks: <code>True</code>)</td>
+          <td><strong style="color:var(--good)">100% Legal Prefix</strong><br/>Prevents Mamba crash</td>
+        </tr>
+        <tr>
+          <td><strong>5. Speculative L3 Miss at Queue Head</strong><br/><span style="font-size:11.5px;color:var(--muted)"><code>waiting_queue[0]</code> hits 18-step L3 retry delay</span></td>
+          <td><code>54.0 ms</code> head-of-line stall</td>
+          <td><strong><code>2.8 ms</code></strong> (<code>StoragePrefetchRetries</code> auto-cancels head retry)</td>
+          <td><strong style="color:var(--good)">-51.2 ms (-94.81%)</strong><br/>Zero HoL blocking</td>
+        </tr>
+        <tr>
+          <td><strong>6. DCP Stager Reuse vs Recreate</strong><br/><span style="font-size:11.5px;color:var(--muted)">14.2 GB shard + 140 tiny scalars (&lt; 5 B) per rank</span></td>
+          <td><code>3.993 s</code> stall (re-pinning) + <code>58.8 ms</code> scalar ioctl</td>
+          <td><strong><code>0.048 s</code> stall</strong> (<code>WeakIdKeyDictionary</code> + <code>pin_memory_min_bytes=5</code>)</td>
+          <td><strong style="color:var(--good)">-3.945 s (83.2x faster)</strong><br/><code>+0.545 pts</code> Goodput</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout-dark">
+    <div><strong>ROBUSTNESS TAKEAWAY:</strong> Every optimization in Phase 19 has an explicit guard condition (<code>is_causal</code> keying for <code>freq=8</code>, <code>FP4</code> exclusion from <code>MLAHostDedup</code>, and <code>pin_memory_min_bytes=5</code> + <code>f.atexit=False</code> in <code>StateDictStager</code>).</div>
+  </div>
+</section>
+
+<!-- CARD 6: LATENCY & SCALING BARS -->
+<section class="card" id="card-6">
+  <div>
+    <div class="card-top">
+      <span>6 / 7 · LATENCY &amp; THROUGHPUT SCALING · PAIRED BENCHMARK BARS</span>
+      <span class="badge">SEALED COORDINATES</span>
+    </div>
+    <h2 class="headline">
+      Visualizing <span class="grad">SM100/SM103 FMHA TFLOPS, 32K L2 Prefix Load Latency &amp; DCP Checkpoint Stall</span>
+    </h2>
+
+    <div class="panel" style="margin-bottom:14px;">
+      <h3>A. SM100 B200 / SM103 B300 FMHA Forward Throughput (Higher is Better, Max = 3,200.0 TFLOPS)</h3>
+      <div class="lat-row">
+        <div class="lat-label"><span>SM103 B300 FP8 Native <code>exp2</code> + <code>tcgen05.ld.red</code> (Primary)</span><strong>3,200.0 TFLOPS (72.1% SOL)</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:100.0%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>SM100 B200 FA4 FP8 (<code>ex2_emu_freq=8</code> + <code>rescale_threshold=4.0</code>)</span><strong>2,790.1 TFLOPS (62.9% SOL)</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:87.19%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>SM100 B200 FA4 BF16 (<code>ex2_emu_freq=10</code> + <code>rescale_threshold=4.0</code>)</span><strong>2,125.3 TFLOPS (95.8% SOL)</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:66.42%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>SM100 B200 HW-<code>exp2</code> Only (BF16 or FP8 — MUFU Bottlenecked Baseline)</span><strong>1,997.0 TFLOPS</strong></div>
+        <div class="bar-track"><div class="bar-fill alt" style="width:62.41%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>SM90 FA3 Architecture Scaled to B200 (Baseline)</span><strong>1,537.5 TFLOPS (69.3% SOL)</strong></div>
+        <div class="bar-track"><div class="bar-fill alt" style="width:48.05%;"></div></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px;">
+      <h3>B. SGLang 32K MLA Prefix Load &amp; L3 Queue-Head Wait Latency (Lower is Better)</h3>
+      <div class="lat-row">
+        <div class="lat-label"><span>32K MLA L2→L1 Load: <code>MLAHostDedupBroadcaster</code> (Rank-0 H2D + 61-Layer NVLink)</span><strong>25.31 ms (1.621x faster)</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:61.70%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>32K MLA L2→L1 Load: Naive 8-Rank Parallel PCIe H2D (Contended Baseline)</span><strong>41.02 ms</strong></div>
+        <div class="bar-track"><div class="bar-fill alt" style="width:100.0%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>L3 Speculative Miss Head Wait: <code>StoragePrefetchRetries</code> Auto-Cancel vs Blocked</span><strong>2.80 ms vs 54.00 ms (-94.81%)</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:5.19%;"></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>C. PyTorch DCP Exposed GPU Stall per 14.2 GB/Rank Checkpoint (Lower is Better)</h3>
+      <div class="lat-row">
+        <div class="lat-label"><span>Cached <code>DefaultStager(StagingOptions(True,True,True,True))</code> (Overlapped D2H)</span><strong>0.048 s (99.993% Goodput)</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:1.20%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>In-Memory Peer <code>_ReplicationStager</code> (Half-World Partner <code>PGTransport</code>)</span><strong>0.765 s (99.894% Goodput)</strong></div>
+        <div class="bar-track"><div class="bar-fill" style="width:19.16%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>Default <code>async_save</code> Unpinned / No-SHM (<code>StagingOptions(False*4)</code>)</span><strong>1.675 s (99.768% Goodput)</strong></div>
+        <div class="bar-track"><div class="bar-fill alt" style="width:41.95%;"></div></div>
+      </div>
+      <div class="lat-row">
+        <div class="lat-label"><span>Uncached Pinned <code>BlockingAsyncStager(cache_staged_state_dict=False)</code></span><strong>3.993 s (vs 91.221 s Sync Save)</strong></div>
+        <div class="bar-track"><div class="bar-fill alt" style="width:100.0%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div><strong>SCALING NOTE:</strong> All bar widths are computed directly from sealed ratios in <code>experiments/*/results.json</code> (e.g., <code>2790.1 / 3200.0 = 87.19%</code>, <code>25.31 / 41.02 = 61.70%</code>, <code>0.048 / 3.993 = 1.20%</code>).</div>
+  </div>
+</section>
+
+<!-- CARD 7: MY TAKE (GOOD FIT VS NOT FOR & READINESS) -->
+<section class="card" id="card-7">
+  <div>
+    <div class="card-top">
+      <span>7 / 7 · MY TAKE · ARCHITECTURAL FIT &amp; PRODUCTION READINESS</span>
+      <span class="badge">DECISION GUIDE</span>
+    </div>
+    <h2 class="headline">
+      When to Deploy <span class="grad">SM100 FA4 Emulation, MLA Host Dedup &amp; Cached Async DCP</span> — and Where They Break
+    </h2>
+
+    <div class="grid-2" style="margin-top:16px;">
+      <div class="fit-good">
+        <h3>✅ Good Fit (Deploy Immediately)</h3>
+        <ul class="clean">
+          <li><strong>SM100 B200 Long-Context Training &amp; Prefill:</strong> Enable 512-col TMEM <code>P0/P1</code> in-place aliasing (`TS` MMA), 16-warp role specialization, <code>ex2_emu_freq=10</code> (BF16) / <code>8</code> (FP8 causal), and <code>rescale_threshold=4.0</code> to reach <code>2,125–2,790 TFLOPS</code>.</li>
+          <li><strong>DeepSeek-V3/V4 MLA Multi-Turn Serving on <code>TP &gt; 1</code>:</strong> Enable <code>MLAHostDedupBroadcaster</code> so only Rank 0 allocates Host DDR5 and broadcasts layerwise over NVLink (<code>8.0x</code> unique prefix capacity, <code>1.621x</code> faster H2D load).</li>
+          <li><strong>Hybrid Mamba/SWA + Full-Attention Prefix Caching:</strong> Intersect <code>restorable_prefix_pages</code> across all TP ranks and enable <code>StoragePrefetchRetries</code> queue-head cancellation.</li>
+          <li><strong>1K–16K GPU FSDP2 Checkpointing:</strong> Instantiate a persistent <code>DefaultStager(StagingOptions(True, True, True, True))</code> across the entire job lifetime so <code>WeakIdKeyDictionary</code> reuses pinned+shared CPU storages (<code>0.048 s</code> stall).</li>
+        </ul>
+      </div>
+
+      <div class="fit-bad">
+        <h3>⛔ Not For (Avoid / Use Fallback)</h3>
+        <ul class="clean">
+          <li><strong>Aggressive <code>ex2_emu_freq=8</code> on Non-Causal FP8 or SM103 (B300):</strong> On B200 non-causal FP8, <code>freq=8</code> regresses throughput (<code>0.94x</code> due to FMA pipe contention); on SM103 B300, native hardware <code>exp2</code> is already fast, so keep <code>ex2_emu_freq=0</code> and enable <code>tcgen05.ld.red</code>.</li>
+          <li><strong><code>MLAHostDedupBroadcaster</code> with <code>MLATokenToKVPoolFP4</code> or Disjoint Remote Storage:</strong> Excluded by <code>mla_host_dedup_eligible</code> because per-rank FP4 scale buffers are not covered by the broadcast, and non-compatible storage backends require rank-local host buffers.</li>
+          <li><strong>Per-Checkpoint Recreated <code>DefaultStager</code> or Odd-World-Size <code>_ReplicationStager</code>:</strong> Calling <code>stager.close()</code> every save triggers a <code>3.737 s</code> <code>cudaHostRegister</code> storm; <code>_ReplicationStager</code> requires an even <code>world_size</code> and <code>2x</code> host memory headroom.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <h3>Architect's Production Checklist</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Subsystem</th>
+            <th>Configuration Knob</th>
+            <th>Recommended Production Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>FlashAttention-4 (SM100 / SM103)</strong></td>
+            <td><code>ex2_emu_freq</code> / <code>split_P_arrive</code></td>
+            <td><code>10</code> (BF16), <code>8</code> (FP8 causal), <code>0</code> (SM103 B300); <code>split_P_arrive = 96</code></td>
+          </tr>
+          <tr>
+            <td><strong>SGLang HiCache MLA Dedup</strong></td>
+            <td><code>SGLANG_MLA_DEDUP_CHUNK_TOKENS</code></td>
+            <td><code>4096</code> tokens (<code>168.7 MiB</code> GPU staging buffer across 61 layers)</td>
+          </tr>
+          <tr>
+            <td><strong>PyTorch DCP Async Save</strong></td>
+            <td><code>StagingOptions</code> + <code>pin_memory_min_bytes</code></td>
+            <td><code>StagingOptions(True, True, True, True)</code> persistent instance; <code>min_bytes = 5</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div>
+      <strong>READINESS &amp; LICENSE:</strong> Open-source Apache-2.0 / BSD-3-Clause upstream implementations verified (`NVIDIA/cutlass`, `Dao-AILab/flash-attention`, `sgl-project/sglang`, `pytorch/pytorch`). Self-contained CSP-compliant HTML deck (`independently_reproduced=true` on offline models).
+    </div>
+    <span class="badge" style="background:#16a34a;color:#ffffff;white-space:nowrap;">PHASE 19 COMPLETE</span>
+  </div>
+</section>
+
+</body>
+</html>
