@@ -2992,6 +2992,117 @@
       "verifier": "python experiments\\async_dcp_checkpoint_stager\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic D2H PCIe, cudaHostRegister, Lustre I/O, and half-world ring partner simulator."
+    },
+    {
+      "id": "ev-deepseek-sglang-eplb-impl-2026",
+      "component": "serving_systems",
+      "claim": "In deepseek-ai/EPLB (commit d52c72d5b2f2fb4c41afbf8eb21366820239913d, eplb.py blob 26c3987f) and sgl-project/sglang (commit 642a671c300babc061b0200c69b1c9882465696d, eplb_manager.py blob 0388dbee & expert_location_updater.py blob 1fd0022e), rebalance_experts_hierarchical packs expert groups onto nodes via balanced_packing when num_groups % num_nodes == 0 before intra-node greedy replication (argmax(w_e / c_e)) and GPU packing, whereas Global Decode mode calls rebalance_experts_hierarchical(weight, num_replicas, 1, 1, num_gpus); SGLang EPLBManager yields across _rebalance_layers_per_chunk and migrates weights via a 5-tier cascade (unchanged, same-gpu via buffer2, free-rider dedup, same-node NVLink, and chunked cross-node RDMA).",
+      "status": "implementation",
+      "source_ids": [
+        "deepseek-eplb-hierarchical-packing-2025",
+        "sglang-eplb-5tier-p2p-updater-2026"
+      ],
+      "artifacts": [
+        "docs/components/deepseek-eplb-redundant-expert-rebalancing.md",
+        "docs/reports/ai-infra-phase20-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of deepseek-ai/EPLB eplb.py and sgl-project/sglang eplb_manager.py / expert_location_updater.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "ev-exp-deepep-eplb-rebalancing-2026",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of 32 GPUs (4 nodes x 8 GPUs) serving 256 logical -> 288 physical experts (+1 redundant slot/GPU) across 58 MoE layers under Zipfian s=0.88 skew, Hierarchical EPLB reduces max/mean GPU load ratio by 73.9% (4.337x -> 1.132x) while keeping 2 expert groups/node to cut cross-node IB dispatch traffic 3.10x vs Global EPLB (22.00% vs 68.25%); SGLang 5-tier P2P with 2-layer chunking eliminates 100% of cross-node RDMA traffic on intra-group shifts (7.29% HBM + 92.71% NVLink, 1.14 ms/step stall, 437.23x faster than 498.44 ms naive full reload) and bounds inter-group shift step stalls to 9.65 ms (51.65x reduction).",
+      "status": "own-offline",
+      "source_ids": [
+        "deepseek-eplb-hierarchical-packing-2025",
+        "sglang-eplb-5tier-p2p-updater-2026"
+      ],
+      "artifacts": [
+        "experiments/deepep_eplb_expert_rebalancing/run.py",
+        "experiments/deepep_eplb_expert_rebalancing/results.json",
+        "docs/components/deepseek-eplb-redundant-expert-rebalancing.md",
+        "docs/reports/ai-infra-phase20-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\deepep_eplb_expert_rebalancing\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic EPLB packing, IB dispatch routing, and 5-tier P2P transfer simulator."
+    },
+    {
+      "id": "ev-nccl-ce-p2p-ras-impl-2026",
+      "component": "interconnect_and_collectives",
+      "claim": "In NVIDIA/nccl (commit 3e46c089f4ae4732722a419eb6096aead7e47a30, src/transport/p2p.cc blob 46889205, src/ras/progress_monitor.cc blob a8c3643d, src/ras/ras_internal.h blob 0f855f6a), p2pSendProxyProgress offloads intra-node P2P transfers to hardware Copy Engines via cudaMemcpyAsync(..., cudaMemcpyDeviceToDevice, resources->stream) + cudaEventQuery with P2P_CUMEM multi-segment registration (0 GPU SM CTAs occupied); ncclGpuProgressCounterMonitor polls per-comm GPU progress counters every 1000 ms (stale at 5000 ms) on a shared per-device sideStream under cudaStreamCaptureModeRelaxed, while the RAS mesh (port 28028) executes RAS_COLL_COMMS/DIAG with a 5s leg timeout.",
+      "status": "implementation",
+      "source_ids": [
+        "nccl-p2p-cumem-ce-memcpy-proxy-2026",
+        "nccl-ras-progress-counter-monitor-2026"
+      ],
+      "artifacts": [
+        "docs/components/nccl-copy-engine-p2p-ras-monitoring.md",
+        "docs/reports/ai-infra-phase20-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of NVIDIA/nccl src/transport/p2p.cc, src/ras/progress_monitor.cc, and src/ras/ras_internal.h",
+      "verified_at": "2026-10-20",
+      "limitations": "Static C++ source verification."
+    },
+    {
+      "id": "ev-exp-nccl-ce-p2p-ras-plane-2026",
+      "component": "interconnect_and_collectives",
+      "claim": "In own-offline evaluation on Blackwell B200 (148 SMs) running a 256-CTA GEMM (3.180 ms standalone) concurrently with a 256 MiB NVLink P2P transfer, SM-driven P2P Simple (16 CTAs) slows GEMM by +21.08% (3.850 ms) and LL128 (8 CTAs) by +10.54% (3.515 ms), whereas P2P_CUMEM Copy Engine proxy occupies 0 SMs, limiting GEMM slowdown to +1.20% (3.218 ms, 1.194x overlapped step speedup); across 1,024 GPUs, RAS progress monitoring consumes 1,024 B/s D2H PCIe bandwidth per GPU (1.7e-6%) and locates a dead/stalled peer in 5,138.4 ms (116.77x faster than a 600s watchdog timeout).",
+      "status": "own-offline",
+      "source_ids": [
+        "nccl-p2p-cumem-ce-memcpy-proxy-2026",
+        "nccl-ras-progress-counter-monitor-2026"
+      ],
+      "artifacts": [
+        "experiments/nccl_ce_p2p_ras_plane/run.py",
+        "experiments/nccl_ce_p2p_ras_plane/results.json",
+        "docs/components/nccl-copy-engine-p2p-ras-monitoring.md",
+        "docs/reports/ai-infra-phase20-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\nccl_ce_p2p_ras_plane\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic SM wave quantization and 1,024-rank RAS tree timeout simulator."
+    },
+    {
+      "id": "ev-vllm-v1-triton-gumbel-fly-impl-2026",
+      "component": "serving_systems",
+      "claim": "In vllm-project/vllm (commit 3ff10ddeb0b77c469c62d9988742d2faa8e4c1f5, vllm/v1/sample/rejection_sampler.py blob ce7a1cd1 and vllm/v1/spec_decode/fly.py blob d984f8ab), sample_recovered_tokens_kernel (BLOCK_SIZE=8192) exploits Gumbel-Max scale invariance to compute argmax_v(max(target_prob - draft_prob, 0.0) * inv_q) in a single streaming HBM pass without sum-reduction or division normalization while generate_uniform_probs uses torch.float64 to guard against 0.0 underflow; fly.py computes top-3 local Shannon entropy (compute_fly_entropy) and defers rejection across FLY_WINDOW_SIZE when subsequent tokens match.",
+      "status": "implementation",
+      "source_ids": [
+        "vllm-v1-triton-rejection-sampler-2026",
+        "vllm-v1-fly-deferred-verification-2026"
+      ],
+      "artifacts": [
+        "docs/components/vllm-v1-rejection-sampler-eagle-spec-decode.md",
+        "docs/reports/ai-infra-phase20-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of vllm-project/vllm vllm/v1/sample/rejection_sampler.py and vllm/v1/spec_decode/fly.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python/Triton source verification."
+    },
+    {
+      "id": "ev-exp-vllm-v1-rejection-sampler-2026",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of BS=64, K=5 (320 draft tokens), 1-pass Triton Gumbel-Max cuts HBM traffic 4.545x (1,565.62 -> 344.44 MiB at V=128,256 and 3,125.00 -> 687.50 MiB at V=256,000) and speeds up recovered-token sampling 4.515x-4.530x (0.652 -> 0.144 ms at V=128K; 1.269 -> 0.280 ms at V=256K) while exactly matching normalized residual probabilities ([0.88, 0, 0, 0.12, 0]); float64 uniform RNG lowers exact-zero underflow risk by 5.37e8x (2^-53 vs 2^-24), and FLY deferred verification (W=2, top_k=3) increases mean output tokens per step by +61.54% (3.25 -> 5.25 tokens/step).",
+      "status": "own-offline",
+      "source_ids": [
+        "vllm-v1-triton-rejection-sampler-2026",
+        "vllm-v1-fly-deferred-verification-2026"
+      ],
+      "artifacts": [
+        "experiments/vllm_v1_rejection_sampler_spec_decode/run.py",
+        "experiments/vllm_v1_rejection_sampler_spec_decode/results.json",
+        "docs/components/vllm-v1-rejection-sampler-eagle-spec-decode.md",
+        "docs/reports/ai-infra-phase20-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\vllm_v1_rejection_sampler_spec_decode\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic HBM roofline, analytical Gumbel-Max identity, and FLY deferred verification simulator."
     }
   ],
   "updated_at": "2026-10-20"
