@@ -2770,7 +2770,118 @@
       "verifier": "python experiments\\kv_cache_quant_kivi_nvfp4\\run.py --check",
       "verified_at": "2026-10-19",
       "limitations": "Deterministic RHT, mantissa bit-packing, and GQA attention fidelity simulator."
+    },
+    {
+      "id": "ev-deepseek-flashmla-v41-sched-2026",
+      "component": "kernel_engineering",
+      "claim": "In deepseek-ai/FlashMLA (commit 0f11e178da1f67becb087a324b400854931ec3e3, kv_cache_format.h blob e730426a and get_decoding_sched_meta.cu blob 2307c47f), KVCacheFormat<ModelType::V41> packs D_QK=512 (D_NOPE=448, D_ROPE=64) into 528 B/tok (512B FP8 + 16x ue8m0 scales) while V41_FP4 packs into 288 B/tok (256B FP4 + 32x e4m3 scales) with asymmetric 2-CTA TMA payloads (CTA0=256B/128B with SEPARATE_SCALES=true, CTA1=272B/160B with trailing scales); get_mla_metadata_kernel computes payload = ceil_div(total_num_blocks, num_sm_parts) + fixed_overhead_num_blocks across the batch via __shfl_xor_sync and writes 32-byte aligned DecodingSchedMeta descriptors via KU_STG_256.",
+      "status": "implementation",
+      "source_ids": [
+        "deepseek-flashmla-kv-format-2026",
+        "deepseek-flashmla-get-sched-meta-2026"
+      ],
+      "artifacts": [
+        "docs/components/deepseek-mla-flashmla-decode-kernels.md",
+        "docs/reports/ai-infra-phase18-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of deepseek-ai/FlashMLA kv_cache_format.h and get_decoding_sched_meta.cu",
+      "verified_at": "2026-10-20",
+      "limitations": "Static CUDA C++ verification."
+    },
+    {
+      "id": "ev-exp-flashmla-paged-decode-2026",
+      "component": "kernel_engineering",
+      "claim": "In own-offline evaluation of MLA matrix absorption (H_q=128) and variable-length Split-KV scheduling, FlashMLA V41 FP8 (528 B/tok, 7.758x compression vs GQA-8 BF16 4,096 B) raises Decode arithmetic intensity from 16.0 to 496.48 FLOP/B and V41_FP4 (288 B/tok, 14.222x compression) reaches 910.22 FLOP/B; on a skewed B=64 batch (512 to 65,536 tokens, 7,384 KV blocks), get_mla_metadata_kernel partitions work into 131 splits across 74 B200 2-CTA pairs, reducing wave imbalance from 89.88% (static 1-req/part, 91.090 us) to 1.24% (15.182 us, 6.00x speedup).",
+      "status": "own-offline",
+      "source_ids": [
+        "deepseek-flashmla-kv-format-2026",
+        "deepseek-flashmla-get-sched-meta-2026"
+      ],
+      "artifacts": [
+        "experiments/flashmla_paged_decode_scheduling/run.py",
+        "experiments/flashmla_paged_decode_scheduling/results/summary.json",
+        "docs/components/deepseek-mla-flashmla-decode-kernels.md",
+        "docs/reports/ai-infra-phase18-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\flashmla_paged_decode_scheduling\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic roofline and exact get_mla_metadata_kernel cursor simulator."
+    },
+    {
+      "id": "ev-muon-ns5-moonlight-distributed-2026",
+      "component": "distributed_training",
+      "claim": "In KellerJordan/Muon (commit f98f1cacc0263b04290753e32be8d498c1efc806, muon.py blob aafa9d7e) and MoonshotAI/Moonlight (commit c2ad5b20c605086526a179d36901bfc41b52b44b, examples/toy_train.py blob 8dbde980), zeropower_via_newtonschulz5 runs 5 BF16 quintic iterations (a=3.4445, b=-4.7750, c=2.0315) after transposing tall matrices (G.size(-2) > G.size(-1)) so the Gram matrix A = X @ X.mT is always min(m,n) x min(m,n), scales learning rate by 0.2 * sqrt(max(A, B)) to match AdamW update RMS, and distributes whole-matrix orthogonalization across ranks via owner_idx = param_idx % world_size.",
+      "status": "implementation",
+      "source_ids": [
+        "kellerjordan-muon-ns5-distributed-2026",
+        "moonshot-moonlight-muon-lr-scaling-2025"
+      ],
+      "artifacts": [
+        "docs/components/distributed-muon-newton-schulz-optimizer.md",
+        "docs/reports/ai-infra-phase18-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of KellerJordan/Muon muon.py and MoonshotAI/Moonlight examples/toy_train.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "ev-exp-distributed-muon-optimizer-2026",
+      "component": "distributed_training",
+      "claim": "In own-offline evaluation, 5-step quintic Newton-Schulz collapses singular value condition number kappa from 250.0 (sigma in [0.00289, 0.72185]) to 1.7343 (sigma in [0.69316, 1.20212], RMS deviation 0.16767) while min(m,n) Gram transposition saves 2.25x FLOPs on [12, 8] (and up to 64x on GQA K/V [1024, 8192]); on a 72B LLM across 512 H100 GPUs (FSDP=64 x TP=8), single-momentum BF16 Muon cuts optimizer state memory per DP shard by 68.54% (8.72 GiB -> 2.743 GiB) and 2D FSDP-Owner + TP-Gram sharding reduces optimizer step time from 22,482.42 ms (naive replicated AllGather) to 42.50 ms (529.0x speedup, 1.10% of training step).",
+      "status": "own-offline",
+      "source_ids": [
+        "kellerjordan-muon-ns5-distributed-2026",
+        "moonshot-moonlight-muon-lr-scaling-2025"
+      ],
+      "artifacts": [
+        "experiments/distributed_muon_optimizer/run.py",
+        "experiments/distributed_muon_optimizer/results/summary.json",
+        "docs/components/distributed-muon-newton-schulz-optimizer.md",
+        "docs/reports/ai-infra-phase18-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\distributed_muon_optimizer\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic spectral polynomial, 2D matrix orthogonalization, and 512-GPU sharding simulator."
+    },
+    {
+      "id": "ev-dynamo-kv-router-rational-bypass-2026",
+      "component": "serving_systems",
+      "claim": "In ai-dynamo/dynamo (commit e3fb11d8632259cdbcea338eafa34b1e1cb04d59, selector/reference.rs blob 8e8bbfb3, conditional_disagg.rs blob e92175be, and conditional_bypass.rs blob da162d90), DefaultWorkerScorer::worker_logit decays device KV prefix overlap credit by 1.0 / (1.0 + overlap_score_credit_decay * (excess_active_prefill_blocks / request_blocks)) and combines device, host, disk, and shared storage credits; IslBoundingPolicy and should_bypass_remote_prefill bypass remote NIXL prefill when effective_isl < 2048, effective_isl / prompt_tokens < 0.70, and DecodeLoadGate is not overloaded.",
+      "status": "implementation",
+      "source_ids": [
+        "nvidia-dynamo-kv-router-selector-2026",
+        "nvidia-dynamo-conditional-disagg-bypass-2026"
+      ],
+      "artifacts": [
+        "docs/components/distributed-kv-aware-router-dynamo-nixl.md",
+        "docs/reports/ai-infra-phase18-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of ai-dynamo/dynamo reference.rs, conditional_disagg.rs, and conditional_bypass.rs",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Rust source verification."
+    },
+    {
+      "id": "ev-exp-dynamo-kv-aware-router-2026",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of 480 bursty Zipfian (s=1.05) multi-turn agent requests across 16 workers, Dynamo rational overlap credit decay (d=0.65) + IslBoundingPolicy conditional disaggregation bypass lifts effective tiered KV cache hit rate from 33.71% (Round-Robin device hit) to 75.26%, executes 42.0% of requests via local aggregated prefill bypass without NIXL RDMA transfer, and reduces P99 TTFT from 2,766.13 ms (Sticky Prefix No-Decay) and 796.30 ms (Round-Robin) down to 163.24 ms (16.95x and 4.88x faster, respectively).",
+      "status": "own-offline",
+      "source_ids": [
+        "nvidia-dynamo-kv-router-selector-2026",
+        "nvidia-dynamo-conditional-disagg-bypass-2026"
+      ],
+      "artifacts": [
+        "experiments/dynamo_kv_aware_router/run.py",
+        "experiments/dynamo_kv_aware_router/results/summary.json",
+        "docs/components/distributed-kv-aware-router-dynamo-nixl.md",
+        "docs/reports/ai-infra-phase18-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\dynamo_kv_aware_router\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic discrete-event queueing and LRU cache simulator across 16 workers."
     }
   ],
-  "updated_at": "2026-10-19"
+  "updated_at": "2026-10-20"
 }
