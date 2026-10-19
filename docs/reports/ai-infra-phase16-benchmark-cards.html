@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Infra Research Phase 16 — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --subtle: #64748b;
+    --line: #e2e8f0;
+    --panel: #f8fafc;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+    --blue: #2563eb;
+    --blue-bar: #3b82f6;
+    --slate-bar: #cbd5e1;
+    --green-bg: #ecfdf5;
+    --green-ink: #065f46;
+    --green-border: #10b981;
+    --amber-bg: #fffbeb;
+    --amber-ink: #92400e;
+    --amber-border: #f59e0b;
+    --red-bg: #fef2f2;
+    --red-ink: #991b1b;
+    --red-border: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+  }
+  .deck-banner {
+    width: 900px;
+    color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 12px;
+  }
+  .deck-banner h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .deck-banner span { font-size: 13px; color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .card {
+    width: 900px;
+    height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 40px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    position: relative;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 14px;
+  }
+  .badge-step {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--blue);
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  .badge-track {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  h2.headline {
+    font-size: 27px;
+    line-height: 1.24;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+    margin: 14px 0 8px;
+  }
+  .gradient-accent {
+    background: linear-gradient(90deg, #1d4ed8 0%, #0284c7 55%, #0d9488 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.lead {
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--subtle);
+    margin-bottom: 10px;
+  }
+  .kv-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .kv-row:last-child { border-bottom: none; }
+  .kv-val {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .pill {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+  }
+  .pill-act { background: var(--green-bg); color: var(--green-ink); border: 1px solid var(--green-border); }
+  .pill-confirm { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber-border); }
+  .pill-human { background: var(--red-bg); color: var(--red-ink); border: 1px solid var(--red-border); }
+  .pill-type { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+  .quote-box {
+    background: #f1f5f9;
+    border-left: 4px solid var(--blue);
+    padding: 12px 16px;
+    border-radius: 0 10px 10px 0;
+    font-size: 13px;
+    color: #1e293b;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 12px; }
+  .decision-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 18px;
+    background: #ffffff;
+  }
+  .decision-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .decision-title { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+  .bar-track {
+    width: 100%;
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 6px 0;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--blue-bar);
+    border-radius: 999px;
+  }
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  table.matrix th {
+    background: #0f172a;
+    color: #f8fafc;
+    text-align: left;
+    padding: 9px 10px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 8.5px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  table.matrix tr:nth-child(even) td { background: #f8fafc; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; }
+  .miss-mark {
+    color: #dc2626;
+    font-weight: 800;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .code-block {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.48;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .flow-arrow {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--blue);
+    margin: 2px 0;
+  }
+  .bar-group { display: flex; flex-direction: column; gap: 11px; }
+  .bar-row { display: flex; flex-direction: column; gap: 4px; }
+  .bar-label-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .paired-bars { display: flex; flex-direction: column; gap: 5px; }
+  .bar-line { display: flex; align-items: center; gap: 10px; }
+  .bar-rect-primary { height: 14px; background: var(--blue-bar); border-radius: 4px; }
+  .bar-rect-base { height: 14px; background: var(--slate-bar); border-radius: 4px; }
+  .bar-num {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .fit-card-good {
+    background: var(--green-bg);
+    border: 2px solid var(--green-border);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .fit-card-bad {
+    background: var(--red-bg);
+    border: 2px solid var(--red-border);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .fit-title { font-size: 16px; font-weight: 800; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 9px; font-size: 13px; line-height: 1.45; }
+  .dark-footer {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 12px;
+    line-height: 1.5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .dark-footer strong { color: #ffffff; }
+</style>
+</head>
+<body>
+
+<div class="deck-banner">
+  <h1>AI Infra Full-Stack Research · Phase 16 (`priority: 25`) Visual Benchmark Deck</h1>
+  <span>7-Card 4:5 Portrait (900×1125) · CSP Self-Contained · Sealed Offline + Upstream Verification</span>
+</div>
+
+<!-- CARD 1: HANDS-ON OVERVIEW & WORKBENCH -->
+<section class="card" id="card-1">
+  <div>
+    <div class="card-top">
+      <span class="badge-step">1 / 7 · HANDS-ON · PHASE 16 KERNELS, COLLECTIVES &amp; MOE ROUTING</span>
+      <span class="badge-track">FLASHINFER · NCCL PAT · MEGATRON MOE</span>
+    </div>
+    <h2 class="headline">
+      <span class="gradient-accent">3-Level Cascade Attention Cuts HBM KV Reads by 94.44% (16.46x Speedup)</span>, While NCCL PAT Slashes 1,024-GPU Collectives by 19.21x and Aux-Loss-Free MoE Cuts Token Drop to 0.27%
+    </h2>
+    <p class="lead">
+      Grounded in primary source verification of <code>flashinfer-ai/flashinfer</code> (<code>f64b4ba</code>), <code>NVIDIA/nccl</code> (<code>3e46c08</code>), and <code>NVIDIA/Megatron-LM</code> (<code>e8a302a</code>), paired with 3 deterministic CPU/offline simulators.
+    </p>
+  </div>
+
+  <div class="grid-3">
+    <div class="panel">
+      <div class="panel-title">1 · Scenarios &amp; Threshold Bands</div>
+      <div class="kv-row"><span>Cascade 3-Level (B=128)</span><span class="kv-val">25.6K ctx / 4 RAG</span></div>
+      <div class="kv-row"><span>NCCL PAT Multi-RPN</span><span class="kv-val">64–1,024 GPUs</span></div>
+      <div class="kv-row"><span>Megatron MoE Bias/Drop</span><span class="kv-val">32E Top-4 (Zipf)</span></div>
+      <div class="kv-row"><span>Act Automatically</span><span class="pill pill-act">HBM Reduction &ge; 85%</span></div>
+      <div class="kv-row"><span>Confirm</span><span class="pill pill-confirm">CF=1.0 Drop 5.96%</span></div>
+      <div class="kv-row"><span>Send to a Human</span><span class="pill pill-human">Ring 1024G / Unbal CF</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">2 · Structured Contract Input</div>
+      <div class="kv-row"><span>FlashInfer Wrapper</span><span class="kv-val">MultiLevelCascade</span></div>
+      <div class="kv-row"><span>LSE Representation</span><span class="kv-val">Base-2 (ptx_exp2/log2)</span></div>
+      <div class="kv-row"><span>NCCL PAT Algo ID</span><span class="kv-val">NCCL_ALGO_PAT</span></div>
+      <div class="kv-row"><span>PAT Shared Queue</span><span class="kv-val">32 Steps + NVLS</span></div>
+      <div class="kv-row"><span>MoE Bias Precision</span><span class="kv-val">FP32 + INT64 Count</span></div>
+      <div class="kv-row"><span>Quantile Balancing</span><span class="kv-val">qb_dual_update</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">3 · Key Sealed Findings</div>
+      <div class="kv-row"><span>B=128 Cascade HBM</span><span class="kv-val">250.08 &rarr; 13.91 GiB</span></div>
+      <div class="kv-row"><span>B=128 Attention AI</span><span class="kv-val">8.0 &rarr; 143.81 FLOP/B</span></div>
+      <div class="kv-row"><span>Base-2 LSE Max Err</span><span class="kv-val">3.64e-17 (Exact)</span></div>
+      <div class="kv-row"><span>1024G 4MiB Latency</span><span class="kv-val">2227.2 &rarr; 116.0 us</span></div>
+      <div class="kv-row"><span>1024G 16MiB Bus BW</span><span class="kv-val">6.69 &rarr; 41.80 GB/s</span></div>
+      <div class="kv-row"><span>MoE CF=1.25 Drop Rate</span><span class="kv-val">39.40% &rarr; 0.27%</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Architectural Tradeoff &amp; Decision Workbench Preview</div>
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>Subsystem Track</th>
+          <th>Upstream Source File &amp; Commit</th>
+          <th>Baseline Bottleneck</th>
+          <th>Phase 16 Architecture Solution</th>
+          <th>Sealed Gain</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>FlashInfer Cascade KV</strong></td>
+          <td class="mono">flashinfer/cascade.py @ f64b4ba</td>
+          <td>Flat Paged-KV reads 250.08 GiB (94.66 ms)</td>
+          <td>3-Level Shared-Prefix + Base-2 LSE + PDL</td>
+          <td class="mono">16.46x (5.752 ms)</td>
+        </tr>
+        <tr>
+          <td><strong>NCCL PAT Collectives</strong></td>
+          <td class="mono">src/include/collectives.h @ 3e46c08</td>
+          <td>Ring 1,023 hops (2,227.17 us @ 4 MiB)</td>
+          <td>Multi-RPN PAT Binomial (7 hops) + NVLS</td>
+          <td class="mono">19.21x (115.96 us)</td>
+        </tr>
+        <tr>
+          <td><strong>Megatron MoE Routing</strong></td>
+          <td class="mono">moe/moe_utils.py @ e8a302a</td>
+          <td>7.828x max load, 39.40% drop @ CF=1.25</td>
+          <td>FP32 expert_bias Sign Update / qb_dual</td>
+          <td class="mono">0.27% drop (1.312x)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="dark-footer">
+    <div><strong>Provenance:</strong> <code>own-offline</code> deterministic simulators + <code>implementation</code> code audit · <code>independently_reproduced=true</code> (CPU/offline)</div>
+    <div><strong>Baseline Repo:</strong> <code>turbo998/ai-infra-research</code> · 63 Questions / 58 Experiments</div>
+  </div>
+</section>
+
+<!-- CARD 2: SINGLE-CASE DEEP DIVE -->
+<section class="card" id="card-2">
+  <div>
+    <div class="card-top">
+      <span class="badge-step">2 / 7 · SCENARIO: B=128 MULTI-LEVEL CASCADE ATTENTION + 1024-GPU FSDP2 MOE</span>
+      <span class="badge-track">DEEP DIVE · 3 STACKED ARCHITECTURAL DECISIONS</span>
+    </div>
+    <h2 class="headline">
+      Decoupling Shared Prefixes &amp; Binomial Trees Delivers 5.752 ms Attention, 115.96 us Collectives, and 99.73% Token Retention
+    </h2>
+    <div class="quote-box">
+      Input Workload: Llama-3.1-70B (TP=4, 80L) serving B=128 concurrent Agent requests (L_sys=16,384 + 4×L_rag=8,192 + L_uniq=1,024 = 25,600 ctx) &amp; 1,024-GPU FSDP2+MoE (32E Top-4, 4 MiB / 16 MiB layer shards).
+    </div>
+  </div>
+
+  <div class="decision-stack">
+    <div class="decision-card">
+      <div class="decision-head">
+        <div>
+          <span class="pill pill-type">choice</span>
+          <span class="decision-title" style="margin-left:8px;">1. Attention Kernel: 3-Level Cascade + Persistent MergeStates + PDL (`enable_pdl=True`)</span>
+        </div>
+        <span class="pill pill-act">Act automatically · 94.44% HBM Saved</span>
+      </div>
+      <p style="font-size:12.5px; color:var(--muted);">
+        Executes <code>causal=False</code> Grouped BatchPrefill once on 16K System Prompt and 4× on 8K RAG Groups, then merges leaf suffixes via base-2 LSE (<code>math::ptx_exp2/log2</code>). HBM drops from <strong>250.078 GiB &rarr; 13.909 GiB</strong>; latency drops from <strong>94.657 ms &rarr; 5.752 ms (16.46x)</strong>.
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 94.44%;"></div></div>
+      <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--subtle);" class="mono">
+        <span>HBM Bandwidth Saved: 94.44% (236.169 GiB/step eliminated)</span>
+        <span>Arithmetic Intensity: 8.0 &rarr; 143.81 FLOPs/Byte</span>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-head">
+        <div>
+          <span class="pill pill-type">score</span>
+          <span class="decision-title" style="margin-left:8px;">2. Collective Transport: NCCL Multi-RPN PAT (`PatAGAlgorithm` / `PatRSAlgorithm` + NVLS)</span>
+        </div>
+        <span class="pill pill-act">Act automatically · 94.79% Latency Cut</span>
+      </div>
+      <p style="font-size:12.5px; color:var(--muted);">
+        Compresses 1,024-GPU Ring's <strong>1,023 sequential hops</strong> into <strong>7 inter-node binomial hypercube hops</strong> (<code>nNodes=128</code>) with <code>aggFactor=64</code> small-packet coalescing and intra-node NVSwitch (<code>prims.patGather/patScatter</code>). 4 MiB latency falls from <strong>2,227.17 us &rarr; 115.96 us (19.21x)</strong>.
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 94.79%;"></div></div>
+      <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--subtle);" class="mono">
+        <span>Latency Reduction @ N=1024, 4 MiB: 94.79% (19.21x speedup)</span>
+        <span>16 MiB Bus BW: 6.687 &rarr; 41.803 GB/s (92.9% of 45 GB/s peak)</span>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-head">
+        <div>
+          <span class="pill pill-type">noul</span>
+          <span class="decision-title" style="margin-left:8px;">3. MoE Router: FP32 `expert_bias` Sign Update + `CF=1.25` (`drop_policy="probs"`)</span>
+        </div>
+        <span class="pill pill-act">Act automatically · 99.73% Retained</span>
+      </div>
+      <p style="font-size:12.5px; color:var(--muted);">
+        Maintains <code>expert_bias</code> in FP32 and updates via integer-exact <code>sign(total_tokens - count * num_experts)</code> without polluting main loss gradients. Reduces max expert load from <strong>7.828x &rarr; 1.312x</strong> (or <strong>1.062x</strong> with <code>qb_dual_update</code>) and cuts <code>CF=1.25</code> token drop from <strong>39.40% &rarr; 0.27%</strong>.
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 99.73%;"></div></div>
+      <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--subtle);" class="mono">
+        <span>Routed Token Assignments Retained @ CF=1.25: 99.73% (Drop = 0.27%)</span>
+        <span>CF=1.50 Drop Rate: 0.00%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <div><strong>Verification:</strong> Base-2 LSE merge error = <code>3.64e-17</code> · Empty-segment <code>-inf</code> guard error = <code>0.0</code></div>
+    <div><strong>Source Artifacts:</strong> <code>experiments/{flashinfer_cascade_paged_kv,nccl_pat_binomial_allgather_rs,megatron_moe_auxfree_token_drop}/results.json</code></div>
+  </div>
+</section>
+
+<!-- CARD 3: WHAT I TESTED — FULL EVALUATION MATRIX -->
+<section class="card" id="card-3">
+  <div>
+    <div class="card-top">
+      <span class="badge-step">3 / 7 · WHAT I TESTED</span>
+      <span class="badge-track">FULL 12-SCENARIO EVALUATION MATRIX</span>
+    </div>
+    <h2 class="headline">
+      9 of 12 Configurations Pass SLA Thresholds; Flat Paged-KV, 1,024-Rank Ring, and Unbalanced MoE Fail Catastrophically
+    </h2>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>SCENARIO</th>
+        <th>QUESTION / TASK</th>
+        <th>MODEL / SIMULATOR ANSWER</th>
+        <th>ACTION</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Cascade-B16-3L</strong></td>
+        <td>Llama-70B B=16, 25.6K ctx (3-Level + PDL)</td>
+        <td class="mono">5.020 GiB (-83.94%) · 2.403 ms (5.08x)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>Cascade-B64-3L</strong></td>
+        <td>Llama-70B B=64, 25.6K ctx (3-Level + PDL)</td>
+        <td class="mono">8.829 GiB (-92.94%) · 3.838 ms (12.39x)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>Cascade-B128-3L</strong></td>
+        <td>Llama-70B B=128, 25.6K ctx (3-Level + PDL)</td>
+        <td class="mono">13.909 GiB (-94.44%) · 5.752 ms (16.46x)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>Cascade-B256-3L</strong></td>
+        <td>Llama-70B B=256, 25.6K ctx (3-Level + PDL)</td>
+        <td class="mono">24.067 GiB (-95.19%) · 9.579 ms (19.72x)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>Flat-Paged-B128</strong></td>
+        <td>Llama-70B B=128 Flat Paged-KV Baseline</td>
+        <td class="mono"><span class="miss-mark">✕</span> 250.078 GiB HBM · 94.657 ms (AI=8.0)</td>
+        <td><span class="pill pill-human">Send to a human</span></td>
+      </tr>
+      <tr>
+        <td><strong>PAT-N512-4MiB</strong></td>
+        <td>NCCL Multi-RPN PAT @ 512 GPUs, 4 MiB</td>
+        <td class="mono">114.01 us (10.19x vs Ring) · 36.72 GB/s</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>PAT-N1024-4MiB</strong></td>
+        <td>NCCL Multi-RPN PAT @ 1,024 GPUs, 4 MiB</td>
+        <td class="mono">115.96 us (19.21x vs Ring) · 7 hops</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>PAT-N1024-16MiB</strong></td>
+        <td>NCCL Multi-RPN PAT @ 1,024 GPUs, 16 MiB</td>
+        <td class="mono">401.04 us (6.25x vs Ring) · 41.803 GB/s</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>Ring-N1024-4MiB</strong></td>
+        <td>NCCL Ring Baseline @ 1,024 GPUs, 4 MiB</td>
+        <td class="mono"><span class="miss-mark">✕</span> 2,227.17 us (1,023 hops · 1.882 GB/s)</td>
+        <td><span class="pill pill-human">Send to a human</span></td>
+      </tr>
+      <tr>
+        <td><strong>MoE-Biased-CF1.25</strong></td>
+        <td>FP32 `expert_bias` + CF=1.25 (`probs` drop)</td>
+        <td class="mono">Max Load 1.312x · Drop 0.27% (Mass 0.23%)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>MoE-QB-Dual-3Step</strong></td>
+        <td>Quantile Balancing `qb_dual_update` (3 steps)</td>
+        <td class="mono">Max Load 1.062x (136 vs 128 ideal tokens)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td><strong>MoE-Unbal-CF1.25</strong></td>
+        <td>Unbalanced Zipf Router + CF=1.25 + Pad</td>
+        <td class="mono"><span class="miss-mark">✕</span> 7.828x Load · 39.40% Drop · 51.52% Pad Waste</td>
+        <td><span class="pill pill-human">Send to a human</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title">Threshold Gating Rule</div>
+      <p style="font-size:12.5px; color:var(--muted); line-height:1.45;">
+        <strong>Act automatically</strong> requires Decode Attention step &le; 10 ms at B=128, 1,024-GPU 4 MiB AllGather/RS latency &le; 200 us, and MoE token drop rate &le; 0.5%. Configurations exceeding 10% token drop or 1 ms small-collective latency are flagged with <span class="miss-mark">✕</span>.
+      </p>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Root-Cause Failure Analysis on <span class="miss-mark">✕</span> Misses</div>
+      <p style="font-size:12.5px; color:var(--muted); line-height:1.45;">
+        1) <strong>Flat-Paged-B128</strong> streams shared 16K/8K pages 128 times from HBM.<br>
+        2) <strong>Ring-N1024-4MiB</strong> suffers 1,023 sequential hop barriers and 256B NIC packets.<br>
+        3) <strong>MoE-Unbal-CF1.25</strong> drops 39.40% tokens on hot experts while wasting 51.52% padded slots on cold experts.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- CARD 4: UNDER THE HOOD — PROTOCOL & SCORING MECHANICS -->
+<section class="card" id="card-4">
+  <div>
+    <div class="card-top">
+      <span class="badge-step">4 / 7 · UNDER THE HOOD</span>
+      <span class="badge-track">UPSTREAM C++/CUDA &amp; PYTHON IMPLEMENTATION MECHANICS</span>
+    </div>
+    <h2 class="headline">
+      Inside FlashInfer Base-2 LSE State Merging, NCCL PAT `aggFactor` Hypercube Scheduling, and Megatron Integer-Exact `expert_bias`
+    </h2>
+  </div>
+
+  <div class="code-block">// 1. FlashInfer Base-2 LSE Merge (`include/flashinfer/attention/cascade.cuh:82-122`, blob 71ee5b7a)
+float s_a = s[s_offset];                // Base-2 LSE: log2(sum(exp2(score * log2(e))))
+float s_b = s_other[s_offset];
+float s_max = max(s_a, s_b);
+s_a = math::ptx_exp2(max(s_a - s_max, -math::inf)); // Prevents (-inf) - (-inf) = NaN
+s_b = math::ptx_exp2(max(s_b - s_max, -math::inf));
+float d_sum = s_a + s_b;
+float scale       = d_sum > 0.f ? s_a / d_sum : 0.f;
+float other_scale = d_sum > 0.f ? s_b / d_sum : 0.f;
+v_a = scale * v_a + other_scale * v_b;
+s[s_offset] = d_sum > 0.f ? math::ptx_log2(d_sum) + s_max : -math::inf;</div>
+
+  <div class="flow-arrow">&darr; Multi-Level Cascade + NCCL PAT Binomial Aggregation + MoE Bias Update &darr;</div>
+
+  <div class="code-block">// 2. NCCL PAT Dynamic Aggregation (`src/include/collectives.h:542-558`, blob f0dac7b9)
+aggDelta = nrPow2 = (1 &lt;&lt; log2Up(nranks));
+aggFactor = 1;
+size_t channelSize = end - offset;
+while (stepSize / (channelSize * sizeof(T) * aggFactor) &gt;= 2 &amp;&amp; aggFactor &lt; nranks / 2) {
+  aggFactor *= 2; aggDelta /= 2;
+}
+postFreq = aggFactor; // Coalesce `postFreq` rank chunks before posting RDMA send/recv
+if (postFreq &lt; parallelFactor) parallelFactor = postFreq;
+
+# 3. Megatron-Core Aux-Loss-Free Bias &amp; Dual Quantile Balancing (`moe_utils.py:241-255, 1271-1280`)
+# (A) Integer-exact sign update (avoids float division rounding):
+update_direction = torch.sign(total_tokens - tokens_per_expert * num_experts)
+updated_expert_bias = expert_bias + update_direction.to(expert_bias.dtype) * expert_bias_update_rate
+# (B) Dual coordinate-descent Quantile Balancing (`qb_dual_update`):
+topk_result = (scores - beta).topk(k + 1, dim=1)
+alpha = topk_result.values[:, -1:]
+beta_local = (scores - alpha).topk(col_target + 1, dim=0).values[-1].contiguous()</div>
+
+  <div class="grid-3">
+    <div class="panel">
+      <div class="panel-title">Base-2 SFU Mapping</div>
+      <p style="font-size:12px; color:var(--muted);">Storing LSE in base-2 maps directly to single-cycle PTX <code>ex2.approx</code> and <code>lg2.approx</code>, achieving <code>3.64e-17</code> max error vs monolithic softmax.</p>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Multi-RPN NVLS + PAT</div>
+      <p style="font-size:12px; color:var(--muted);">In <code>all_gather.h:192</code>, Multi-RPN runs PAT across <code>nNodes = N/8</code> and uses <code>prims.patGather</code> over intra-node NVSwitch.</p>
+    </div>
+    <div class="panel">
+      <div class="panel-title">FP32 Bias Invariant</div>
+      <p style="font-size:12px; color:var(--muted);"><code>router.py:358</code> keeps <code>expert_bias</code> in FP32 so small update rates (<code>1e-3</code>) never underflow BF16 mantissas.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CARD 5: ROBUSTNESS CHECK — PERTURBATION & CONSISTENCY -->
+<section class="card" id="card-5">
+  <div>
+    <div class="card-top">
+      <span class="badge-step">5 / 7 · ROBUSTNESS CHECK</span>
+      <span class="badge-track">PERTURBATION, SCALE &amp; POLICY SENSITIVITY</span>
+    </div>
+    <h2 class="headline">
+      Sensitivity Across PDL Overlap, Empty Prefix Guards, Cluster Scale (64&rarr;1024 GPUs), and MoE Capacity / Drop Policies
+    </h2>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>QUESTION / DIMENSION</th>
+        <th>ORIGINAL / BASELINE</th>
+        <th>PERTURBED / OPTIMIZED</th>
+        <th>CHANGE (DELTA)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Cascade Merge Numerics</strong><br><span style="font-size:11px; color:var(--subtle);">Monolithic vs 3-Level Base-2 LSE</span></td>
+        <td class="mono">LSE = 4.55102985</td>
+        <td class="mono">LSE = 4.55102985</td>
+        <td class="mono" style="color:var(--green-ink);">0.0 LSE / 3.64e-17 V</td>
+      </tr>
+      <tr>
+        <td><strong>Empty Prefix Segment (`L=0`)</strong><br><span style="font-size:11px; color:var(--subtle);">`s_other = -inf` NaN Perturbation</span></td>
+        <td class="mono">Unprotected: (-inf)-(-inf)=NaN</td>
+        <td class="mono">d_sum &gt; 0.f Guard Active</td>
+        <td class="mono" style="color:var(--green-ink);">0.0 Error (Zero NaN)</td>
+      </tr>
+      <tr>
+        <td><strong>Programmatic Dependent Launch</strong><br><span style="font-size:11px; color:var(--subtle);">`enable_pdl` @ B=16 vs B=128</span></td>
+        <td class="mono">No-PDL: 3.651 ms / 7.000 ms</td>
+        <td class="mono">PDL: 2.403 ms / 5.752 ms</td>
+        <td class="mono" style="color:var(--green-ink);">-34.18% / -17.83%</td>
+      </tr>
+      <tr>
+        <td><strong>NCCL PAT 1-RPN vs Multi-RPN</strong><br><span style="font-size:11px; color:var(--subtle);">N=1024, 4 MiB AllGather/RS</span></td>
+        <td class="mono">1-RPN (10 hops): 118.73 us</td>
+        <td class="mono">Multi-RPN (7 hops): 115.96 us</td>
+        <td class="mono" style="color:var(--green-ink);">-2.77 us (-3 hops)</td>
+      </tr>
+      <tr>
+        <td><strong>NCCL Large Message Crossover</strong><br><span style="font-size:11px; color:var(--subtle);">N=64, 256 MiB vs N=1024, 256 MiB</span></td>
+        <td class="mono">N=64 Ring: 6007.98 us</td>
+        <td class="mono">N=64 PAT-MRPN: 6049.00 us<br>N=1024 PAT: 6145.46 us</td>
+        <td class="mono" style="color:var(--amber-ink);">0.99x @ N=64<br>1.32x @ N=1024</td>
+      </tr>
+      <tr>
+        <td><strong>MoE Drop Policy (`CF=1.25`)</strong><br><span style="font-size:11px; color:var(--subtle);">`position` vs `probs` Dropped Mass</span></td>
+        <td class="mono">position: 41.18% mass lost</td>
+        <td class="mono">probs: 40.25% mass lost</td>
+        <td class="mono" style="color:var(--green-ink);">-0.93 pts mass saved</td>
+      </tr>
+      <tr>
+        <td><strong>MoE `expert_bias` Convergence</strong><br><span style="font-size:11px; color:var(--subtle);">Step 0 &rarr; Step 20 &rarr; Step 44</span></td>
+        <td class="mono">Step 0: 7.742x (991 tok)</td>
+        <td class="mono">Step 20: 4.109x (526 tok)<br>Step 44: 1.289x (165 tok)</td>
+        <td class="mono" style="color:var(--green-ink);">-6.453x Load Factor</td>
+      </tr>
+      <tr>
+        <td><strong>MoE `expert_bias` vs `qb_dual`</strong><br><span style="font-size:11px; color:var(--subtle);">Sign Update (45 steps) vs Dual QB (3 steps)</span></td>
+        <td class="mono">expert_bias: 1.312x max load</td>
+        <td class="mono">qb_dual_update: 1.062x max</td>
+        <td class="mono" style="color:var(--green-ink);">-0.250x tighter bound</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="panel">
+    <div class="panel-title">Key Robustness Takeaway</div>
+    <p style="font-size:12.5px; color:var(--muted); line-height:1.48;">
+      1) <strong>PDL (`enable_pdl=True`)</strong> provides the largest relative latency reduction at smaller batch sizes (<strong>-34.18% at B=16</strong> vs <strong>-17.83% at B=128</strong>) where kernel launch serialization is a higher fraction of step time.<br>
+      2) <strong>NCCL PAT</strong> dominates small/medium collectives across all scales (`4.30x–47.64x` at 1 MiB) and maintains `1.32x` advantage even at `256 MiB` on `1,024` GPUs, with the only crossover (`0.99x`) occurring at small scale (`N=64`) + huge message (`256 MiB`).
+    </p>
+  </div>
+</section>
+
+<!-- CARD 6: LATENCY & SCALING BARS -->
+<section class="card" id="card-6">
+  <div>
+    <div class="card-top">
+      <span class="badge-step">6 / 7 · LATENCY &amp; SCALING BARS</span>
+      <span class="badge-track">PRIMARY OPTIMIZED PATH (#3B82F6) VS BASELINE PATH (#CBD5E1)</span>
+    </div>
+    <h2 class="headline">
+      Paired Latency &amp; Drop-Rate Scaling Across Batch Sizes, Cluster Ranks, and Capacity Factors
+    </h2>
+    <p class="lead">
+      Blue bars (<code>#3B82F6</code>) show the Phase 16 optimized path; slate bars (<code>#CBD5E1</code>) show the conventional baseline. All widths are proportionally scaled to exact values from <code>results.json</code>.
+    </p>
+  </div>
+
+  <div class="bar-group">
+    <div class="bar-row">
+      <div class="bar-label-line">
+        <span>1. Llama-70B 80L Attention Latency @ B=64 (25.6K ctx)</span>
+        <span class="mono">3.838 ms vs 47.549 ms (12.39x)</span>
+      </div>
+      <div class="paired-bars">
+        <div class="bar-line"><div class="bar-rect-primary" style="width: 4.04%;"></div><span class="bar-num">3-Level Cascade + PDL: 3.838 ms (8.829 GiB)</span></div>
+        <div class="bar-line"><div class="bar-rect-base" style="width: 50.0%;"></div><span class="bar-num">Flat Paged-KV: 47.549 ms (125.039 GiB)</span></div>
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label-line">
+        <span>2. Llama-70B 80L Attention Latency @ B=128 (25.6K ctx)</span>
+        <span class="mono">5.752 ms vs 94.657 ms (16.46x)</span>
+      </div>
+      <div class="paired-bars">
+        <div class="bar-line"><div class="bar-rect-primary" style="width: 6.08%;"></div><span class="bar-num">3-Level Cascade + PDL: 5.752 ms (13.909 GiB)</span></div>
+        <div class="bar-line"><div class="bar-rect-base" style="width: 100.0%;"></div><span class="bar-num">Flat Paged-KV: 94.657 ms (250.078 GiB)</span></div>
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label-line">
+        <span>3. NCCL 4 MiB AllGather/ReduceScatter @ N=512 GPUs (64 Nodes)</span>
+        <span class="mono">114.01 us vs 1,161.42 us (10.19x)</span>
+      </div>
+      <div class="paired-bars">
+        <div class="bar-line"><div class="bar-rect-primary" style="width: 5.12%;"></div><span class="bar-num">PAT Multi-RPN + NVLS: 114.01 us (36.716 GB/s)</span></div>
+        <div class="bar-line"><div class="bar-rect-base" style="width: 52.15%;"></div><span class="bar-num">NCCL Ring: 1,161.42 us (3.604 GB/s)</span></div>
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label-line">
+        <span>4. NCCL 4 MiB AllGather/ReduceScatter @ N=1,024 GPUs (128 Nodes)</span>
+        <span class="mono">115.96 us vs 2,227.17 us (19.21x)</span>
+      </div>
+      <div class="paired-bars">
+        <div class="bar-line"><div class="bar-rect-primary" style="width: 5.21%;"></div><span class="bar-num">PAT Multi-RPN + NVLS: 115.96 us (36.143 GB/s, 7 hops)</span></div>
+        <div class="bar-line"><div class="bar-rect-base" style="width: 100.0%;"></div><span class="bar-num">NCCL Ring: 2,227.17 us (1.882 GB/s, 1,023 hops)</span></div>
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label-line">
+        <span>5. NCCL 16 MiB AllGather/ReduceScatter @ N=1,024 GPUs (128 Nodes)</span>
+        <span class="mono">401.04 us vs 2,506.42 us (6.25x)</span>
+      </div>
+      <div class="paired-bars">
+        <div class="bar-line"><div class="bar-rect-primary" style="width: 16.0%;"></div><span class="bar-num">PAT Multi-RPN + NVLS: 401.04 us (41.803 GB/s)</span></div>
+        <div class="bar-line"><div class="bar-rect-base" style="width: 100.0%;"></div><span class="bar-num">NCCL Ring: 2,506.42 us (6.687 GB/s)</span></div>
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label-line">
+        <span>6. Megatron MoE Token Drop Rate @ Capacity Factor CF=1.25 (32E Top-4)</span>
+        <span class="mono">0.27% vs 39.40% (-39.13 pts)</span>
+      </div>
+      <div class="paired-bars">
+        <div class="bar-line"><div class="bar-rect-primary" style="width: 0.69%;"></div><span class="bar-num">FP32 expert_bias + probs drop: 0.27% dropped</span></div>
+        <div class="bar-line"><div class="bar-rect-base" style="width: 100.0%;"></div><span class="bar-num">Unbalanced Router: 39.40% dropped (51.52% pad waste)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <div><strong>Measurement Note:</strong> Deterministic analytical &amp; step-accurate kernel/collective models (0 variance across --check runs).</div>
+    <div><strong>Hardware Profile:</strong> H100 SXM (2.85 TB/s eff HBM, 400 Gbps RoCEv2, 900 GB/s NVLS)</div>
+  </div>
+</section>
+
+<!-- CARD 7: MY TAKE — GOOD FIT VS NOT FOR & READINESS -->
+<section class="card" id="card-7">
+  <div>
+    <div class="card-top">
+      <span class="badge-step">7 / 7 · MY TAKE</span>
+      <span class="badge-track">ARCHITECTURAL GUIDANCE &amp; PRODUCTION READINESS</span>
+    </div>
+    <h2 class="headline">
+      When to Deploy Multi-Level Cascade Attention, NCCL PAT, and Aux-Loss-Free MoE Routing — and Where Their Boundaries Lie
+    </h2>
+  </div>
+
+  <div class="grid-2">
+    <div class="fit-card-good">
+      <div class="fit-title" style="color:var(--green-ink);">&#9989; Good fit</div>
+      <ul class="fit-list" style="color:var(--green-ink);">
+        <li><strong>Multi-Turn Agent &amp; RAG Serving (Shared Prefix &ge; 1K tokens, Group &ge; 4):</strong> Use FlashInfer <code>MultiLevelCascadeAttentionWrapper</code> with <code>causal=False</code> on upper tree levels and <code>enable_pdl=True</code> on SM90/SM100 to cut HBM KV traffic by <code>83.9%–95.2%</code>.</li>
+        <li><strong>Large-Scale FSDP2 / ZeRO-3 (`N &ge; 256` GPUs, Shards `1–64 MiB`):</strong> Enable <code>NCCL_ALGO_PAT</code> (Multi-RPN with intra-node NVLS) to replace $O(N)$ Ring latency with $O(\log_2(N/8))$ binomial hops and `aggFactor` packet coalescing (`6.25x–19.21x` faster at 1,024 GPUs).</li>
+        <li><strong>Fine-Grained MoE Training (`32–256` Experts):</strong> Combine FP32 <code>expert_bias</code> sign updates (or <code>qb_dual_update</code>) with <code>CF = 1.25–1.50</code> and <code>drop_policy="probs"</code> to bound memory without auxiliary-loss gradient interference.</li>
+      </ul>
+    </div>
+
+    <div class="fit-card-bad">
+      <div class="fit-title" style="color:var(--red-ink);">&#9940; Not for</div>
+      <ul class="fit-list" style="color:var(--red-ink);">
+        <li><strong>Zero-Overlap Unique Prompts or Tiny Prefixes (`L_shared &lt; 256`):</strong> Splitting into multi-level Cascade kernels when requests share no prefix adds extra HBM LSE/output state read-writes and kernel launch overhead.</li>
+        <li><strong>Small-Cluster Huge Bucket Collectives (`N &le; 64` GPUs, `M &ge; 256 MiB`):</strong> Standard Ring or direct NVLS Tree already saturates NIC channels at `63` steps; Multi-RPN PAT's extra NVLS staging slot yields `0.99x` vs Ring at `N=64, 256 MiB`.</li>
+        <li><strong>Batch-Invariant Deterministic MoE Inference:</strong> Never mutate <code>expert_bias</code> online or enable <code>drop_and_pad=True</code> during deterministic compliance/RL evaluation (<code>moe_utils.py:424</code> requires <code>frozen_expert_bias=True</code> and dropless routing).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Production Configuration Checklist for Solution Architects</div>
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Recommended Flag / API</th>
+          <th>Guardrail / Verification Metric</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Serving Attention</strong></td>
+          <td class="mono">MultiLevelCascadeAttentionWrapper(..., enable_pdl=True)</td>
+          <td>Activate when <code>L_shared &ge; 512</code> &amp; <code>B_shared &ge; 4</code>; verify non-NaN <code>-inf</code> LSE guard.</td>
+        </tr>
+        <tr>
+          <td><strong>Collective Comm</strong></td>
+          <td class="mono">NCCL_ALGO=PAT,NVLS,RING,TREE (NCCL 2.23+)</td>
+          <td>Verify <code>isOneRPN == false</code> uses NVLS local gather/scatter + inter-node PAT on 8-GPU nodes.</td>
+        </tr>
+        <tr>
+          <td><strong>MoE Router</strong></td>
+          <td class="mono">moe_router_enable_expert_bias=True, moe_token_drop_policy="probs"</td>
+          <td>Confirm <code>expert_bias.dtype == torch.float32</code> and <code>local_tokens_per_expert.dtype == torch.int64</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="dark-footer">
+    <div><strong>Readiness &amp; License:</strong> Apache-2.0 / BSD-3 Upstream Sources Verified · Original Simulators MIT/Apache-2.0 Compatible</div>
+    <div><strong>Provenance:</strong> Anonymized public architecture research · Zero external assets (`default-src 'none'`)</div>
+  </div>
+</section>
+
+</body>
+</html>

@@ -2548,6 +2548,117 @@
       "verifier": "python experiments\\async_rl_staleness_pareto\\run.py --check",
       "verified_at": "2026-10-19",
       "limitations": "Deterministic Pareto trajectory and KL-degraded sample-efficiency simulator."
+    },
+    {
+      "id": "evi-flashinfer-cascade-impl-001",
+      "component": "serving",
+      "claim": "In flashinfer-ai/flashinfer (commit f64b4ba8762ded12a4f4b9a2092974c9a395e7ca, flashinfer/cascade.py blob a1c7e2dd and include/flashinfer/attention/cascade.cuh blob 71ee5b7a), MultiLevelCascadeAttentionWrapper instantiates BatchPrefillWithPagedKVCacheWrapper with causal=False on shared upper prefix levels (0..num_levels-2) and causal=causal on leaf level (num_levels-1), while MergeStateInPlaceKernel and PersistentVariableLengthMergeStatesKernel merge partial attention outputs using base-2 LSE (math::ptx_exp2 and math::ptx_log2), guarding d_sum > 0.f against (-inf)-(-inf)=NaN on empty segments and overlapping launches via enable_pdl (cudaLaunchAttributeProgrammaticStreamSerialization).",
+      "status": "implementation",
+      "source_ids": [
+        "flashinfer-cascade-wrapper-2026",
+        "flashinfer-cascade-merge-cuh-2026"
+      ],
+      "artifacts": [
+        "docs/components/flashinfer-cascade-paged-kv-attention.md",
+        "docs/reports/ai-infra-phase16-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of flashinfer/cascade.py and include/flashinfer/attention/cascade.cuh",
+      "verified_at": "2026-10-19",
+      "limitations": "Static source code verification."
+    },
+    {
+      "id": "evi-flashinfer-cascade-sim-001",
+      "component": "serving",
+      "claim": "In own-offline evaluation of Llama-3.1-70B (TP=4, 80 layers, 25,600 context = 16,384 shared system prompt + 4x 8,192 RAG groups + 1,024 unique suffix), base-2 LSE multi-level state merging matches monolithic full-sequence attention within 3.64e-17 max absolute error (0.0 LSE error and 0.0 empty-segment guard error), while at batch size B=128 3-Level Cascade + PDL slashes 80-layer HBM KV reads from 250.078 GiB to 13.909 GiB (-94.44%), boosts effective arithmetic intensity from 8.0 to 143.81 FLOPs/Byte, and cuts attention latency from 94.657 ms to 5.752 ms (16.46x speedup; 19.72x at B=256).",
+      "status": "own-offline",
+      "source_ids": [
+        "flashinfer-cascade-wrapper-2026",
+        "flashinfer-cascade-merge-cuh-2026"
+      ],
+      "artifacts": [
+        "experiments/flashinfer_cascade_paged_kv/run.py",
+        "experiments/flashinfer_cascade_paged_kv/results.json",
+        "docs/components/flashinfer-cascade-paged-kv-attention.md",
+        "docs/reports/ai-infra-phase16-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\flashinfer_cascade_paged_kv\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic numerical and roofline bandwidth simulator."
+    },
+    {
+      "id": "evi-nccl-pat-impl-001",
+      "component": "interconnect",
+      "claim": "In NVIDIA/nccl (commit 3e46c089f4ae4732722a419eb6096aead7e47a30, src/include/collectives.h blob f0dac7b9, src/device/all_gather.h blob a9ad0e19, and src/device/reduce_scatter.h blob 04150df8), NCCL_ALGO_PAT implements PatRSAlgorithm and PatAGAlgorithm by dynamically doubling aggFactor while stepSize/(channelSize*sizeof(T)*aggFactor) >= 2 and across stepDepth, scheduling binomial hypercube dimensions via mirrorInvert and firstBitSet across parallelFactor worker warp groups, and in Multi-RPN mode (work->isOneRPN == false) combining intra-node NVSwitch (prims.patGather/patScatter) with inter-node PAT across nNodes = nranks / localRanks.",
+      "status": "implementation",
+      "source_ids": [
+        "nccl-pat-collectives-header-2026",
+        "nccl-pat-device-ag-rs-2026"
+      ],
+      "artifacts": [
+        "docs/components/nccl-pat-binomial-allgather-reducescatter.md",
+        "docs/reports/ai-infra-phase16-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of NVIDIA/nccl collectives.h, all_gather.h, and reduce_scatter.h",
+      "verified_at": "2026-10-19",
+      "limitations": "Static C++/CUDA source verification."
+    },
+    {
+      "id": "evi-nccl-pat-sim-001",
+      "component": "interconnect",
+      "claim": "In own-offline simulation of 64 to 1,024 GPUs (8x H100/node, 400 Gbps RoCEv2, 900 GB/s NVLS), Multi-RPN PAT + NVLS compresses 1,024-GPU AllGather/ReduceScatter sequential network hops from 1,023 (Ring) to 7 inter-node binomial hops with aggFactor=64 packet coalescing, cutting 4 MiB latency from 2,227.17 us to 115.96 us (19.21x speedup; 47.64x at 1 MiB) and lifting 16 MiB effective bus bandwidth from 6.687 GB/s to 41.803 GB/s (6.25x speedup).",
+      "status": "own-offline",
+      "source_ids": [
+        "nccl-pat-collectives-header-2026",
+        "nccl-pat-device-ag-rs-2026"
+      ],
+      "artifacts": [
+        "experiments/nccl_pat_binomial_allgather_rs/run.py",
+        "experiments/nccl_pat_binomial_allgather_rs/results.json",
+        "docs/components/nccl-pat-binomial-allgather-reducescatter.md",
+        "docs/reports/ai-infra-phase16-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\nccl_pat_binomial_allgather_rs\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic step-accurate PAT state-machine and alpha-beta collective simulator."
+    },
+    {
+      "id": "evi-megatron-moe-drop-impl-001",
+      "component": "distributed_training",
+      "claim": "In NVIDIA/Megatron-LM (commit e8a302ac5bfeb98c6701020cc6cba977d05ab1d4, megatron/core/transformer/moe/router.py blob 46edc49a and moe_utils.py blob aa60d2d3), TopKRouter maintains expert_bias and qb_beta in torch.float32 alongside int64 local_tokens_per_expert, updates expert_bias without float division rounding via torch.sign(total_tokens - tokens_per_expert * num_experts) * expert_bias_update_rate, supports dual coordinate-descent quantile balancing (qb_dual_update), and enforces capacity limits in apply_router_token_dropping using ceil((num_tokens*topk/num_experts)*capacity_factor) with probs or position drop policy and optional pad_to_capacity for CUDA Graph static shapes.",
+      "status": "implementation",
+      "source_ids": [
+        "megatron-moe-router-bias-qb-2026",
+        "megatron-moe-utils-token-drop-2026"
+      ],
+      "artifacts": [
+        "docs/components/megatron-moe-auxfree-routing-token-drop.md",
+        "docs/reports/ai-infra-phase16-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of NVIDIA/Megatron-LM router.py and moe_utils.py",
+      "verified_at": "2026-10-19",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "evi-megatron-moe-drop-sim-001",
+      "component": "distributed_training",
+      "claim": "In own-offline evaluation of 32-expert Top-4 MoE routing under Zipfian skew (alpha=0.85, 1,024 tokens, ideal 128 tokens/expert), unbalanced routing suffers a 7.828x max expert load factor and drops 39.40% of token assignments at capacity_factor=1.25 (with 51.52% dummy padding waste when pad_to_capacity=True); FP32 expert_bias sign updates reduce max load factor to 1.312x (and qb_dual_update reaches 1.062x in 3 steps), slashing CF=1.25 token drop rate to 0.27% and achieving 0.0% drop at CF=1.50.",
+      "status": "own-offline",
+      "source_ids": [
+        "megatron-moe-router-bias-qb-2026",
+        "megatron-moe-utils-token-drop-2026"
+      ],
+      "artifacts": [
+        "experiments/megatron_moe_auxfree_token_drop/run.py",
+        "experiments/megatron_moe_auxfree_token_drop/results.json",
+        "docs/components/megatron-moe-auxfree-routing-token-drop.md",
+        "docs/reports/ai-infra-phase16-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\megatron_moe_auxfree_token_drop\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic Zipfian MoE routing, bias convergence, and capacity drop simulator."
     }
   ],
   "updated_at": "2026-10-19"
