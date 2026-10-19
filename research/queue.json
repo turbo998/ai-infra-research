@@ -1369,6 +1369,72 @@
         "evi-megatron-moe-drop-sim-001"
       ],
       "next_step": "已核验 NVIDIA/Megatron-LM (commit e8a302ac5bfeb98c6701020cc6cba977d05ab1d4: router.py 与 moe_utils.py) 源码并完成 32E Top-4 Zipf 路由仿真，证实 FP32 expert_bias 将最大专家过载从 7.828x 压至 1.312x（qb_dual_update 达 1.062x），并将 CF=1.25 丢包率从 39.40% 压至 0.27%。"
+    },
+    {
+      "id": "cutlass-sm100-grouped-gemm-clc-moe-scheduler",
+      "title": "Blackwell SM100 Ptr-Array / Grouped GEMM 如何通过专用异步 TensorMapUpdater Warp（双级 clc_response 与 tensormaps_perform_update<false>）及 Cluster Launch Control (CLC) 硬件动态工作窃取消除细粒度 MoE 跨专家 TMA 描述符切换停顿与 Cluster 尾波失衡？",
+      "component": "cutlass-sm100-grouped-gemm-clc-scheduler",
+      "priority": 26,
+      "depends_on": [
+        "triton-cutlass-warp-specialized-pingpong-gemm",
+        "nvfp4-cutlass-sm100-block-scaled-gemm-kv-quant"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/cutlass-sm100-grouped-gemm-clc-scheduler.md",
+        "experiments/cutlass_sm100_grouped_clc_gemm/results/summary.json",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-cutlass-sm100-array-tensormap-updater-2026",
+        "ev-exp-cutlass-sm100-grouped-clc-2026"
+      ],
+      "next_step": "已完成 NVIDIA/cutlass (commit 78e46228: sm100_gemm_array_tma_warpspecialized.hpp 与 sm100_tile_scheduler_group.hpp) 源码核验与 64/128 专家离线仿真，证实异步 TensorMapUpdater 消除 94.5% TMA 更新停顿（12.541 us -> 0.692 us），配合 CLC 将 Cluster 失衡从 21.04% 压至 4.10%（1.374x–1.441x 提速）。"
+    },
+    {
+      "id": "nvshmem-ibgda-symmetric-heap-vmm-multicast-team",
+      "title": "PyTorch CUDASymmetricMemory 如何利用系统级无锁信号垫（sync_remote_blocks）与 NVLS 硬件多播指令（multimem.ld_reduce.acc::f32 + multimem.st）突破小消息 NCCL 延迟地板，且 One-Shot 与 Two-Shot 算法在流量放大、SM 占用与跨 Rank 1-ULP 漂移上的精确边界是什么？",
+      "component": "symmetric-memory-multimem-collectives",
+      "priority": 26,
+      "depends_on": [
+        "fsdp2-dtensor-async-tp-nd-parallelism",
+        "nccl-symmetric-memory-nvls-sharp-zero-copy"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/symmetric-memory-multimem-collectives.md",
+        "experiments/symm_mem_multimem_collective/results/summary.json",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-pytorch-symm-mem-multimem-ops-2026",
+        "ev-exp-symm-mem-multimem-collective-2026"
+      ],
+      "next_step": "已完成 pytorch/pytorch (commit 7f2c7e8a: CUDASymmetricMemoryOps.cu 与 CUDASymmetricMemory-inl.cuh) 源码核验与 8x H100 NVLink 4.0 仿真，证实 16 KB 下 multimem 达 2.187 us（比 NCCL Ring 8.544 us 快 3.91x），16 MB 下 multimem_all_reduce_ 仅用 8 个 SM Block 取得 47.281 us（1.125x 流量）、2.73x 更低 BF16 舍入误差且 0.0% 跨 Rank 漂移。"
+    },
+    {
+      "id": "kv-cache-quantization-fp8-nvfp4-kivi-outlier-rotation",
+      "title": "在超长上下文推理中，为什么未旋转 INT4 KV Cache 会因 Key 固定通道离群值崩塌？vLLM V1 如何通过随机 Walsh-Hadamard 旋转（single_rht）与 FP32 Scale 尾数零点隐写术（Zero-Point Steganography）实现零额外元数据开销的 4.25-bit 高保真 KV 压缩，并与 FP8、NVFP4 及 KIVI 2-bit 如何选型？",
+      "component": "kv-cache-quantization-rht-steganography",
+      "priority": 26,
+      "depends_on": [
+        "kv-cache-offload-tiered-hbm-dram-cxl-nvme",
+        "nvfp4-cutlass-sm100-block-scaled-gemm-kv-quant"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/kv-cache-quantization-rht-steganography.md",
+        "experiments/kv_cache_quant_kivi_nvfp4/results/summary.json",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-vllm-int4-rht-steganography-kv-2026",
+        "ev-exp-kv-cache-quant-kivi-nvfp4-2026"
+      ],
+      "next_step": "已完成 vllm-project/vllm (commit afe2183f: int4_per_token_head.py 与 triton_reshape_and_cache_flash.py) 源码核验与 7 模式仿真，证实 FP8_PER_TOKEN_HEAD 比静态 FP8 降 376x KL 散度（0.000020），INT4 + RHT + 尾数隐写术（1.37 ppm 尺度漂移）比未旋转 INT4 降 16.3x KL 散度（0.000993）并将 H200 70B 容量从 238.0K 扩至 896.1K tokens（32K Decode TPOT 从 107.75 ms 降至 41.35 ms）。"
     }
   ],
   "updated_at": "2026-10-19"

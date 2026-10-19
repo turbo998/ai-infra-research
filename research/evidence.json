@@ -2659,6 +2659,117 @@
       "verifier": "python experiments\\megatron_moe_auxfree_token_drop\\run.py --check",
       "verified_at": "2026-10-19",
       "limitations": "Deterministic Zipfian MoE routing, bias convergence, and capacity drop simulator."
+    },
+    {
+      "id": "ev-cutlass-sm100-array-tensormap-updater-2026",
+      "component": "kernel_engineering",
+      "claim": "In NVIDIA/cutlass (commit 78e46228a1bfc5c972e2f9a634223af784cd6949, sm100_gemm_array_tma_warpspecialized.hpp blob a42c33c5), when IsTensorMapUpdateAsync is true, SharedStorage allocates a 2-stage clc_response[2][SchedulerPipelineStageCount] array (WithTensorMapUpdateInfo: uint16_t batch_changed, uint16_t TMA_stage), TensorMapReadyPipelineStorage, and 128B-aligned tensormaps[(NumTensorMapUpdaterThreads/NumThreadsPerWarp)+1] (1,024 B for 2 cyclic slots x 4 descriptors), while a dedicated tensor_map_updater warp deallocates registers and executes tensormaps_perform_update<false /*WaitForInflightTmaRequests*/> only when did_batch_change == 1.",
+      "status": "implementation",
+      "source_ids": [
+        "cutlass-sm100-array-tma-warpspecialized-2026",
+        "cutlass-sm100-group-clc-scheduler-2026"
+      ],
+      "artifacts": [
+        "docs/components/cutlass-sm100-grouped-gemm-clc-scheduler.md",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of NVIDIA/cutlass sm100_gemm_array_tma_warpspecialized.hpp and sm100_tile_scheduler_group.hpp",
+      "verified_at": "2026-10-19",
+      "limitations": "Static C++ header verification."
+    },
+    {
+      "id": "ev-exp-cutlass-sm100-grouped-clc-2026",
+      "component": "kernel_engineering",
+      "claim": "In own-offline evaluation of 64-expert Zipf(1.15) MoE Grouped GEMM (8,192 tokens, N=2048, K=2048, 540 2-CTA tiles across 74 B200 clusters), dedicated asynchronous TensorMapUpdater warps cut exposed TMA descriptor update stalls by 94.5% (from 12.541 us / 8.76% wall time down to 0.692 us), and combining Async TensorMapUpdater with Blackwell Cluster Launch Control (CLC) dynamic tile stealing compresses cluster load imbalance from 21.04% to 4.10%, reducing kernel wall time from 143.083 us to 104.118 us (1.374x speedup, scaling to 1.441x at 128 experts).",
+      "status": "own-offline",
+      "source_ids": [
+        "cutlass-sm100-array-tma-warpspecialized-2026",
+        "cutlass-sm100-group-clc-scheduler-2026"
+      ],
+      "artifacts": [
+        "experiments/cutlass_sm100_grouped_clc_gemm/run.py",
+        "experiments/cutlass_sm100_grouped_clc_gemm/results/summary.json",
+        "docs/components/cutlass-sm100-grouped-gemm-clc-scheduler.md",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\cutlass_sm100_grouped_clc_gemm\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic cycle/stall model on B200 74-cluster parameters."
+    },
+    {
+      "id": "ev-pytorch-symm-mem-multimem-ops-2026",
+      "component": "interconnect",
+      "claim": "In pytorch/pytorch (commit 7f2c7e8ad5f8d42fc340abe7e1ee487afbfb9434, CUDASymmetricMemoryOps.cu blob 5be1174b and CUDASymmetricMemory-inl.cuh blob e2475c36), CUDASymmetricMemory synchronizes same-blockIdx.x CTAs across GPUs via sync_remote_blocks<has_previous_mem_access, has_subsequent_mem_access> (atomic_cas_release_system + spin_until_Acquire_system on signal_pads) and caps NVLS multimem kernels at 8 blocks x 1,024 threads (vs 24 blocks for P2P one_shot/two_shot), executing multimem.ld_reduce.relaxed.sys.global.add.acc::f32.v4.bf16x2 and multimem.st.relaxed.sys.global.v4.f32.",
+      "status": "implementation",
+      "source_ids": [
+        "pytorch-symm-mem-multimem-ops-2026",
+        "pytorch-symm-mem-inl-barrier-ptx-2026"
+      ],
+      "artifacts": [
+        "docs/components/symmetric-memory-multimem-collectives.md",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of pytorch/pytorch CUDASymmetricMemoryOps.cu and CUDASymmetricMemory-inl.cuh",
+      "verified_at": "2026-10-19",
+      "limitations": "Static CUDA C++ verification."
+    },
+    {
+      "id": "ev-exp-symm-mem-multimem-collective-2026",
+      "component": "interconnect",
+      "claim": "In own-offline evaluation of 8-GPU NVLink 4.0 (450 GB/s unidir) AllReduce from 4 KB to 64 MB, unicast P2P one_shot_all_reduce (7.0x traffic) beats two_shot_all_reduce (1.75x traffic) only below ~28 KB; NVLS multimem_one_shot achieves 2.187 us at 16 KB (3.91x faster than NCCL Ring at 8.544 us) while multimem_all_reduce_ (1.125x traffic, 8 SM blocks) achieves 47.281 us at 16 MB (vs 302.185 us P2P 1-shot and 135.425 us NCCL Ring) with 2.73x lower BF16 rounding error (MAE 0.004056 vs 0.011068) and 0.0% cross-rank ULP drift (vs 54.3% 1-ULP drift in multimem_one_shot under port arrival order permutation).",
+      "status": "own-offline",
+      "source_ids": [
+        "pytorch-symm-mem-multimem-ops-2026",
+        "pytorch-symm-mem-inl-barrier-ptx-2026"
+      ],
+      "artifacts": [
+        "experiments/symm_mem_multimem_collective/run.py",
+        "experiments/symm_mem_multimem_collective/results/summary.json",
+        "docs/components/symmetric-memory-multimem-collectives.md",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\symm_mem_multimem_collective\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic latency and IEEE-754 BF16/FP32 rounding simulator."
+    },
+    {
+      "id": "ev-vllm-int4-rht-steganography-kv-2026",
+      "component": "serving_systems",
+      "claim": "In vllm-project/vllm (commit afe2183f2bab35988de0e6a506a5694b3cc1ef34, int4_per_token_head.py blob 3567f49b and triton_reshape_and_cache_flash.py blob 47261bbc), KVQuantMode.INT4_PER_TOKEN_HEAD applies an orthogonal randomized Walsh-Hadamard transform single_rht (H_d * D_1 * x, seed 0x9E3779B9) to K, V, and Q before quantization and uses zero-point steganography ((k_scale_bits & -16) | (k_zp_int & 0xF)) to pack the 4-bit zero-point into the lowest 4 mantissa bits of float32 k_scale_cache/v_scale_cache with zero extra metadata buffers.",
+      "status": "implementation",
+      "source_ids": [
+        "vllm-v1-int4-rht-steganography-kv-2026",
+        "vllm-v1-fp8-per-token-head-kv-2026"
+      ],
+      "artifacts": [
+        "docs/components/kv-cache-quantization-rht-steganography.md",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of vllm-project/vllm int4_per_token_head.py and triton_reshape_and_cache_flash.py",
+      "verified_at": "2026-10-19",
+      "limitations": "Static Python/Triton source verification."
+    },
+    {
+      "id": "ev-exp-kv-cache-quant-kivi-nvfp4-2026",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of GQA attention with 14x-18x persistent Key channel outliers, dynamic FP8_PER_TOKEN_HEAD (8.25 bits/elem) lowers attention KL divergence 376x vs static FP8_PER_TENSOR (0.000020 vs 0.007525); for 4.25 bits/elem INT4_PER_TOKEN_HEAD (3.765x compression), Walsh-Hadamard rotation + FP32 mantissa zero-point steganography (1.37 ppm mean scale drift) cuts attention KL divergence 16.3x (0.016167 -> 0.000993) and MSE 2.97x over unrotated INT4, expanding single-H200 Llama-3.1-70B KV capacity from 238.0K to 896.1K tokens and cutting BS=32 @ 32K Decode TPOT from 107.75 ms to 41.35 ms (while NVFP4 + RHT achieves 0.000638 KL at 4.50 bits/elem and KIVI 2-bit reaches 1,335.5K tokens at 2.85 bits/elem).",
+      "status": "own-offline",
+      "source_ids": [
+        "vllm-v1-int4-rht-steganography-kv-2026",
+        "vllm-v1-fp8-per-token-head-kv-2026"
+      ],
+      "artifacts": [
+        "experiments/kv_cache_quant_kivi_nvfp4/run.py",
+        "experiments/kv_cache_quant_kivi_nvfp4/results/summary.json",
+        "docs/components/kv-cache-quantization-rht-steganography.md",
+        "docs/reports/ai-infra-phase17-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\kv_cache_quant_kivi_nvfp4\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic RHT, mantissa bit-packing, and GQA attention fidelity simulator."
     }
   ],
   "updated_at": "2026-10-19"
