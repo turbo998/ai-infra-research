@@ -2437,6 +2437,117 @@
       "verifier": "python experiments\\wafer_sram_gpu_cascaded_serving\\run.py --check",
       "verified_at": "2026-10-19",
       "limitations": "Deterministic analytical SRAM/HBM capacity wall and speculative cascade simulator."
+    },
+    {
+      "id": "evi-sm100-nvfp4-blockscaled-impl-001",
+      "component": "gpu-hbm",
+      "claim": "In NVIDIA/cutlass (commit 78e46228a1bfc5c972e2f9a634223af784cd6949, include/cutlass/detail/sm100_blockscaled_layout.hpp blob e44dd887 and media/docs/cpp/blackwell_functionality.md blob 28ccc79b), Sm1xxBlockScaledBasicChunk<SFVecSize> packs Blk_MN=128 rows/cols by Blk_SF=4 scale factors into a 512-byte basic chunk using SfKMajorAtom = Layout<Shape<Shape<_32,_4>, Shape<Int<SFVecSize>,_4>>, Stride<Stride<_16,_4>, Stride<_0,_1>>> so 4 consecutive 8-bit scale factors form a single 32-bit TMEM word; in deduce_smem_layoutSFB, MMA_N=192 requires MMA_N_SFB = cutlass::ceil_div(MMA_N, 128) * 128 = 256 columns (+33.33% SFB padding) to satisfy UTCCP hardware transfer alignment.",
+      "status": "implementation",
+      "source_ids": [
+        "cutlass-sm100-blockscaled-layout-2026",
+        "cutlass-sm100-blackwell-functionality-2026"
+      ],
+      "artifacts": [
+        "docs/components/sm100-block-scaled-nvfp4-kernels.md",
+        "docs/reports/ai-infra-phase15-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of include/cutlass/detail/sm100_blockscaled_layout.hpp and media/docs/cpp/blackwell_functionality.md",
+      "verified_at": "2026-10-19",
+      "limitations": "Static C++ header and documentation verification."
+    },
+    {
+      "id": "evi-sm100-nvfp4-blockscaled-sim-001",
+      "component": "gpu-hbm",
+      "claim": "In own-offline evaluation of SM100 block-scaled quantization on heavy-tailed Transformer channels (kurtosis 20.23), NVIDIA NVFP4 (E2M1 + UE4M3 scale, SFVecSize=16 + FP32 per-tensor global scale, 4.50 bits/elem) reduces quantization MSE by 4.25x compared to OCP MXFP4 (E2M1 + UE8M0 power-of-two scale, SFVecSize=32, 4.25 bits/elem) (MSE 0.006032 vs 0.025646, lifting SQNR by +6.29 dB from 14.43 dB to 20.72 dB); on B200 (N=16384, K=16384), fusing scale-factor generation via LinCombBlockScaleFactor improves Decode (M=64) throughput by +32.1% over unfused quantization (1,553.4 vs 1,175.6 TFLOPS, 1.80x over FP8's 863.7 TFLOPS), reaches 7,200.0 TFLOPS (1.95x over FP8) in Prefill, and expands 8x B200 128K-context KV concurrency from 36 to 74 sessions (2.06x).",
+      "status": "own-offline",
+      "source_ids": [
+        "cutlass-sm100-blockscaled-layout-2026",
+        "cutlass-sm100-blackwell-functionality-2026"
+      ],
+      "artifacts": [
+        "experiments/sm100_block_scaled_nvfp4_gemm/run.py",
+        "experiments/sm100_block_scaled_nvfp4_gemm/results.json",
+        "docs/components/sm100-block-scaled-nvfp4-kernels.md",
+        "docs/reports/ai-infra-phase15-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\sm100_block_scaled_nvfp4_gemm\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic quantization SQNR and analytical B200 Roofline simulator; not a physical B200 hardware trace."
+    },
+    {
+      "id": "evi-uec-packet-trimming-sonic-impl-001",
+      "component": "interconnect-network",
+      "claim": "In sonic-net/sonic-buildimage (commit 3e670e64f9c4b48a5af3964d2e6dff0295c48dda, src/sonic-yang-models/tests/files/sample_config_db.json blob 54a3708b), BUFFER_POOL defines ingress_lossless_pool with size = 33,004,032 B (31.48 MiB) and xoff = 196,608 B, while BUFFER_PROFILE pg_lossless_100000_300m_profile configures dynamic_th = 1 (alpha = 2^1 = 2), xoff = 50,176 B, xon_offset = 3,584 B, WRED_PROFILE green thresholds 1,024,000..2,048,000 B, and PFC_WD detection_time = 100 ms / restoration_time = 400 ms.",
+      "status": "implementation",
+      "source_ids": [
+        "sonic-buffer-profile-wred-pfc-2026",
+        "uec-1-1"
+      ],
+      "artifacts": [
+        "docs/components/uec-packet-trimming-switch-buffering.md",
+        "docs/reports/ai-infra-phase15-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of sonic-net/sonic-buildimage sample_config_db.json and sonic-buffer-profile.yang",
+      "verified_at": "2026-10-19",
+      "limitations": "Static SONiC configuration and YANG schema inspection."
+    },
+    {
+      "id": "evi-uec-packet-trimming-sonic-sim-001",
+      "component": "interconnect-network",
+      "claim": "In own-offline evaluation of a 32-port 800 Gbps switch ITM slice with a 33,004,032 B shared ingress pool, RoCEv2 lossless PFC requires 393,216 B/port XOFF headroom (locking 12.58 MB or 38.13% of the pool and capping 4-queue dynamic_th=1 absorption at 55.0%); under 32-to-1 and 64-to-1 800G Incast bursts (512 KiB/sender), UEC 1.0 Lossless-Free transport (0% XOFF reserve, 80.0% pool absorption at alpha=1.0, and 64B CP header trimming delivered in 0.5 RTT = 6.0 us) eliminates PFC port pauses (0 vs 29-63 paused ports), cuts P99 collective completion time from 971.9 us to 207.2 us (4.69x) at 32:1 and from 2,014.2 us to 413.2 us (4.87x) at 64:1, and reduces innocent victim flow P99 tail latency by 24.69x-43.72x (18.3-22.2 us vs 452.8-969.6 us).",
+      "status": "own-offline",
+      "source_ids": [
+        "sonic-buffer-profile-wred-pfc-2026",
+        "uec-1-1"
+      ],
+      "artifacts": [
+        "experiments/uec_packet_trimming_buffer/run.py",
+        "experiments/uec_packet_trimming_buffer/results.json",
+        "docs/components/uec-packet-trimming-switch-buffering.md",
+        "docs/reports/ai-infra-phase15-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\uec_packet_trimming_buffer\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic MMU dynamic-threshold and Incast queueing simulator; not a physical Tomahawk-5 hardware trace."
+    },
+    {
+      "id": "evi-async-rl-slime-impl-001",
+      "component": "distributed_training",
+      "claim": "In THUDM/slime (commit a4202e0595467d9374d9a68d45a34f45c3f8d230, slime/rollout/fully_async_rollout.py blob 7a4ed8d1 and docs/en/advanced/rollout-scheduling.md blob a6d09fce), AsyncRolloutWorker decouples max_concurrent_tasks from rollout_batch_size with a dual backpressure gate (len(active_tasks) < max_concurrent and output_queue.qsize() < max_concurrent), pauses admission around weight updates while requeuing ABORTED/PENDING groups via prepare_retry_group, and models partial rollout continuations across policy versions v0 and v1 via the mixed-version behavior distribution q(y|x) = prod_{t=1}^k q_{v0}(y_t|x,y_{<t}) prod_{t=k+1}^T q_{v1}(y_t|x,y_{<t}) with token-aligned importance ratio p_theta(y_t|h_t)/q_{v(t)}(y_t|h_t) or --mask-offpolicy-in-partial-rollout.",
+      "status": "implementation",
+      "source_ids": [
+        "slime-fully-async-rollout-2026",
+        "slime-rollout-scheduling-partial-tis-2026"
+      ],
+      "artifacts": [
+        "docs/components/async-rl-staleness-weight-sync.md",
+        "docs/reports/ai-infra-phase15-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of THUDM/slime fully_async_rollout.py and rollout-scheduling.md",
+      "verified_at": "2026-10-19",
+      "limitations": "Static Python source and documentation verification."
+    },
+    {
+      "id": "evi-async-rl-slime-sim-001",
+      "component": "distributed_training",
+      "claim": "In own-offline evaluation of 128-GPU GRPO post-training (64 SGLang Rollout GPUs + 64 Megatron Training GPUs, 64 prompt groups with Pareto CoT mean 13.70s and max straggler 59.15s), synchronous colocated execution (tau_max=0) suffers a 76.8% straggler bubble (23.2% rollout GPU utilization, 48.32 steps/hr); Synchronous + Partial Rollout (--partial-rollout, 1.25x oversampling) reaches 2.42x speedup (81.8% utilization), while Bounded-Staleness Async RL at tau_max=4 with Token-Aligned TIS achieves the global Pareto optimum of 140.73 eff_steps/hr (2.91x effective convergence speedup, KL=0.01657, ESS=90.39%), outperforming both prefix loss masking (106.13 eff_steps/hr) and unbounded async tau_max=8 (which degrades to 131.74 eff_steps/hr due to KL=0.05574 and 15.11% Dual-Clip rejection).",
+      "status": "own-offline",
+      "source_ids": [
+        "slime-fully-async-rollout-2026",
+        "slime-rollout-scheduling-partial-tis-2026"
+      ],
+      "artifacts": [
+        "experiments/async_rl_staleness_pareto/run.py",
+        "experiments/async_rl_staleness_pareto/results.json",
+        "docs/components/async-rl-staleness-weight-sync.md",
+        "docs/reports/ai-infra-phase15-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\async_rl_staleness_pareto\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic Pareto trajectory and KL-degraded sample-efficiency simulator."
     }
   ],
   "updated_at": "2026-10-19"

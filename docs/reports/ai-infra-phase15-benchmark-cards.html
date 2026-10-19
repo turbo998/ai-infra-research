@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Infra Phase 15 Benchmark Report — SM100 NVFP4 Block-Scaled Kernels, UEC Packet Trimming &amp; Async RL Staleness Pareto</title>
+<style>
+  :root {
+    --bg: #0B1020;
+    --card-bg: #FFFFFF;
+    --ink: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --line: #E2E8F0;
+    --panel: #F8FAFC;
+    --dark-code: #0F172A;
+    --blue: #2563EB;
+    --blue-bar: #3B82F6;
+    --slate-bar: #CBD5E1;
+    --green-bg: #ECFDF5;
+    --green-border: #10B981;
+    --green-ink: #065F46;
+    --amber-bg: #FFFBEB;
+    --amber-border: #F59E0B;
+    --amber-ink: #92400E;
+    --red-bg: #FEF2F2;
+    --red-border: #EF4444;
+    --red-ink: #991B1B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+  }
+  .deck-banner {
+    width: 900px;
+    color: #F8FAFC;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #1E293B;
+    padding-bottom: 12px;
+  }
+  .deck-banner h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.02em; }
+  .deck-banner span { font-size: 12px; color: #94A3B8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .card {
+    width: 900px;
+    height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    position: relative;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 12px;
+  }
+  .badge-step {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--blue);
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    padding: 4px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+  }
+  .badge-track {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--subtle);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .headline {
+    font-size: 26px;
+    line-height: 1.26;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 14px 0 8px 0;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #1D4ED8, #0EA5E9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .panel-title {
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--subtle);
+    margin-bottom: 10px;
+  }
+  .kv-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12.5px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .kv-row:last-child { border-bottom: none; }
+  .kv-val {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .pill-act { background: var(--green-bg); color: var(--green-ink); border: 1px solid var(--green-border); }
+  .pill-confirm { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber-border); }
+  .pill-human { background: var(--red-bg); color: var(--red-ink); border: 1px solid var(--red-border); }
+  .pill-type { background: #EEF2FF; color: #3730A3; border: 1px solid #C7D2FE; font-family: ui-monospace, monospace; }
+  .quote-box {
+    background: #F1F5F9;
+    border-left: 4px solid var(--blue);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: #1E293B;
+    line-height: 1.48;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .decision-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .decision-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: #FFFFFF;
+  }
+  .decision-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .decision-title { font-size: 14px; font-weight: 800; color: var(--ink); }
+  .bar-track {
+    width: 100%;
+    height: 12px;
+    background: #E2E8F0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 6px 0;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--blue-bar);
+    border-radius: 999px;
+  }
+  .bar-fill-slate {
+    height: 100%;
+    background: var(--slate-bar);
+    border-radius: 999px;
+  }
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.matrix th {
+    background: #0F172A;
+    color: #F8FAFC;
+    text-align: left;
+    padding: 9px 10px;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  table.matrix td {
+    padding: 8.5px 10px;
+    border-bottom: 1px solid var(--line);
+    color: #1E293B;
+    vertical-align: middle;
+  }
+  table.matrix tr:nth-child(even) td { background: #F8FAFC; }
+  .miss-mark {
+    color: #DC2626;
+    font-weight: 900;
+    font-family: ui-monospace, monospace;
+  }
+  .pass-mark {
+    color: #059669;
+    font-weight: 800;
+    font-family: ui-monospace, monospace;
+  }
+  .code-block {
+    background: var(--dark-code);
+    color: #E2E8F0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11.4px;
+    line-height: 1.44;
+    white-space: pre;
+    overflow-x: hidden;
+  }
+  .code-arrow {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--blue);
+    margin: 2px 0;
+  }
+  .latency-row {
+    margin-bottom: 14px;
+  }
+  .latency-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .dual-bar-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 90px;
+    align-items: center;
+    gap: 10px;
+    font-size: 11.5px;
+    margin: 3px 0;
+  }
+  .fit-card-good {
+    background: var(--green-bg);
+    border: 2px solid var(--green-border);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .fit-card-bad {
+    background: var(--red-bg);
+    border: 2px solid var(--red-border);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .fit-title { font-size: 15px; font-weight: 800; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; line-height: 1.45; }
+  .footer-dark {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 11.8px;
+    line-height: 1.48;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-dark code {
+    color: #38BDF8;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-banner">
+  <h1>AI Infra Research · Phase 15 Benchmark Deck (7-Card 4:5 Visual Standard)</h1>
+  <span>PROVENANCE: own-offline + implementation · 2026-10-19 · COMMITTED LEDGER SEALED</span>
+</div>
+
+<!-- ==================== CARD 1 / 7 ==================== -->
+<section class="card" id="card-1">
+  <div>
+    <div class="card-header">
+      <span class="badge-step">1 / 7 · HANDS-ON · PHASE 15 KERNELS / UEC / ASYNC-RL</span>
+      <span class="badge-track">SM100 NVFP4 · UEC Trimming · Slime Async RL</span>
+    </div>
+    <h2 class="headline">
+      <span class="accent">SM100 NVFP4 Fused Epilogue 提速 1.95x</span>，UEC 裁剪消除 800G Incast PFC 风暴，有界异步 RL (<span class="accent">&tau;<sub>max</sub>=4</span>) 实现 2.91x 有效收敛
+    </h2>
+    <p class="subhead">
+      基于 NVIDIA CUTLASS 4.x (`78e46228`)、SONiC YANG/ConfigDB (`3e670e64`) 与 THUDM/slime (`a4202e05`) 一手源码核验，联合评测微缩放算子布局、800G 浅缓冲交换机拥塞控制与长尾推理 RL 训推解耦。
+    </p>
+  </div>
+
+  <div class="grid-3">
+    <div class="panel">
+      <div class="panel-title">1. Scenarios &amp; Threshold Bands</div>
+      <div class="kv-row"><span>Track A: SM100 NVFP4</span><span class="pill pill-act">SQNR 20.72 dB</span></div>
+      <div class="kv-row"><span>UTCCP SFB Align</span><span class="kv-val">128 Cols (512B)</span></div>
+      <div class="kv-row"><span>Track B: 800G UEC Trim</span><span class="pill pill-act">0 PFC Paused</span></div>
+      <div class="kv-row"><span>RoCE XOFF Tax (32p)</span><span class="kv-val">38.13% Pool</span></div>
+      <div class="kv-row"><span>Track C: Slime Async RL</span><span class="pill pill-act">&tau;<sub>max</sub>=4 Optimal</span></div>
+      <div class="kv-row"><span>Sync Straggler Bubble</span><span class="kv-val">76.8% Idle</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">2. Structured Contract Input</div>
+      <div class="kv-row"><span>CUTLASS Atom</span><span class="kv-val">SfKMajorAtom</span></div>
+      <div class="kv-row"><span>Basic Chunk</span><span class="kv-val">128&times;4 = 512 B</span></div>
+      <div class="kv-row"><span>SONiC Pool</span><span class="kv-val">33,004,032 B</span></div>
+      <div class="kv-row"><span>Trim Header (CP)</span><span class="kv-val">64 B @ 0.5 RTT</span></div>
+      <div class="kv-row"><span>RL Batch / Group</span><span class="kv-val">64 Grps &times; G=8</span></div>
+      <div class="kv-row"><span>IS Correction</span><span class="kv-val">Token-Aligned TIS</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">3. Top Quantified Decisions</div>
+      <div class="kv-row"><span>NVFP4 vs MXFP4 MSE</span><span class="kv-val">4.25x Lower</span></div>
+      <div class="kv-row"><span>B200 Decode M=64</span><span class="kv-val">1,553.4 TFLOPS</span></div>
+      <div class="kv-row"><span>8xB200 128K KV Cap</span><span class="kv-val">74 vs 36 Seqs</span></div>
+      <div class="kv-row"><span>32:1 Incast CCT</span><span class="kv-val">4.69x Faster</span></div>
+      <div class="kv-row"><span>64:1 Victim P99</span><span class="kv-val">43.72x Lower</span></div>
+      <div class="kv-row"><span>Async RL &tau;<sub>max</sub>=4</span><span class="kv-val">2.91x Eff. Speed</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Phase 15 Cross-Layer Architecture Synthesis (Hardware Atom &rarr; Switch MMU &rarr; Distributed RL Loop)</div>
+    <div class="grid-3">
+      <div>
+        <div style="font-size:12px;font-weight:800;color:#1D4ED8;margin-bottom:4px;">SM100 TMEM &amp; NVFP4</div>
+        <p style="font-size:11.8px;color:#334155;line-height:1.45;">
+          `Sm1xxBlockScaledBasicChunk` 将 128 行 &times; 4 K-块打包为 512B 原子以对齐 32-bit TMEM 字宽；`MMA_N=192` 触发 `MMA_N_SFB=256` (+33.33% 填充)，生产应锚定 `MMA_N=128/256`。
+        </p>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:800;color:#047857;margin-bottom:4px;">UEC Packet Trimming</div>
+        <p style="font-size:11.8px;color:#334155;line-height:1.45;">
+          800G 端口下 RoCEv2 XOFF 预留吞噬 38.13% 入向池；UEC 零预留 + 64B CP 高优裁剪在 0.5 RTT (6 &mu;s) 内闭环，将 64:1 受害流 P99 从 969.6 &mu;s 压至 22.2 &mu;s。
+        </p>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:800;color:#B45309;margin-bottom:4px;">Slime Bounded Async RL</div>
+        <p style="font-size:11.8px;color:#334155;line-height:1.45;">
+          `AsyncRolloutWorker` 双门控背压结合逐 Token 版本对齐 TIS ($p_\theta/q_{v(t)}$) 在 $\tau_{\max}=4$ 达 140.73 eff_steps/hr，避免 $\tau_{\max}=8$ 的 KL 爆炸退化。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-dark">
+    <div>
+      <strong>PROVENANCE &amp; SEALED SOURCES:</strong> <code>own-offline</code> deterministic models + <code>implementation</code> inspection (`NVIDIA/cutlass@78e46228`, `sonic-buildimage@3e670e64`, `THUDM/slime@a4202e05`).
+    </div>
+    <span>independently_reproduced = true (CPU/offline)</span>
+  </div>
+</section>
+
+<!-- ==================== CARD 2 / 7 ==================== -->
+<section class="card" id="card-2">
+  <div>
+    <div class="card-header">
+      <span class="badge-step">2 / 7 · SCENARIO: DEEP-DIVE CASE BREAKDOWN</span>
+      <span class="badge-track">3 Quantified Architectural Decisions</span>
+    </div>
+    <h2 class="headline">
+      单案深潜：<span class="accent">NVFP4 双级缩放降误差 4.25x</span>、UEC 64B 裁剪降尾延迟 24.7x、Async RL <span class="accent">&tau;<sub>max</sub>=4</span> 破除 76.8% 气泡
+    </h2>
+    <div class="quote-box">
+      INPUT CONTRACT: Evaluate (1) 405B FFN (N=16384, K=16384, Kurtosis=20.23) on Blackwell SM100 tcgen05.mma, (2) 32-to-1 800G MoE Incast on 33.0 MB SONiC MMU Pool, and (3) 64-Group Long-Tail CoT Rollout (mean 13.7s, max 59.15s) on 128 H100 GPUs.
+    </div>
+  </div>
+
+  <div class="decision-stack">
+    <div class="decision-card">
+      <div class="decision-top">
+        <div>
+          <span class="pill pill-type">choice</span>
+          <span class="decision-title" style="margin-left:8px;">Case A: NVFP4 (SFVecSize=16, UE4M3+FP32) + Fused Epilogue vs MXFP4 (SFVecSize=32, UE8M0)</span>
+        </div>
+        <span class="pill pill-act">Act automatically · SQNR 20.72 dB (86.3% of FP8)</span>
+      </div>
+      <p style="font-size:12px;color:#475569;margin-bottom:6px;">
+        MXFP4 的 `UE8M0` 纯 $2^e$ 缩放遇离群值向上取整损失近半动态范围 (SQNR 14.43 dB, MSE 0.025646)；NVFP4 凭 16 元素块 + `UE4M3` 尾数缩放将 MSE 降至 0.006032 (4.25x)，配合 `LinCombBlockScaleFactor` 融合 Epilogue 在 Decode M=64 下提速 +32.1% (1,553.4 vs 1,175.6 TFLOPS)。
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 86.3%;"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748B;font-family:monospace;">
+        <span>NVFP4 SQNR: 20.72 dB (MSE 0.006032, PPL +0.023)</span>
+        <span>MXFP4 SQNR: 14.43 dB (MSE 0.025646, PPL +0.097)</span>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-top">
+        <div>
+          <span class="pill pill-type">score</span>
+          <span class="decision-title" style="margin-left:8px;">Case B: UEC 1.0 Packet Trimming (64B CP @ 0.5 RTT) vs RoCEv2 PFC+DCQCN (32:1 800G Incast)</span>
+        </div>
+        <span class="pill pill-act">Act automatically · CCT 207.2 &mu;s (80.98% Ideal Line-Rate)</span>
+      </div>
+      <p style="font-size:12px;color:#475569;margin-bottom:6px;">
+        32 个发送端突发 16.0 MiB (理想串行化 167.8 &mu;s)：RoCEv2 锁死 29 个入向端口触发 PFC 风暴，CCT P99 达 971.9 &mu;s，受害流 P99 飙至 452.8 &mu;s；UEC 裁剪 515 个包为 64B CP 报头，6.0 &mu;s 内闭环重传，CCT P99 仅 207.2 &mu;s (4.69x)，受害流 P99 仅 18.3 &mu;s (24.69x 改善)。
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 81.0%;"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748B;font-family:monospace;">
+        <span>UEC 32:1 CCT Efficiency: 80.98% (207.2 &mu;s, 0 Paused Ports)</span>
+        <span>RoCEv2 Efficiency: 17.27% (971.9 &mu;s, 29 Paused Ports)</span>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-top">
+        <div>
+          <span class="pill pill-type">noul</span>
+          <span class="decision-title" style="margin-left:8px;">Case C: Bounded-Staleness Async RL (&tau;<sub>max</sub>=4, Token-Aligned TIS) vs Sync &amp; Unbounded (&tau;<sub>max</sub>=8)</span>
+        </div>
+        <span class="pill pill-confirm">Confirm &tau;<sub>max</sub>=4 Gate · ESS 90.39% (140.73 eff_steps/hr)</span>
+      </div>
+      <p style="font-size:12px;color:#475569;margin-bottom:6px;">
+        同步模式受 59.15s 最慢轨迹拖累 (气泡 76.8%，48.32 steps/hr)；$\tau_{\max}=4$ (平均陈旧度 2.32 步) 配合逐 Token 版本对齐 TIS 达 140.73 eff_steps/hr (2.91x)，而 $\tau_{\max}=8$ 因 $D_{\text{KL}}=0.05574$ 与 15.11% 裁剪丢弃退化至 131.74 eff_steps/hr。
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 90.4%;"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748B;font-family:monospace;">
+        <span>&tau;_max=4 ESS: 90.39% (2.91x Eff. Convergence)</span>
+        <span>&tau;_max=8 ESS: 71.95% (KL=0.05574 Degradation)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-dark">
+    <div>
+      <strong>VERIFICATION ARTIFACTS:</strong> <code>experiments/sm100_block_scaled_nvfp4_gemm</code> · <code>experiments/uec_packet_trimming_buffer</code> · <code>experiments/async_rl_staleness_pareto</code>
+    </div>
+    <span>All 3 --check scripts: PASS</span>
+  </div>
+</section>
+
+<!-- ==================== CARD 3 / 7 ==================== -->
+<section class="card" id="card-3">
+  <div>
+    <div class="card-header">
+      <span class="badge-step">3 / 7 · WHAT I TESTED · FULL EVALUATION MATRIX</span>
+      <span class="badge-track">12 Sealed Scenarios Across Kernels, Fabric &amp; RL</span>
+    </div>
+    <h2 class="headline">
+      全量评测矩阵：12 组确定性算例中 <span class="accent">4 项反模式触发显式失效 (&#10005;)</span>，8 项达成帕累托最优
+    </h2>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th style="width:22%;">SCENARIO</th>
+        <th style="width:32%;">QUESTION / TASK</th>
+        <th style="width:30%;">MODEL / SIMULATOR ANSWER</th>
+        <th style="width:16%;">ACTION</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>SM100 Tile 128x192x256</strong></td>
+        <td>ScaleFactorB `UTCCP` alignment overhead</td>
+        <td><span class="miss-mark">&#10005;</span> `MMA_N_SFB=256` (+33.33% SFB padding, 4096B vs 3072B)</td>
+        <td><span class="pill pill-confirm">Confirm</span></td>
+      </tr>
+      <tr>
+        <td><strong>SM100 Tile 256x256x256</strong></td>
+        <td>2-CTA Cluster NVFP4 SFB alignment</td>
+        <td><span class="pass-mark">&#10003;</span> `0.0%` SFB padding (`4096B` exact), `12.5%` SF BW ratio</td>
+        <td><span class="pill pill-act">Act auto</span></td>
+      </tr>
+      <tr>
+        <td><strong>OCP MXFP4 (SFVec=32)</strong></td>
+        <td>Outlier channel quantization (Kurtosis 20.23)</td>
+        <td><span class="miss-mark">&#10005;</span> `UE8M0` $2^e$ rounding -> SQNR `14.43 dB`, MSE `0.025646`</td>
+        <td><span class="pill pill-human">Send human</span></td>
+      </tr>
+      <tr>
+        <td><strong>NVIDIA NVFP4 (SFVec=16)</strong></td>
+        <td>`UE4M3` + FP32 global scale quantization</td>
+        <td><span class="pass-mark">&#10003;</span> SQNR `20.72 dB` (+6.29 dB), MSE `0.006032` (`4.25x` lower)</td>
+        <td><span class="pill pill-act">Act auto</span></td>
+      </tr>
+      <tr>
+        <td><strong>B200 Decode M=64</strong></td>
+        <td>`LinCombBlockScaleFactor` fused epilogue</td>
+        <td><span class="pass-mark">&#10003;</span> `1553.4 TFLOPS` (+32.1% vs unfused `1175.6`, `1.80x` vs FP8)</td>
+        <td><span class="pill pill-act">Act auto</span></td>
+      </tr>
+      <tr>
+        <td><strong>8x B200 128K KV Pool</strong></td>
+        <td>405B model concurrent 128K sessions</td>
+        <td><span class="pass-mark">&#10003;</span> `74` concurrent 128K sessions vs `36` in FP8 (`2.06x`)</td>
+        <td><span class="pill pill-act">Act auto</span></td>
+      </tr>
+      <tr>
+        <td><strong>RoCEv2 800G 32:1 Incast</strong></td>
+        <td>SONiC `dynamic_th=1` + `38.13%` XOFF reserve</td>
+        <td><span class="miss-mark">&#10005;</span> `29` ports paused, CCT P99 `971.9 us`, Victim `452.8 us`</td>
+        <td><span class="pill pill-human">Send human</span></td>
+      </tr>
+      <tr>
+        <td><strong>UEC 800G 32:1 Incast</strong></td>
+        <td>0% XOFF reserve + `64B` CP trim @ `0.5 RTT`</td>
+        <td><span class="pass-mark">&#10003;</span> `0` ports paused, CCT P99 `207.2 us` (`4.69x`), Victim `18.3 us`</td>
+        <td><span class="pill pill-act">Act auto</span></td>
+      </tr>
+      <tr>
+        <td><strong>UEC 800G 64:1 Incast</strong></td>
+        <td>Extreme 32 MiB burst victim HoL isolation</td>
+        <td><span class="pass-mark">&#10003;</span> CCT `413.2 us` (`4.87x`), Victim `22.2 us` vs `969.6 us` (`43.72x`)</td>
+        <td><span class="pill pill-act">Act auto</span></td>
+      </tr>
+      <tr>
+        <td><strong>RL Sync Colocated (&tau;=0)</strong></td>
+        <td>64-group CoT rollout with 59.15s straggler</td>
+        <td><span class="miss-mark">&#10005;</span> `76.8%` straggler bubble, GPU util `23.2%`, step `74.50s`</td>
+        <td><span class="pill pill-human">Send human</span></td>
+      </tr>
+      <tr>
+        <td><strong>RL Sync Partial Rollout</strong></td>
+        <td>`--partial-rollout` (1.25x oversample, P80 cut)</td>
+        <td><span class="pass-mark">&#10003;</span> Step `30.75s` (`2.42x` speedup), Rollout GPU util `81.8%`</td>
+        <td><span class="pill pill-act">Act auto</span></td>
+      </tr>
+      <tr>
+        <td><strong>RL Async &tau;<sub>max</sub>=4 vs 8</strong></td>
+        <td>Bounded queue backpressure + Token-Aligned TIS</td>
+        <td><span class="pass-mark">&#10003;</span> $\tau_{\max}=4$ hits `140.73 eff_steps/hr` (`2.91x`); $\tau_{\max}=8$ drops to `131.74`</td>
+        <td><span class="pill pill-confirm">Confirm</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="grid-2">
+    <div class="panel" style="background:#EFF6FF;border-color:#93C5FD;">
+      <div class="panel-title" style="color:#1E40AF;">Threshold Gating Summary</div>
+      <p style="font-size:12px;color:#1E3A8A;line-height:1.45;">
+        自动准入规则：(1) SM100 块缩放 GEMM 强制要求 `MMA_N mod 128 == 0` 以消除 `UTCCP` 填充；(2) 800G 交换机启用 UEC Trimming 释放 `38.13%` XOFF 死锁预留；(3) Async RL 队列门控锁死 `output_queue.qsize() &lt; max_concurrent` ($\tau_{\max} \le 4$)。
+      </p>
+    </div>
+    <div class="panel" style="background:#FEF2F2;border-color:#FCA5A5;">
+      <div class="panel-title" style="color:#991B1B;">Failure Analysis (4 Explicit &#10005; Misses)</div>
+      <p style="font-size:12px;color:#7F1D1D;line-height:1.45;">
+        4 项 &#10005; 揭示三大隐蔽陷阱：`MMA_N=192` 的 +33.33% 缩放因子带宽浪费、`MXFP4` 纯 $2^e$ 缩放在峰度 20.23 下的 6.29 dB 信噪比崩塌、RoCEv2 63 端口级联暂停，以及无界异步 RL ($\tau_{\max}=8$) 的 15.11% 样本裁剪失效。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== CARD 4 / 7 ==================== -->
+<section class="card" id="card-4">
+  <div>
+    <div class="card-header">
+      <span class="badge-step">4 / 7 · UNDER THE HOOD · PROTOCOL &amp; SCORING MECHANICS</span>
+      <span class="badge-track">First-Hand Source Code &amp; Deterministic Verifier Flow</span>
+    </div>
+    <h2 class="headline">
+      底层机制：CUTLASS <span class="accent">SfKMajorAtom 512B 交错映射</span>与 Slime 跨版本混合策略分布验证链
+    </h2>
+    <p class="subhead">
+      上方代码块展示 `NVIDIA/cutlass` (`sm100_blockscaled_layout.hpp`) 与 `THUDM/slime` (`fully_async_rollout.py`) 的核心契约，下方展示确定性校验器 (`--check`) 的精确代数不变量。
+    </p>
+  </div>
+
+  <div class="code-block">// [1] NVIDIA/cutlass (commit 78e46228) include/cutlass/detail/sm100_blockscaled_layout.hpp
+template&lt;int SFVecSize, UMMA::Major major = UMMA::Major::K&gt;
+struct Sm1xxBlockScaledBasicChunk {
+  using Blk_MN = _128;  using Blk_SF = _4; // 128 rows x 4 SFs = 512B (4 SFs = 32-bit TMEM word)
+  using SfKMajorAtom = Layout&lt;Shape&lt;Shape&lt;_32,_4&gt;, Shape&lt;Int&lt;SFVecSize&gt;, _4&gt;&gt;,
+                              Stride&lt;Stride&lt;_16,_4&gt;, Stride&lt;_0, _1&gt;&gt;&gt;;
+};
+// In deduce_smem_layoutSFB: UTCCP hardware requires 128-column granularity!
+constexpr int MMA_N_SFB = cutlass::ceil_div(MMA_N, Blk_MN{}) * Blk_MN{}; // 192 -&gt; 256 (+33.33%)
+
+// [2] THUDM/slime (commit a4202e05) slime/rollout/fully_async_rollout.py + rollout-scheduling.md
+// Bounded queue backpressure in AsyncRolloutWorker._loop():
+while (len(active_tasks) &lt; max_concurrent and self.output_queue.qsize() &lt; max_concurrent
+       and self.running and not self.paused):
+    groups = self.data_buffer.get_samples(1) // Pulls only when warm queue &lt; max_concurrent
+// Partial rollout mixed-version behavior policy (v0 prefix 1..k, v1 continuation k+1..T):
+// q(y|x) = \prod_{t=1}^k q_{v0}(y_t|x,y_{&lt;t}) * \prod_{t=k+1}^T q_{v1}(y_t|x,y_{&lt;t})</div>
+
+  <div class="code-arrow">&darr; Deterministic Offline Verifier &amp; Algebraic Invariant Check (`&lt;answer&gt;`) &darr;</div>
+
+  <div class="code-block"># Verified in experiments/{sm100_block_scaled_nvfp4_gemm,uec_packet_trimming_buffer,async_rl_staleness_pareto}/run.py
+def sf_k_major_atom_offset(row_in_128: int, k_in_4sf: int, sf_vec_size: int) -&gt; int:
+    r0, r1 = row_in_128 % 32, row_in_128 // 32
+    k1 = k_in_4sf // sf_vec_size  # Stride _0 across SFVecSize elements
+    return r0 * 16 + r1 * 4 + k1  # Bijective on [0, 511]: row0_sf0=0, row32_sf0=4, row1_sf0=16
+
+# SONiC Dynamic Threshold Steady-State Absorption &amp; UEC Lossless-Free Pool Release:
+# T_q = (alpha * B_usable) / (1 + N_active * alpha), where B_usable = 33,004,032 - B_xoff_reserve
+# RoCEv2 (32x800G XOFF reserve = 12,582,912 B [38.13%]) -&gt; Pool util capped at 55.0% (alpha=2)
+# UEC 1.0 (0 B XOFF reserve, 64B CP Trim @ 0.5 RTT = 6.0 us) -&gt; Pool util 80.0% (alpha=1), 0 PFC pauses
+
+&lt;answer&gt;
+  BasicChunk_Bijective_Offsets = 512 | MMA_N192_SFB_Padding = +33.33% | NVFP4_SQNR = 20.72 dB (+6.29 dB vs MXFP4)
+  UEC_32to1_CCT_P99 = 207.2 us (4.69x vs RoCEv2 971.9 us) | AsyncRL_Tau4_Eff_Speedup = 2.91x (140.73 eff_steps/hr)
+&lt;/answer&gt;</div>
+
+  <div class="footer-dark">
+    <div>
+      <strong>UNIT TEST COVERAGE:</strong> <code>tests/test_sm100_block_scaled_nvfp4_gemm.py</code> · <code>tests/test_uec_packet_trimming_buffer.py</code> · <code>tests/test_async_rl_staleness_pareto.py</code>
+    </div>
+    <span>243 Total Unit Tests: 100% OK</span>
+  </div>
+</section>
+
+<!-- ==================== CARD 5 / 7 ==================== -->
+<section class="card" id="card-5">
+  <div>
+    <div class="card-header">
+      <span class="badge-step">5 / 7 · ROBUSTNESS CHECK · PERTURBATION &amp; CONSISTENCY</span>
+      <span class="badge-track">Tile Shape, Alpha Exponent &amp; Staleness Perturbations</span>
+    </div>
+    <h2 class="headline">
+      鲁棒性检验：跨 Tile 形状、交换机 <span class="accent">dynamic_th (&alpha;)</span> 与 RL 陈旧度扰动的敏感度对账
+    </h2>
+    <p class="subhead">
+      检验当硬件 Tile 偏离 128 倍数、微缩放切回 `UE8M0`、SONiC $\alpha$ 从 $2^1$ 降至 $2^{-2}$、以及 RL 陈旧度从 $\tau_{\max}=4$ 推至 $\tau_{\max}=8$ 或启用前缀掩码时的定量变化。
+    </p>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th style="width:28%;">QUESTION / METRIC</th>
+        <th style="width:24%;">ORIGINAL (OPTIMAL)</th>
+        <th style="width:26%;">PERTURBED / REVERSED</th>
+        <th style="width:22%;">CHANGE (DELTA)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>SM100 SFB Transfer Bytes</strong><br><span style="color:#64748B;font-size:11px;">Tile N=256 vs Tile N=192</span></td>
+        <td><code>0.0% Padding</code><br>(4096 B logical = 4096 B UTCCP)</td>
+        <td><code>33.33% Padding</code><br>(3072 B logical &rarr; 4096 B UTCCP)</td>
+        <td><span class="miss-mark">+33.33% SFB Padding</span><br>(+2.50 pts SF BW ratio)</td>
+      </tr>
+      <tr>
+        <td><strong>FP4 Quantization SQNR</strong><br><span style="color:#64748B;font-size:11px;">NVFP4 (SF16) vs MXFP4 (SF32)</span></td>
+        <td><code>20.72 dB SQNR</code><br>(MSE 0.006032, PPL +0.023)</td>
+        <td><code>14.43 dB SQNR</code><br>(MSE 0.025646, PPL +0.097)</td>
+        <td><span class="miss-mark">-6.29 dB SQNR</span><br>(+325.2% MSE inflation)</td>
+      </tr>
+      <tr>
+        <td><strong>B200 Decode M=64 GEMM</strong><br><span style="color:#64748B;font-size:11px;">Fused vs Unfused Epilogue</span></td>
+        <td><code>1,553.4 TFLOPS</code><br>(`LinCombBlockScaleFactor`)</td>
+        <td><code>1,175.6 TFLOPS</code><br>(Separate BF16&rarr;FP4 kernel)</td>
+        <td><span class="miss-mark">-377.8 TFLOPS</span><br>(-24.3% Decode throughput)</td>
+      </tr>
+      <tr>
+        <td><strong>800G Shared Pool Usable %</strong><br><span style="color:#64748B;font-size:11px;">UEC (&alpha;=1, 0 XOFF) vs RoCE (&alpha;=2)</span></td>
+        <td><code>80.00% Absorbed</code><br>(25,784.4 KiB across 4 queues)</td>
+        <td><code>55.00% Absorbed</code><br>(17,726.7 KiB; 38.13% XOFF locked)</td>
+        <td><span class="miss-mark">-25.00 pts Pool Util</span><br>(-8,057.7 KiB buffer)</td>
+      </tr>
+      <tr>
+        <td><strong>32:1 Incast Victim P99</strong><br><span style="color:#64748B;font-size:11px;">UEC Trimming vs RoCEv2 PFC</span></td>
+        <td><code>18.3 &mu;s P99</code><br>(0 PFC paused ports)</td>
+        <td><code>452.8 &mu;s P99</code><br>(29 PFC paused ports HoL)</td>
+        <td><span class="miss-mark">+434.5 &mu;s (+2,374%)</span><br>(24.69x tail inflation)</td>
+      </tr>
+      <tr>
+        <td><strong>Async RL Staleness Ceiling</strong><br><span style="color:#64748B;font-size:11px;">&tau;<sub>max</sub>=4 vs Unbounded &tau;<sub>max</sub>=8</span></td>
+        <td><code>140.73 eff_steps/hr</code><br>(KL 0.01657, Clip 5.16%)</td>
+        <td><code>131.74 eff_steps/hr</code><br>(KL 0.05574, Clip 15.11%)</td>
+        <td><span class="miss-mark">-8.99 eff_steps/hr</span><br>(-18.44 pts ESS factor)</td>
+      </tr>
+      <tr>
+        <td><strong>Partial Rollout IS Estimator</strong><br><span style="color:#64748B;font-size:11px;">Token-Aligned TIS vs Prefix Mask</span></td>
+        <td><code>140.73 eff_steps/hr</code><br>($p_\theta(y_t)/q_{v(t)}(y_t)$ at $\tau_{\max}=4$)</td>
+        <td><code>106.13 eff_steps/hr</code><br>(`--mask-offpolicy`, 33.64% masked)</td>
+        <td><span class="miss-mark">-34.60 eff_steps/hr</span><br>(-24.6% learning signal)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="panel">
+    <div class="panel-title">Key Perturbation Takeaway for Production Architects</div>
+    <p style="font-size:12.3px;color:#334155;line-height:1.5;">
+      在三层架构中，“盲目追求单一维度极限”均会导致系统级反噬：(1) 仅将权重量化为 4-bit 但沿用无尾数的 `UE8M0` (`MXFP4`) 会损失 `6.29 dB` 信噪比；(2) 在 800G 交换机上调大 `dynamic_th` ($\alpha=8$) 却保留 RoCEv2 `PFC` 仍会被 `38.13%` 的 XOFF 预留卡死在 `60.0%` 池利用率上限；(3) 将异步 RL 推至 $\tau_{\max}=8$ 虽提升 `17.6%` 原始步速，却因 KL 散度暴增 `3.36x` 造成有效收敛速率净亏 `6.4%`。
+    </p>
+  </div>
+</section>
+
+<!-- ==================== CARD 6 / 7 ==================== -->
+<section class="card" id="card-6">
+  <div>
+    <div class="card-header">
+      <span class="badge-step">6 / 7 · LATENCY &amp; THROUGHPUT SCALING</span>
+      <span class="badge-track">Paired Primary (#3B82F6) vs Baseline (#CBD5E1) Across Load Tiers</span>
+    </div>
+    <h2 class="headline">
+      延迟与吞吐缩放：UEC 裁剪在 64:1 Incast 下将 <span class="accent">CCT 从 2,014.2 &mu;s 压至 413.2 &mu;s (4.87x)</span>
+    </h2>
+    <p class="subhead">
+      成对水平条形图对比：(上) 800G 交换机在 8/16/32/64 并发 Incast 下的 P99 集合通信完成时间 (CCT, 越短越好)；(下) B200 GEMM 与 128-GPU Async RL 在不同批次/陈旧度下的有效吞吐率 (越高越好)。
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Part A · 800G MoE Incast P99 Collective Completion Time (CCT &mu;s — Lower is Better)</div>
+
+    <div class="latency-row">
+      <div class="latency-label"><span>8-to-1 Incast (4.0 MiB Burst, Ideal 41.9 &mu;s)</span><span>3.03x Speedup (0 vs 3 Paused Ports)</span></div>
+      <div class="dual-bar-row">
+        <span>UEC Trimming</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 8.92%;"></div></div>
+        <span class="kv-val">59.9 &mu;s</span>
+      </div>
+      <div class="dual-bar-row">
+        <span>RoCEv2 PFC</span>
+        <div class="bar-track"><div class="bar-fill-slate" style="width: 27.08%;"></div></div>
+        <span class="kv-val">181.8 &mu;s</span>
+      </div>
+    </div>
+
+    <div class="latency-row">
+      <div class="latency-label"><span>16-to-1 Incast (8.0 MiB Burst, Ideal 83.9 &mu;s)</span><span>4.32x Speedup (56 Trimmed vs 12 Paused)</span></div>
+      <div class="dual-bar-row">
+        <span>UEC Trimming</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 15.52%;"></div></div>
+        <span class="kv-val">104.2 &mu;s</span>
+      </div>
+      <div class="dual-bar-row">
+        <span>RoCEv2 PFC</span>
+        <div class="bar-track"><div class="bar-fill-slate" style="width: 67.13%;"></div></div>
+        <span class="kv-val">450.7 &mu;s</span>
+      </div>
+    </div>
+
+    <div class="latency-row">
+      <div class="latency-label"><span>32-to-1 Incast (16.0 MiB Burst, Ideal 167.8 &mu;s)</span><span>4.69x Speedup (515 Trimmed vs 29 Paused)</span></div>
+      <div class="dual-bar-row">
+        <span>UEC Trimming</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 20.57%;"></div></div>
+        <span class="kv-val">207.2 &mu;s</span>
+      </div>
+      <div class="dual-bar-row">
+        <span>RoCEv2 PFC</span>
+        <div class="bar-track"><div class="bar-fill-slate" style="width: 48.25%;"></div></div>
+        <span class="kv-val">971.9 &mu;s</span>
+      </div>
+    </div>
+
+    <div class="latency-row" style="margin-bottom:0;">
+      <div class="latency-label"><span>64-to-1 Incast (32.0 MiB Burst, Ideal 335.5 &mu;s)</span><span>4.87x Speedup (Victim P99: 22.2 vs 969.6 &mu;s)</span></div>
+      <div class="dual-bar-row">
+        <span>UEC Trimming</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 20.51%;"></div></div>
+        <span class="kv-val">413.2 &mu;s</span>
+      </div>
+      <div class="dual-bar-row">
+        <span>RoCEv2 PFC</span>
+        <div class="bar-track"><div class="bar-fill-slate" style="width: 100.0%;"></div></div>
+        <span class="kv-val">2014.2 &mu;s</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Part B · B200 NVFP4 GEMM (TFLOPS) &amp; Slime Async RL Effective Convergence (eff_steps/hr — Higher is Better)</div>
+
+    <div class="latency-row">
+      <div class="latency-label"><span>B200 Decode GEMM (M=64, N=16384, K=16384)</span><span>1.80x vs FP8 (+32.1% Fused Epilogue Gain)</span></div>
+      <div class="dual-bar-row">
+        <span>NVFP4 Fused</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 86.30%;"></div></div>
+        <span class="kv-val">1553.4 TF</span>
+      </div>
+      <div class="dual-bar-row">
+        <span>FP8 Baseline</span>
+        <div class="bar-track"><div class="bar-fill-slate" style="width: 47.98%;"></div></div>
+        <span class="kv-val">863.7 TF</span>
+      </div>
+    </div>
+
+    <div class="latency-row">
+      <div class="latency-label"><span>B200 Chunked Prefill GEMM (M=512..8192, N=16384, K=16384)</span><span>1.95x Sustained Tensor Core Throughput</span></div>
+      <div class="dual-bar-row">
+        <span>NVFP4 Fused</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 100.0%;"></div></div>
+        <span class="kv-val">7200.0 TF</span>
+      </div>
+      <div class="dual-bar-row">
+        <span>FP8 Baseline</span>
+        <div class="bar-track"><div class="bar-fill-slate" style="width: 51.25%;"></div></div>
+        <span class="kv-val">3690.0 TF</span>
+      </div>
+    </div>
+
+    <div class="latency-row" style="margin-bottom:0;">
+      <div class="latency-label"><span>128-GPU GRPO Effective Convergence Rate (&tau;<sub>max</sub>=4 TIS vs Sync &tau;=0)</span><span>2.91x Effective Convergence Speedup</span></div>
+      <div class="dual-bar-row">
+        <span>Async &tau;<sub>max</sub>=4</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 93.82%;"></div></div>
+        <span class="kv-val">140.73 /hr</span>
+      </div>
+      <div class="dual-bar-row">
+        <span>Sync Baseline</span>
+        <div class="bar-track"><div class="bar-fill-slate" style="width: 32.21%;"></div></div>
+        <span class="kv-val">48.32 /hr</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-dark">
+    <div>
+      <strong>SCALING NOTE:</strong> Deterministic single-seed exact arithmetic (`run.py --check`); all bar widths scaled directly from sealed `results.json` ratios.
+    </div>
+    <span>0 Fabricated Coordinates</span>
+  </div>
+</section>
+
+<!-- ==================== CARD 7 / 7 ==================== -->
+<section class="card" id="card-7">
+  <div>
+    <div class="card-header">
+      <span class="badge-step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; READINESS</span>
+      <span class="badge-track">Architectural Decision Guide &amp; Provenance</span>
+    </div>
+    <h2 class="headline">
+      架构师决断：<span class="accent">何时采用 NVFP4、UEC 裁剪与有界异步 RL</span>，以及四大严禁踩坑边界
+    </h2>
+    <p class="subhead">
+      将 Phase 15 的底层硬件布局、交换机缓冲方程与分布式 RL 随机过程收敛边界转化为可直接落地的生产准入清单。
+    </p>
+  </div>
+
+  <div class="grid-2">
+    <div class="fit-card-good">
+      <div class="fit-title" style="color:var(--green-ink);">&#9989; Good Fit (强烈推荐落地场景)</div>
+      <ul class="fit-list" style="color:#064E3B;">
+        <li><strong>1. Blackwell B200/GB200 大模型推理与后训练 (`NVFP4`)</strong>：启用 `SFVecSize=16` (`float_ue4m3_t`) + Per-Tensor FP32 二级缩放，强制 `MMA_N` 对齐 128/256 并开启 `LinCombBlockScaleFactor` 融合 Epilogue，兼得 `1.80x–1.95x` 算力提速与 `2.06x` 128K KV 并发容量。</li>
+        <li><strong>2. 800G/1.6T 浅缓冲 AI 以太网 (`UEC Packet Trimming`)</strong>：在 MoE All-to-All 与高频 Checkpoint 场景下关闭业务队列 PFC，启用 `dynamic_th=0` ($\alpha=1.0$) + `64B` CP 高优队列裁剪 + EVB 多路径喷洒，释放 `38.13%` XOFF 死锁缓冲并将 32:1/64:1 CCT 缩短 `4.69x–4.87x`。</li>
+        <li><strong>3. 长思维链 (1K–32K CoT) 强化学习 (`Slime Async RL`)</strong>：配置 `AsyncRolloutWorker` 后台并发池并将队列背压限制在 $\tau_{\max} \in [2, 4]$，对跨步续写 (`--partial-rollout`) 轨迹严格保留逐 Token 生成版本 $\log q_{v(t)}(y_t\mid h_t)$ 执行 TIS 双重截断，获取 `2.46x–2.91x` 净收敛加速。</li>
+      </ul>
+    </div>
+
+    <div class="fit-card-bad">
+      <div class="fit-title" style="color:var(--red-ink);">&#9940; Not For (严禁盲目套用场景)</div>
+      <ul class="fit-list" style="color:#7F1D1D;">
+        <li><strong>1. 严禁在高峰度离群层直接使用无尾数 `MXFP4` (`UE8M0`)</strong>：当激活通道 Kurtosis &gt; 15 时，`UE8M0` 纯 $2^e$ 指数缩放会引发 `6.29 dB` SQNR 暴跌与 `4.25x` MSE 膨胀，必须改用 `NVFP4` (`UE4M3`) 或前置 Hadamard $H_{16}$ 旋转。</li>
+        <li><strong>2. 严禁在 SM100 块缩放算子中盲选 `MMA_N = 192`</strong>：由于 `UTCCP` 硬件按 `Blk_MN = 128` 列粒度搬运缩放因子，`MMA_N = 192` 会强制按 `256` 列分配并传输 `SFB` (+33.33% 冗余开销)。</li>
+        <li><strong>3. 严禁在 800G RoCEv2 上仅调大 `dynamic_th` 而不治理 XOFF 与 Incast</strong>：32 端口 XOFF Headroom 已锁死 `38.13%` 缓冲池，盲目调大 $\alpha$ 只会加速触发 PFC 级联暂停与 `100 ms` `PFC_WD` 丢包风暴。</li>
+        <li><strong>4. 严禁运行无界异步 RL ($\tau_{\max} \ge 8$) 或用单一当前策略重算跨版本前缀</strong>：会引发 KL 散度爆炸 (`0.05574`) 与梯度失真。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Readiness &amp; Falsifiable Verification Matrix</div>
+    <div class="grid-3">
+      <div class="kv-row"><span>CUTLASS 4.x Kernel</span><span class="pill pill-act">Production Ready</span></div>
+      <div class="kv-row"><span>UEC 1.0 Trimming</span><span class="pill pill-confirm">TH5/TH6 &amp; SONiC 2025+</span></div>
+      <div class="kv-row"><span>Slime Async RL</span><span class="pill pill-act">Production Ready</span></div>
+    </div>
+  </div>
+
+  <div class="footer-dark">
+    <div>
+      <strong>LICENSE &amp; PROVENANCE:</strong> Original analysis &amp; deterministic standard-library Python simulations in <code>turbo998/ai-infra-research</code> (MIT / CC-BY-4.0). No private/customer data or GPU cluster telemetry claimed.
+    </div>
+    <span>Phase 15 Complete · 60 Questions / 55 Experiments</span>
+  </div>
+</section>
+
+</body>
+</html>
