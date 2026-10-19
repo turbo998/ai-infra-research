@@ -1633,6 +1633,72 @@
         "ev-exp-vllm-v1-rejection-sampler-2026"
       ],
       "next_step": "已完成 vllm-project/vllm (commit 3ff10dde: vllm/v1/sample/rejection_sampler.py 与 vllm/v1/spec_decode/fly.py) 源码核验与 128K/256K 词表离线仿真，证实免归一化 Triton Gumbel-Max (BLOCK_SIZE=8192) 将单步 HBM 流量削减 4.545x（3,125 -> 687.5 MiB）、采样延迟从 1.269 ms 压至 0.280 ms（4.53x 提速）且严格保持目标分布，float64 RNG 将 0.0 下溢概率降 5.37e8x，FLY (W=2, top_k=3) 将单步产出从 3.25 提升至 5.25 tokens（+61.54%）。"
+    },
+    {
+      "id": "deepep-engram-hybrid-elastic-symmetric-memory",
+      "title": "在挂载 1.0 TiB 级参数化 N-Gram 记忆表（Engram）的稀疏大模型中，如何避免纯 GPU 对称内存吞噬 20 GiB/GPU HBM 以及 1,792 次 512B 细粒度跨节点随机读取引发的 PCIe MMIO 门铃风暴？DeepEP V2.5 HybridElasticSymmetricMemory (pidfd_getfd VMM + Host NUMA) 与 engram_fetch_impl (__ballot_sync + ncclGinOptFlagsAggregateRequests + 末 Warp flush_async) 如何节省 1,024 GiB HBM 并实现 20.15x 检索加速？",
+      "component": "deepep-engram-hybrid-elastic-symmetric-memory",
+      "priority": 30,
+      "depends_on": [
+        "ibgda-gpu-initiated-rdma-doorbell-nvshmem-deepep",
+        "nvshmem-ibgda-symmetric-heap-vmm-multicast-team"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/deepep-engram-hybrid-elastic-symmetric-memory.md",
+        "experiments/deepep_engram_hybrid_symmetric/results.json",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-deepep-engram-hybrid-symmetric-impl-2026",
+        "ev-exp-deepep-engram-hybrid-symmetric-2026"
+      ],
+      "next_step": "已完成 deepseek-ai/DeepEP V2.5 (commit b5a33eef: csrc/kernels/comm/symmetric.hpp 与 deep_ep/include/deep_ep/impls/engram/engram_fetch.cuh) 源码核验与 64 卡 1.0 TiB Engram 离线仿真，证实 HybridElasticSymmetricMemory (Host NUMA + pidfd_getfd 拼装 132 GiB 连续 VA) 为每卡节省 16.0 GiB HBM（全集群 1,024 GiB），且 engram_fetch_impl 将每步门铃削减 10.67x（1,792 -> 168）、省去 56 次冗余 Flush，4 层检索延迟从 676.08 us（CPU 代理）/ 305.68 us（未聚合 IBGDA）降至 33.56 us（提速 20.15x / 9.11x）。"
+    },
+    {
+      "id": "megatron-fsdp-nccl-ub-double-buffer-hfsdp",
+      "title": "在 512 卡 B200 训练 120B 混合架构（Mamba + Attention + MoE）模型时，如何同时攻克标准 HSDP 的 244.2 GiB 显存 OOM、Full FSDP 跨机通信墙与 16/16 SM 集合通信抢占？Megatron-FSDP 的 HFSDP (outer='optim')、MaxPoolAllocator 双缓冲、nccl_ub 用户缓冲区注册（Copy-Engine 0/4 SMs）与 fp8_param_gather 如何将显存压降 4.79x 并实现 1.344x 步耗时加速？",
+      "component": "megatron-fsdp-nccl-ub-double-buffer-hfsdp",
+      "priority": 30,
+      "depends_on": [
+        "fsdp2-dtensor-async-tp-nd-parallelism",
+        "nccl-symmetric-memory-nvls-sharp-zero-copy"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/megatron-fsdp-nccl-ub-double-buffer-hfsdp.md",
+        "experiments/megatron_fsdp_nccl_ub_hfsdp/results.json",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-megatron-fsdp-nccl-ub-hfsdp-impl-2026",
+        "ev-exp-megatron-fsdp-nccl-ub-hfsdp-2026"
+      ],
+      "next_step": "已完成 NVIDIA/Megatron-LM (commit e592c042: docs/user-guide/features/megatron_fsdp.md 与 distributed_data_parallel_config.py) 源码核验与 512 卡 B200 120B 模型仿真，证实 HFSDP 将单卡状态显存从 HSDP 的 244.20 GiB 降至 51.01 GiB（-4.79x，消除 192 GiB OOM），配合 nccl_ub + MaxPoolAllocator + CE AG (0/4 SMs) + fp8_param_gather 将步耗时从 572.35 ms 降至 425.95 ms（1.344x 提速）。"
+    },
+    {
+      "id": "mooncake-transfer-engine-cx8-data-direct-rdma",
+      "title": "在 ConnectX-8 (800G) 分布式 KV 缓存传输中，为什么跨 PCI Root 注册 MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT 会遭遇 ENOTSUPP 错误且 4,096 个 16 KiB 分页块提交会消耗 1.72 ms CPU 时间？Mooncake Transfer Engine 如何通过 mlx5dv_get_data_direct_sysfs_path@MLX5_1.25 顶层 PCI Root 配对与 BatchRdmaDeviceCache O(1) 快照短路将 CPU 提交加速 34.71x 并实现 5.23x 端到端 KV 传输提速？",
+      "component": "mooncake-transfer-engine-cx8-data-direct-rdma",
+      "priority": 30,
+      "depends_on": [
+        "disaggregated-kv-routing",
+        "kv-cache-offload-tiered-hbm-dram-cxl-nvme"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/mooncake-transfer-engine-cx8-data-direct-rdma.md",
+        "experiments/mooncake_cx8_data_direct_rdma/results.json",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-mooncake-cx8-data-direct-impl-2026",
+        "ev-exp-mooncake-cx8-data-direct-2026"
+      ],
+      "next_step": "已完成 kvcache-ai/Mooncake (commit 1f65cf13: data_direct_topology.cpp, topology.h, rdma_batch_cache.h) 源码核验与 4,096 块 (64 MiB) KV 传输仿真，证实 firstPciRootSegment ('pci0009:00') 精确配对消除 75% 跨 Root 绕行并提供 92.0 GB/s Data Direct 带宽，BatchRdmaDeviceCache (99.976% 命中率) 将 CPU 提交从 1.720 ms 压至 0.050 ms（快 34.71x），端到端传输从 4.074 ms（轮询）/ 2.919 ms（标准 GPUDirect）降至 0.779 ms（提速 5.23x / 3.75x）。"
     }
   ],
   "updated_at": "2026-10-20"

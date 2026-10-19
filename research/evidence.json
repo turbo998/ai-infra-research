@@ -3103,6 +3103,117 @@
       "verifier": "python experiments\\vllm_v1_rejection_sampler_spec_decode\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic HBM roofline, analytical Gumbel-Max identity, and FLY deferred verification simulator."
+    },
+    {
+      "id": "ev-deepep-engram-hybrid-symmetric-impl-2026",
+      "component": "interconnect_and_collectives",
+      "claim": "In deepseek-ai/DeepEP (commit b5a33eefda39485f438dc764695b71ba7b9249b6, csrc/kernels/comm/symmetric.hpp blob 30f1ac3b and deep_ep/include/deep_ep/impls/engram/engram_fetch.cuh blob b008e7e6), HybridElasticSymmetricMemory reserves contiguous virtual addresses (num_sym_bytes + num_rdma_storage_bytes * num_scaleup_ranks), imports intra-node peer POSIX file descriptors via syscall(SYS_pidfd_open) + syscall(SYS_pidfd_getfd) + lazy_cuMemImportFromShareableHandle + lazy_cuMemMap, and sets NCCL_ELASTIC_BUFFER_REGISTER=1 when use_cpu_rdma_storage=true; engram_fetch_impl coalesces per-peer 512B requests via __ballot_sync into circular pending_requests[2*kWarpSize], batches doorbells via ncclGinOptFlagsAggregateRequests at doorbell_threshold = kFlushDepth / num_active_peer_context_warps, and executes gin.flush_async only on the last arriving warp.",
+      "status": "implementation",
+      "source_ids": [
+        "deepep-hybrid-elastic-symmetric-memory-2026",
+        "deepep-engram-fetch-rdma-gin-get-2026"
+      ],
+      "artifacts": [
+        "docs/components/deepep-engram-hybrid-elastic-symmetric-memory.md",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of deepseek-ai/DeepEP csrc/kernels/comm/symmetric.hpp and deep_ep/include/deep_ep/impls/engram/engram_fetch.cuh",
+      "verified_at": "2026-10-20",
+      "limitations": "Static C++/CUDA VMM and GIN source verification."
+    },
+    {
+      "id": "ev-exp-deepep-engram-hybrid-symmetric-2026",
+      "component": "interconnect_and_collectives",
+      "claim": "In own-offline evaluation of a 1.0 TiB parametric Engram table across 64 GPUs (8 nodes x 8 GPUs, 16 GiB/rank shard, 132.0 GiB contiguous VA per rank), HybridElasticSymmetricMemory with Host-NUMA storage saves 16.0 GiB HBM per GPU (1,024.0 GiB cluster HBM, reducing symmetric HBM tax from 20.0 to 4.0 GiB/GPU); on a 4-layer BS=64 lookup (1,792 remote 512B reads), warp-ballot coalescing (doorbell_threshold=16) + last-warp atomic flush cuts PCIe MMIO doorbells 10.67x (1,792 -> 168), avoids 56 redundant flushes, and reduces fetch latency from 676.08 us (CPU proxy) and 305.68 us (uncoalesced GPU IBGDA) to 33.56 us (20.15x and 9.11x speedup).",
+      "status": "own-offline",
+      "source_ids": [
+        "deepep-hybrid-elastic-symmetric-memory-2026",
+        "deepep-engram-fetch-rdma-gin-get-2026"
+      ],
+      "artifacts": [
+        "experiments/deepep_engram_hybrid_symmetric/run.py",
+        "experiments/deepep_engram_hybrid_symmetric/results.json",
+        "docs/components/deepep-engram-hybrid-elastic-symmetric-memory.md",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\deepep_engram_hybrid_symmetric\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic CUDA VMM memory ledger and PCIe MMIO doorbell / 400G RDMA latency simulator."
+    },
+    {
+      "id": "ev-megatron-fsdp-nccl-ub-hfsdp-impl-2026",
+      "component": "distributed_training",
+      "claim": "In NVIDIA/Megatron-LM (commit e592c042d575ad86b9a0b9b20239e4c1a1c1f060, megatron_fsdp.md blob 956e79fe and distributed_data_parallel_config.py blob 7fae838b), Megatron-FSDP supports Hybrid-FSDP (data_parallel_sharding_strategy='optim_grads_params' + outer_dp_sharding_strategy='optim' + hfsdp_param_gather_overlap=True), MaxPoolAllocator (megatron_fsdp_max_pool_double_buffer=True) for asymmetric Mamba/MoE layers, fp8_param_gather=True sharded FP8 quantization, and nccl_ub=True user buffer registration which reduces AG/RS SM usage from 16/16 (NVL+IB without SHARP) to 6/6 (with SHARP) and 4/5 or 0/4 (NVL with Copy-Engine AG).",
+      "status": "implementation",
+      "source_ids": [
+        "megatron-fsdp-user-guide-maxpool-hfsdp-2026",
+        "megatron-fsdp-ddp-config-sm-table-2026"
+      ],
+      "artifacts": [
+        "docs/components/megatron-fsdp-nccl-ub-double-buffer-hfsdp.md",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of NVIDIA/Megatron-LM megatron_fsdp.md and distributed_data_parallel_config.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python/Markdown source verification."
+    },
+    {
+      "id": "ev-exp-megatron-fsdp-nccl-ub-hfsdp-2026",
+      "component": "distributed_training",
+      "claim": "In own-offline evaluation of a 120B hybrid Mamba/Transformer/MoE model across 512 Blackwell B200 GPUs (64 nodes x 8 GPUs, 148 SMs, 192 GiB HBM), standard HSDP (outer='no_shard') requires 244.20 GiB/GPU and OOMs, whereas Megatron HFSDP (outer='optim') reduces per-GPU state memory 4.79x to 51.01 GiB; combining nccl_ub=True + MaxPoolAllocator (saving 38.50 ms dynamic allocator stall) + Copy-Engine AG (0/4 SMs vs 16/16 SMs, cutting compute inflation from +6.44% to +0.35%) + fp8_param_gather=True reduces step time from 572.35 ms (Full FSDP without UB) to 425.95 ms (1.344x speedup).",
+      "status": "own-offline",
+      "source_ids": [
+        "megatron-fsdp-user-guide-maxpool-hfsdp-2026",
+        "megatron-fsdp-ddp-config-sm-table-2026"
+      ],
+      "artifacts": [
+        "experiments/megatron_fsdp_nccl_ub_hfsdp/run.py",
+        "experiments/megatron_fsdp_nccl_ub_hfsdp/results.json",
+        "docs/components/megatron-fsdp-nccl-ub-double-buffer-hfsdp.md",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\megatron_fsdp_nccl_ub_hfsdp\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic 2D sharding memory, SM wave inflation, and NVLink/IB overlap simulator."
+    },
+    {
+      "id": "ev-mooncake-cx8-data-direct-impl-2026",
+      "component": "serving_systems",
+      "claim": "In kvcache-ai/Mooncake (commit 1f65cf13c9f886f8db8b88b7733367b18340ebf0, data_direct_topology.cpp blob 540fbbd0, topology.h blob 151ca69e, and rdma_batch_cache.h blob 68dd5a70), dataDirectSysfsRoot dynamically resolves mlx5dv_get_data_direct_sysfs_path@MLX5_1.25 via dlvsym and pairs a ConnectX-8 NIC with a GPU for MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT only when both share the identical top-level firstPciRootSegment (e.g., 'pci0009:00'); BatchRdmaDeviceCache::select caches (snapshot_, addr_, length_, buffer_id_, device_id_) to short-circuit bufferCoversRange lookups in O(1) when buffer_range_index is non-overlapping and HCA list size is 1.",
+      "status": "implementation",
+      "source_ids": [
+        "mooncake-cx8-data-direct-topology-2026",
+        "mooncake-rdma-batch-device-cache-2026"
+      ],
+      "artifacts": [
+        "docs/components/mooncake-transfer-engine-cx8-data-direct-rdma.md",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of kvcache-ai/Mooncake data_direct_topology.cpp, topology.h, and rdma_batch_cache.h",
+      "verified_at": "2026-10-20",
+      "limitations": "Static C++ source verification."
+    },
+    {
+      "id": "ev-exp-mooncake-cx8-data-direct-2026",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of a 64.0 MiB paged KV transfer (4,096 x 16 KiB blocks) across a 4-PCI-root 8x GPU + 8x ConnectX-8 800G node, topology-unaware round-robin incurs a 75.0% cross-root ENOTSUPP/hairpin rate (28.51 GB/s, 4.074 ms total); Mooncake CX8 Data Direct PCI-root pairing ('pci0009:00', 92.00 GB/s) + BatchRdmaDeviceCache (99.976% hit rate, cutting 4,096-block CPU submit time 34.71x from 1.720 ms to 0.050 ms) reduces end-to-end transfer latency to 0.779 ms (5.23x faster than round-robin and 3.75x faster than uncached standard GPUDirect at 2.919 ms).",
+      "status": "own-offline",
+      "source_ids": [
+        "mooncake-cx8-data-direct-topology-2026",
+        "mooncake-rdma-batch-device-cache-2026"
+      ],
+      "artifacts": [
+        "experiments/mooncake_cx8_data_direct_rdma/run.py",
+        "experiments/mooncake_cx8_data_direct_rdma/results.json",
+        "docs/components/mooncake-transfer-engine-cx8-data-direct-rdma.md",
+        "docs/reports/ai-infra-phase21-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\mooncake_cx8_data_direct_rdma\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic PCI-root bandwidth and 4,096-block metadata cache simulator."
     }
   ],
   "updated_at": "2026-10-20"
