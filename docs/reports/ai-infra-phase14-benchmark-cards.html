@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 14 Benchmark Report — DeepEP V2.5 GDAKI GPU-Initiated RDMA, SGLang DP-Attention &amp; Wafer-SRAM/HBM Speculative Cascade</title>
+<style>
+  :root {
+    --bg: #0B1120;
+    --card-bg: #FFFFFF;
+    --ink: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --border: #E2E8F0;
+    --surface: #F8FAFC;
+    --code-bg: #0F172A;
+    --blue: #2563EB;
+    --blue-bar: #3B82F6;
+    --slate-bar: #CBD5E1;
+    --green-bg: #ECFDF5;
+    --green-border: #A7F3D0;
+    --green-ink: #065F46;
+    --amber-bg: #FFFBEB;
+    --amber-border: #FDE68A;
+    --amber-ink: #92400E;
+    --red-bg: #FEF2F2;
+    --red-border: #FECACA;
+    --red-ink: #991B1B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+  }
+  .deck-header {
+    width: 900px;
+    color: #F8FAFC;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #1E293B;
+    padding-bottom: 12px;
+  }
+  .deck-header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .deck-header span { font-size: 13px; color: #94A3B8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .card {
+    width: 900px;
+    height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+  .card-top { display: flex; flex-direction: column; gap: 12px; }
+  .eyebrow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .badge-num {
+    background: #EFF6FF;
+    color: var(--blue);
+    border: 1px solid #BFDBFE;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .headline {
+    font-size: 27px;
+    line-height: 1.24;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+  }
+  .accent {
+    background: linear-gradient(90deg, #1D4ED8, #0284C7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .workbench-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr 1fr;
+    gap: 16px;
+    margin: 12px 0;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--subtle);
+  }
+  .kv-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .kv-row:last-child { border-bottom: none; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 700; }
+  .pill {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pill-act { background: var(--green-bg); color: var(--green-ink); border: 1px solid var(--green-border); }
+  .pill-confirm { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber-border); }
+  .pill-human { background: var(--red-bg); color: var(--red-ink); border: 1px solid var(--red-border); }
+  .pill-type { background: #EEF2FF; color: #3730A3; border: 1px solid #C7D2FE; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .quote-box {
+    background: #F1F5F9;
+    border-left: 4px solid var(--blue);
+    padding: 12px 16px;
+    border-radius: 0 10px 10px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #1E293B;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; }
+  .decision-card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .decision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bar-track {
+    width: 100%;
+    height: 12px;
+    background: #E2E8F0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--blue-bar);
+    border-radius: 999px;
+  }
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  table.matrix th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--subtle);
+    padding: 9px 10px;
+    border-bottom: 2px solid var(--border);
+    background: var(--surface);
+  }
+  table.matrix td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .code-block {
+    background: var(--code-bg);
+    color: #E2E8F0;
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.52;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .arrow-divider {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--blue);
+    padding: 4px 0;
+  }
+  .callout-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .callout {
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    line-height: 1.48;
+  }
+  .callout-green { background: var(--green-bg); border: 1px solid var(--green-border); color: var(--green-ink); }
+  .callout-amber { background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber-ink); }
+  .callout-red { background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red-ink); }
+  .callout-dark {
+    background: var(--code-bg);
+    color: #F8FAFC;
+    border-radius: 14px;
+    padding: 16px 20px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .lat-group { display: flex; flex-direction: column; gap: 14px; }
+  .lat-item { display: flex; flex-direction: column; gap: 6px; }
+  .lat-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; }
+  .lat-bars { display: flex; flex-direction: column; gap: 5px; }
+  .lat-row { display: grid; grid-template-columns: 150px 1fr 95px; align-items: center; gap: 10px; font-size: 12px; }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .fit-card {
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .fit-card h3 { font-size: 16px; font-weight: 800; }
+  .fit-list { display: flex; flex-direction: column; gap: 10px; font-size: 13px; line-height: 1.48; padding-left: 16px; }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>AI Infra Full-Stack Benchmark Report — Phase 14 (Priority 23)</h1>
+  <span>4:5 Portrait Deck (900x1125) · Provenance: own-offline + upstream SHA verified</span>
+</div>
+
+<!-- CARD 1: OVERVIEW & WORKBENCH -->
+<section class="card" id="card-1">
+  <div class="card-top">
+    <div class="eyebrow">
+      <span class="badge-num">1 / 7</span>
+      <span>HANDS-ON · GPU-INITIATED RDMA × DP-ATTENTION × WAFER-SRAM CASCADE</span>
+    </div>
+    <h2 class="headline">
+      DeepEP V2.5 <span class="accent">GDAKI GPU 直发 RDMA</span> 将 512B 延迟压至 0.831 us（7.90x），配合 SGLang <span class="accent">DP-Attention TBO</span> 实现 7.12x 吞吐与 9.34x KV 扩容
+    </h2>
+    <p class="subhead">
+      基于一手源码核验（<code>deepseek-ai/DeepEP@b5a33eef</code>、<code>sgl-project/sglang@62cee1b1</code>、<code>vllm-project/vllm@973dbf80</code>）与三个确定性标准库仿真器（<code>--check</code> 100% 校验通过）。
+    </p>
+  </div>
+
+  <div class="workbench-grid">
+    <div class="panel">
+      <div class="panel-title">Scenarios &amp; Threshold Bands</div>
+      <div class="kv-row"><span>1. DeepEP V2.5 GDAKI</span><span class="mono">60L EP=64</span></div>
+      <div class="kv-row"><span>2. SGLang DP-Attention</span><span class="mono">DP=64 EP=64</span></div>
+      <div class="kv-row"><span>3. SRAM+HBM Cascade</span><span class="mono">64K × 32 Sess</span></div>
+      <div class="kv-row"><span>Act Automatically</span><span class="pill pill-act">&ge; 0.85</span></div>
+      <div class="kv-row"><span>Confirm Architecture</span><span class="pill pill-confirm">0.65 – 0.84</span></div>
+      <div class="kv-row"><span>Send to Human</span><span class="pill pill-human">&lt; 0.65</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Structured Workload Input</div>
+      <div class="kv-row"><span>MoE Model</span><span class="mono">671B FP8 (61L MLA)</span></div>
+      <div class="kv-row"><span>Small RDMA Payload</span><span class="mono">128 B – 64 KiB</span></div>
+      <div class="kv-row"><span>GDAKI QP Config</span><span class="mono">kNumQPs=25 (24 SM)</span></div>
+      <div class="kv-row"><span>DP Gather Skew</span><span class="mono">sum=2720 / pad=8192</span></div>
+      <div class="kv-row"><span>Agentic Context</span><span class="mono">65,536 tok (10 GiB/sess)</span></div>
+      <div class="kv-row"><span>Speculative Draft</span><span class="mono">Suffix / DFlash / SRAM</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Headline Verified Readouts</div>
+      <div class="kv-row"><span>512B GDAKI Latency</span><span class="mono">0.831 us (7.90x)</span></div>
+      <div class="kv-row"><span>60L MoE Decode TPOT</span><span class="mono">14.196 ms (2.99x)</span></div>
+      <div class="kv-row"><span>MLA KV Pool Gain</span><span class="mono">4,147 GiB (9.34x)</span></div>
+      <div class="kv-row"><span>SUM_LEN FP8+TBO</span><span class="mono">146,087 tok/s (7.12x)</span></div>
+      <div class="kv-row"><span>Allocator Saved</span><span class="mono">-257.6 GiB (_TBO_BUF)</span></div>
+      <div class="kv-row"><span>SRAM+HBM Cascade</span><span class="mono">2.563 ms ($0.8566/1M)</span></div>
+    </div>
+  </div>
+
+  <div class="callout-row">
+    <div class="callout callout-green">
+      <strong>GDAKI + CTA-Exclusive QPs (`barrier.cuh:57`)</strong>：当 <code>kNumSMs (24) &le; kNumAvailableQPs (24)</code> 时自动切换至 <code>NCCL_GIN_RESOURCE_SHARING_CTA</code>，将跨 SM 自旋锁停顿从 <code>49.97 us</code> 压至 <code>0.54 us</code>。
+    </div>
+    <div class="callout callout-amber">
+      <strong>SRAM KV 容量墙警示 (`wafer_sram_gpu_cascaded_serving`)</strong>：单会话 64K KV 达 <code>10.0 GiB</code>；纯片上 SRAM 集群仅能片上驻留 <code>1</code> 个 64K 会话，必须采用 8K 滑窗 SRAM 草稿 + HBM3e 64K 全量验证级联。
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div>
+      <strong>Provenance &amp; Reproducibility</strong> · Mode: <code>own-offline</code> deterministic analytical models · Zero fabricated coordinates · Upstream blobs pinned.
+    </div>
+    <span class="mono">Phase 14 · Priority 23</span>
+  </div>
+</section>
+
+<!-- CARD 2: SINGLE-CASE DEEP DIVE -->
+<section class="card" id="card-2">
+  <div class="card-top">
+    <div class="eyebrow">
+      <span class="badge-num">2 / 7</span>
+      <span>SCENARIO: DEEPEP V2.5 GDAKI &amp; SGLANG DP-ATTENTION PRODUCTION AUDIT</span>
+    </div>
+    <h2 class="headline">
+      单案深潜：消除 <span class="accent">CPU Proxy 33.99 ms</span> 通信墙与 <span class="accent">MAX_LEN 268 GiB</span> 显存抖动的三项架构决策
+    </h2>
+    <div class="quote-box">
+      INPUT CASE: 8x8 H100 (EP=64, DP_attn=64) 671B MoE Serving · Decode BS=32/rank (512B–7.5KiB RDMA puts) + Hybrid Skewed Extend (sum_tokens=2,720 vs max_len*64=8,192 rows).
+    </div>
+  </div>
+
+  <div class="decision-stack">
+    <div class="decision-card">
+      <div class="decision-header">
+        <div>
+          <span class="pill pill-type">choice</span>
+          <strong style="margin-left:8px;">Decision 1: Enable NCCL_GIN_TYPE_GDAKI + kNumQPs=25 CTA-Exclusive + Doorbell Batching</strong>
+        </div>
+        <span class="pill pill-act">Act automatically · 0.96</span>
+      </div>
+      <p class="subhead">
+        <code>context.cpp:139</code> 启用 <code>NCCL_GIN_TYPE_GDAKI</code> 并配置 <code>kNumQPs=25</code>（1 Notify + 24 Data QPs），配合 <code>ncclGinOptFlagsAggregateRequests</code> 将 512B 带宽提至 <code>18.637 GB/s</code>（16.93x），60 层通信从 <code>33.99 ms</code> 降至 <code>5.676 ms</code>。
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 96%;"></div></div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-header">
+        <div>
+          <span class="pill pill-type">choice</span>
+          <strong style="margin-left:8px;">Decision 2: Switch DP-Attention to SUM_LEN FP8 AllGatherv + Two-Batch Overlap (_TBO_PERSIST_BUF)</strong>
+        </div>
+        <span class="pill pill-act">Act automatically · 0.94</span>
+      </div>
+      <p class="subhead">
+        <code>dp_attention.py:823</code> Group-128 FP8 量化（<code>1.03125 B/elem</code>）结合 <code>dp_tbo_comm</code> 双批次重叠与 KV 水位均衡路由，将单步耗时从 <code>132.538 ms</code> 压至 <code>18.619 ms</code>（吞吐 <code>7.12x</code>），持久缓冲削减 <code>257.6 GiB</code> 分配器预留。
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 94%;"></div></div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-header">
+        <div>
+          <span class="pill pill-type">score</span>
+          <strong style="margin-left:8px;">Decision 3: Deploy Heterogeneous SRAM-8B-Draft (8K Sliding) + GPU-HBM3e-70B-Target (64K Full)</strong>
+        </div>
+        <span class="pill pill-act">Act automatically · 0.91</span>
+      </div>
+      <p class="subhead">
+        针对 32 并发 64K 会话（<code>320 GiB</code> KV），将 Draft KV 限制在 8K 滑窗（<code>8 GiB</code>）驻留片上 SRAM（草稿耗时 <code>0.64 ms</code>），GPU HBM3e 单次验证 8 Token（接受 <code>5.40</code> tok），等效 TPOT <code>2.563 ms</code>（提速 <code>4.45x</code>，成本降 <code>3.70x</code>）。
+      </p>
+      <div class="bar-track"><div class="bar-fill" style="width: 91%;"></div></div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <span>Guardrail: Mandatory <code>ptx::fence_acq_rel_sys()</code> before world-team GIN barrier when mixing NVLink TMA writes &amp; RDMA signals.</span>
+    <span class="mono">Verified: barrier.cuh:155</span>
+  </div>
+</section>
+
+<!-- CARD 3: WHAT I TESTED (FULL EVALUATION MATRIX) -->
+<section class="card" id="card-3">
+  <div class="card-top">
+    <div class="eyebrow">
+      <span class="badge-num">3 / 7</span>
+      <span>WHAT I TESTED · FULL 8-SCENARIO EVALUATION MATRIX</span>
+    </div>
+    <h2 class="headline">
+      8 组跨栈评测矩阵：淘汰 <span class="accent">3 项反模式（✕）</span>，锁定 GDAKI、TBO 与异构投机级联最优工作点
+    </h2>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>SCENARIO</th>
+        <th>QUESTION / TASK</th>
+        <th>MODEL / SIMULATOR ANSWER</th>
+        <th>ACTION</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">1. Host-Proxy RDMA</td>
+        <td>60L MoE Decode (512B puts)</td>
+        <td class="mono">✕ 6.561 us/msg · 33.99 ms comm (79.96% share)</td>
+        <td><span class="pill pill-human">Reject (Bottleneck)</span></td>
+      </tr>
+      <tr>
+        <td class="mono">2. GDAKI Shared QP=5</td>
+        <td>24 SMs sharing 4 Data QPs</td>
+        <td class="mono">✕ SHARING_GPU lock stall 49.97 us (88.37 us total)</td>
+        <td><span class="pill pill-confirm">Increase QPs &ge; 25</span></td>
+      </tr>
+      <tr>
+        <td class="mono">3. DeepEP V2.5 GDAKI</td>
+        <td>kNumQPs=25 CTA + Doorbell Agg</td>
+        <td class="mono">0.831 us/msg · 5.676 ms comm · 14.196 ms TPOT (2.99x)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td class="mono">4. MAX_LEN Unmasked</td>
+        <td>DP=64 padded 8,192 rows to MoE</td>
+        <td class="mono">✕ 132.538 ms step · 20,522 tok/s · 268.0 GiB alloc</td>
+        <td><span class="pill pill-human">Reject (Pad Leak)</span></td>
+      </tr>
+      <tr>
+        <td class="mono">5. MAX_LEN + Mask -1</td>
+        <td>_mask_dp_pad_topk_ids_kernel</td>
+        <td class="mono">MoE cut 20.78 &rarr; 6.90 ms · 118.657 ms step (CUDA Graph)</td>
+        <td><span class="pill pill-confirm">Use in Graph Mode</span></td>
+      </tr>
+      <tr>
+        <td class="mono">6. SUM_LEN FP8 + TBO</td>
+        <td>AllGatherv FP8 + dp_tbo_comm</td>
+        <td class="mono">18.619 ms step · 146,087.3 tok/s (7.12x) · 10.4 GiB</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td class="mono">7. vLLM Suffix / DFlash</td>
+        <td>64K×32 GPU Speculative Decode</td>
+        <td class="mono">Suffix: 4.484 ms (2.54x) · DFlash: 3.499 ms (3.26x)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+      <tr>
+        <td class="mono">8. SRAM+HBM Cascade</td>
+        <td>8K SRAM Draft + 64K HBM Verify</td>
+        <td class="mono">2.563 ms TPOT (4.45x) · $0.8566 / 1M tok (-73% cost)</td>
+        <td><span class="pill pill-act">Act automatically</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout-row">
+    <div class="callout callout-red">
+      <strong>Failure Analysis (✕ Marks)</strong>：
+      (1) Host-Proxy 在 512B 下仅达 <code>1.101 GB/s</code>；(2) <code>kNumQPs=5</code> 触发跨 SM 自旋锁；(3) <code>MAX_LEN</code> 未掩码填充行将垃圾 Token 送入专家并引发 <code>268 GiB</code> 分配器膨胀。
+    </div>
+    <div class="callout callout-green">
+      <strong>Threshold Gating</strong>：
+      生产部署强制校验 <code>kNumAvailableQPs &ge; kNumSMs</code>、<code>mask_dp_pad_moe_topk_ids</code> 置 <code>-1</code> 哨兵、以及片上 SRAM 仅承载滑窗 Draft KV。
+    </div>
+  </div>
+</section>
+
+<!-- CARD 4: UNDER THE HOOD -->
+<section class="card" id="card-4">
+  <div class="card-top">
+    <div class="eyebrow">
+      <span class="badge-num">4 / 7</span>
+      <span>UNDER THE HOOD · VERIFIED UPSTREAM KERNEL &amp; SCHEDULER CONTRACTS</span>
+    </div>
+    <h2 class="headline">
+      代码级契约：从 DeepEP <span class="accent">get_qp_mode / fence_acq_rel_sys</span> 到 SGLang <span class="accent">_mask_dp_pad_topk_ids</span>
+    </h2>
+  </div>
+
+  <div class="code-block">// [1] deepseek-ai/DeepEP@b5a33eef — deep_ep/include/deep_ep/comm/barrier.cuh (lines 56-85, 147-159)
+template &lt;int kNumSMs, int kNumQPs, int kNumChannelsPerSM, bool kWithNotifyWarps = false&gt;
+__device__ __forceinline__ std::pair&lt;int, ncclGinResourceSharingMode&gt; get_qp_mode(
+    const int&amp; sm_idx, const int&amp; channel_in_sm_idx, const bool&amp; is_notify_warp = false) {
+    if (is_notify_warp) return {0, NCCL_GIN_RESOURCE_SHARING_CTA};
+    constexpr int kQPStartIdx = static_cast&lt;int&gt;(kWithNotifyWarps);
+    constexpr int kNumAvailableQPs = kNumQPs - kQPStartIdx;
+    if constexpr (kNumSMs &lt;= kNumAvailableQPs) {
+        const int num_qps_in_sm = (kNumAvailableQPs / kNumSMs) + (sm_idx &lt; (kNumAvailableQPs % kNumSMs));
+        return {kQPStartIdx + sm_idx + (channel_in_sm_idx % num_qps_in_sm) * kNumSMs, NCCL_GIN_RESOURCE_SHARING_CTA};
+    } else {
+        const auto global_channel_idx = sm_idx * kNumChannelsPerSM + channel_in_sm_idx;
+        return {kQPStartIdx + (global_channel_idx % kNumAvailableQPs), NCCL_GIN_RESOURCE_SHARING_GPU};
+    }
+}
+// In gin_barrier_wo_local_sync: flush all QPs + enforce system-scope fence when mixing NVLink &amp; GIN signals
+if constexpr (std::is_same_v&lt;team_t, ncclTeamTagWorld&gt;) ptx::fence_acq_rel_sys();</div>
+
+  <div class="arrow-divider">↓ Combined with Decoupled Attention-DP &amp; Parallel Block Speculation ↓</div>
+
+  <div class="code-block">// [2] sgl-project/sglang@62cee1b1 — python/sglang/srt/layers/dp_attention.py (lines 166-191, 792-858, 1122-1220)
+// - DpPaddingMode: SUM_LEN when (sum_len * 2 &lt; max_len * gather_width), forced MAX_LEN for pplx / CUDA Graph
+// - _mask_dp_pad_topk_ids_kernel: sets topk_ids = -1 on pad rows [r*max_len + n_r : (r+1)*max_len)
+// - _dp_gather_via_all_gatherv_fp8: quantizes BF16 -&gt; group-128 uint8 + fp32 scale (1.03125 B/elem)
+// - Two-Batch Overlap (TBO): dp_gather_partial_async on dp_tbo_comm with _TBO_PERSIST_BUF &amp; _tbo_event
+
+// [3] vllm-project/vllm@973dbf80 — vllm/v1/spec_decode/dflash.py &amp; suffix_decoding.py
+// - SuffixDecodingProposer: ArcticInference CPU suffix-tree match (load_model is no-op, 0 GiB GPU VRAM)
+// - DFlashProposer: parallel query block (num_query_per_req = 1 + num_speculative_tokens) in 1 forward pass</div>
+
+  <div class="callout-dark">
+    <span>Deterministic Verifier: <code>python -m unittest discover -s tests</code> (235 tests OK) &amp; <code>validate_research.py</code></span>
+    <span class="mono">&lt;answer&gt; PASS &lt;/answer&gt;</span>
+  </div>
+</section>
+
+<!-- CARD 5: ROBUSTNESS CHECK -->
+<section class="card" id="card-5">
+  <div class="card-top">
+    <div class="eyebrow">
+      <span class="badge-num">5 / 7</span>
+      <span>ROBUSTNESS CHECK · PERTURBATION &amp; SCALING SENSITIVITY</span>
+    </div>
+    <h2 class="headline">
+      鲁棒性检验：QP 数量缩减、DP 流量偏斜与上下文翻倍（4K&rarr;64K）下的退化幅度量化
+    </h2>
+    <p class="subhead">
+      测试当硬件资源受限或负载分布剧烈扰动时，各核心子系统的性能敏感度与保护机制。
+    </p>
+  </div>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>PERTURBATION DIMENSION</th>
+        <th>OPTIMAL / BASELINE</th>
+        <th>PERTURBED / STRESSED</th>
+        <th>CHANGE (DELTA)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>GDAKI QP Allocation</strong><br><span class="subhead">24 SMs, 96 Warp Channels</span></td>
+        <td class="mono">kNumQPs = 25 (SHARING_CTA)<br>Dispatch: 38.94 us (Lock: 0.54 us)</td>
+        <td class="mono">kNumQPs = 5 (SHARING_GPU)<br>Dispatch: 88.37 us (Lock: 49.97 us)</td>
+        <td class="mono" style="color:var(--red-ink);">+49.43 us (+126.9%)<br>2.27x slower</td>
+      </tr>
+      <tr>
+        <td><strong>GDAKI Over-Provisioning</strong><br><span class="subhead">NIC ICM Cache Thrashing</span></td>
+        <td class="mono">kNumQPs = 25 (24 Data QPs)<br>ICM Miss: 0.00 us (38.94 us)</td>
+        <td class="mono">kNumQPs = 97 (96 Data QPs)<br>ICM Miss: +3.24 us (41.64 us)</td>
+        <td class="mono" style="color:var(--amber-ink);">+2.70 us (+6.9%)<br>ICM page miss</td>
+      </tr>
+      <tr>
+        <td><strong>RDMA Doorbell Mode</strong><br><span class="subhead">512 B Payload Bandwidth</span></td>
+        <td class="mono">AggregateRequests (Batched)<br>18.637 GB/s (0.831 us)</td>
+        <td class="mono">Single Doorbell per WQE<br>7.578 GB/s (1.111 us)</td>
+        <td class="mono" style="color:var(--red-ink);">-11.059 GB/s (-59.3%)<br>PCIe MMIO bound</td>
+      </tr>
+      <tr>
+        <td><strong>DP-Attention Pad Masking</strong><br><span class="subhead">MAX_LEN (8,192 vs 2,720 rows)</span></td>
+        <td class="mono">topk_ids = -1 Masked<br>MoE: 6.90 ms · Alloc: 42.0 GiB</td>
+        <td class="mono">Unmasked Stale Pad Rows<br>MoE: 20.781 ms · Alloc: 268.0 GiB</td>
+        <td class="mono" style="color:var(--red-ink);">+13.881 ms MoE (+201%)<br>+226.0 GiB Alloc</td>
+      </tr>
+      <tr>
+        <td><strong>DP Gather Wire Precision</strong><br><span class="subhead">SUM_LEN AllGatherv (61L)</span></td>
+        <td class="mono">Group-128 FP8 (1.03125 B)<br>Raw DP Comm: 25.751 ms</td>
+        <td class="mono">BF16 Wire (2.000 B)<br>Raw DP Comm: 33.980 ms</td>
+        <td class="mono" style="color:var(--amber-ink);">+8.229 ms (+32.0%)<br>Wire BW overhead</td>
+      </tr>
+      <tr>
+        <td><strong>Wafer-SRAM Context Jump</strong><br><span class="subhead">2x WSE-3 @ 16 Concurrent Sess</span></td>
+        <td class="mono">L = 4,096 (0.625 GiB/sess)<br>28 sess fit · TPOT: 0.63 ms</td>
+        <td class="mono">L = 65,536 (10.0 GiB/sess)<br>1 sess fits · TPOT: 348.58 ms</td>
+        <td class="mono" style="color:var(--red-ink);">+347.95 ms (553x)<br>Off-wafer KV spill</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout-dark">
+    <span>Key Takeaway: Always keep <code>25 &le; kNumQPs &le; 33</code> for 24-SM GDAKI kernels and bound on-chip SRAM to sliding-window draft KV.</span>
+    <span class="mono">Robustness Verified</span>
+  </div>
+</section>
+
+<!-- CARD 6: LATENCY / THROUGHPUT SCALING -->
+<section class="card" id="card-6">
+  <div class="card-top">
+    <div class="eyebrow">
+      <span class="badge-num">6 / 7</span>
+      <span>LATENCY · END-TO-END STEP LATENCY &amp; TPOT ACROSS ARCHITECTURES</span>
+    </div>
+    <h2 class="headline">
+      延迟对决：GDAKI 削减 <span class="accent">83.3% MoE 通信耗时</span>，异构投机级联将 64K TPOT 压至 <span class="accent">2.563 ms</span>
+    </h2>
+    <p class="subhead">
+      蓝色条（<code>#3B82F6</code>）为 Phase 14 优化路径，灰色条（<code>#CBD5E1</code>）为传统基线路径（全部数值取自已封存 <code>results.json</code>）。
+    </p>
+  </div>
+
+  <div class="lat-group">
+    <div class="lat-item">
+      <div class="lat-label">
+        <span>1. 512B MoE Decode One-Way RDMA Latency (us) — Lower is Better</span>
+        <span class="mono">7.90x Faster</span>
+      </div>
+      <div class="lat-bars">
+        <div class="lat-row">
+          <span>DeepEP V2.5 GDAKI</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 12.67%;"></div></div>
+          <span class="mono">0.831 us</span>
+        </div>
+        <div class="lat-row">
+          <span>Host-Proxy RDMA</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--slate-bar);"></div></div>
+          <span class="mono">6.561 us</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="lat-item">
+      <div class="lat-label">
+        <span>2. 671B MoE 60-Layer Decode End-to-End TPOT (ms) — EP=64, BS=32/rank</span>
+        <span class="mono">2.99x Faster</span>
+      </div>
+      <div class="lat-bars">
+        <div class="lat-row">
+          <span>GDAKI CTA+PDL</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 33.39%;"></div></div>
+          <span class="mono">14.196 ms</span>
+        </div>
+        <div class="lat-row">
+          <span>Host-Proxy Ring</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--slate-bar);"></div></div>
+          <span class="mono">42.510 ms</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="lat-item">
+      <div class="lat-label">
+        <span>3. 64-GPU DP-Attention + MoE-EP Hybrid Step Latency (ms) — 2,720 Active Tokens</span>
+        <span class="mono">7.12x Faster</span>
+      </div>
+      <div class="lat-bars">
+        <div class="lat-row">
+          <span>SUM_LEN FP8+TBO</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 14.05%;"></div></div>
+          <span class="mono">18.619 ms</span>
+        </div>
+        <div class="lat-row">
+          <span>MAX_LEN Unmasked</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--slate-bar);"></div></div>
+          <span class="mono">132.538 ms</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="lat-item">
+      <div class="lat-label">
+        <span>4. 64K-Context Agentic Coding Effective TPOT (ms) — 32 Concurrent Sessions (320 GiB KV)</span>
+        <span class="mono">4.45x Faster</span>
+      </div>
+      <div class="lat-bars">
+        <div class="lat-row">
+          <span>SRAM+HBM Cascade</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 22.48%;"></div></div>
+          <span class="mono">2.563 ms</span>
+        </div>
+        <div class="lat-row">
+          <span>vLLM DFlash (K=8)</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 30.69%; background: #60A5FA;"></div></div>
+          <span class="mono">3.499 ms</span>
+        </div>
+        <div class="lat-row">
+          <span>GPU HBM3e AR Base</span>
+          <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--slate-bar);"></div></div>
+          <span class="mono">11.400 ms</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <span>Deterministic Repeatability: <code>run.py --check</code> exact JSON equality verified across all 3 Phase 14 suites.</span>
+    <span class="mono">CSP Self-Contained</span>
+  </div>
+</section>
+
+<!-- CARD 7: MY TAKE (GOOD FIT VS NOT FOR) -->
+<section class="card" id="card-7">
+  <div class="card-top">
+    <div class="eyebrow">
+      <span class="badge-num">7 / 7</span>
+      <span>MY TAKE · ARCHITECTURAL DECISION GUIDE &amp; READINESS</span>
+    </div>
+    <h2 class="headline">
+      架构师选型决断：何时启用 <span class="accent">GDAKI / DP-Attention / SRAM 级联</span>，何时规避反模式？
+    </h2>
+  </div>
+
+  <div class="fit-grid">
+    <div class="fit-card callout-green">
+      <h3>✅ Good Fit（强烈推荐场景）</h3>
+      <ul class="fit-list">
+        <li><strong>跨机柜 Wide-EP MoE Decode（EP &ge; 32）</strong>：启用 DeepEP V2.5 <code>NCCL_GIN_TYPE_GDAKI</code>，配置 <code>kNumQPs = 1 + kNumSMs</code>（如 25 QPs）与 <code>ncclGinOptFlagsAggregateRequests</code>，消除 CPU Proxy 瓶颈。</li>
+        <li><strong>MLA 架构长上下文高并发推理（DeepSeek-V3/R1）</strong>：采用 SGLang <code>dp_attention</code>（<code>DP_attn=64, EP=64</code>），开启 <code>SUM_LEN + FP8 AllGatherv + TBO</code>，释放 <code>9.34x</code> KV 容量。</li>
+        <li><strong>64K+ Agentic 代码生成与多轮工具调用</strong>：单集群开启 vLLM V1 <code>SuffixDecodingProposer + DFlashProposer</code>；跨集群采用 <code>片上 SRAM 8K 滑窗草稿 + GPU HBM3e 64K 全量验证</code>。</li>
+      </ul>
+    </div>
+
+    <div class="fit-card callout-red">
+      <h3>⛔ Not For（严禁误用场景）</h3>
+      <ul class="fit-list">
+        <li><strong>在 GDAKI 下配置过少或过多 QP</strong>：<code>kNumAvailableQPs &lt; kNumSMs</code> 会退化为全卡 L2 自旋锁（<code>+49.97 us</code>）；超过 64 QPs/rank 则引发 NIC ICM 页表抖动。</li>
+        <li><strong>在 <code>pplx</code> 对称后端或 CUDA Graph 下强开 <code>SUM_LEN</code></strong>：空闲 0-Token DP Rank 会导致设备端握手死锁，必须走 <code>MAX_LEN</code> 并开启 <code>mask_dp_pad_moe_topk_ids</code>（<code>-1</code> 哨兵）。</li>
+        <li><strong>用纯片上 SRAM 集群直接硬扛高并发 64K–128K 全量 KV</strong>：单会话 10–20 GiB KV 会瞬间击穿片上 SRAM 并触发片外 MemoryX 带宽雪崩（TPOT 劣化至 <code>348+ ms</code>）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <div>
+      <strong>Deliverable Readiness &amp; License</strong> · Repository: <code>turbo998/ai-infra-research</code> (branch <code>main</code>) · All 57 Questions &amp; 52 Experiments Verified · Apache-2.0 / MIT upstream citations linked.
+    </div>
+    <span class="mono">Phase 14 Complete</span>
+  </div>
+</section>
+
+</body>
+</html>

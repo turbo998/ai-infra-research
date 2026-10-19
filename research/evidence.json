@@ -2328,6 +2328,115 @@
       "verifier": "python experiments\\vera_rubin_hbm4_nvl144_roofline\\run.py --check",
       "verified_at": "2026-10-19",
       "limitations": "Analytical cross-generation roofline and rack-scale TCO projection based on published HBM4/NVLink-6/NVL144 architecture parameters; physical VR200 silicon not yet benchmarked."
+    },
+    {
+      "id": "evi-ibgda-gdaki-deepep-impl-001",
+      "component": "interconnect_and_collectives",
+      "claim": "In deepseek-ai/DeepEP (commit b5a33eefda39485f438dc764695b71ba7b9249b6, csrc/kernels/comm/context.cpp blob d26fdac9 lines 121-159, barrier.cuh blob 732c598c lines 56-169, and dispatch.cuh blob 3bacfc60 lines 92-405), GPU-initiated RDMA configures NCCL_GIN_TYPE_GDAKI with ginContextCount = num_allocated_qps and ginExclusiveContexts = true; get_qp_mode switches from device-wide spinlocked NCCL_GIN_RESOURCE_SHARING_GPU to CTA-exclusive NCCL_GIN_RESOURCE_SHARING_CTA when kNumSMs <= kNumAvailableQPs, batches counter puts via ncclGinOptFlagsAggregateRequests so only the final WQE rings the NIC UAR doorbell, enforces ptx::fence_acq_rel_sys() before world-team GIN barriers when mixing NVLink and RDMA writes, and overlaps epilogue launch via cudaTriggerProgrammaticLaunchCompletion().",
+      "status": "implementation",
+      "source_ids": [
+        "deepep-gdaki-comm-context-2026",
+        "deepep-gdaki-handle-barrier-dispatch-2026"
+      ],
+      "artifacts": [
+        "docs/components/ibgda-gpu-initiated-rdma.md",
+        "docs/reports/ai-infra-phase14-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of deepseek-ai/DeepEP context.cpp, handle.cuh, barrier.cuh, and dispatch.cuh",
+      "verified_at": "2026-10-19",
+      "limitations": "Static C++/CUDA source inspection; message-rate and QP lock contention evaluated in own-offline simulator."
+    },
+    {
+      "id": "evi-ibgda-gdaki-deepep-sim-001",
+      "component": "interconnect_and_collectives",
+      "claim": "In own-offline evaluation of 671B MoE 60-layer Decode (EP=64, BS=32/rank, 512B-7.5KiB RDMA payloads across 24 communication SMs), DeepEP V2.5 GDAKI with doorbell aggregation (ncclGinOptFlagsAggregateRequests) reduces 512B one-way latency from 6.561 us (Host-Proxy RDMA) to 0.831 us (7.90x speedup) and lifts 512B effective bandwidth from 1.101 GB/s to 18.637 GB/s (16.93x gain); allocating kNumQPs = 25 (1 notify + 24 data QPs, NCCL_GIN_RESOURCE_SHARING_CTA) eliminates cross-SM WQ spinlock stalls (38.94 us vs 88.37 us at kNumQPs = 5, 2.27x speedup), cutting 60-layer MoE communication time from 33.99 ms to 5.676 ms (5.99x speedup) and end-to-end Decode TPOT from 42.51 ms to 14.196 ms (2.99x speedup).",
+      "status": "own-offline",
+      "source_ids": [
+        "deepep-gdaki-comm-context-2026",
+        "deepep-gdaki-handle-barrier-dispatch-2026"
+      ],
+      "artifacts": [
+        "experiments/ibgda_gpu_initiated_rdma/run.py",
+        "experiments/ibgda_gpu_initiated_rdma/results.json",
+        "docs/components/ibgda-gpu-initiated-rdma.md",
+        "docs/reports/ai-infra-phase14-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\ibgda_gpu_initiated_rdma\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic analytical message-rate, PCIe MMIO doorbell, and QP contention simulator; not a physical multi-node ConnectX-7 hardware trace."
+    },
+    {
+      "id": "evi-sglang-dp-attention-tbo-impl-001",
+      "component": "serving_systems",
+      "claim": "In sgl-project/sglang (commit 62cee1b15c22350b17a9256fc6ad5777feb2ec70, python/sglang/srt/layers/dp_attention.py blob 022f29ef lines 143-193, 792-858, 1122-1221), Decoupled Attention-DP + Expert-EP switches between DpPaddingMode.MAX_LEN (forced under pplx symmetric collectives to avoid 0-token rank handshake deadlock and under CUDA Graph) and DpPaddingMode.SUM_LEN (when sum_len * 2 < max_len * gather_width); under MAX_LEN, _mask_dp_pad_topk_ids_kernel overwrites padded rows' topk_ids to -1 so stale hidden rows are dropped before MoE grouped GEMM; under SUM_LEN, _dp_gather_via_all_gatherv_fp8 quantizes BF16 activations into group-128 uint8 + fp32 scales (1.03125 B/elem) while Two-Batch Overlap (dp_gather_partial_async / dp_reduce_scatterv_async) reuses persistent _tbo_event and grow-only _TBO_PERSIST_BUF.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-dp-attention-tbo-fp8-2026"
+      ],
+      "artifacts": [
+        "docs/components/attention-dp-moe-ep-serving.md",
+        "docs/reports/ai-infra-phase14-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of sgl-project/sglang python/sglang/srt/layers/dp_attention.py",
+      "verified_at": "2026-10-19",
+      "limitations": "Static Python/Triton source inspection."
+    },
+    {
+      "id": "evi-sglang-dp-attention-tbo-sim-001",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of a 64-GPU H100 pod serving 671B MLA MoE (61 layers, 35,136 B/token FP8 MLA KV), partitioning attention via DP_attn=64 × EP=64 expands effective non-replicated pod KV capacity from 444.0 GiB (TP=8 replicated KV, 13.568M tokens) to 4,147.2 GiB (126.737M tokens, 9.34x gain); on a skewed hybrid batch (2,720 active tokens vs 8,192 MAX_LEN padded rows), combining SUM_LEN Group-128 FP8 AllGatherv, Two-Batch Overlap (dp_tbo_comm hiding 78% of DP comm), and KV-Watermark routing reduces step latency from 132.538 ms (unmasked MAX_LEN) to 18.619 ms (146,087.3 vs 20,522.4 tok/s, 7.12x throughput gain) while _TBO_PERSIST_BUF cuts reserved allocator memory by 257.6 GiB (268.0 -> 10.4 GiB).",
+      "status": "own-offline",
+      "source_ids": [
+        "sglang-dp-attention-tbo-fp8-2026"
+      ],
+      "artifacts": [
+        "experiments/attention_dp_moe_ep_schedule/run.py",
+        "experiments/attention_dp_moe_ep_schedule/results.json",
+        "docs/components/attention-dp-moe-ep-serving.md",
+        "docs/reports/ai-infra-phase14-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\attention_dp_moe_ep_schedule\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic analytical MLA KV capacity and DP-MoE gather/overlap simulator."
+    },
+    {
+      "id": "evi-wafer-sram-gpu-cascade-impl-001",
+      "component": "serving_systems",
+      "claim": "In vllm-project/vllm (commit 973dbf8071f8bdd6dd7eb2d6ee0da7cbe6a93670, vllm/v1/spec_decode/suffix_decoding.py blob 5d100ce9 lines 1-102 and dflash.py blob d7d3e3ad lines 1-140), SuffixDecodingProposer performs CPU suffix-tree pattern speculation via SuffixDecodingCache with a no-op load_model() (0 GiB GPU VRAM overhead), while DFlashProposer dispatches 1 + num_speculative_tokens parallel query tokens per request in a single non-causal cross-attention forward pass using separate _context_slot_mapping_buffer and _slot_mapping_buffer for CUDA Graph stability.",
+      "status": "implementation",
+      "source_ids": [
+        "vllm-v1-suffix-dflash-spec-decode-2026"
+      ],
+      "artifacts": [
+        "docs/components/wafer-sram-gpu-cascaded-serving.md",
+        "docs/reports/ai-infra-phase14-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of vllm/v1/spec_decode/suffix_decoding.py and dflash.py",
+      "verified_at": "2026-10-19",
+      "limitations": "Static Python source inspection."
+    },
+    {
+      "id": "evi-wafer-sram-gpu-cascade-sim-001",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of 64K-context Llama-3.3-70B FP8 serving (10.0 GiB KV/session, 32 concurrent agentic coding sessions = 320 GiB total KV), pure on-chip SRAM clusters (320-LPU Groq pod or 2x Cerebras WSE-3) fit only 1 full 64K session on-chip before suffering off-wafer KV spill (TPOT degrading to 348.58-685.15 ms at 16 sessions); on GPU HBM3e (11.40 ms autoregressive TPOT, $3.1667/1M tokens), vLLM SuffixDecodingProposer reaches 4.484 ms (2.54x) and DFlashProposer reaches 3.499 ms (3.26x), while a heterogeneous Wafer/SRAM 8B Draft (8K sliding-window KV = 8 GiB fitting 100% in SRAM, 0.64 ms/8 tokens) + GPU HBM3e 70B Verifier (full 64K KV, E[tau]=5.40) achieves 2.563 ms effective TPOT (4.45x speedup) and lowers cost to $0.8566/1M tokens (3.70x reduction).",
+      "status": "own-offline",
+      "source_ids": [
+        "vllm-v1-suffix-dflash-spec-decode-2026",
+        "cerebras-csl-bandwidth-test",
+        "groq-tsp-bert-paper"
+      ],
+      "artifacts": [
+        "experiments/wafer_sram_gpu_cascaded_serving/run.py",
+        "experiments/wafer_sram_gpu_cascaded_serving/results.json",
+        "docs/components/wafer-sram-gpu-cascaded-serving.md",
+        "docs/reports/ai-infra-phase14-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\wafer_sram_gpu_cascaded_serving\\run.py --check",
+      "verified_at": "2026-10-19",
+      "limitations": "Deterministic analytical SRAM/HBM capacity wall and speculative cascade simulator."
     }
   ],
   "updated_at": "2026-10-19"
