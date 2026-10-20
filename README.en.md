@@ -13,13 +13,14 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 1. Current Research Baseline (Phase 1 – Phase 32 Complete on `main`)
+## 1. Current Research Baseline (Phase 1 – Phase 33 Complete on `main`)
 
-- **Research Queue (`research/queue.json`)**: **`111 / 111` questions `done`** (`priority: 1` through `priority: 41`, `0` pending, `0` blocked).
-- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`106` standard-library experiments**, all passing `--check`.
-- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`362` first-hand sources** and **`282` audited claims**.
+- **Research Queue (`research/queue.json`)**: **`114 / 114` questions `done`** (`priority: 1` through `priority: 42`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`109` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`371` first-hand sources** and **`291` audited claims**.
 - **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
   - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 33 7-Card 4:5 Benchmark Deck — FlashInfer GDN Prefix Materialize / SM103a W8A8 MegaMoE FC2 `evict_first` / FMHA L2 Stream, SGLang GLM-5.2 Compact DSA / Ascend INT8 vs MXFP8 `mla_prolog` / Megatron Meta Shared Embedding & Mooncake `LocalHotCache` Scan Race / Dynamo In-Place KV Hash / Prefill Fail-Closed Gate (`ai-infra-phase33-benchmark-cards.html`)](docs/reports/ai-infra-phase33-benchmark-cards.html)
   - [Phase 32 7-Card 4:5 Benchmark Deck — FlashInfer Cake RMSNorm / SGLang ROCm `gfx1250` MXFP4 EP / vLLM MRV2 Async Spec, TorchTitan `cuspy` CUPTI Graph / Muse Spark RoPE+Norm / TE NVLink Fused EP & Mooncake HA `SIGTERM` Drain / NIXL UCX `eventfd` / LMCache Kimi Linear (`ai-infra-phase32-benchmark-cards.html`)](docs/reports/ai-infra-phase32-benchmark-cards.html)
   - [Phase 31 7-Card 4:5 Benchmark Deck — SGLang DS-V4 TF32 mHC / FlashInfer GDN TMEM / TRT-LLM MegaMoE, TorchTitan MLA Compile / TE MXFP8 FP8BS / veRL Tail-KL & Mooncake GID Epoch / LMCache Inproc / NIXL UCX Spans (`ai-infra-phase31-benchmark-cards.html`)](docs/reports/ai-infra-phase31-benchmark-cards.html)
   - [Phase 30 7-Card 4:5 Benchmark Deck — FlashInfer Rubin MoE Barrier / EP Split / SM103a AG+GEMM, TorchTitan DS-V3 MLA `int32` RoPE / Megatron Recompute & LMCache CXL DAX / Mooncake OpLog Dedup (`ai-infra-phase30-benchmark-cards.html`)](docs/reports/ai-infra-phase30-benchmark-cards.html)
@@ -39,10 +40,13 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 2. Latest Phase 32, Phase 31, Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 41`..`31`, Bilingual EN/ZH)
+## 2. Latest Phase 33, Phase 32, Phase 31, Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 42`..`31`, Bilingual EN/ZH)
 
 | Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
 |---|---|---|---|
+| `flashinfer-gdn-prefix-state-w8a8-megamoe-evict-fmha-l2-stream` | [中文](docs/components/flashinfer-gdn-prefix-state-w8a8-megamoe-evict-fmha-l2-stream.md) · [English](docs/components/flashinfer-gdn-prefix-state-w8a8-megamoe-evict-fmha-l2-stream.en.md) | [`experiments/flashinfer_gdn_materialize_megamoe_fc2_fmha_l2/`](experiments/flashinfer_gdn_materialize_megamoe_fc2_fmha_l2/README.md) | `flashinfer-ai/flashinfer` (`99406bb9ca`, `60213537ce` & `566812deed`): `gdn_prefix_materialize` reconstructs a request's GDN SSM state at token 128 from checkpoint token 120 + `C=8` of 9 ring tokens with **`0.0` error** vs step recurrence (untruncated `C=9` drifts by `0.130181`), while its persistent grid + device-side `num_active` cuts `active=0` launch cost **`32.0 -> 2.5 us` (`12.8x`)**; SM103a W8A8 MegaMoE FC2 4D TMA `L2::cache_hint` `0x12F0000000000000ULL` (`evict_first`) cuts latency to **`0.991x` geomean (`0.986x..0.995x`)**; `cake_fmha` `plan_flags=0/1/2` gates K/V `evict_first` and V-page prefetch across `4/4` decode regimes. |
+| `sglang-glm52-compact-dsa-int8-mlaprolog-megatron-meta-tied-embed` | [中文](docs/components/sglang-glm52-compact-dsa-int8-mlaprolog-megatron-meta-tied-embed.md) · [English](docs/components/sglang-glm52-compact-dsa-int8-mlaprolog-megatron-meta-tied-embed.en.md) | [`experiments/sglang_glm52_dsa_mlaprolog_megatron_meta_embed/`](experiments/sglang_glm52_dsa_mlaprolog_megatron_meta_embed/README.md) | `sgl-project/sglang` (`3bf4cbc6cf` & `10d5293546`) & `NVIDIA/Megatron-LM` (`fa322ce620`): removing `is_npu_arch35` from `use_compact_indexer_layout` cuts 60-layer GLM-5.2 (15 full / 45 shared) DSA indexer bytes **`15,360 -> 3,840 B/tok` (`-75.0%`)** and expands `24 GiB` pool capacity **`+15.79%` (`305,040 -> 353,204` tokens)**; class-based `weight_quant_mode=2/3` retains `w_kc` on INT8 disaggregated decode and recomputes BF16 `q_lora`; `_materialize_shared_embedding_weight()` eliminates `meta`-device `all_reduce` crashes and `NaN` summation (`0.0` PP stage diff). |
+| `mooncake-hotcache-scan-race-dynamo-inplace-kv-hash-prefill-failclosed` | [中文](docs/components/mooncake-hotcache-scan-race-dynamo-inplace-kv-hash-prefill-failclosed.md) · [English](docs/components/mooncake-hotcache-scan-race-dynamo-inplace-kv-hash-prefill-failclosed.en.md) | [`experiments/mooncake_hotcache_race_dynamo_kvhash_prefill_gate/`](experiments/mooncake_hotcache_race_dynamo_kvhash_prefill_gate/README.md) | `kvcache-ai/Mooncake` (`ac4d29bff2`) & `ai-dynamo/dynamo` (`1246a4bbd1` & `7aaf17b626`): `block->ref_count > 0` short-circuit before `block->key_ == key` + `ReleaseHotKey` reordering cuts unlocked `key_` data-race reads across 1,000 scans **`16,000 -> 0`**; `hash_complete_blocks` cuts 128K pure-text heap allocations **`1,048,576 -> 0 B` (`-100.0%`)** and 8K multimodal allocations **`65,952 -> 416 B` (`-99.37%`)**; `PrefillRouter::activation_snapshot()` fails closed with `HTTP 503 WorkerUnavailable` across `4/4` transitions. |
 | `flashinfer-cake-rmsnorm-grad-sglang-gfx1250-mxfp4-ep-vllm-mrv2-spec-async` | [中文](docs/components/flashinfer-cake-rmsnorm-grad-sglang-gfx1250-mxfp4-ep-vllm-mrv2-spec-async.md) · [English](docs/components/flashinfer-cake-rmsnorm-grad-sglang-gfx1250-mxfp4-ep-vllm-mrv2-spec-async.en.md) | [`experiments/flashinfer_cake_rmsnorm_sglang_ep_vllm_mrv2/`](experiments/flashinfer_cake_rmsnorm_sglang_ep_vllm_mrv2/README.md) | `flashinfer-ai/flashinfer` (`0d062af33b`), `sgl-project/sglang` (`89860fbd2e`) & `vllm-project/vllm` (`f1dbfef799`): `cake_rmsnorm_train` cooperative `cp.async.bulk` + `mbarrier` SMEM ring delivers **`1.1245x` B200 and `1.2161x` R200 backward speedup** at `T=65536` with deterministic fixed-order FP32 `dweight`; `build_ep_expert_map` `-1` sentinel + `gather_src.clamp_(0, N-1)` cuts ROCm `gfx1250` MXFP4 EP OOB gathers **`72 -> 0` (`0.0` AllReduce error)**; `use_v2_model_runner` preserves **`async_scheduling=True` across `3/3` speculative/PP setups**. |
 | `torchtitan-cuspy-cupti-graph-muse-spark-rope-norm-te-nvl-fused-ep` | [中文](docs/components/torchtitan-cuspy-cupti-graph-muse-spark-rope-norm-te-nvl-fused-ep.md) · [English](docs/components/torchtitan-cuspy-cupti-graph-muse-spark-rope-norm-te-nvl-fused-ep.en.md) | [`experiments/torchtitan_cuspy_graph_muse_rope_te_ep/`](experiments/torchtitan_cuspy_graph_muse_rope_te_ep/README.md) | `pytorch/torchtitan` (`b93d5c0cf5` & `8f8dbfb50c`) & `NVIDIA/TransformerEngine` (`b7db08fd73`): `get_cuspy_cuda_graph_annotation_config` sets `backend="cupti", key_by="exec"` to capture **`24/24` nodes and `4/4` NCCL event-record nodes** (vs `20/24` and `0/4` under `cuda_runtime`); `muse_spark_attention_qk` fuses per-head Q/K RMSNorms + `int32` ComplexRoPE (`recompile_limit=16`), cutting 256-seq decode **`39.0 -> 10.4 us` (`3.75x`, `0.0` drift)**; `ep_prepare_and_dispatch_fwd` cuts NVLink-domain XLA FFI calls **`-50.0%`**. |
 | `mooncake-ha-sigterm-drain-nixl-ucx-eventfd-lmcache-kimi-linear` | [中文](docs/components/mooncake-ha-sigterm-drain-nixl-ucx-eventfd-lmcache-kimi-linear.md) · [English](docs/components/mooncake-ha-sigterm-drain-nixl-ucx-eventfd-lmcache-kimi-linear.en.md) | [`experiments/mooncake_ha_drain_nixl_eventfd_lmcache_kimi/`](experiments/mooncake_ha_drain_nixl_eventfd_lmcache_kimi/README.md) | `kvcache-ai/Mooncake` (`3db34ceb3a`), `ai-dynamo/nixl` (`8a78b338a3`) & `LMCache/LMCache` (`e7a4f2380b`): `StartShutdownWatchdog(15s)` + `ServingStateGate` fence + 9-stage reverse teardown + `_exit(0)` drains **`9/9` HA stages (`0` OpLog lost)** and exits with `143` on a second `SIGTERM`; `eventfd(0, EFD_CLOEXEC \| EFD_NONBLOCK)` cuts UCX shared-thread FDs **`-50.0%` (`256` FDs saved)**; `_resolve_mamba_pool_tensors` accepts `slice_axis=1` Kimi Linear `conv` state (`[5, 1, 1, 21]` zero-copy view). |
@@ -191,16 +195,16 @@ Every quantitative claim in this repository is backed by:
 All validation tools and experiments use the Python 3.12 standard library only:
 
 ```powershell
-# 1. Run the full unit test suite (333 unit tests)
+# 1. Run the full unit test suite (340 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and links
 python scripts\validate_research.py
 
-# 3. Verify Phase 31, Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
-python experiments\sglang_dsv4_mhc_flashinfer_gdn_trtllm_megamoe\run.py --check
-python experiments\torchtitan_mla_compile_te_mxfp8_verl_tail_kl\run.py --check
-python experiments\mooncake_gid_recovery_lmcache_inproc_nixl_ucx\run.py --check
+# 3. Verify Phase 33, Phase 32, Phase 31, Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+python experiments\flashinfer_gdn_materialize_megamoe_fc2_fmha_l2\run.py --check
+python experiments\sglang_glm52_dsa_mlaprolog_megatron_meta_embed\run.py --check
+python experiments\mooncake_hotcache_race_dynamo_kvhash_prefill_gate\run.py --check
 python experiments\flashinfer_cake_rmsnorm_sglang_ep_vllm_mrv2\run.py --check
 python experiments\torchtitan_cuspy_graph_muse_rope_te_ep\run.py --check
 python experiments\mooncake_ha_drain_nixl_eventfd_lmcache_kimi\run.py --check
