@@ -3887,6 +3887,165 @@
       "verifier": "python experiments\\megatron_ckpt_without_output_mfsdp_sim\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic state-machine and memory-lifecycle simulation."
+    },
+    {
+      "id": "ev-flashmla-sm100-v41-fp4-dequant-2026",
+      "component": "gpu-software-stack",
+      "claim": "In deepseek-ai/FlashMLA (commit 07a1089857), KVCacheFormat<V41_FP4> packs 512 FP4 e2m1 elements (256 B, TMA_K_STRIDE=256 >= 256) and 32 FP8 e4m3 scales (32 B) into 288 B/token (2.2778x compression over V32 656 B and 1.8333x over V41 FP8 528 B); KVBlockDequantizer pads FP4 SMEM rows by +32 B (288 B for 1-CTA, 160 B for 2-CTA, RAW_TOKEN_SMEM_STRIDE/4%16 == 8) to stagger gather4 rows across 4 distinct SMEM bank quarters (1-way conflict-free LDS.32), applies SW128 XOR swizzling for 1-way STS.128, and multiplies e2m1*e4m3 in BF16 with 0 rounding error across all 2,032 finite pairs.",
+      "status": "implementation",
+      "source_ids": [
+        "flashmla-kv-cache-format-v41-fp4-07a10898",
+        "flashmla-sm100-dequant-utils-07a10898"
+      ],
+      "artifacts": [
+        "docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.md",
+        "docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.en.md"
+      ],
+      "verifier": "python experiments\\flashmla_sm100_v41_fused_dequant_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static CUDA C++ source verification and exact IEEE-754 bit-level verification."
+    },
+    {
+      "id": "ev-flashmla-sm100-fused-norm-rope-attn-cast-2026",
+      "component": "gpu-software-stack",
+      "claim": "In deepseek-ai/FlashMLA (commits 07a1089857 & ba89a3466e), fused_norm_rope_attn_rope_cast_fwd packs O=[0,256), Q=[256,384), and P buffers into 512 TMEM columns for H_Q=64 (1-CTA, B_TOPK=64, NUM_P_BUFS=2, NEED_TP_EMPTY_BAR=0) and 480 TMEM columns for H_Q=128 (2-CTA, B_TOPK=96, NUM_P_BUFS=1), uses bijective weight permutations permute_q_b_proj (65,536 rows) and permute_wv_proj (128 chunks/group) to eliminate runtime transposes, and fixes st_async_128b upper-64-bit truncation on Windows MSVC LLP64 by replacing long2 (8 B) with longlong2 (16 B).",
+      "status": "implementation",
+      "source_ids": [
+        "flashmla-sm100-fused-norm-rope-attn-cast-ba89a346"
+      ],
+      "artifacts": [
+        "docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.md",
+        "docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.en.md"
+      ],
+      "verifier": "python experiments\\flashmla_sm100_v41_fused_dequant_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static CUDA C++ kernel and PTX intrinsic verification."
+    },
+    {
+      "id": "ev-exp-flashmla-sm100-v41-fused-dequant-sim-2026",
+      "component": "gpu-software-stack",
+      "claim": "In deterministic simulator flashmla_sm100_v41_fused_dequant_sim, V41_FP4 achieves 288 B/token (2.2778x vs V32, 1.8333x vs V41), +32 B padding reduces gather4 LDS.32 bank conflicts from 4-way to 1-way (and +16 B padding reduces LDS.128 to 1-way), all 2,032 finite e2m1*e4m3 products have 0x0000 low-16 FP32 mantissa bits (0 BF16 rounding error), TMEM columns evaluate to 512 (H_Q=64) and 480 (H_Q=128), and weight permutations are verified bijective across 65,536 rows and 128 chunks.",
+      "status": "own-offline",
+      "source_ids": [
+        "flashmla-kv-cache-format-v41-fp4-07a10898",
+        "flashmla-sm100-dequant-utils-07a10898",
+        "flashmla-sm100-fused-norm-rope-attn-cast-ba89a346"
+      ],
+      "artifacts": [
+        "experiments/flashmla_sm100_v41_fused_dequant_sim/run.py",
+        "experiments/flashmla_sm100_v41_fused_dequant_sim/results/summary.json",
+        "docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.md",
+        "docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.en.md"
+      ],
+      "verifier": "python experiments\\flashmla_sm100_v41_fused_dequant_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic offline memory-layout, bank-conflict, and IEEE-754 numerical model."
+    },
+    {
+      "id": "ev-sglang-kvshard-pd-transfer-admission-2026",
+      "component": "inference-disaggregation",
+      "claim": "In sgl-project/sglang (commit eb4b167d27), KVShard PD disaggregation maps logical KV page l to shard rank r = l % N and local page l // N via filter_kv_indices_for_shard_rank, skips non-final empty chunks on each rank, pulls from all N prefill TP ranks per decode rank, and bounds bootstrap admission to max_input_len = ((capacity - N * page_size - 3) // page_size) * page_size (reserving 320 tokens at N=4, page_size=64, capacity=65,536 -> 65,216) to prevent worst-case per-shard page rounding overflow.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-kvshard-pd-disagg-eb4b167d"
+      ],
+      "artifacts": [
+        "docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.md",
+        "docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.en.md"
+      ],
+      "verifier": "python experiments\\sglang_kvshard_uncached_bucket_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source inspection."
+    },
+    {
+      "id": "ev-sglang-uncached-bucket-routing-eplb-2026",
+      "component": "inference-disaggregation",
+      "claim": "In sgl-project/sglang (commits df13d5dce3 & 9db58ab547), sgl-router --route-by-uncached-tokens routes prefill buckets by E = sequence_tokens - reusable_tokens while enforcing input_tokens <= max_context_tokens in prefill_compatible, spills to alternative context-compatible buckets via CacheAwareDecision::IdleSpill only when all target DP ranks have pending work (waiting > 0 or uncached > 0) and a candidate worker has a completely idle DP rank (waiting == 0 and uncached == 0), and Qwen3MoeSparseMoeBlock.forward_normal passes ExpertLocationDispatchInfo to self.topk when enable_eplb is active.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-router-uncached-bucket-idle-spill-df13d5dc",
+        "sglang-qwen3-moe-eplb-dispatch-9db58ab5"
+      ],
+      "artifacts": [
+        "docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.md",
+        "docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.en.md"
+      ],
+      "verifier": "python experiments\\sglang_kvshard_uncached_bucket_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Rust and Python source inspection."
+    },
+    {
+      "id": "ev-exp-sglang-kvshard-uncached-bucket-sim-2026",
+      "component": "inference-disaggregation",
+      "claim": "In deterministic simulator sglang_kvshard_uncached_bucket_sim, KVShard (N=4, page_size=64) tightens bootstrap admission from 65,536 to 65,216 tokens, skips 3 empty non-final RDMA chunks across 4 shards while reconstructing all 12 logical pages losslessly, routes a 20,000-token prompt with 15,000 cached tokens (E=5,000) to the short bucket (or falls back to long under a 10,000 context cap), triggers idle_spill when long is busy and short has an idle (0,0) DP rank while blocking spill on chunked-prefill (0,40000), and restores exact Qwen3 MoE post-EPLB output (120.0 vs corrupted 190.0).",
+      "status": "own-offline",
+      "source_ids": [
+        "sglang-kvshard-pd-disagg-eb4b167d",
+        "sglang-router-uncached-bucket-idle-spill-df13d5dc",
+        "sglang-qwen3-moe-eplb-dispatch-9db58ab5"
+      ],
+      "artifacts": [
+        "experiments/sglang_kvshard_uncached_bucket_sim/run.py",
+        "experiments/sglang_kvshard_uncached_bucket_sim/results/summary.json",
+        "docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.md",
+        "docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.en.md"
+      ],
+      "verifier": "python experiments\\sglang_kvshard_uncached_bucket_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic routing, sharding, and MoE dispatch simulation."
+    },
+    {
+      "id": "ev-lmcache-devdax-offset-apc-attribution-2026",
+      "component": "storage-and-kv-offload",
+      "claim": "In LMCache/LMCache (commits e8dc1a1dae & 168130df9c), get_dax_device_geometry and check_dax_range read /sys/dev/char/{major}:{minor}/{size,align} (since fstat returns 0 on /dev/dax*) to enforce 2 MiB device alignment, capacity bounds, and disjoint multi-arena slicing before mmap (preventing runtime SIGBUS), while lookup.py subtracts apc_covered_tokens = start_chunk * chunk_size from looked_up_tokens before shifting found_count and computes request_hit_tokens = max(engine_hit_tokens, covered_tokens + hit_tokens).",
+      "status": "implementation",
+      "source_ids": [
+        "lmcache-devdax-offset-geometry-e8dc1a1d",
+        "lmcache-lookup-apc-attribution-168130df"
+      ],
+      "artifacts": [
+        "docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.md",
+        "docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.en.md"
+      ],
+      "verifier": "python experiments\\lmcache_devdax_apc_dynamo_relay_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "ev-dynamo-dcckf-removed-replay-migration-rebase-2026",
+      "component": "inference-disaggregation",
+      "claim": "In ai-dynamo/dynamo (commits 909ebee0c4 & cc02d8b1c2), DcCkfRankReplacement::push_event replays KvCacheEventData::Removed and Cleared events in cached recovery snapshot tails and prunes zero-owner canonical candidates during install_replacement, while RetryManager::rebase_usage subtracts replayed_tokens from prompt_tokens, adds them to completion_tokens, caps prompt_tokens_details.cached_tokens to rebased prompt_tokens, and clears partial completion_tokens_details.",
+      "status": "implementation",
+      "source_ids": [
+        "dynamo-dcckf-removed-replay-migration-rebase-cc02d8b1"
+      ],
+      "artifacts": [
+        "docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.md",
+        "docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.en.md"
+      ],
+      "verifier": "python experiments\\lmcache_devdax_apc_dynamo_relay_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Rust source verification."
+    },
+    {
+      "id": "ev-exp-lmcache-devdax-apc-dynamo-relay-sim-2026",
+      "component": "storage-and-kv-offload",
+      "claim": "In deterministic simulator lmcache_devdax_apc_dynamo_relay_sim, check_dax_range admits disjoint [0,256 GiB) and [256 GiB,512 GiB) CXL arenas while rejecting overlapping [128 GiB,384 GiB), +1 MiB unaligned, and out-of-bounds mappings prior to mmap; APC prefix exclusion eliminates a 37.5% fake L1 hit rate on 0-chunk miss (1,280 looked_up_tokens) and deduplicates 100 sub-chunk overlap tokens (1,536 vs 1,636); Dynamo DcCkfRankReplacement prunes 2 zombie candidates ([1011,1012,1013,1014] -> [1011,1014]) and RetryManager::rebase_usage restores (prompt=7, completion=2, cached=7) across 4 replayed tokens to (3, 6, 3).",
+      "status": "own-offline",
+      "source_ids": [
+        "lmcache-devdax-offset-geometry-e8dc1a1d",
+        "lmcache-lookup-apc-attribution-168130df",
+        "dynamo-dcckf-removed-replay-migration-rebase-cc02d8b1"
+      ],
+      "artifacts": [
+        "experiments/lmcache_devdax_apc_dynamo_relay_sim/run.py",
+        "experiments/lmcache_devdax_apc_dynamo_relay_sim/results/summary.json",
+        "docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.md",
+        "docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.en.md"
+      ],
+      "verifier": "python experiments\\lmcache_devdax_apc_dynamo_relay_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic CXL geometry, cache attribution, Cuckoo filter, and token-accounting simulation."
     }
   ],
   "updated_at": "2026-10-20"
