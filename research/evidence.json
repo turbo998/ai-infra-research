@@ -4368,6 +4368,166 @@
       "verifier": "python experiments\\megatron_payload_staging_verl_hdo_offload\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic offline state-machine simulation."
+    },
+    {
+      "id": "ev-sglang-kvshard-filter-indices-modulo-quotient-2026",
+      "component": "sglang-kv-shard-pd-transfer-page-interleave",
+      "claim": "In sgl-project/sglang (commit eb4b167d27, #38473), filter_kv_indices_for_shard_rank maps logical KV page l owned by shard rank r = l % N to local physical page l // N and request-global send position index_slice.start + offset, while CommonKVSender._prepare_send_indices skips non-final chunks where len(kv_indices) == 0 and not is_last_chunk.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-kvshard-pd-transfer-commit-eb4b167d27",
+        "sglang-kvshard-control-plane-commit-de487f8039",
+        "sglang-kvshard-sharded-pools-commit-e7f7447333"
+      ],
+      "artifacts": [
+        "docs/components/sglang-kv-shard-pd-transfer-page-interleave.md",
+        "docs/components/sglang-kv-shard-pd-transfer-page-interleave.en.md"
+      ],
+      "verifier": "python experiments\\sglang_kv_shard_pd_transfer\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source inspection of SGLang disaggregation and sharded pool modules."
+    },
+    {
+      "id": "ev-sglang-kvshard-mla-all-shard-pull-dcp-guard-2026",
+      "component": "sglang-kv-shard-pd-transfer-page-interleave",
+      "claim": "In sgl-project/sglang CommonKVManager._resolve_rank_mapping (commit eb4b167d27), MLA with enable_kv_cache_sharding and attn_cp_size == 1 requires equal prefill/decode attn_tp_size, sets target_tp_ranks = list(range(info.attn_tp_size)) and required_prefill_response_num = info.attn_tp_size so every decode rank pulls from all prefill shard ranks, and rejects PD decode DCP (dcp_size > 1) with RuntimeError.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-kvshard-pd-transfer-commit-eb4b167d27"
+      ],
+      "artifacts": [
+        "docs/components/sglang-kv-shard-pd-transfer-page-interleave.md",
+        "docs/components/sglang-kv-shard-pd-transfer-page-interleave.en.md"
+      ],
+      "verifier": "python experiments\\sglang_kv_shard_pd_transfer\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python source inspection."
+    },
+    {
+      "id": "ev-exp-sglang-kv-shard-pd-transfer-2026",
+      "component": "sglang-kv-shard-pd-transfer-page-interleave",
+      "claim": "In deterministic simulator sglang_kv_shard_pd_transfer, filter_kv_indices_for_shard_rank reconstructs all 9 logical pages of rotated chain [2, 7, 8, 13, 18, 23, 24, 29, 34] at slice(20, 29) across N=4 shards while skipping 4/8 empty non-final chunk sends; max_bootstrap_input_len caps sharded admission at 32,576 / 65,216 / 130,496 tokens for N=2/4/8 (16,384 tokens/rank, page_size=64) to prevent 300 s decode timeouts; and 24,576-token (1.50x single-rank pool) dual-needle recovery places red page 20 on rank 0 (local 10) and blue page 341 on rank 1 (local 170).",
+      "status": "own-offline",
+      "source_ids": [
+        "sglang-kvshard-pd-transfer-commit-eb4b167d27",
+        "sglang-kvshard-control-plane-commit-de487f8039",
+        "sglang-kvshard-sharded-pools-commit-e7f7447333"
+      ],
+      "artifacts": [
+        "experiments/sglang_kv_shard_pd_transfer/run.py",
+        "experiments/sglang_kv_shard_pd_transfer/results/summary.json",
+        "docs/components/sglang-kv-shard-pd-transfer-page-interleave.md",
+        "docs/components/sglang-kv-shard-pd-transfer-page-interleave.en.md"
+      ],
+      "verifier": "python experiments\\sglang_kv_shard_pd_transfer\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic sharded page-interleave, admission, and PD transfer simulator."
+    },
+    {
+      "id": "ev-pytorch-cuda-cow-alloc-stream-clone-and-retired-retention-2026",
+      "component": "pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool",
+      "claim": "In pytorch/pytorch (commit 20f82b619b, #200800), CUDA COW materialization replaces unordered legacy default-stream cudaMemcpy with cudaMemcpyAsync on the original allocation stream (*ctx->stream()) followed by impl->waitStream(op_stream, *ctx->stream()) and retains the replaced COWReference in StorageExtraMeta::cow_retired_data, while COWReference::record_done records a COWCompletion event on the current stream, blocks reuse_stream, and releases cow_retired_data.",
+      "status": "implementation",
+      "source_ids": [
+        "pytorch-cuda-cow-completion-events-commit-20f82b619b"
+      ],
+      "artifacts": [
+        "docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.md",
+        "docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.en.md"
+      ],
+      "verifier": "python experiments\\pytorch_cuda_cow_nccl_lazy_mempool\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static C++ source inspection of c10 COW and CUDACachingAllocator."
+    },
+    {
+      "id": "ev-pytorch-c10d-nccl-lazy-mempool-forwarding-2026",
+      "component": "pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool",
+      "claim": "In pytorch/pytorch torch/csrc/distributed/c10d/init.cpp (commit 47bc8be46b, #201432), ProcessGroupNCCLLazy binds register_mem_pool(pool, symm=false) and deregister_mem_pool(pool) by forwarding directly to self.getPrimary()->registerMemPool(pool, symm) and deregisterMemPool(pool), allowing symmetric memory window teardown before pool destruction.",
+      "status": "implementation",
+      "source_ids": [
+        "pytorch-c10d-nccl-lazy-mempool-commit-47bc8be46b"
+      ],
+      "artifacts": [
+        "docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.md",
+        "docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.en.md"
+      ],
+      "verifier": "python experiments\\pytorch_cuda_cow_nccl_lazy_mempool\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static C++ pybind11 binding inspection."
+    },
+    {
+      "id": "ev-exp-pytorch-cuda-cow-nccl-lazy-mempool-2026",
+      "component": "pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool",
+      "claim": "In deterministic simulator pytorch_cuda_cow_nccl_lazy_mempool, allocation-stream cudaMemcpyAsync + waitStream reduces stale CUDA Graph replay reads across 8 replays from 8/8 to 0/8; explicit _cow_record_done enables last-sibling in-place steal of a 256.0 MiB buffer (cutting 2-sibling peak memory from 512.0 MiB to 256.0 MiB, -50.0%, and wait stall from 45.0 ms to 10.0 ms, -77.78%); all 3 illegal CUDA Graph capture boundary crossings are rejected with TORCH_CHECK; and ProcessGroupNCCLLazy leaves 0 leaked memory pools.",
+      "status": "own-offline",
+      "source_ids": [
+        "pytorch-cuda-cow-completion-events-commit-20f82b619b",
+        "pytorch-c10d-nccl-lazy-mempool-commit-47bc8be46b"
+      ],
+      "artifacts": [
+        "experiments/pytorch_cuda_cow_nccl_lazy_mempool/run.py",
+        "experiments/pytorch_cuda_cow_nccl_lazy_mempool/results/summary.json",
+        "docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.md",
+        "docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.en.md"
+      ],
+      "verifier": "python experiments\\pytorch_cuda_cow_nccl_lazy_mempool\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic CUDA stream timeline, COW state-machine, and MemPool forwarding simulator."
+    },
+    {
+      "id": "ev-nixl-ucx-vram-memtype-hint-and-libfabric-vmm-2026",
+      "component": "nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier",
+      "claim": "In ai-dynamo/nixl (commits 466ebb1ccc #1536, 1f4afe6b60 #2425, and b55e79152f #2455), nixlUcxContext::resolveMemoryTypeConfig queries UCP_ATTR_FIELD_MEMORY_TYPES, auto-hints UCS_MEMORY_TYPE_ZE_DEVICE only on ZE-only contexts, validates case-sensitive <auto|none|cuda|cuda-managed|rocm|ze-device> hints against supportedMemoryTypesMask_, and rejects VRAM_SEG mapped as UCS_MEMORY_TYPE_HOST; nixlLibfabricCudaCtx::cudaUpdateCtxPtr returns -1 when CU_POINTER_ATTRIBUTE_CONTEXT is nullptr on cuMemCreate() VMM buffers to trigger cudaSetDevice(mem.devId) fallback; and check_remote_xfer_done checks `if message is not None:` to consume empty b\"\" notifications once.",
+      "status": "implementation",
+      "source_ids": [
+        "nixl-ucx-vram-memtype-hint-commit-466ebb1ccc",
+        "nixl-libfabric-cumemcreate-vmm-commit-1f4afe6b60",
+        "nixl-empty-notification-check-commit-b55e79152f"
+      ],
+      "artifacts": [
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.md",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.en.md"
+      ],
+      "verifier": "python experiments\\nixl_ucx_vram_hint_triton_cdna5_barrier\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static C++ and Python source inspection of NIXL UCX/Libfabric backends and Python API."
+    },
+    {
+      "id": "ev-triton-amd-cdna5-pre-cluster-workgroup-barrier-2026",
+      "component": "nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier",
+      "claim": "In triton-lang/triton third_party/amd/lib/TritonAMDGPUToLLVM/TargetInfo.cpp (commit 249c29ead3, #12342), TargetInfo::clusterBarrier unconditionally emits a workgroup barrier (rocdl.s.barrier) before ClusterBarrierArriveOp and ClusterBarrierWaitOp so all waves within a CTA finish prior cluster waits before any wave executes the next s_barrier_signal -3.",
+      "status": "implementation",
+      "source_ids": [
+        "triton-amd-cdna5-cluster-barrier-commit-249c29ead3"
+      ],
+      "artifacts": [
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.md",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.en.md"
+      ],
+      "verifier": "python experiments\\nixl_ucx_vram_hint_triton_cdna5_barrier\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Static MLIR-to-LLVM pass inspection."
+    },
+    {
+      "id": "ev-exp-nixl-ucx-vram-hint-triton-cdna5-barrier-2026",
+      "component": "nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier",
+      "claim": "In deterministic simulator nixl_ucx_vram_hint_triton_cdna5_barrier, all 7 UCX VRAM hint policy cases match upstream (auto-hinting ze-device only on ZE-only contexts and rejecting host fallback on VRAM_SEG); Libfabric cuMemCreate() VMM registration failures drop from 3/3 NIXL_ERR_BACKEND to 0/3 via cudaSetDevice(devId) fallback; empty b\"\" notifications are consumed once (0/2 stuck vs 2/2); and Triton AMD CDNA5 pre-cluster rocdl.s.barrier reduces deadlocked waves across two consecutive cluster barriers (2 CTAs x 8 waves) from 14/16 (87.5%) to 0/16 (0.0%).",
+      "status": "own-offline",
+      "source_ids": [
+        "nixl-ucx-vram-memtype-hint-commit-466ebb1ccc",
+        "nixl-libfabric-cumemcreate-vmm-commit-1f4afe6b60",
+        "nixl-empty-notification-check-commit-b55e79152f",
+        "triton-amd-cdna5-cluster-barrier-commit-249c29ead3"
+      ],
+      "artifacts": [
+        "experiments/nixl_ucx_vram_hint_triton_cdna5_barrier/run.py",
+        "experiments/nixl_ucx_vram_hint_triton_cdna5_barrier/results/summary.json",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.md",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.en.md"
+      ],
+      "verifier": "python experiments\\nixl_ucx_vram_hint_triton_cdna5_barrier\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic UCX/Libfabric memory registration and CDNA5 1-bit wave-state barrier simulator."
     }
   ],
   "updated_at": "2026-10-20"

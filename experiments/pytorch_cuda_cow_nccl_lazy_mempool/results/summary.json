@@ -1,0 +1,127 @@
+{
+  "experiment": "pytorch_cuda_cow_nccl_lazy_mempool",
+  "evidence_class": "own-offline",
+  "upstream_commits": [
+    "pytorch/pytorch@20f82b619b55f8b55c663550069e9cd0c63cb81e",
+    "pytorch/pytorch@47bc8be46b5770e165f02d327ebd0910e590d07a"
+  ],
+  "cow_materialization_and_steal": {
+    "tensor_mib": 256.0,
+    "graph_replays": 8,
+    "legacy_mode": {
+      "policy": "legacy_default_stream_memcpy",
+      "captured_in_cuda_graph": false,
+      "stale_graph_replay_reads": 8,
+      "peak_memory_mib_on_two_siblings": 512.0,
+      "last_sibling_steal_stall_ms": 45.0,
+      "d2d_copy_count_when_first_completed": 1
+    },
+    "conservative_event_mode": {
+      "policy": "event_cow_without_record_done",
+      "captured_in_cuda_graph": true,
+      "stale_graph_replay_reads": 0,
+      "peak_memory_mib_on_two_siblings": 512.0,
+      "retained_retired_mib": 256.0,
+      "needs_stream_wait": true,
+      "last_sibling_steal_stall_ms": 45.0,
+      "d2d_copy_count_when_first_completed": 1
+    },
+    "explicit_completion_mode": {
+      "policy": "explicit_cow_record_done_steal",
+      "captured_in_cuda_graph": true,
+      "stale_graph_replay_reads": 0,
+      "peak_memory_mib_on_two_siblings": 256.0,
+      "retained_retired_mib": 0.0,
+      "needs_stream_wait": false,
+      "last_sibling_steal_stall_ms": 10.0,
+      "d2d_copy_count_when_first_completed": 0,
+      "memory_reduction_pct": 50.0,
+      "stall_reduction_pct": 77.78,
+      "saved_copy_ms": 4.0
+    }
+  },
+  "cuda_graph_boundary_matrix": [
+    {
+      "scenario": "existing_cow_input_read_inside_capture",
+      "ctx_capture_id": 0,
+      "stream_capture_id": 101,
+      "action": "check_cow_read",
+      "outcome": "reject_runtime_error",
+      "reason": "Materialize COW graph inputs before CUDA graph capture"
+    },
+    {
+      "scenario": "external_non_cow_lazy_cloned_inside_capture",
+      "alloc_capture_id": 0,
+      "stream_capture_id": 101,
+      "action": "lazy_clone_storage",
+      "outcome": "eager_clone_on_capture_stream",
+      "reason": "capture_local is False while capture_id != 0"
+    },
+    {
+      "scenario": "same_capture_alloc_and_cow_materialization",
+      "ctx_capture_id": 101,
+      "stream_capture_id": 101,
+      "action": "materialize_cow_shared",
+      "outcome": "captured_alloc_stream_clone_and_event_wait",
+      "reason": "capture_id == ctx->capture_id()"
+    },
+    {
+      "scenario": "shared_cow_output_materialized_after_capture",
+      "ctx_capture_id": 101,
+      "stream_capture_id": 0,
+      "is_unique": false,
+      "action": "materialize_cow_shared",
+      "outcome": "reject_runtime_error",
+      "reason": "Cannot materialize shared COW storage across CUDA graph capture boundaries"
+    },
+    {
+      "scenario": "unique_cow_output_materialized_after_capture",
+      "ctx_capture_id": 101,
+      "stream_capture_id": 0,
+      "is_unique": true,
+      "action": "materialize_cow_unique",
+      "outcome": "steal_in_place_with_fresh_stream_wait",
+      "reason": "impl->getStreamCaptureId(stream) != capture_id_ uses waitStream(stream, *stream_)"
+    },
+    {
+      "scenario": "cross_capture_cow_record_done",
+      "ctx_capture_id": 101,
+      "stream_capture_id": 0,
+      "action": "record_done",
+      "outcome": "reject_runtime_error",
+      "reason": "Cannot complete COW uses across CUDA graph capture boundaries"
+    }
+  ],
+  "nccl_lazy_mempool_forwarding": {
+    "unpatched_lazy": {
+      "has_register_mem_pool_binding": false,
+      "has_deregister_mem_pool_binding": false,
+      "symm_window_supported": false,
+      "deregistered_before_free": false
+    },
+    "patched_lazy": {
+      "has_register_mem_pool_binding": true,
+      "has_deregister_mem_pool_binding": true,
+      "world_size": 4,
+      "active_pair_comms": 2,
+      "pool_segments": 2,
+      "primary_comm_registered_segments": 2,
+      "pair_comm_window_registrations": 0,
+      "symm_window_supported": true,
+      "active_registered_pools_after_deregister": 0,
+      "deregistered_before_free": true
+    }
+  },
+  "summary_metrics": {
+    "legacy_stale_replay_reads": 8,
+    "patched_stale_replay_reads": 0,
+    "uncompleted_peak_memory_mib": 512.0,
+    "completed_steal_peak_memory_mib": 256.0,
+    "memory_reduction_pct": 50.0,
+    "uncompleted_steal_stall_ms": 45.0,
+    "completed_steal_stall_ms": 10.0,
+    "stall_reduction_pct": 77.78,
+    "rejected_illegal_capture_crossings": 3,
+    "nccl_lazy_active_pools_after_deregister": 0
+  }
+}
