@@ -13,13 +13,14 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 1. Current Research Baseline (Phase 1 – Phase 24 Complete on `main`)
+## 1. Current Research Baseline (Phase 1 – Phase 25 Complete on `main`)
 
-- **Research Queue (`research/queue.json`)**: **`87 / 87` questions `done`** (`priority: 1` through `priority: 33`, `0` pending, `0` blocked).
-- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`82` standard-library experiments**, all passing `--check`.
-- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`287` first-hand sources** and **`210` audited claims**.
+- **Research Queue (`research/queue.json`)**: **`90 / 90` questions `done`** (`priority: 1` through `priority: 34`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`85` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`299` first-hand sources** and **`219` audited claims**.
 - **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
   - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 25 7-Card 4:5 Benchmark Deck — FA4 SM100 `hdim=256` Bwd `M=64`, NIXL UCX VRAM / Libfabric Ctx & Megatron `CheckpointWithoutOutput` / mFSDP (`ai-infra-phase25-benchmark-cards.html`)](docs/reports/ai-infra-phase25-benchmark-cards.html)
   - [Phase 24 7-Card 4:5 Benchmark Deck — TE Blackwell Grouped MXFP8 Swizzle, Mooncake Auto-GID Reprobe & veRL FP4 Refit / Tail-KL OPD (`ai-infra-phase24-benchmark-cards.html`)](docs/reports/ai-infra-phase24-benchmark-cards.html)
   - [Phase 23 7-Card 4:5 Benchmark Deck — FlashInfer Frost DS4.1, TorchTitan FlexShard/HybridEP & SGLang PD Role Switch (`ai-infra-phase23-benchmark-cards.html`)](docs/reports/ai-infra-phase23-benchmark-cards.html)
   - [Phase 22 7-Card 4:5 Benchmark Deck — NCCL GIN Symmetric, SM100 MegaMoE/MHC & vLLM V1 Sparse MLA (`ai-infra-phase22-benchmark-cards.html`)](docs/reports/ai-infra-phase22-benchmark-cards.html)
@@ -31,10 +32,13 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 2. Latest Phase 24, Phase 23 & Phase 22 Highlights (`priority: 33`, `32` & `31`, Bilingual EN/ZH)
+## 2. Latest Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 34`, `33`, `32` & `31`, Bilingual EN/ZH)
 
 | Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
 |---|---|---|---|
+| `fa4-sm100-hd256-bwd-m64-tmem-accum-layout` | [中文](docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.md) · [English](docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.en.md) | [`experiments/fa4_sm100_hd256_bwd_m64_sim/`](experiments/fa4_sm100_hd256_bwd_m64_sim/README.md) | `Dao-AILab/flash-attention` (`2b00d76f` & `965c9212`): `hdim=256` 2-CTA Serial `M=64` (`lane_rows=2`) packs `dV`, `dK`, `S`, `dQ`, `dP` into exactly **`512` TMEM columns** (vs `768`/`640` overflow at `M=128`), eliminates `sdS_xchg`, budgets `sdQaccum` at **`8 KiB/CTA`** (`ncol=16, stage=2`), and uses `AccumTileOrder` (`TMEM_FRAG_1CTA`/`2CTA`/`ROW_MAJOR`) for `512 B` coalesced postprocess loads without `cp.async` SMEM staging. |
+| `nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback` | [中文](docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.md) · [English](docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.en.md) | [`experiments/nixl_ucx_vram_vmm_notif_sim/`](experiments/nixl_ucx_vram_vmm_notif_sim/README.md) | `ai-dynamo/nixl` (`466ebb1c`, `1f4afe6b` & `b55e7915`): `resolveMemoryTypeConfig` queries `UCP_ATTR_FIELD_MEMORY_TYPES` (`AUTO` hints `ze-device` only on ZE-only `0x11` and aborts via `ucp_mem_unmap` on unhinted `HOST` misdetection); `cudaUpdateCtxPtr` returns `-1` on `cuMemCreate` `ctx==nullptr` to trigger `cudaSetDevice(devId)`; `if message is not None:` fixes `0`-byte `b""` notification leaks (`3 -> 1` hits). |
+| `megatron-checkpoint-without-output-mfsdp-frozen-grad` | [中文](docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.md) · [English](docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.en.md) | [`experiments/megatron_ckpt_without_output_mfsdp_sim/`](experiments/megatron_ckpt_without_output_mfsdp_sim/README.md) | `NVIDIA/Megatron-LM` (`d2c430ab` & `d37b3a8f`): `_RecomputeRegion` frees `64 MiB` main output while retaining `16 MiB` input-aliased output, unpacks `_InputStash` once (`unpack_count=1`), shares rebuilt storage (`0` version bumps), and breaks reference cycles via `weakref`; `Megatron-FSDP` defers all-`None` `grad_input` hooks to `_delayed_post_backward_callbacks` (`0` UAF on `32 MiB` frozen weights) and cuts 4-microbatch `finish_grad_sync()` barriers from **`4` to `1`**. |
 | `te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle` | [中文](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md) · [English](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md) | [`experiments/te_grouped_mxfp8_swizzle_sim/`](experiments/te_grouped_mxfp8_swizzle_sim/README.md) | `NVIDIA/TransformerEngine` (`f4a69dc8` & `4a3a8a8e`): zero-copy FP8 data pointer reuse + device-side warp prefix sum + `find_tensor` binary search emulates Hopper FP8 block scaling on Blackwell via MXFP8 grouped GEMM (`22,064` tiles for 256E MoE, host upper bound **`14.62 MB` vs `11.30 MB` exact, `1.2944x` slack**, zero D2H sync); auto-unlocks `>48 KiB` dynamic SMEM at **`>= 2,048` tensors** (up to `9,685` in `227 KiB`). |
 | `mooncake-rdma-auto-gid-reprobe-bounded-reshard` | [中文](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md) · [English](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md) | [`experiments/mooncake_gid_reprobe_reshard_sim/`](experiments/mooncake_gid_reprobe_reshard_sim/README.md) | `kvcache-ai/Mooncake` (`5ea6cf0d` & `0977fc70`): 7-class `AutoGidCandidateClass` promotes RFC1918 `10/8` to `kNetworkPrivateV4` above `fe80::`; two-endpoint failure confirmation (`kRetrySameGid` -> `kAdvanceGid` + `auto_gid_reprobe_from`) filters transient timeouts and stale CQEs; bounded Scatter window **`W=4` lifts 64 GiB goodput from `313.03` to `357.85 Gbps` (`+14.3%`)**. |
 | `verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation` | [中文](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md) · [English](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md) | [`experiments/verl_fp4_refit_tail_kl_sim/`](experiments/verl_fp4_refit_tail_kl_sim/README.md) | `volcengine/verl` (`8f016846` & `5a8dd519`): `_mxfp4_staging_data` zero-copy byte aliasing + `_replace_parameter_in_place` shrinks 61L MoE (`40,992 MiB/GPU`) RL refit staging to **`2,562 MiB` (`6.25%`, MXFP4)** and **`5,124 MiB` (`12.5%`, NVFP4)** while preserving CUDA Graph addresses; `forward_kl_topk_tail` recovers **`+0.205276` non-negative KL** when $Q_k=0.92 > P_k=0.70$ (vs `-0.19125` clamped to `0.0`). |
@@ -47,7 +51,7 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 3. Full Component Catalog (Phases 1 – 24)
+## 3. Full Component Catalog (Phases 1 – 25)
 
 ### A. GPU Hardware, SM90/SM100 Kernels & Numerical Formats
 - [GPU & HBM Architecture](docs/components/gpu-hbm.md) (`experiments/capacity_roofline/README.md`)
@@ -57,6 +61,7 @@ Every quantitative claim in this repository is backed by:
 - [Blackwell SM100 Block-Scaled NVFP4 vs MXFP4, 512B TMEM Atom & Fused Epilogue](docs/components/sm100-block-scaled-nvfp4-kernels.md)
 - [CUTLASS SM100 Ptr-Array / Grouped GEMM: Async `TensorMapUpdater` & `CLC` Scheduler](docs/components/cutlass-sm100-grouped-gemm-clc-scheduler.md)
 - [SM100 Blackwell FMHA & FlashAttention-4 (`CuTe DSL`): 512-Col TMEM Aliasing & `FFMA2`](docs/components/sm100-blackwell-fmha-tmem-fa4.md) (`experiments/sm100_blackwell_fmha_fa4/README.md`)
+- [FlashAttention-4 Blackwell SM100 `hdim=256` Backward `M=64` TMEM Packing & `AccumTileOrder` Postprocess](docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.en.md) ([中文](docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.md), [`experiments/fa4_sm100_hd256_bwd_m64_sim/`](experiments/fa4_sm100_hd256_bwd_m64_sim/README.md))
 - [DeepSeek MLA & FlashMLA V4.1 Paged Decode: SM90/SM100 2-CTA & `get_mla_metadata`](docs/components/deepseek-mla-flashmla-decode-kernels.md)
 - [FlashInfer JIT Multi-Level Cascade Paged KV Attention & Base-2 LSE Merge](docs/components/flashinfer-cascade-paged-kv-attention.md)
 - [DeepGEMM SM100 `MegaMoE` Fused Expert Pool & `MegaMHC` HyperConnection (`Sinkhorn-Knopp`)](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) ([中文](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md), [`experiments/deepgemm_mega_moe_mhc_sim/`](experiments/deepgemm_mega_moe_mhc_sim/README.md))
@@ -94,6 +99,7 @@ Every quantitative claim in this repository is backed by:
 - [Large-Scale Reasoning RL Engine (`verl` Weight Resharding & vLLM `CuMemAllocator`)](docs/components/rl-post-training-engine.md) (`experiments/rl_rollout_resharding/README.md`)
 - [Bounded-Staleness Async RL, Partial Rollout & Token-Level TIS Pareto](docs/components/async-rl-staleness-weight-sync.md)
 - [veRL Low-Precision QAT Rollout (`MXFP4xMXFP8` / `NVFP4`) Zero-Copy In-Place Refit & Tail-Aware Top-K OPD (`forward_kl_topk_tail`)](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md) ([中文](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md), [`experiments/verl_fp4_refit_tail_kl_sim/`](experiments/verl_fp4_refit_tail_kl_sim/README.md))
+- [Megatron-LM `CheckpointWithoutOutput` Recompute Lifecycle (`_InputStash`) & Megatron-FSDP Delayed Post-Backward Hooks](docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.en.md) ([中文](docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.md), [`experiments/megatron_ckpt_without_output_mfsdp_sim/`](experiments/megatron_ckpt_without_output_mfsdp_sim/README.md))
 - [Storage GDS & Asynchronous Distributed Checkpointing](docs/components/storage-checkpoint.md) (`experiments/checkpoint_recovery/README.md`)
 - [PyTorch DCP Async Checkpoint: `WeakIdKeyDictionary` Pinned Pool & `_ReplicationStager`](docs/components/pytorch-dcp-async-stager-replication.md) (`experiments/async_dcp_checkpoint_stager/README.md`)
 - [DeepSeek 3FS (`hf3fs_usrbio`), GPUDirect Storage (`cuFile`) & Tiered KV/Checkpoints](docs/components/storage-gds-3fs-kv-tiering.md) (`experiments/storage_gds_kv_checkpoint/README.md`)
@@ -105,6 +111,7 @@ Every quantitative claim in this repository is backed by:
 - [Long-Context Hybrid Attention: FlashMLA, Ring/Ulysses CP & Mamba Checkpoint Pool](docs/components/long-context-hybrid-attention.md) (`experiments/long_context_attention/README.md`)
 - [SGLang `HiRadixCache`, `MLAHostDedupBroadcaster` & Hybrid `TRAILING_PAGES` Intersection](docs/components/sglang-hiradix-cache-mla-dedup-prefetch.md) (`experiments/sglang_hiradix_cache_controller/README.md`)
 - [Prefill/Decode Disaggregation & Tiered KV Cache Routing (`Mooncake` / `NIXL` / `SGLang`)](docs/components/disaggregated-kv-routing.md) (`experiments/disaggregated_kv_routing/README.md`)
+- [NVIDIA NIXL UCX VRAM `mem_type` Hinting, `cuMemCreate` Libfabric Primary-Context Fallback & Zero-Byte Notification Fix](docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.en.md) ([中文](docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.md), [`experiments/nixl_ucx_vram_vmm_notif_sim/`](experiments/nixl_ucx_vram_vmm_notif_sim/README.md))
 - [Mooncake Transfer Engine: ConnectX-8 `Data Direct` DMA & `BatchRdmaDeviceCache`](docs/components/mooncake-transfer-engine-cx8-data-direct-rdma.md) (`experiments/mooncake_cx8_data_direct_rdma/README.md`)
 - [Mooncake RDMA 7-Class Auto-GID Re-Probing (`kNetworkPrivateV4`) & Bounded In-Flight Scatter Resharding](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md) ([中文](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md), [`experiments/mooncake_gid_reprobe_reshard_sim/`](experiments/mooncake_gid_reprobe_reshard_sim/README.md))
 - [Distributed KV-Aware Router (`NVIDIA Dynamo`): Rational Credit Decay & Conditional PD Bypass](docs/components/distributed-kv-aware-router-dynamo-nixl.md)
@@ -147,13 +154,16 @@ Every quantitative claim in this repository is backed by:
 All validation tools and experiments use the Python 3.12 standard library only:
 
 ```powershell
-# 1. Run the full unit test suite (311 unit tests)
+# 1. Run the full unit test suite (314 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and links
 python scripts\validate_research.py
 
-# 3. Verify Phase 24, Phase 23 & Phase 22 deterministic experiments
+# 3. Verify Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+python experiments\fa4_sm100_hd256_bwd_m64_sim\run.py --check
+python experiments\nixl_ucx_vram_vmm_notif_sim\run.py --check
+python experiments\megatron_ckpt_without_output_mfsdp_sim\run.py --check
 python experiments\te_grouped_mxfp8_swizzle_sim\run.py --check
 python experiments\mooncake_gid_reprobe_reshard_sim\run.py --check
 python experiments\verl_fp4_refit_tail_kl_sim\run.py --check

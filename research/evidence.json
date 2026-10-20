@@ -3726,6 +3726,167 @@
       "verifier": "python experiments\\verl_fp4_refit_tail_kl_sim\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic numerical KL/gradient and memory-staging simulation."
+    },
+    {
+      "id": "ev-fa4-sm100-hd256-m64-tmem-map-2026",
+      "component": "kernel-dispatch-layout",
+      "claim": "In Dao-AILab/flash-attention (commits 2b00d76f22 & 965c9212e6, flash_bwd_sm100.py), running SM100 backward at hdim=256 with a 64-row KV tile per CTA (tile_n=64, use_2cta_instrs=True, CtaSchedule.TWO_CTA_SERIAL) activates the M=64 TMEM layout (acc_m64=True, lane_rows=2), halving accumulator TMEM widths to dV=128 [0,128), dK=128 [128,256), S=64 [256,320), dQ=128 [384,512), and dP=64 [448,512) (512 columns total) while staging P^T and dS^T in SMEM (sP, sdS_dK) and eliminating the sdS_xchg buffer (has_sdS_xchg=False).",
+      "status": "implementation",
+      "source_ids": [
+        "fa4-sm100-hd256-m64-bwd-2b00d76f",
+        "fa4-sm100-bwd-interface-965c9212"
+      ],
+      "artifacts": [
+        "docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.md",
+        "docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.en.md"
+      ],
+      "verifier": "python experiments\\fa4_sm100_hd256_bwd_m64_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Source-level implementation verification; physical SM100 kernel latency not measured in this repo."
+    },
+    {
+      "id": "ev-fa4-sm100-bwd-accum-tile-order-2026",
+      "component": "kernel-dispatch-layout",
+      "claim": "In Dao-AILab/flash-attention (commit 965c9212e6, bwd_accum_tile.py & flash_bwd_postprocess.py), AccumTileOrder unifies the three FP32 accumulate storage orders (TMEM_FRAG_1CTA, TMEM_FRAG_2CTA, ROW_MAJOR) between FlashAttentionBackwardSm100 and FlashAttentionBackwardPostprocess, removing the cp.async SMEM staging buffer so each postprocess warp reads 512 contiguous bytes (4 FP32/thread) directly from global memory into registers.",
+      "status": "implementation",
+      "source_ids": [
+        "fa4-sm100-bwd-accum-tile-965c9212",
+        "fa4-sm100-bwd-postprocess-965c9212"
+      ],
+      "artifacts": [
+        "docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.md",
+        "docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.en.md"
+      ],
+      "verifier": "python experiments\\fa4_sm100_hd256_bwd_m64_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Source-level implementation verification."
+    },
+    {
+      "id": "ev-exp-fa4-sm100-hd256-bwd-m64-sim-2026",
+      "component": "kernel-dispatch-layout",
+      "claim": "In deterministic simulator fa4_sm100_hd256_bwd_m64_sim, hdim=256 overflows SM100's 512 TMEM columns at tile_n=128 in both 1-CTA (768 cols) and 2-CTA serial (640 cols), whereas 2-CTA serial with tile_n=64 (acc_m64=True) fits in exactly 512 columns with 16 KiB sdQaccum staging (dQ_reduce_ncol=16, sdQaccum_stage=2) alongside 32 KiB sKt, and all three AccumTileOrder layouts are bijective across 32,768 elements and match 400/400 2-CTA dQ writer samples.",
+      "status": "own-offline",
+      "source_ids": [
+        "fa4-sm100-hd256-m64-bwd-2b00d76f",
+        "fa4-sm100-bwd-accum-tile-965c9212"
+      ],
+      "artifacts": [
+        "experiments/fa4_sm100_hd256_bwd_m64_sim/run.py",
+        "experiments/fa4_sm100_hd256_bwd_m64_sim/results/summary.json",
+        "docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.md",
+        "docs/components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.en.md"
+      ],
+      "verifier": "python experiments\\fa4_sm100_hd256_bwd_m64_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic arithmetic and coordinate bijection model."
+    },
+    {
+      "id": "ev-nixl-ucx-vram-memtype-hint-policy-2026",
+      "component": "interconnect-network",
+      "claim": "In ai-dynamo/nixl (commit 466ebb1ccc, ucx_utils.cpp & ucx_backend.cpp), nixlUcxContext::resolveMemoryTypeConfig queries UCP_ATTR_FIELD_MEMORY_TYPES and conservatively auto-hints UCS_MEMORY_TYPE_ZE_DEVICE only on ZE-only stacks (leaving CUDA and mixed stacks as UCS_MEMORY_TYPE_UNKNOWN), validates explicit hints (cuda, cuda-managed, rocm, ze-device) against supportedMemoryTypesMask_, and calls ucp_mem_unmap + aborts if VRAM_SEG registration resolves to UCS_MEMORY_TYPE_HOST.",
+      "status": "implementation",
+      "source_ids": [
+        "nixl-ucx-vram-memtype-utils-466ebb1c",
+        "nixl-ucx-vram-memtype-backend-466ebb1c"
+      ],
+      "artifacts": [
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.md",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.en.md"
+      ],
+      "verifier": "python experiments\\nixl_ucx_vram_vmm_notif_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Source-level C++ implementation audit."
+    },
+    {
+      "id": "ev-nixl-libfabric-cumemcreate-and-empty-notif-2026",
+      "component": "interconnect-network",
+      "claim": "In ai-dynamo/nixl, commit 1f4afe6b60 updates nixlLibfabricCudaCtx::cudaUpdateCtxPtr to return -1 when cuPointerGetAttribute(CU_POINTER_ATTRIBUTE_CONTEXT) yields ctx == nullptr on context-independent cuMemCreate allocations (triggering cudaSetDevice(mem.devId) primary-context binding before fi_mr_regattr), and commit b55e79152f changes Python check_remote_xfer_done from `if message:` to `if message is not None:` so 0-byte empty barrier notifications (b\"\") are removed on first match.",
+      "status": "implementation",
+      "source_ids": [
+        "nixl-libfabric-cumemcreate-ctx-1f4afe6b",
+        "nixl-python-empty-notif-b55e7915"
+      ],
+      "artifacts": [
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.md",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.en.md"
+      ],
+      "verifier": "python experiments\\nixl_ucx_vram_vmm_notif_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Source-level C++/Python implementation audit."
+    },
+    {
+      "id": "ev-exp-nixl-ucx-vram-vmm-notif-sim-2026",
+      "component": "interconnect-network",
+      "claim": "In deterministic simulator nixl_ucx_vram_vmm_notif_sim, UCX AUTO policy resolves to 'ze-device' on ZE-only mask (0x11) and 'unknown' on CUDA (0x07) or mixed CUDA+ZE (0x17) masks while unmapping host-misdetected VRAM_SEG buffers; Libfabric cuMemCreate fallback recovers primary context binding (ret=-1 -> cudaSetDevice); and `if message is not None:` reduces 0-byte notification hits across 3 polls from 3 (1 leaked) to 1 (0 remaining).",
+      "status": "own-offline",
+      "source_ids": [
+        "nixl-ucx-vram-memtype-utils-466ebb1c",
+        "nixl-libfabric-cumemcreate-ctx-1f4afe6b",
+        "nixl-python-empty-notif-b55e7915"
+      ],
+      "artifacts": [
+        "experiments/nixl_ucx_vram_vmm_notif_sim/run.py",
+        "experiments/nixl_ucx_vram_vmm_notif_sim/results/summary.json",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.md",
+        "docs/components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.en.md"
+      ],
+      "verifier": "python experiments\\nixl_ucx_vram_vmm_notif_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic control-flow and bitmask simulation."
+    },
+    {
+      "id": "ev-megatron-ckpt-without-output-region-state-2026",
+      "component": "distributed-training",
+      "claim": "In NVIDIA/Megatron-LM (commit d2c430ab48, megatron/core/tensor_parallel/random.py), CheckpointWithoutOutput isolates recomputation into a 4-state forward-only automaton _RecomputeRegion (RECORDED -> RELEASED -> REBUILT -> DONE) that stashes raw tensor inputs via _InputStash (unpacking once via saved_tensors), holds only weakref.ref(region) on the facade to break autograd reference cycles, preserves _retained_storage_ptrs during storage.resize_(0), and swaps UntypedStorage pointers below TensorImpl without bumping tensor version counters.",
+      "status": "implementation",
+      "source_ids": [
+        "megatron-ckpt-without-output-random-d2c430ab",
+        "megatron-ckpt-without-output-test-d2c430ab"
+      ],
+      "artifacts": [
+        "docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.md",
+        "docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.en.md"
+      ],
+      "verifier": "python experiments\\megatron_ckpt_without_output_mfsdp_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Source-level Python implementation audit."
+    },
+    {
+      "id": "ev-megatron-fsdp-frozen-cleanup-and-microbatch-2026",
+      "component": "distributed-training",
+      "claim": "In NVIDIA/Megatron-LM (commit d37b3a8fdb, megatron_fsdp/experimental/{context,fully_shard}.py), when a frozen FSDP unit (_trainable_parameter_countdown == 0) receives no input gradients (all(g is None for g in grad_input)), grad_checking_post_backward_hook defers weight cleanup onto context._delayed_post_backward_callbacks (popped LIFO in post_backward) to prevent use-after-free during internal backward, while microbatch(context, is_last=False) skips finish_grad_sync() on non-final microbatches so trailing ReduceScatters overlap the next microbatch forward.",
+      "status": "implementation",
+      "source_ids": [
+        "megatron-fsdp-context-microbatch-d37b3a8f",
+        "megatron-fsdp-fully-shard-frozen-d37b3a8f"
+      ],
+      "artifacts": [
+        "docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.md",
+        "docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.en.md"
+      ],
+      "verifier": "python experiments\\megatron_ckpt_without_output_mfsdp_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Source-level Python implementation audit."
+    },
+    {
+      "id": "ev-exp-megatron-ckpt-without-output-mfsdp-sim-2026",
+      "component": "distributed-training",
+      "claim": "In deterministic simulator megatron_ckpt_without_output_mfsdp_sim, releasing a 64 MiB main output and 16 MiB input-aliased output drops main storage to 0 B while preserving the 16 MiB alias, unpacks inputs exactly once across duplicate hooks, restores 64 MiB to downstream views with 0 version-counter bumps, and garbage-collects abandoned regions via weakref; for Megatron-FSDP, LIFO delayed cleanup preserves 32 MiB frozen weights during internal backward (0 UAF) and microbatch(is_last=False) cuts stream waits across 4 microbatches from 4 to 1 (+3 cross-microbatch ReduceScatter overlaps).",
+      "status": "own-offline",
+      "source_ids": [
+        "megatron-ckpt-without-output-random-d2c430ab",
+        "megatron-fsdp-context-microbatch-d37b3a8f",
+        "megatron-fsdp-fully-shard-frozen-d37b3a8f"
+      ],
+      "artifacts": [
+        "experiments/megatron_ckpt_without_output_mfsdp_sim/run.py",
+        "experiments/megatron_ckpt_without_output_mfsdp_sim/results/summary.json",
+        "docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.md",
+        "docs/components/megatron-checkpoint-without-output-mfsdp-frozen-grad.en.md"
+      ],
+      "verifier": "python experiments\\megatron_ckpt_without_output_mfsdp_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic state-machine and memory-lifecycle simulation."
     }
   ],
   "updated_at": "2026-10-20"
