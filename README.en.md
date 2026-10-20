@@ -13,13 +13,14 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 1. Current Research Baseline (Phase 1 – Phase 30 Complete on `main`)
+## 1. Current Research Baseline (Phase 1 – Phase 31 Complete on `main`)
 
-- **Research Queue (`research/queue.json`)**: **`105 / 105` questions `done`** (`priority: 1` through `priority: 39`, `0` pending, `0` blocked).
-- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`100` standard-library experiments**, all passing `--check`.
-- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`344` first-hand sources** and **`264` audited claims**.
+- **Research Queue (`research/queue.json`)**: **`108 / 108` questions `done`** (`priority: 1` through `priority: 40`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`103` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`353` first-hand sources** and **`273` audited claims**.
 - **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
   - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 31 7-Card 4:5 Benchmark Deck — SGLang DS-V4 TF32 mHC / FlashInfer GDN TMEM / TRT-LLM MegaMoE, TorchTitan MLA Compile / TE MXFP8 FP8BS / veRL Tail-KL & Mooncake GID Epoch / LMCache Inproc / NIXL UCX Spans (`ai-infra-phase31-benchmark-cards.html`)](docs/reports/ai-infra-phase31-benchmark-cards.html)
   - [Phase 30 7-Card 4:5 Benchmark Deck — FlashInfer Rubin MoE Barrier / EP Split / SM103a AG+GEMM, TorchTitan DS-V3 MLA `int32` RoPE / Megatron Recompute & LMCache CXL DAX / Mooncake OpLog Dedup (`ai-infra-phase30-benchmark-cards.html`)](docs/reports/ai-infra-phase30-benchmark-cards.html)
   - [Phase 29 7-Card 4:5 Benchmark Deck — SGLang KVShard PD Transfer, PyTorch CUDA COW / c10d nccl-lazy MemPool & NIXL UCX/Libfabric VMM / Triton CDNA5 Cluster Barrier (`ai-infra-phase29-benchmark-cards.html`)](docs/reports/ai-infra-phase29-benchmark-cards.html)
   - [Phase 28 7-Card 4:5 Benchmark Deck — TE NVFP4 Compile / Symmetric AR & DeepGEMM MegaMHC Epoch, Mooncake Deferred Offload / DFS Align & Megatron Payload Staging / veRL HDO Offload (`ai-infra-phase28-benchmark-cards.html`)](docs/reports/ai-infra-phase28-benchmark-cards.html)
@@ -37,10 +38,13 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 2. Latest Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 39`..`31`, Bilingual EN/ZH)
+## 2. Latest Phase 31, Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 40`..`31`, Bilingual EN/ZH)
 
 | Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
 |---|---|---|---|
+| `sglang-dsv4-dspark-tf32-mhc-flashinfer-gdn-tmem-trtllm-megamoe` | [中文](docs/components/sglang-dsv4-dspark-tf32-mhc-flashinfer-gdn-tmem-trtllm-megamoe.md) · [English](docs/components/sglang-dsv4-dspark-tf32-mhc-flashinfer-gdn-tmem-trtllm-megamoe.en.md) | [`experiments/sglang_dsv4_mhc_flashinfer_gdn_trtllm_megamoe/`](experiments/sglang_dsv4_mhc_flashinfer_gdn_trtllm_megamoe/README.md) | `sgl-project/sglang` (`c2e5742464`), `flashinfer-ai/flashinfer` (`80a44189a0`) & `NVIDIA/TensorRT-LLM` (`46d9966b54`): lowering SM100 TF32 mHC threshold `128 -> 32` lifts medium-batch hits **`2/7 -> 6/7` (`181.21 -> 91.18 us`, `1.9874x`)** and `post_load_weights()` refreshes all 4 DSpark draft norms (`0` stale); `fence_view_async_tmem_load()` eliminates **`16/16 -> 0/16` GDN TMEM WAR hazards**; `MegaMoECuteDsl` `returns_global_routed_output=True` prevents **`4.0x` duplicate TP AllReduce inflation** (`0.0` error). |
+| `torchtitan-dsv3-mla-local-compile-te-mxfp8-verl-topk-kl-rollout` | [中文](docs/components/torchtitan-dsv3-mla-local-compile-te-mxfp8-verl-topk-kl-rollout.md) · [English](docs/components/torchtitan-dsv3-mla-local-compile-te-mxfp8-verl-topk-kl-rollout.en.md) | [`experiments/torchtitan_mla_compile_te_mxfp8_verl_tail_kl/`](experiments/torchtitan_mla_compile_te_mxfp8_verl_tail_kl/README.md) | `pytorch/torchtitan` (`21db340cba`), `NVIDIA/TransformerEngine` (`f4a69dc81e`) & `volcengine/verl` (`5a8dd519ab`): `@local_compile("mla_qk", options={"max_pointwise_cat_inputs": 0})` eliminates **`100,663,296` masked loads (`198.0 -> 112.0 us`, `1.7679x`)**; Blackwell `4x32` MXFP8 `E8M0` (`force_pow_2_scales=True`) emulates 128-elem FP8BS with **`0.0` error** (`4/4` non-pow2 rejected); `forward_kl_topk_tail` restores **`+0.428726` positive KL** vs `-0.170396` truncated and blocks `log_prob_min_clamp`. |
+| `mooncake-auto-gid-recovery-reshard-inflight-lmcache-nixl-ucx-spans` | [中文](docs/components/mooncake-auto-gid-recovery-reshard-inflight-lmcache-nixl-ucx-spans.md) · [English](docs/components/mooncake-auto-gid-recovery-reshard-inflight-lmcache-nixl-ucx-spans.en.md) | [`experiments/mooncake_gid_recovery_lmcache_inproc_nixl_ucx/`](experiments/mooncake_gid_recovery_lmcache_inproc_nixl_ucx/README.md) | `kvcache-ai/Mooncake` (`5ea6cf0d95`), `LMCache/LMCache` (`df19cd68cd`) & `ai-dynamo/nixl` (`8d5660c118`): `RdmaCompletionToken.selection_epoch` advances Auto-GID **once (`epoch 1 -> 2`)** on a 16-slice `IBV_WC_RETRY_EXC_ERR` burst, ignores **`15/15` stale completions**, and recovers `16/16` slices; `_validate_vllm_device_features` catches **`3/3` invalid MUSA/HPU feature configs (`0` CUDA Stream crashes)**; UCX omits poll-triggered `wire.completed` to eliminate **`8.3191x` (`195.5 vs 23.5 us`) poll-skew inflation**. |
 | `flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul` | [中文](docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.md) · [English](docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.en.md) | [`experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/`](experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/README.md) | `flashinfer-ai/flashinfer` (`25f13da076`, `ffc2e552c2`, `b4d20faac1` & `b815220c91`): Rubin SM120/SM121 `cp_async_bulk_wait_group(0, read=True)` before `barrier_sync(1)` eliminates **`7/8 -> 0/8` `sC` WAR races**; `moe_ep` split (`5/5` matrix cases) + non-capturing zero-token skip cuts 4-rank EP local GEMMs **`12,288 -> 6,821` (`-44.49%`, `0` on all-remote)** while keeping fixed CUDA Graph topology across 3 replays; SM103a hoisted `peer` cuts `po` pointer switches **`224 -> 4` (`-98.21%`)**; Kimi-K3 `tcgen05.wait::ld` eliminates **`9/9` TMEM hazards**. |
 | `torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region` | [中文](docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.md) · [English](docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.en.md) | [`experiments/torchtitan_dsv3_mla_rope_megatron_recompute/`](experiments/torchtitan_dsv3_mla_rope_megatron_recompute/README.md) | `pytorch/torchtitan` (`2fbff90f1f` & `d0972094d1`) & `NVIDIA/Megatron-LM` (`d2c430ab48` & `ed48fa0b31`): 2-BF16-as-`int32` MLA RoPE broadcast matches strided BF16 with **`0.0` error**, halves row mem ops (**`384 -> 192`, `-50.0%`**), and eliminates **`25,239,552` masked loads**; `recompile_limit=16, fullgraph=True` caches all 10 FlexAttention graphs (**`46.6 -> 12.0 ms`, `3.88x` speedup**); `_RecomputeRegion` dual-hook gating (`[False, True]`) + weakref (`0` cycles) + TE FP8 discard (`0/32` leaks). |
 | `lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup` | [中文](docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.md) · [English](docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.en.md) | [`experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/`](experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/README.md) | `LMCache/LMCache` (`e8dc1a1dae` & `5c42b62bd4`) & `kvcache-ai/Mooncake` (`a041e00d9e`): sysfs `check_dax_range` (`2 MiB` align) blocks **`5/5` invalid/overlapping CXL configs (`0` `SIGBUS`)** and partitions `1 TiB` CXL into `2 x 512 GiB` disjoint arenas; singleton gRPC response writer cuts compilations **`10,000 -> 1` (`-99.99%`, `438.0 -> 18.04 ms`, `24.28x`)**; Mooncake HA Master OpLog `mounted_segments_` dedup eliminates **`150` double-counted mounts** (`512 GiB` exact). |
@@ -183,13 +187,16 @@ Every quantitative claim in this repository is backed by:
 All validation tools and experiments use the Python 3.12 standard library only:
 
 ```powershell
-# 1. Run the full unit test suite (329 unit tests)
+# 1. Run the full unit test suite (333 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and links
 python scripts\validate_research.py
 
-# 3. Verify Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+# 3. Verify Phase 31, Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+python experiments\sglang_dsv4_mhc_flashinfer_gdn_trtllm_megamoe\run.py --check
+python experiments\torchtitan_mla_compile_te_mxfp8_verl_tail_kl\run.py --check
+python experiments\mooncake_gid_recovery_lmcache_inproc_nixl_ucx\run.py --check
 python experiments\flashinfer_rubin_moe_barrier_ep_split_ag_matmul\run.py --check
 python experiments\torchtitan_dsv3_mla_rope_megatron_recompute\run.py --check
 python experiments\lmcache_dax_cxl_offset_grpc_mooncake_oplog\run.py --check
