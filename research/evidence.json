@@ -3566,6 +3566,166 @@
       "verifier": "python experiments\\sglang_pd_role_switch_offload_sim\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic state-machine, wire-framing, and chunking simulation."
+    },
+    {
+      "id": "ev-te-blackwell-grouped-mxfp8-swizzle-kernel-2026",
+      "component": "gpu-software",
+      "claim": "In NVIDIA/TransformerEngine (commit f4a69dc81e, swizzle_block_scaling.cu), grouped_swizzle_block_scaling_to_mxfp8_kernel emulates Hopper FP8 block scaling (1D/2D FP32 scale_inv) on Blackwell via MXFP8 grouped GEMM by sharing the rowwise FP8 data pointer zero-copy and computing device-side 32-lane __shfl_up_sync exclusive prefix sums (tile_start, in_start, out_start) in dynamic shared memory ((3*num_tensors+1)*8 bytes, opting into >48 KiB at num_tensors >= 2048) followed by O(log2 N) binary search (find_tensor) over 128x128 tiles.",
+      "status": "implementation",
+      "source_ids": [
+        "te-swizzle-header-f4a69dc8",
+        "te-swizzle-block-scaling-cu-f4a69dc8",
+        "te-pytorch-swizzle-ext-f4a69dc8"
+      ],
+      "artifacts": [
+        "docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md",
+        "docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static source verification of CUDA kernel and C++ extension."
+    },
+    {
+      "id": "ev-te-grouped-mxfp8-upper-bound-and-nvfp4-transpose-2026",
+      "component": "gpu-software",
+      "claim": "In NVIDIA/TransformerEngine (commits f4a69dc81e and 4a3a8a8e85), grouped_mxfp8_scale_bytes_upper_bound bounds total swizzled E8M0 scale allocation from the 2D logical shape [F, L] without host-device synchronization as (F + 127*n)*ceil(L/128)*4 for varying first_dims and roundup(F, 128)*4*(ceil(L/128) + n) for varying last_dims, while quantize_transpose_nvfp4.cuh uses ptx::abs_max_2x rowwise/columnwise amax reduction and wmma.load/store.m16n16k16.shared::cta transpose.",
+      "status": "implementation",
+      "source_ids": [
+        "te-swizzle-block-scaling-cu-f4a69dc8",
+        "te-nvfp4-quantize-transpose-4a3a8a8e"
+      ],
+      "artifacts": [
+        "docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md",
+        "docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static source verification."
+    },
+    {
+      "id": "ev-exp-te-grouped-mxfp8-swizzle-sim-2026",
+      "component": "gpu-software",
+      "claim": "In deterministic simulator te_grouped_mxfp8_swizzle_sim, 256-expert DeepSeek-V3 MoE FPROP (F=32768, L=7168, 16 empty experts) produces 22,064 tiles (11,296,768 B exact E8M0 scales) bounded by 14,622,720 B on host (1.2944x slack, 6,152 B SMEM); 2D 128x128 block-scale emulation expands scale bytes by 128.0x (88,256 B -> 11,296,768 B); and 2,048 experts require 49,160 B SMEM (>48 KiB default), triggering opt-in dynamic SMEM (supporting up to 9,685 tensors in 227 KiB).",
+      "status": "own-offline",
+      "source_ids": [
+        "te-swizzle-header-f4a69dc8",
+        "te-swizzle-block-scaling-cu-f4a69dc8"
+      ],
+      "artifacts": [
+        "experiments/te_grouped_mxfp8_swizzle_sim/run.py",
+        "experiments/te_grouped_mxfp8_swizzle_sim/results/summary.json",
+        "docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md",
+        "docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md"
+      ],
+      "verifier": "python experiments\\te_grouped_mxfp8_swizzle_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic geometry, binary-search, and upper-bound simulation."
+    },
+    {
+      "id": "ev-mooncake-auto-gid-reprobe-state-machine-2026",
+      "component": "interconnect",
+      "claim": "In kvcache-ai/Mooncake (commit 5ea6cf0d95, rdma_gid_probe.h and rdma_endpoint.cpp), AutoGidCandidateClass promotes RFC1918 private IPv4-mapped GIDs (kNetworkPrivateV4=2) above link-local fe80:: and overlay networks (kNetworkDegraded=3), while PeerAutoGidStateTable::recordCompletion returns kRetrySameGid on the first failing endpoint_id and advances via kAdvanceGid (advertising auto_gid_reprobe_from) only when a strictly higher endpoint_id > first_failed_endpoint_id fails on the same selection_epoch.",
+      "status": "implementation",
+      "source_ids": [
+        "mooncake-rdma-gid-probe-5ea6cf0d",
+        "mooncake-rdma-endpoint-reprobe-5ea6cf0d"
+      ],
+      "artifacts": [
+        "docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md",
+        "docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static source verification."
+    },
+    {
+      "id": "ev-mooncake-bounded-scatter-reshard-and-poison-2026",
+      "component": "interconnect",
+      "claim": "In kvcache-ai/Mooncake (commits 0977fc7066 and 67df8c414a, executor.py and client_service.cpp), MooncakeTransferEngineExecutor._execute_batches enforces a bounded in-flight deque of size max_inflight_batches over submit_scatter_read/write tickets, transitions TransferSubmission to _TransferSubmissionState.POISONED on unresolved completions (TransferCompletionUnknownError/Interrupted), and coalesces contiguous slices via GetContiguousSliceRange.",
+      "status": "implementation",
+      "source_ids": [
+        "mooncake-reshard-bounded-executor-0977fc70",
+        "mooncake-store-contiguous-slice-67df8c41"
+      ],
+      "artifacts": [
+        "docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md",
+        "docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static source verification."
+    },
+    {
+      "id": "ev-exp-mooncake-gid-reprobe-reshard-sim-2026",
+      "component": "interconnect",
+      "claim": "In deterministic simulator mooncake_gid_reprobe_reshard_sim, two-endpoint failure verification absorbs single-endpoint transient errors (kRetrySameGid on ep#101) and duplicate/stale CQEs (kIgnoreDuplicate) before advancing to kNetworkPrivateV4 (GID index 2 on ep#102), while bounded Scatter resharding at max_inflight_batches=4 cuts 64 GiB transfer time from 1.7562 s to 1.5363 s (313.03 Gbps -> 357.85 Gbps, +14.3%) within a 1,024 MiB pinned window.",
+      "status": "own-offline",
+      "source_ids": [
+        "mooncake-rdma-gid-probe-5ea6cf0d",
+        "mooncake-reshard-bounded-executor-0977fc70"
+      ],
+      "artifacts": [
+        "experiments/mooncake_gid_reprobe_reshard_sim/run.py",
+        "experiments/mooncake_gid_reprobe_reshard_sim/results/summary.json",
+        "docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md",
+        "docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md"
+      ],
+      "verifier": "python experiments\\mooncake_gid_reprobe_reshard_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic state-machine and sliding-window simulation."
+    },
+    {
+      "id": "ev-verl-fp4-zero-copy-refit-and-cutlass-patch-2026",
+      "component": "distributed-training",
+      "claim": "In volcengine/verl (commit 8f016846e3, vllm_fp4_utils.py and compressed_tensors.py), _mxfp4_staging_data aliases live 4-bit routed-expert weight storage zero-copy via data.flatten().view(dtype).reshape(shape) so only block scales (_MXFP4_SF_BLOCK=32 at 1/16 weight bytes; _NVFP4_SF_BLOCK=16 at 1/8 weight bytes) require temporary allocation during RL refit, while _replace_parameter_in_place copies post-processed tensors back into the CUDA-Graph-captured storage and routes MXFP4xMXFP8 to flashinfer_cutlass.",
+      "status": "implementation",
+      "source_ids": [
+        "verl-qat-compressed-tensors-8f016846",
+        "verl-vllm-fp4-refit-utils-8f016846"
+      ],
+      "artifacts": [
+        "docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md",
+        "docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static source verification."
+    },
+    {
+      "id": "ev-verl-opd-tail-bucket-kl-and-gradient-2026",
+      "component": "distributed-training",
+      "claim": "In volcengine/verl (commit 5a8dd519ab, tail_kl.py and docs/algo/opd.md), compute_tail_bucket_kl and compute_tail_aware_logit_gradient implement forward_kl_topk_tail by adding one aggregate non-top-k tail bucket (1-P_k)*log((1-P_k)/max(1-Q_k, tail_mass_eps)) with a one-sided student epsilon guard (1e-6), guaranteeing a non-negative coarse-grained KL lower bound and an exact vocabulary-sharded logit gradient without extra teacher RPC payload.",
+      "status": "implementation",
+      "source_ids": [
+        "verl-distillation-tail-kl-5a8dd519",
+        "verl-opd-tail-kl-doc-5a8dd519"
+      ],
+      "artifacts": [
+        "docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md",
+        "docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static source and mathematical derivation verification."
+    },
+    {
+      "id": "ev-exp-verl-fp4-refit-tail-kl-sim-2026",
+      "component": "distributed-training",
+      "claim": "In deterministic simulator verl_fp4_refit_tail_kl_sim, when student top-k mass exceeds teacher top-k mass (P_k=0.70, Q_k=0.92), legacy forward_kl_topk yields -0.19125 (clamped to 0.0, losing all gradients) whereas forward_kl_topk_tail adds +0.396527 tail KL to recover +0.205276 total KL with 0.0 finite-difference gradient error; for 61-layer MoE (40,992 MiB live FP4 weights/GPU), zero-copy weight aliasing shrinks peak refit staging from 46,116 MiB to 2,562 MiB (6.25%, MXFP4) and 5,124 MiB (12.5%, NVFP4).",
+      "status": "own-offline",
+      "source_ids": [
+        "verl-vllm-fp4-refit-utils-8f016846",
+        "verl-distillation-tail-kl-5a8dd519"
+      ],
+      "artifacts": [
+        "experiments/verl_fp4_refit_tail_kl_sim/run.py",
+        "experiments/verl_fp4_refit_tail_kl_sim/results/summary.json",
+        "docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md",
+        "docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md"
+      ],
+      "verifier": "python experiments\\verl_fp4_refit_tail_kl_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic numerical KL/gradient and memory-staging simulation."
     }
   ],
   "updated_at": "2026-10-20"

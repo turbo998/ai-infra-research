@@ -13,13 +13,14 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 1. Current Research Baseline (Phase 1 – Phase 23 Complete on `main`)
+## 1. Current Research Baseline (Phase 1 – Phase 24 Complete on `main`)
 
-- **Research Queue (`research/queue.json`)**: **`84 / 84` questions `done`** (`priority: 1` through `priority: 32`, `0` pending, `0` blocked).
-- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`79` standard-library experiments**, all passing `--check`.
-- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`275` first-hand sources** and **`201` audited claims**.
+- **Research Queue (`research/queue.json`)**: **`87 / 87` questions `done`** (`priority: 1` through `priority: 33`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`82` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`287` first-hand sources** and **`210` audited claims**.
 - **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
   - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 24 7-Card 4:5 Benchmark Deck — TE Blackwell Grouped MXFP8 Swizzle, Mooncake Auto-GID Reprobe & veRL FP4 Refit / Tail-KL OPD (`ai-infra-phase24-benchmark-cards.html`)](docs/reports/ai-infra-phase24-benchmark-cards.html)
   - [Phase 23 7-Card 4:5 Benchmark Deck — FlashInfer Frost DS4.1, TorchTitan FlexShard/HybridEP & SGLang PD Role Switch (`ai-infra-phase23-benchmark-cards.html`)](docs/reports/ai-infra-phase23-benchmark-cards.html)
   - [Phase 22 7-Card 4:5 Benchmark Deck — NCCL GIN Symmetric, SM100 MegaMoE/MHC & vLLM V1 Sparse MLA (`ai-infra-phase22-benchmark-cards.html`)](docs/reports/ai-infra-phase22-benchmark-cards.html)
   - [Phase 21 7-Card 4:5 Benchmark Deck — Mooncake ConnectX-8, Megatron-FSDP & PyTorch DCP (`ai-infra-phase21-benchmark-cards.html`)](docs/reports/ai-infra-phase21-benchmark-cards.html)
@@ -30,10 +31,13 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 2. Latest Phase 23 & Phase 22 Highlights (`priority: 32` & `31`, Bilingual EN/ZH)
+## 2. Latest Phase 24, Phase 23 & Phase 22 Highlights (`priority: 33`, `32` & `31`, Bilingual EN/ZH)
 
 | Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
 |---|---|---|---|
+| `te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle` | [中文](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md) · [English](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md) | [`experiments/te_grouped_mxfp8_swizzle_sim/`](experiments/te_grouped_mxfp8_swizzle_sim/README.md) | `NVIDIA/TransformerEngine` (`f4a69dc8` & `4a3a8a8e`): zero-copy FP8 data pointer reuse + device-side warp prefix sum + `find_tensor` binary search emulates Hopper FP8 block scaling on Blackwell via MXFP8 grouped GEMM (`22,064` tiles for 256E MoE, host upper bound **`14.62 MB` vs `11.30 MB` exact, `1.2944x` slack**, zero D2H sync); auto-unlocks `>48 KiB` dynamic SMEM at **`>= 2,048` tensors** (up to `9,685` in `227 KiB`). |
+| `mooncake-rdma-auto-gid-reprobe-bounded-reshard` | [中文](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md) · [English](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md) | [`experiments/mooncake_gid_reprobe_reshard_sim/`](experiments/mooncake_gid_reprobe_reshard_sim/README.md) | `kvcache-ai/Mooncake` (`5ea6cf0d` & `0977fc70`): 7-class `AutoGidCandidateClass` promotes RFC1918 `10/8` to `kNetworkPrivateV4` above `fe80::`; two-endpoint failure confirmation (`kRetrySameGid` -> `kAdvanceGid` + `auto_gid_reprobe_from`) filters transient timeouts and stale CQEs; bounded Scatter window **`W=4` lifts 64 GiB goodput from `313.03` to `357.85 Gbps` (`+14.3%`)**. |
+| `verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation` | [中文](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md) · [English](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md) | [`experiments/verl_fp4_refit_tail_kl_sim/`](experiments/verl_fp4_refit_tail_kl_sim/README.md) | `volcengine/verl` (`8f016846` & `5a8dd519`): `_mxfp4_staging_data` zero-copy byte aliasing + `_replace_parameter_in_place` shrinks 61L MoE (`40,992 MiB/GPU`) RL refit staging to **`2,562 MiB` (`6.25%`, MXFP4)** and **`5,124 MiB` (`12.5%`, NVFP4)** while preserving CUDA Graph addresses; `forward_kl_topk_tail` recovers **`+0.205276` non-negative KL** when $Q_k=0.92 > P_k=0.70$ (vs `-0.19125` clamped to `0.0`). |
 | `flashinfer-frost-ds41-mixed-mxfp8-fp4-decode` | [中文](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md) · [English](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md) | [`experiments/flashinfer_ds41_mixed_decode_sim/`](experiments/flashinfer_ds41_mixed_decode_sim/README.md) | `flashinfer-ai/flashinfer` (`8dc1163f`): non-interleaved 64-token pages (`swa_mxfp8` `[pages,64,1,528]` + `main_kv_fp4` `[pages,64,1,288]`) compress 640-token active KV reads **`3.0476x` (`-67.19%` BW)**; `tl.div_rn` eliminates **`4.15%` (`9/217`)** E2M1 halfway jumps caused by `x*(1.0/scale)`; `persistent_ctas=80` lifts `B=160` 2-wave grid balance on 148 SMs from `54.05%` to **`100.0%`**; `green_ctx.py` enforces `(8, 8)` SM alignment. |
 | `torchtitan-flexshard-distmuon-hybridep` | [中文](docs/components/torchtitan-flexshard-distmuon-hybridep.md) · [English](docs/components/torchtitan-flexshard-distmuon-hybridep.en.md) | [`experiments/torchtitan_flexshard_hybridep_sim/`](experiments/torchtitan_flexshard_hybridep_sim/README.md) | `pytorch/torchtitan` (`3b1714ab`): `BlockShard(0, (512, 64))` partitions Kimi `wkv_a` `[4608, 4096]` into `16` intact sub-matrices (`0` broken boundaries vs `4` under naive 6-rank `Shard(0)`); `compute_dtype=bfloat16` + 4-bucket overlap speeds up DistMuon **`1.716x` (`8.757 -> 5.103 ms`)**; GB200 NVLink72 `HybridEP` non-blocking `capacity_factor=0.25` saves **`75.0%` buffer memory (`4,033.12 MiB`)** with `0` drops at `1.35x` P99 skew. |
 | `sglang-pd-role-switch-pp-consensus-offload` | [中文](docs/components/sglang-pd-role-switch-pp-consensus-offload.md) · [English](docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md) | [`experiments/sglang_pd_role_switch_offload_sim/`](experiments/sglang_pd_role_switch_offload_sim/README.md) | `sgl-project/sglang` (`df13d5dc`): `handle_pd_role_switch` flips Prefill <-> Decode in **`180 ms` (`233.33x` faster than `42s` cold restart)** without reallocating the token KV pool and gates on `decode_cuda_graph_memory_gb` (`safe_to_restore=True`); `PPConsensusStore` MsgPack 4-tuple `_ReplicationOp` cuts ZMQ payload **`72.31%` (`65 -> 18 B`)** without pickle RCE; `DecodeKVCacheOffloadManager` recovers all **`38` unaligned prompt tail tokens**. |
@@ -43,7 +47,7 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 3. Full Component Catalog (Phases 1 – 23)
+## 3. Full Component Catalog (Phases 1 – 24)
 
 ### A. GPU Hardware, SM90/SM100 Kernels & Numerical Formats
 - [GPU & HBM Architecture](docs/components/gpu-hbm.md) (`experiments/capacity_roofline/README.md`)
@@ -57,6 +61,7 @@ Every quantitative claim in this repository is backed by:
 - [FlashInfer JIT Multi-Level Cascade Paged KV Attention & Base-2 LSE Merge](docs/components/flashinfer-cascade-paged-kv-attention.md)
 - [DeepGEMM SM100 `MegaMoE` Fused Expert Pool & `MegaMHC` HyperConnection (`Sinkhorn-Knopp`)](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) ([中文](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md), [`experiments/deepgemm_mega_moe_mhc_sim/`](experiments/deepgemm_mega_moe_mhc_sim/README.md))
 - [FlashInfer Frost (`DeepSeek-V4.1`) SM100 Mixed `MXFP8/FP4` Non-Interleaved Decode & `Green Context` SM Split](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md) ([中文](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md), [`experiments/flashinfer_ds41_mixed_decode_sim/`](experiments/flashinfer_ds41_mixed_decode_sim/README.md))
+- [TransformerEngine Blackwell FP8 Block-Scaling to MXFP8 Grouped GEMM Swizzle & Dynamic SMEM](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md) ([中文](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md), [`experiments/te_grouped_mxfp8_swizzle_sim/`](experiments/te_grouped_mxfp8_swizzle_sim/README.md))
 
 ### B. Scale-Up / Scale-Out Fabrics, RDMA & NCCL Internals
 - [Interconnect & Network Stack Overview](docs/components/interconnect-network.md)
@@ -88,6 +93,7 @@ Every quantitative claim in this repository is backed by:
 - [Operator-Level Selective Activation Checkpointing (`SAC`) & NUMA PCIe Gen5 Offload](docs/components/selective-activation-checkpoint-offload.md) (`experiments/selective_activation_offload/README.md`)
 - [Large-Scale Reasoning RL Engine (`verl` Weight Resharding & vLLM `CuMemAllocator`)](docs/components/rl-post-training-engine.md) (`experiments/rl_rollout_resharding/README.md`)
 - [Bounded-Staleness Async RL, Partial Rollout & Token-Level TIS Pareto](docs/components/async-rl-staleness-weight-sync.md)
+- [veRL Low-Precision QAT Rollout (`MXFP4xMXFP8` / `NVFP4`) Zero-Copy In-Place Refit & Tail-Aware Top-K OPD (`forward_kl_topk_tail`)](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md) ([中文](docs/components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md), [`experiments/verl_fp4_refit_tail_kl_sim/`](experiments/verl_fp4_refit_tail_kl_sim/README.md))
 - [Storage GDS & Asynchronous Distributed Checkpointing](docs/components/storage-checkpoint.md) (`experiments/checkpoint_recovery/README.md`)
 - [PyTorch DCP Async Checkpoint: `WeakIdKeyDictionary` Pinned Pool & `_ReplicationStager`](docs/components/pytorch-dcp-async-stager-replication.md) (`experiments/async_dcp_checkpoint_stager/README.md`)
 - [DeepSeek 3FS (`hf3fs_usrbio`), GPUDirect Storage (`cuFile`) & Tiered KV/Checkpoints](docs/components/storage-gds-3fs-kv-tiering.md) (`experiments/storage_gds_kv_checkpoint/README.md`)
@@ -100,6 +106,7 @@ Every quantitative claim in this repository is backed by:
 - [SGLang `HiRadixCache`, `MLAHostDedupBroadcaster` & Hybrid `TRAILING_PAGES` Intersection](docs/components/sglang-hiradix-cache-mla-dedup-prefetch.md) (`experiments/sglang_hiradix_cache_controller/README.md`)
 - [Prefill/Decode Disaggregation & Tiered KV Cache Routing (`Mooncake` / `NIXL` / `SGLang`)](docs/components/disaggregated-kv-routing.md) (`experiments/disaggregated_kv_routing/README.md`)
 - [Mooncake Transfer Engine: ConnectX-8 `Data Direct` DMA & `BatchRdmaDeviceCache`](docs/components/mooncake-transfer-engine-cx8-data-direct-rdma.md) (`experiments/mooncake_cx8_data_direct_rdma/README.md`)
+- [Mooncake RDMA 7-Class Auto-GID Re-Probing (`kNetworkPrivateV4`) & Bounded In-Flight Scatter Resharding](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md) ([中文](docs/components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md), [`experiments/mooncake_gid_reprobe_reshard_sim/`](experiments/mooncake_gid_reprobe_reshard_sim/README.md))
 - [Distributed KV-Aware Router (`NVIDIA Dynamo`): Rational Credit Decay & Conditional PD Bypass](docs/components/distributed-kv-aware-router-dynamo-nixl.md)
 - [Large-Scale MoE Expert Parallelism & DeepEP 2-Tier Deduplication / EPLB](docs/components/moe-expert-parallel-alltoall.md) (`experiments/moe_ep_alltoall/README.md`)
 - [DeepSeek EPLB Hierarchical Packing & SGLang 5-Tier Async P2P Expert Rebalancing](docs/components/deepseek-eplb-redundant-expert-rebalancing.md) (`experiments/deepep_eplb_expert_rebalancing/README.md`)
@@ -140,13 +147,16 @@ Every quantitative claim in this repository is backed by:
 All validation tools and experiments use the Python 3.12 standard library only:
 
 ```powershell
-# 1. Run the full unit test suite (302 unit tests)
+# 1. Run the full unit test suite (311 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and links
 python scripts\validate_research.py
 
-# 3. Verify Phase 23 & Phase 22 deterministic experiments
+# 3. Verify Phase 24, Phase 23 & Phase 22 deterministic experiments
+python experiments\te_grouped_mxfp8_swizzle_sim\run.py --check
+python experiments\mooncake_gid_reprobe_reshard_sim\run.py --check
+python experiments\verl_fp4_refit_tail_kl_sim\run.py --check
 python experiments\flashinfer_ds41_mixed_decode_sim\run.py --check
 python experiments\torchtitan_flexshard_hybridep_sim\run.py --check
 python experiments\sglang_pd_role_switch_offload_sim\run.py --check
