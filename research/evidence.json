@@ -4528,6 +4528,177 @@
       "verifier": "python experiments\\nixl_ucx_vram_hint_triton_cdna5_barrier\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic UCX/Libfabric memory registration and CDNA5 1-bit wave-state barrier simulator."
+    },
+    {
+      "id": "claim-flashinfer-rubin-moe-finalize-sc-bulk-wait",
+      "component": "flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul",
+      "claim": "In flashinfer-ai/flashinfer (commits 91b201a670 #6307 & 3bf6d32022 #6740), blockscaled_contiguous_grouped_gemm_finalize_fusion.py inserts cute.arch.cp_async_bulk_commit_group() and cute.arch.cp_async_bulk_wait_group(0, read=True) before self.epilog_sync_barrier.arrive_and_wait() so async TMA bulk reductions finish reading shared memory sC[sC_row, None, 0] before the next tile overwrites it, while persistent Kimi-K3 AttnRes kernels issue tcgen05.wait::ld.sync.aligned before barrier.sync 9, 288 and tcgen05.dealloc.",
+      "status": "implementation",
+      "source_ids": [
+        "flashinfer-rubin-moe-finalize-bulk-wait-2026",
+        "flashinfer-sm103a-po-tile-tcgen05-wait-ld-2026"
+      ],
+      "artifacts": [
+        "docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.md",
+        "docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.en.md",
+        "experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/results/summary.json"
+      ],
+      "verifier": "python experiments\\flashinfer_rubin_moe_barrier_ep_split_ag_matmul\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Source-verified from upstream CuTeDSL and CUDA/PTX commits."
+    },
+    {
+      "id": "claim-flashinfer-moe-ep-split-nonlocal-route-exclusion",
+      "component": "flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul",
+      "claim": "In flashinfer-ai/flashinfer (commit 69f082fe75 #6840), because the unified MoE runner schedules GEMMs solely by whether the global expert ID falls in [local_expert_offset, local_expert_offset + num_local_experts) (zero weight alone does not skip GEMMs), build_activation_pack_rank_major maps masked -1 non-local picks to remote sentinel masked_expert = (local_expert_offset + num_local_experts) % num_experts whenever num_experts is not None and num_local_experts < num_experts.",
+      "status": "implementation",
+      "source_ids": [
+        "flashinfer-moe-ep-split-skip-nonlocal-2026"
+      ],
+      "artifacts": [
+        "docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.md",
+        "docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.en.md",
+        "experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/results/summary.json"
+      ],
+      "verifier": "python experiments\\flashinfer_rubin_moe_barrier_ep_split_ag_matmul\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Static Python source and unit-test verification."
+    },
+    {
+      "id": "claim-flashinfer-sm103a-po-tile-tcgen05-wait-ld-offline",
+      "component": "flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul",
+      "claim": "Deterministic verifier flashinfer_rubin_moe_barrier_ep_split_ag_matmul confirms cp_async_bulk_wait_group(0, read=True) reduces sC overwrite races across an 8-tile Rubin MoE finalize loop from 7/8 (87.5%) to 0/8; remote sentinel expert mapping reduces local expert evaluations across three 512-token top-8 CUDA Graph replays from 12,288 to 6,821 (-44.49%, and 0 on all-remote replay); SM103a peer-outer (po, form code 4) walk cuts peer transitions at [4, bfloat16, k_major, 128, 14336] from 224 to 4 (-98.21%); and tcgen05.wait::ld reduces TMEM deallocation hazard warps from 9/9 to 0/9.",
+      "status": "own-offline",
+      "source_ids": [
+        "flashinfer-rubin-moe-finalize-bulk-wait-2026",
+        "flashinfer-moe-ep-split-skip-nonlocal-2026",
+        "flashinfer-sm103a-po-tile-tcgen05-wait-ld-2026"
+      ],
+      "artifacts": [
+        "experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/run.py",
+        "experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/results/summary.json",
+        "docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.md",
+        "docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.en.md",
+        "docs/reports/ai-infra-phase30-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\flashinfer_rubin_moe_barrier_ep_split_ag_matmul\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Deterministic cycle, routing, tile-walk, and TMEM pipe simulation."
+    },
+    {
+      "id": "claim-torchtitan-dsv3-mla-int32-rope-tail-flex-limit",
+      "component": "torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region",
+      "claim": "In pytorch/torchtitan (commits 2fddc6b7a0 #5529, 21db340cba #5161, and aabe6eff1e #5442), _RotateTail views contiguous 192-dim bf16 MLA query rows as 96 int32 words and rotates the trailing 32 pairs in-place inside @local_compile('mla_qk', batch_invariant=True, options={'max_pointwise_cat_inputs': 0}), while FlexInnerAttention._compiled_flex_attn sets recompile_limit=16 and fullgraph=True to prevent silent eager fallback on 10-graph models.",
+      "status": "implementation",
+      "source_ids": [
+        "torchtitan-dsv3-mla-int32-rope-tail-compile-2026",
+        "torchtitan-flex-attention-recompile-limit-16-2026"
+      ],
+      "artifacts": [
+        "docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.md",
+        "docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.en.md",
+        "experiments/torchtitan_dsv3_mla_rope_megatron_recompute/results/summary.json"
+      ],
+      "verifier": "python experiments\\torchtitan_dsv3_mla_rope_megatron_recompute\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "claim-megatron-checkpoint-without-output-recompute-region",
+      "component": "torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region",
+      "claim": "In NVIDIA/Megatron-LM (commit d2c430ab48 #8334), CheckpointWithoutOutput is refactored around _RecomputeRegion (monotonic states RECORDED -> RELEASED -> REBUILT -> DONE), _InputStash, and _RegionFunction, retaining only detached output aliases to break reference cycles, bypassing _TERecomputeContext when not recording autograd, and ensuring idempotent single recomputation across multiple consumer hooks.",
+      "status": "implementation",
+      "source_ids": [
+        "megatron-core-checkpoint-without-output-region-2026"
+      ],
+      "artifacts": [
+        "docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.md",
+        "docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.en.md",
+        "experiments/torchtitan_dsv3_mla_rope_megatron_recompute/results/summary.json"
+      ],
+      "verifier": "python experiments\\torchtitan_dsv3_mla_rope_megatron_recompute\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "claim-torchtitan-mla-rope-megatron-recompute-offline",
+      "component": "torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region",
+      "claim": "Deterministic verifier torchtitan_dsv3_mla_rope_megatron_recompute confirms _RotateTail cuts memory operations per MLA query row (T=1027, H=128, D=192) from 384 to 192 (-50.0%) with 0 masked cat loads and bitwise-identical forward/backward outputs; recompile_limit=16, fullgraph=True reduces 10-graph Muse Spark attention step latency from 46.6 ms to 12.0 ms (3.88x speedup, 0 silent eager fallbacks); and _RecomputeRegion eliminates 32/32 leaked TE FP8 states under no_grad, breaks reference cycles (0 vs 1), and runs rebuild() once with grad_enabled=[False, True] under dual consumer hooks.",
+      "status": "own-offline",
+      "source_ids": [
+        "torchtitan-dsv3-mla-int32-rope-tail-compile-2026",
+        "torchtitan-flex-attention-recompile-limit-16-2026",
+        "megatron-core-checkpoint-without-output-region-2026"
+      ],
+      "artifacts": [
+        "experiments/torchtitan_dsv3_mla_rope_megatron_recompute/run.py",
+        "experiments/torchtitan_dsv3_mla_rope_megatron_recompute/results/summary.json",
+        "docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.md",
+        "docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.en.md",
+        "docs/reports/ai-infra-phase30-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\torchtitan_dsv3_mla_rope_megatron_recompute\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Deterministic bit-level BF16/FP32, compile-cache, and recompute state-machine simulation."
+    },
+    {
+      "id": "claim-lmcache-devdax-cxl-l1-offset-sysfs-guard",
+      "component": "lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup",
+      "claim": "In LMCache/LMCache (commit e8dc1a1dae #5874), because character devices /dev/daxX.Y report fstat().st_size == 0 and out-of-bounds mmap calls raise fatal SIGBUS on first page fault, get_dax_device_geometry and check_dax_range read /sys/dev/char/<major>:<minor>/{size,align} before mmap to validate capacity bounds and 2 MiB device alignment, while (device_path, offset_in_bytes) and st_rdev interval tracking allow multiple arenas or servers to partition a single CXL device safely.",
+      "status": "implementation",
+      "source_ids": [
+        "lmcache-devdax-cxl-l1-offset-sysfs-range-2026"
+      ],
+      "artifacts": [
+        "docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.md",
+        "docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.en.md",
+        "experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/results/summary.json"
+      ],
+      "verifier": "python experiments\\lmcache_dax_cxl_offset_grpc_mooncake_oplog\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Static Python source verification."
+    },
+    {
+      "id": "claim-lmcache-grpc-writer-once-mooncake-oplog-dedup",
+      "component": "lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup",
+      "claim": "In LMCache/LMCache (commit dbe22ef828 #5906) and kvcache-ai/Mooncake (commit 37642c5aa0 #4771), compile_response_encoder_for_type caches the compiled structural response writer write_value once per RPC method (0 compilations for native protobuf returns), and OpLogApplier removes redundant inc_oplog_applied_entries() calls from ApplySegmentMount, ApplySegmentUnmount, and ApplySegmentUpdate.",
+      "status": "implementation",
+      "source_ids": [
+        "lmcache-mp-grpc-response-writer-once-2026",
+        "mooncake-ha-oplog-applier-segment-dedup-2026"
+      ],
+      "artifacts": [
+        "docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.md",
+        "docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.en.md",
+        "experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/results/summary.json"
+      ],
+      "verifier": "python experiments\\lmcache_dax_cxl_offset_grpc_mooncake_oplog\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Static Python and C++ source verification."
+    },
+    {
+      "id": "claim-lmcache-dax-cxl-grpc-mooncake-oplog-offline",
+      "component": "lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup",
+      "claim": "Deterministic verifier lmcache_dax_cxl_offset_grpc_mooncake_oplog confirms sysfs pre-mapping validation on a 1 TiB CXL /dev/dax0.0 (2 MiB align) blocks 5/5 invalid or symlink-aliased overlapping configurations (0 SIGBUS vs 2 legacy crashes) while partitioning 1,024 GiB into disjoint [0, 512 GiB) and [512, 1024 GiB) arenas; one-shot gRPC response writer compilation cuts compilations over 10,000 KVEventBatch RPCs from 10,000 to 1 (438.0 -> 18.04 ms, 24.28x speedup); and Mooncake HA OpLog deduplication eliminates 150/1,000 double-counted segment metrics.",
+      "status": "own-offline",
+      "source_ids": [
+        "lmcache-devdax-cxl-l1-offset-sysfs-range-2026",
+        "lmcache-mp-grpc-response-writer-once-2026",
+        "mooncake-ha-oplog-applier-segment-dedup-2026"
+      ],
+      "artifacts": [
+        "experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/run.py",
+        "experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/results/summary.json",
+        "docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.md",
+        "docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.en.md",
+        "docs/reports/ai-infra-phase30-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\lmcache_dax_cxl_offset_grpc_mooncake_oplog\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Deterministic DAX geometry, gRPC encoder closure, and OpLog metric simulation."
     }
   ],
   "updated_at": "2026-10-20"

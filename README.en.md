@@ -13,13 +13,14 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 1. Current Research Baseline (Phase 1 – Phase 29 Complete on `main`)
+## 1. Current Research Baseline (Phase 1 – Phase 30 Complete on `main`)
 
-- **Research Queue (`research/queue.json`)**: **`102 / 102` questions `done`** (`priority: 1` through `priority: 38`, `0` pending, `0` blocked).
-- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`97` standard-library experiments**, all passing `--check`.
-- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`335` first-hand sources** and **`255` audited claims**.
+- **Research Queue (`research/queue.json`)**: **`105 / 105` questions `done`** (`priority: 1` through `priority: 39`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`100` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`344` first-hand sources** and **`264` audited claims**.
 - **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
   - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 30 7-Card 4:5 Benchmark Deck — FlashInfer Rubin MoE Barrier / EP Split / SM103a AG+GEMM, TorchTitan DS-V3 MLA `int32` RoPE / Megatron Recompute & LMCache CXL DAX / Mooncake OpLog Dedup (`ai-infra-phase30-benchmark-cards.html`)](docs/reports/ai-infra-phase30-benchmark-cards.html)
   - [Phase 29 7-Card 4:5 Benchmark Deck — SGLang KVShard PD Transfer, PyTorch CUDA COW / c10d nccl-lazy MemPool & NIXL UCX/Libfabric VMM / Triton CDNA5 Cluster Barrier (`ai-infra-phase29-benchmark-cards.html`)](docs/reports/ai-infra-phase29-benchmark-cards.html)
   - [Phase 28 7-Card 4:5 Benchmark Deck — TE NVFP4 Compile / Symmetric AR & DeepGEMM MegaMHC Epoch, Mooncake Deferred Offload / DFS Align & Megatron Payload Staging / veRL HDO Offload (`ai-infra-phase28-benchmark-cards.html`)](docs/reports/ai-infra-phase28-benchmark-cards.html)
   - [Phase 27 7-Card 4:5 Benchmark Deck — FlashInfer Cake SM100 Fused GEMM+Lamport AllReduce, TorchTitan Kimi K3 MXFP4 / SimpleFSDP & vLLM V1 UMBP / Slime Straw Rewind (`ai-infra-phase27-benchmark-cards.html`)](docs/reports/ai-infra-phase27-benchmark-cards.html)
@@ -36,10 +37,13 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 2. Latest Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 38`, `37`, `36`, `35`, `34`, `33`, `32` & `31`, Bilingual EN/ZH)
+## 2. Latest Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 39`..`31`, Bilingual EN/ZH)
 
 | Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
 |---|---|---|---|
+| `flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul` | [中文](docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.md) · [English](docs/components/flashinfer-rubin-moe-finalize-barrier-ep-split-sm103a-ag-matmul.en.md) | [`experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/`](experiments/flashinfer_rubin_moe_barrier_ep_split_ag_matmul/README.md) | `flashinfer-ai/flashinfer` (`25f13da076`, `ffc2e552c2`, `b4d20faac1` & `b815220c91`): Rubin SM120/SM121 `cp_async_bulk_wait_group(0, read=True)` before `barrier_sync(1)` eliminates **`7/8 -> 0/8` `sC` WAR races**; `moe_ep` split (`5/5` matrix cases) + non-capturing zero-token skip cuts 4-rank EP local GEMMs **`12,288 -> 6,821` (`-44.49%`, `0` on all-remote)** while keeping fixed CUDA Graph topology across 3 replays; SM103a hoisted `peer` cuts `po` pointer switches **`224 -> 4` (`-98.21%`)**; Kimi-K3 `tcgen05.wait::ld` eliminates **`9/9` TMEM hazards**. |
+| `torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region` | [中文](docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.md) · [English](docs/components/torchtitan-dsv3-mla-int32-rope-flex-limit-megatron-recompute-region.en.md) | [`experiments/torchtitan_dsv3_mla_rope_megatron_recompute/`](experiments/torchtitan_dsv3_mla_rope_megatron_recompute/README.md) | `pytorch/torchtitan` (`2fbff90f1f` & `d0972094d1`) & `NVIDIA/Megatron-LM` (`d2c430ab48` & `ed48fa0b31`): 2-BF16-as-`int32` MLA RoPE broadcast matches strided BF16 with **`0.0` error**, halves row mem ops (**`384 -> 192`, `-50.0%`**), and eliminates **`25,239,552` masked loads**; `recompile_limit=16, fullgraph=True` caches all 10 FlexAttention graphs (**`46.6 -> 12.0 ms`, `3.88x` speedup**); `_RecomputeRegion` dual-hook gating (`[False, True]`) + weakref (`0` cycles) + TE FP8 discard (`0/32` leaks). |
+| `lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup` | [中文](docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.md) · [English](docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.en.md) | [`experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/`](experiments/lmcache_dax_cxl_offset_grpc_mooncake_oplog/README.md) | `LMCache/LMCache` (`e8dc1a1dae` & `5c42b62bd4`) & `kvcache-ai/Mooncake` (`a041e00d9e`): sysfs `check_dax_range` (`2 MiB` align) blocks **`5/5` invalid/overlapping CXL configs (`0` `SIGBUS`)** and partitions `1 TiB` CXL into `2 x 512 GiB` disjoint arenas; singleton gRPC response writer cuts compilations **`10,000 -> 1` (`-99.99%`, `438.0 -> 18.04 ms`, `24.28x`)**; Mooncake HA Master OpLog `mounted_segments_` dedup eliminates **`150` double-counted mounts** (`512 GiB` exact). |
 | `sglang-kv-shard-pd-transfer-page-interleave` | [中文](docs/components/sglang-kv-shard-pd-transfer-page-interleave.md) · [English](docs/components/sglang-kv-shard-pd-transfer-page-interleave.en.md) | [`experiments/sglang_kv_shard_pd_transfer/`](experiments/sglang_kv_shard_pd_transfer/README.md) | `sgl-project/sglang` (`eb4b167d27`, `de487f8039` & `e7f7447333`): `filter_kv_indices_for_shard_rank` maps logical page $l$ to shard rank $r = l \bmod N$, local page $\lfloor l/N \rfloor$, and global send position `index_slice.start + offset`, reconstructing a 9-page rotated chain across $N=4$ shards (`100%`) while skipping **`4/8` empty non-final chunk sends**; `max_bootstrap_input_len` caps sharded admission at **`32,576 / 65,216 / 130,496` tokens** ($N=2/4/8$, `16,384` tokens/rank) to prevent `300 s` Decode timeouts; recovers **`24,576`-token (`1.50x` single-rank pool) dual needles**. |
 | `pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool` | [中文](docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.md) · [English](docs/components/pytorch-cuda-cow-completion-events-c10d-nccl-lazy-mempool.en.md) | [`experiments/pytorch_cuda_cow_nccl_lazy_mempool/`](experiments/pytorch_cuda_cow_nccl_lazy_mempool/README.md) | `pytorch/pytorch` (`20f82b619b` & `47bc8be46b`): allocation-stream `cudaMemcpyAsync` + `waitStream` + `cow_retired_data` cut stale CUDA Graph replay reads across 8 replays from **`8/8` to `0/8`**; `torch._C._cow_record_done` enables last-sibling in-place steal of a `256.0 MiB` buffer (cutting 2-sibling peak memory from **`512.0 MiB` to `256.0 MiB`, `-50.0%`**, and stream wait stall from **`45.0 ms` to `10.0 ms`, `-77.78%`**); `ProcessGroupNCCLLazy` forwards `register_mem_pool` / `deregister_mem_pool` (`0` leaked pools). |
 | `nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier` | [中文](docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.md) · [English](docs/components/nixl-ucx-vram-memtype-hint-libfabric-vmm-triton-cdna5-barrier.en.md) | [`experiments/nixl_ucx_vram_hint_triton_cdna5_barrier/`](experiments/nixl_ucx_vram_hint_triton_cdna5_barrier/README.md) | `ai-dynamo/nixl` (`466ebb1ccc`, `1f4afe6b60` & `b55e79152f`) & `triton-lang/triton` (`249c29ead3`): `resolveMemoryTypeConfig` auto-hints `ze-device` only on ZE-only contexts and aborts on `HOST` fallback; Libfabric `cudaUpdateCtxPtr` returns `-1` on `cuMemCreate()` VMM allocations to trigger `cudaSetDevice(devId)` fallback (**`0/3` vs `3/3` EFA errors**); `if message is not None:` consumes empty `b""` notifications once (**`0/2` stuck**); Triton AMD CDNA5 inserts `rocdl.s.barrier` before cluster barriers (**`0/16` vs `14/16` deadlocked waves**). |
@@ -179,13 +183,16 @@ Every quantitative claim in this repository is backed by:
 All validation tools and experiments use the Python 3.12 standard library only:
 
 ```powershell
-# 1. Run the full unit test suite (326 unit tests)
+# 1. Run the full unit test suite (329 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and links
 python scripts\validate_research.py
 
-# 3. Verify Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+# 3. Verify Phase 30, Phase 29, Phase 28, Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+python experiments\flashinfer_rubin_moe_barrier_ep_split_ag_matmul\run.py --check
+python experiments\torchtitan_dsv3_mla_rope_megatron_recompute\run.py --check
+python experiments\lmcache_dax_cxl_offset_grpc_mooncake_oplog\run.py --check
 python experiments\sglang_kv_shard_pd_transfer\run.py --check
 python experiments\pytorch_cuda_cow_nccl_lazy_mempool\run.py --check
 python experiments\nixl_ucx_vram_hint_triton_cdna5_barrier\run.py --check
