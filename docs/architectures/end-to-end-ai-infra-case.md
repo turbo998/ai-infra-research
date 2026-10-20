@@ -1,5 +1,7 @@
 # 端到端 AI Infra 综合架构案例：1024-GPU 训练与分离式推理（P/D Disaggregation）混合集群全栈设计
 
+> **Language / 语言**: **中文 (Chinese)** | [English (英文版)](end-to-end-ai-infra-case.en.md)
+
 - **状态**：已建立覆盖 GPU/HBM、Scale-Up/Scale-Out 互连、并行训练、在线推理 SLO、异步 Checkpoint 存储、拓扑感知编排、容量/Token 经济学与机架液冷/功耗控制的端到端综合架构设计（`specification` / `implementation` / `own-offline`）；所有定量预算均由本仓库 11 套可复核标准库实验验证，未在真实 1024-GPU 液冷生产集群上执行实机压测（`own-hardware` 未生成）。
 - **覆盖组件与先修链**：
   - 硬件与互连基座：[GPU 架构与 HBM](../components/gpu-hbm.md) → [互连与网络总览](../components/interconnect-network.md) → [RDMA Verbs 生命周期](../components/rdma-lifecycle.md) → [NCCL 拓扑与传输](../components/nccl-topology-transport.md) → [NCCL 图搜索与多轨 Channel 映射](../components/nccl-graph-channel-mapping.md) → [NCCL IB Port-Failover 与恢复不变量](../components/nccl-port-recovery-invariants.md) → [张量 Layout/Dtype 到 SM100 Kernel 分派](../components/kernel-dispatch-layout.md)。

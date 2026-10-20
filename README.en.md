@@ -1,0 +1,146 @@
+# AI Infrastructure Full-Stack Research & Architecture Workbench
+
+> **Language / 语言**: [中文版 (Chinese)](README.md) | **English**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+An evidence-driven, source-verified full-stack AI Infrastructure research repository for Cloud and AI Solution Architects transitioning from cloud-native systems to **GPU / HBM / NVLink / RDMA / NCCL / 6D Parallel Training / Disaggregated Inference / Liquid-Cooled AI Factories**.
+
+Every quantitative claim in this repository is backed by:
+1. **First-hand upstream source verification** (`specification` / `implementation` with exact repository commit SHAs and file paths from `NVIDIA/nccl`, `deepseek-ai/DeepGEMM`, `deepseek-ai/DeepEP`, `vllm-project/vllm`, `sgl-project/sglang`, `pytorch/pytorch`, `NVIDIA/Megatron-LM`, `kvcache-ai/Mooncake`, `ai-dynamo/dynamo`, `deepseek-ai/3FS`, `Dao-AILab/flash-attention`, `flashinfer-ai/flashinfer`, `ROCm/rccl`, `NVIDIA/TransformerEngine`, `NVIDIA/nvidia-resiliency-ext`, `SchedMD/slurm`, `kubernetes-sigs/kueue`, etc.).
+2. **Deterministic Python 3.12 standard-library experiments** (`own-offline`, zero third-party dependencies, reproducible via `--check` in `< 1s`).
+3. **Bilingual Chinese & English documentation** (`README.md` <-> `README.en.md`, `docs/components/*.md` <-> `*.en.md`, and 7-Card 4:5 visual benchmark decks).
+
+---
+
+## 1. Current Research Baseline (Phase 1 – Phase 22 Complete on `main`)
+
+- **Research Queue (`research/queue.json`)**: **`81 / 81` questions `done`** (`priority: 1` through `priority: 31`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`76` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`263` first-hand sources** and **`192` audited claims**.
+- **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
+  - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 22 7-Card 4:5 Benchmark Deck — NCCL GIN Symmetric, SM100 MegaMoE/MHC & vLLM V1 Sparse MLA (`ai-infra-phase22-benchmark-cards.html`)](docs/reports/ai-infra-phase22-benchmark-cards.html)
+  - [Phase 21 7-Card 4:5 Benchmark Deck — Mooncake ConnectX-8, Megatron-FSDP & PyTorch DCP (`ai-infra-phase21-benchmark-cards.html`)](docs/reports/ai-infra-phase21-benchmark-cards.html)
+  - [Phase 20 7-Card 4:5 Benchmark Deck — NVIDIA Dynamo, DeepSeek 3FS & PyTorch SymmetricMemory (`ai-infra-phase20-benchmark-cards.html`)](docs/reports/ai-infra-phase20-benchmark-cards.html)
+  - [Phase 19 7-Card 4:5 Benchmark Deck — FlashAttention-4 SM100, RCCL Graphics/RDNA & NVRx Resiliency (`ai-infra-phase19-benchmark-cards.html`)](docs/reports/ai-infra-phase19-benchmark-cards.html)
+  - [Phase 18 7-Card 4:5 Benchmark Deck — NCCL Symmetric Windows, FlashInfer Blackwell MLA & PyTorch FlightRecorder (`ai-infra-phase18-benchmark-cards.html`)](docs/reports/ai-infra-phase18-benchmark-cards.html)
+  - [Flagship End-to-End Reference Architecture (`docs/architectures/end-to-end-ai-infra-case.en.md`)](docs/architectures/end-to-end-ai-infra-case.en.md) ([中文](docs/architectures/end-to-end-ai-infra-case.md))
+
+---
+
+## 2. Latest Phase 22 Highlights (`priority: 31`, Bilingual EN/ZH)
+
+| Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
+|---|---|---|---|
+| `nccl-device-gin-symmetric-collectives` | [中文](docs/components/nccl-device-gin-symmetric-collectives.md) · [English](docs/components/nccl-device-gin-symmetric-collectives.en.md) | [`experiments/nccl_gin_symmetric_sim/`](experiments/nccl_gin_symmetric_sim/README.md) | `NVIDIA/nccl` (`3e46c089`): `rsAlgoHier` splits `14` worker warps `7:7` with `multimem=True` vs `11:3` without; `AllGather_RailRing_LsaSTMC` Gray-code `g^(g>>1)=[0,1,3,2,4,5,7,6]` eliminates step-0 bank contention across `256 KiB` offsets; 1-kernel `RMSNormGIN` (`ncclGin_WeakSignalInc`) cuts `64 MiB` latency from `234.57 us` to **`110.92 us` (`2.11x`)** and saves **`20.0%` HBM traffic**. |
+| `deepgemm-sm100-mega-moe-mhc-hyperconnection` | [中文](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md) · [English](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) | [`experiments/deepgemm_mega_moe_mhc_sim/`](experiments/deepgemm_mega_moe_mhc_sim/README.md) | `deepseek-ai/DeepGEMM` (`5081f851`): 1-sigma routing margin `E+sqrt(E)` selects `block_m=[16,64,192,240]` (`num_stages=[10,9,6,5]`) inside SM100's `232,448 B` SMEM; asymmetric `store_block_m_l1=24, l2=8` shrinks `smem_cd` at `M=240` from `20,480 B` to **`6,144 B`**; fused `sm100_mega_mhc` (`split_k=14`, 20-iter Sinkhorn-Knopp) cuts HBM traffic by **`40.09%` (`984.38 -> 589.75 MiB`)** and speeds up execution by **`1.92x`**. |
+| `vllm-v1-sparse-mla-hisparse-gdn-hybrid` | [中文](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md) · [English](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md) | [`experiments/vllm_v1_sparse_mla_hisparse_sim/`](experiments/vllm_v1_sparse_mla_hisparse_sim/README.md) | `vllm-project/vllm` (`5285b9b8`): Sparse MLA KV layouts compress `1,152 B/tok` (`274.50 GiB` for 61-layer `32x128K`) to `584 B` (`fp8_ds_mla`, `576B` TMA stride), `528 B` (`mxfp8_ds_mla`, `2.182x`), and SM100 `352 B` (`nvfp4_ds_mla`, **`83.88 GiB`, `3.273x`**, scale permutation `8*(s&3)+(s>>2)`); `HiSparse` hot cache (`4,096` rows, `26,148 B` SMEM) yields **`12.8x` HBM offload**; `SparseMLAIndexGroup._convert_once` reduces index conversions by **`61x`**. |
+
+---
+
+## 3. Full Component Catalog (Phases 1 – 22)
+
+### A. GPU Hardware, SM90/SM100 Kernels & Numerical Formats
+- [GPU & HBM Architecture](docs/components/gpu-hbm.md) (`experiments/capacity_roofline/README.md`)
+- [Tensor Layout & SM100 Kernel Dispatch](docs/components/kernel-dispatch-layout.md)
+- [FP8 Block-Scaled & Blackwell NVFP4 Pretraining Numerics](docs/components/fp8-nvfp4-pretraining-numerics.md) (`experiments/fp8_nvfp4_numerics/README.md`)
+- [SM90 Hopper & SM100 Blackwell Warp-Specialized Ping-Pong & TMEM Engineering](docs/components/warp-specialized-kernel-engineering.md) (`experiments/warp_specialized_kernels/README.md`)
+- [Blackwell SM100 Block-Scaled NVFP4 vs MXFP4, 512B TMEM Atom & Fused Epilogue](docs/components/sm100-block-scaled-nvfp4-kernels.md)
+- [CUTLASS SM100 Ptr-Array / Grouped GEMM: Async `TensorMapUpdater` & `CLC` Scheduler](docs/components/cutlass-sm100-grouped-gemm-clc-scheduler.md)
+- [SM100 Blackwell FMHA & FlashAttention-4 (`CuTe DSL`): 512-Col TMEM Aliasing & `FFMA2`](docs/components/sm100-blackwell-fmha-tmem-fa4.md) (`experiments/sm100_blackwell_fmha_fa4/README.md`)
+- [DeepSeek MLA & FlashMLA V4.1 Paged Decode: SM90/SM100 2-CTA & `get_mla_metadata`](docs/components/deepseek-mla-flashmla-decode-kernels.md)
+- [FlashInfer JIT Multi-Level Cascade Paged KV Attention & Base-2 LSE Merge](docs/components/flashinfer-cascade-paged-kv-attention.md)
+- [DeepGEMM SM100 `MegaMoE` Fused Expert Pool & `MegaMHC` HyperConnection (`Sinkhorn-Knopp`)](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) ([中文](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md), [`experiments/deepgemm_mega_moe_mhc_sim/`](experiments/deepgemm_mega_moe_mhc_sim/README.md))
+
+### B. Scale-Up / Scale-Out Fabrics, RDMA & NCCL Internals
+- [Interconnect & Network Stack Overview](docs/components/interconnect-network.md)
+- [RDMA Verbs Lifecycle, QP State Machine & Doorbell/WQE](docs/components/rdma-lifecycle.md)
+- [NCCL Topology Discovery & Transport Selection](docs/components/nccl-topology-transport.md) (`experiments/ring_cut/README.md`)
+- [NCCL Graph Search & Multi-Rail Channel Mapping](docs/components/nccl-graph-channel-mapping.md) (`experiments/rail_channel_cut/README.md`)
+- [NCCL IB Port-Failover & Recovery Invariants](docs/components/nccl-port-recovery-invariants.md) (`experiments/ib_failover_invariants/README.md`)
+- [In-Network SHARP Collectives, NVLS Multicast Reduction & Bitwise Drift](docs/components/in-network-collectives-sharp.md) (`experiments/sharp_in_network_collectives/README.md`)
+- [NCCL Zero-Copy User Buffer Registration (`ncclCommWindowRegister`) & `CUMEM` NVLS](docs/components/nccl-zero-copy-user-buffer-registration.md) (`experiments/nccl_zero_copy_registration/README.md`)
+- [NCCL Copy Engine (`P2P_CUMEM`) Zero-SM P2P & RAS Health Monitoring Plane](docs/components/nccl-copy-engine-p2p-ras-monitoring.md) (`experiments/nccl_ce_p2p_ras_plane/README.md`)
+- [NCCL Parallel Aggregated Binomial Trees (`PAT` Algorithm) & Multi-RPN `NVLS`](docs/components/nccl-pat-binomial-allgather-reducescatter.md)
+- [NCCL Device API (`ncclGin`) & Symmetric Fused Collectives (`RMSNormGIN`)](docs/components/nccl-device-gin-symmetric-collectives.en.md) ([中文](docs/components/nccl-device-gin-symmetric-collectives.md), [`experiments/nccl_gin_symmetric_sim/`](experiments/nccl_gin_symmetric_sim/README.md))
+- [PyTorch `CUDASymmetricMemory` & NVLS `multimem` Hardware Multicast Collectives](docs/components/symmetric-memory-multimem-collectives.md)
+- [GPU-Initiated RDMA (`IBGDA` / `GDAKI`), Per-CTA QPs & `DeepEP V2.5` Doorbell Batching](docs/components/ibgda-gpu-initiated-rdma.md)
+- [DeepEP Engram GPU-Initiated RDMA Get & `HybridElasticSymmetricMemory` VMM](docs/components/deepep-engram-hybrid-elastic-symmetric-memory.md) (`experiments/deepep_engram_hybrid_symmetric/README.md`)
+- [UEC 1.1 vs RoCEv2 Multi-Rail Congestion Control & Packet Spraying](docs/components/uec-transport-congestion.md) (`experiments/uec_fabric_congestion/README.md`)
+- [UEC 1.0 Packet Trimming, SONiC Dynamic Alpha Buffering & 800G Incast Tail Latency](docs/components/uec-packet-trimming-switch-buffering.md)
+- [Co-Packaged Optics (CPO), LPO & Optical Circuit Switching (OCS) 100K-GPU Fabric](docs/components/optical-interconnect-cpo-ocs.md) (`experiments/optical_cpo_ocs_fabric/README.md`)
+
+### C. Distributed Training, Checkpointing & Storage
+- [6D Distributed Training Parallelism (`TP/SP/PP/CP/EP/FSDP2`)](docs/components/training-parallelism.md) (`experiments/training_parallelism/README.md`)
+- [Zero-Bubble (`ZB-H1/H2/V`) & DeepSeek-V3 Bidirectional `DualPipe` / `DualPipeV`](docs/components/zero-bubble-dualpipe-scheduling.md) (`experiments/zero_bubble_dualpipe/README.md`)
+- [PyTorch FSDP2 (`fully_shard` Per-Param `DTensor`) & `SymmetricMemory` `Async-TP`](docs/components/fsdp2-dtensor-async-tp-composability.md) (`experiments/fsdp2_async_tp_composability/README.md`)
+- [Megatron-FSDP: NCCL Zero-Copy User Buffer (`nccl_ub`), `MaxPoolAllocator` & `HFSDP`](docs/components/megatron-fsdp-nccl-ub-double-buffer-hfsdp.md) (`experiments/megatron_fsdp_nccl_ub_hfsdp/README.md`)
+- [Megatron-Core MoE Aux-Loss-Free Routing (`expert_bias`) & `qb_dual_update`](docs/components/megatron-moe-auxfree-routing-token-drop.md)
+- [Distributed Muon Optimizer: 5-Step Quintic Newton-Schulz & `FSDP2 × TP`](docs/components/distributed-muon-newton-schulz-optimizer.md)
+- [2D Hybrid Context Parallelism (`USP = Ulysses × ZigZag Ring-Attention`)](docs/components/context-parallel-usp-zigzag-ring.md) (`experiments/context_parallel_usp_zigzag/README.md`)
+- [Operator-Level Selective Activation Checkpointing (`SAC`) & NUMA PCIe Gen5 Offload](docs/components/selective-activation-checkpoint-offload.md) (`experiments/selective_activation_offload/README.md`)
+- [Large-Scale Reasoning RL Engine (`verl` Weight Resharding & vLLM `CuMemAllocator`)](docs/components/rl-post-training-engine.md) (`experiments/rl_rollout_resharding/README.md`)
+- [Bounded-Staleness Async RL, Partial Rollout & Token-Level TIS Pareto](docs/components/async-rl-staleness-weight-sync.md)
+- [Storage GDS & Asynchronous Distributed Checkpointing](docs/components/storage-checkpoint.md) (`experiments/checkpoint_recovery/README.md`)
+- [PyTorch DCP Async Checkpoint: `WeakIdKeyDictionary` Pinned Pool & `_ReplicationStager`](docs/components/pytorch-dcp-async-stager-replication.md) (`experiments/async_dcp_checkpoint_stager/README.md`)
+- [DeepSeek 3FS (`hf3fs_usrbio`), GPUDirect Storage (`cuFile`) & Tiered KV/Checkpoints](docs/components/storage-gds-3fs-kv-tiering.md) (`experiments/storage_gds_kv_checkpoint/README.md`)
+
+### D. Online Inference, Disaggregated KV & Hybrid Architectures
+- [Inference SLOs, Continuous Batching & P/D Disaggregation](docs/components/inference-slo.md) (`experiments/inference_slo_scheduler/README.md`)
+- [vLLM V1 Sparse MLA (`FlashMLASparse`), `HiSparse` Tiered Offload & `GDN` Hybrid Checkpoints](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md) ([中文](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md), [`experiments/vllm_v1_sparse_mla_hisparse_sim/`](experiments/vllm_v1_sparse_mla_hisparse_sim/README.md))
+- [Long-Context Hybrid Attention: FlashMLA, Ring/Ulysses CP & Mamba Checkpoint Pool](docs/components/long-context-hybrid-attention.md) (`experiments/long_context_attention/README.md`)
+- [SGLang `HiRadixCache`, `MLAHostDedupBroadcaster` & Hybrid `TRAILING_PAGES` Intersection](docs/components/sglang-hiradix-cache-mla-dedup-prefetch.md) (`experiments/sglang_hiradix_cache_controller/README.md`)
+- [Prefill/Decode Disaggregation & Tiered KV Cache Routing (`Mooncake` / `NIXL` / `SGLang`)](docs/components/disaggregated-kv-routing.md) (`experiments/disaggregated_kv_routing/README.md`)
+- [Mooncake Transfer Engine: ConnectX-8 `Data Direct` DMA & `BatchRdmaDeviceCache`](docs/components/mooncake-transfer-engine-cx8-data-direct-rdma.md) (`experiments/mooncake_cx8_data_direct_rdma/README.md`)
+- [Distributed KV-Aware Router (`NVIDIA Dynamo`): Rational Credit Decay & Conditional PD Bypass](docs/components/distributed-kv-aware-router-dynamo-nixl.md)
+- [Large-Scale MoE Expert Parallelism & DeepEP 2-Tier Deduplication / EPLB](docs/components/moe-expert-parallel-alltoall.md) (`experiments/moe_ep_alltoall/README.md`)
+- [DeepSeek EPLB Hierarchical Packing & SGLang 5-Tier Async P2P Expert Rebalancing](docs/components/deepseek-eplb-redundant-expert-rebalancing.md) (`experiments/deepep_eplb_expert_rebalancing/README.md`)
+- [Wide-EP Disaggregated `Attention-DP × Expert-EP`, FP8 `SUM_LEN` & Two-Batch Overlap (`TBO`)](docs/components/attention-dp-moe-ep-serving.md)
+- [EAGLE-3 / DeepSeek MTP Speculative Tree Verification & High-Concurrency Roofline](docs/components/eagle3-speculative-tree-verification.md) (`experiments/eagle3_speculative_tree/README.md`)
+- [vLLM V1 Speculative Decoding Triton Gumbel-Max Rejection Sampler & FLY Entropy Verification](docs/components/vllm-v1-rejection-sampler-eagle-spec-decode.md) (`experiments/vllm_v1_rejection_sampler_spec_decode/README.md`)
+- [Zero-Stall EAGLE-3 / MTP Seed Handover in Disaggregated Prefill-Decode](docs/components/disaggregated-speculative-decoding-pd.md)
+- [Long-Context KV Cache Quantization: `FP8`, `INT4 + RHT + Steganography`, `KIVI` & `NVFP4`](docs/components/kv-cache-quantization-rht-steganography.md)
+- [4-Tier KV Cache Hierarchy (`HBM3e -> DDR5 -> CXL/Mooncake -> NVMe GDS`)](docs/components/tiered-kv-cache-offload-hierarchy.md)
+- [Dynamic Token-Budget Chunked Prefill & Decode P99 TPOT Interference Control](docs/components/chunked-prefill-tpot-interference-scheduler.md) (`experiments/chunked_prefill_interference/README.md`)
+- [vLLM V1 Piecewise / Breakable CUDA Graph Pool & SGLang Graph Runner](docs/components/cuda-graph-piecewise-compilation.md) (`experiments/cuda_graph_piecewise_capture/README.md`)
+- [`torch.compile` (`TorchInductor` / `FxGraphCache` / `MEGA_AOT`) Cold-Start Elimination](docs/components/torch-compile-inductor-cache-serving.md)
+- [Zero-Overhead Structured Decoding: `XGrammar` Adaptive Bitmask Cache & Async Overlap](docs/components/structured-decoding-xgrammar-bitmask.md) (`experiments/structured_decoding_xgrammar/README.md`)
+- [Serverless Multi-LoRA Serving: `S-LoRA` Unified Paging & Punica `SGMV`](docs/components/multi-lora-serving-architecture.md) (`experiments/multi_lora_serving/README.md`)
+- [Multimodal Vision/Video Encode-Prefill-Decode (EPD) Disaggregation & `EncoderCacheManager`](docs/components/multimodal-encoder-disaggregation.md) (`experiments/multimodal_encoder_disaggregation/README.md`)
+- [DiT Video Hybrid Parallelism (`xDiT`: `CFG × Ulysses × PipeFusion`) & `TeaCache`](docs/components/dit-video-xdit-pipefusion-serving.md) (`experiments/dit_video_pipefusion_serving/README.md`)
+- [Batch-Invariant Deterministic Inference Kernels & 0-ULP RL/Compliance Reproducibility](docs/components/batch-invariant-deterministic-inference.md)
+
+### E. Orchestration, Resiliency, Rack Power & AI Factory Economics
+- [Cluster Orchestration, Slurm Power Save & Kueue TAS](docs/components/cluster-orchestration.md) (`experiments/cluster_orchestration/README.md`)
+- [Heterogeneous Hopper + Blackwell Asymmetric Pipeline Scheduling & KV Transcoding](docs/components/heterogeneous-cluster-scheduling.md) (`experiments/heterogeneous_cluster_scheduler/README.md`)
+- [Agentic RL 10K-MicroVM Sandbox (`Firecracker UFFD`) & GPU KV Co-Scheduling](docs/components/agentic-sandbox-coscheduling.md) (`experiments/agentic_sandbox_coscheduler/README.md`)
+- [Megascale Fault-Tolerant Training & SDC Defense: `NVRx` In-Process Restart & ABFT](docs/components/fault-tolerant-training-resilience.md) (`experiments/megascale_fault_tolerance/README.md`)
+- [GPU HBM3e ECC Row Remapping, `Xid 63/64/94/95` & Predictive Zero-Loss Drain](docs/components/gpu-ecc-row-remapping-predictive-failure.md) (`experiments/gpu_ecc_predictive_drain/README.md`)
+- [Megascale Grey Failure / Slow Straggler Detection & Hot-Spare Replacement](docs/components/grey-failure-straggler-detection.md)
+- [10K-GPU Silent Collective Hang Diagnosis: PyTorch `FlightRecorder` & NCCL `RAS`](docs/components/nccl-flight-recorder-hang-diagnosis.md)
+- [Confidential GPU Computing (`CC-On / PPCIE`): SPDM/RIM Attestation & Bounce Buffer](docs/components/confidential-gpu-tee.md) (`experiments/confidential_gpu_overhead/README.md`)
+- [Rack Power, Liquid Cooling (CDU) & Rack-Level Fault Domains](docs/components/rack-power-cooling.md) (`experiments/rack_power_cooling/README.md`)
+- [132kW–600kW Liquid-Cooled Rack Millisecond Power Transients (`dP/dt`) & ORv3 Supercaps](docs/components/rack-power-transient-smoothing.md) (`experiments/rack_power_transients/README.md`)
+- [Capacity, Token Economics](docs/components/capacity-economics.md) & [100K-GPU AI Factory TCO Pareto](docs/components/ai-factory-tco-pareto.md) (`experiments/capacity_economics/README.md`, `experiments/ai_factory_tco_simulator/README.md`)
+- [Next-Gen Supernode Evolution: Hopper (`NVL8`) -> Blackwell (`GB200 NVL72`) -> Vera Rubin (`VR200 NVL144`)](docs/components/vera-rubin-nvl144-hbm4-architecture.md)
+- [AI Infra Innovators: Groq LPU, Cerebras WSE-3, Fireworks & Together](docs/components/ai-infra-innovators.md) · [v2 Pareto](docs/components/ai-infra-innovators-v2.md) · [Wafer/SRAM vs GPU HBM3e Cascade](docs/components/wafer-sram-gpu-cascaded-serving.md) (`experiments/innovator_arch_tradeoffs/README.md`, `experiments/innovator_pareto_v2/README.md`)
+
+---
+
+## 4. Verification & Reproducibility Commands
+
+All validation tools and experiments use the Python 3.12 standard library only:
+
+```powershell
+# 1. Run the full unit test suite (293 unit tests)
+python -m unittest discover -s tests
+
+# 2. Validate research queue, evidence ledger, source citations, and links
+python scripts\validate_research.py
+
+# 3. Verify Phase 22 deterministic experiments
+python experiments\nccl_gin_symmetric_sim\run.py --check
+python experiments\deepgemm_mega_moe_mhc_sim\run.py --check
+python experiments\vllm_v1_sparse_mla_hisparse_sim\run.py --check
+```

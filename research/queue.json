@@ -1699,6 +1699,78 @@
         "ev-exp-mooncake-cx8-data-direct-2026"
       ],
       "next_step": "已完成 kvcache-ai/Mooncake (commit 1f65cf13: data_direct_topology.cpp, topology.h, rdma_batch_cache.h) 源码核验与 4,096 块 (64 MiB) KV 传输仿真，证实 firstPciRootSegment ('pci0009:00') 精确配对消除 75% 跨 Root 绕行并提供 92.0 GB/s Data Direct 带宽，BatchRdmaDeviceCache (99.976% 命中率) 将 CPU 提交从 1.720 ms 压至 0.050 ms（快 34.71x），端到端传输从 4.074 ms（轮询）/ 2.919 ms（标准 GPUDirect）降至 0.779 ms（提速 5.23x / 3.75x）。"
+    },
+    {
+      "id": "nccl-device-gin-symmetric-collectives",
+      "title": "在多节点 64 卡 Blackwell/Hopper 集群上，NVIDIA/nccl Device API (`ncclGin`) 如何通过 `AllGather_RailRing_LsaSTMC` 的格雷码 (`lsaRank^(lsaRank>>1)`) 256 KiB Bank 偏移消除 NVLS 多播写冲突、通过 `rsAlgoHier` 动态调节跨节点 GIN 与机内 NVLS 的 Warp 配比（`multimem=True` 下 `7:7` vs `False` 下 `11:3`），并通过 `RMSNormGIN` (`ncclGin_WeakSignalInc` + 末步单次 `gin.flush`) 将 8 步环延迟压低 2.11x 并节省 20% HBM 流量？",
+      "component": "nccl-device-gin-symmetric-collectives",
+      "priority": 31,
+      "depends_on": [
+        "nccl-symmetric-memory-nvls-sharp-zero-copy",
+        "deepep-engram-hybrid-elastic-symmetric-memory"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/nccl-device-gin-symmetric-collectives.md",
+        "docs/components/nccl-device-gin-symmetric-collectives.en.md",
+        "experiments/nccl_gin_symmetric_sim/results.json",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-nccl-gin-symmetric-collectives-impl-2026",
+        "ev-exp-nccl-gin-symmetric-collectives-2026",
+        "ev-nccl-rmsnorm-gin-single-flush-2026"
+      ],
+      "next_step": "已完成 NVIDIA/nccl (commit 3e46c089: gin.h, all_gather_gin.cuh, reduce_scatter_gin.cuh, 03_rmsnorm_gin/c/main.cu) 源码核验、中英双语文档与离线仿真，证实格雷码系数 [0,1,3,2,4,5,7,6] 生成 8 个零冲突 256 KiB Bank 偏移，rsAlgoHier 精确执行 7:7 vs 11:3 Warp 切分，RMSNormGIN WeakSignalInc 将延迟从 234.57 us 降至 110.92 us（2.11x 提速，6.38x 启动削减，省 20% HBM 流量）。"
+    },
+    {
+      "id": "deepgemm-sm100-mega-moe-mhc-hyperconnection",
+      "title": "在 Blackwell SM100 (232,448 B SMEM, 148 SMs) 上，DeepGEMM 如何通过 `num_covered_tokens = E + sqrt(E)` 1-sigma 路由裕量将 `B=256` 专家溢出率从 51.31% 压至 0.01%、在 `block_m=240` 下收缩非对称 `store_block_m_l1=24, l2=8` 省出 14,336 B SMEM 保住 5 级 TMA 流水线，并通过 `sm100_mega_mhc` (`dynamic_split_k=14` + Sinkhorn 融合) 削减 40.09% HBM 流量与实现 1.92x 加速？",
+      "component": "deepgemm-sm100-mega-moe-mhc-hyperconnection",
+      "priority": 31,
+      "depends_on": [
+        "cutlass-sm100-grouped-gemm-clc-moe-scheduler",
+        "moe-expert-parallel-alltoall"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md",
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md",
+        "experiments/deepgemm_mega_moe_mhc_sim/results.json",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-deepgemm-sm100-mega-moe-mhc-impl-2026",
+        "ev-exp-deepgemm-mega-moe-mhc-2026",
+        "ev-deepgemm-asymmetric-epilogue-smem-2026"
+      ],
+      "next_step": "已完成 deepseek-ai/DeepGEMM (commit 5081f851: heuristics/mega_moe.hpp, sm100_fp8_fp4_mega_moe.hpp, apis/mega_mhc.hpp, sm100_mega_mhc.hpp) 源码核验、中英双语文档与离线仿真，证实 1-sigma 裕量选出 block_m=[16,64,192,240] 与 num_stages=[10,9,6,5]，非对称 Epilogue 将 smem_cd 从 20,480 B 压至 6,144 B，sm100_mega_mhc (split_k=14) 削减 40.09% HBM 流量并提速 1.92x (184.79 -> 96.44 us)。"
+    },
+    {
+      "id": "vllm-v1-sparse-mla-hisparse-gdn-hybrid",
+      "title": "在 128K 超长上下文 DeepSeek-V3.2 / Kimi-Linear 混合推理中，vLLM V1 如何通过四代 Sparse MLA KV 布局（`656B` -> `584B` 576B TMA 步幅 -> `528B` -> SM100 `352B` NVFP4 `8*(s&3)+(s>>2)` 置换）实现 3.273x 压缩、通过 `HiSparse` (`2*top_k*(1+n_spec)` 热缓存 + 双缓冲 H2D) 削减 12.8x HBM 驻留并提速 4.16x、通过 `SparseMLAIndexGroup._convert_once` 削减 61x 索引转换，并通过 `plan_flashinfer_checkpoints` 实现 GDN 状态前缀恢复？",
+      "component": "vllm-v1-sparse-mla-hisparse-gdn-hybrid",
+      "priority": 31,
+      "depends_on": [
+        "deepseek-mla-flashmla-splitkv-paged-decode-sm90-sm100",
+        "sglang-hiradix-cache-l2-l3-mla-dedup-prefetch"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md",
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md",
+        "experiments/vllm_v1_sparse_mla_hisparse_sim/results.json",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-vllm-v1-sparse-mla-hisparse-impl-2026",
+        "ev-exp-vllm-v1-sparse-mla-hisparse-2026",
+        "ev-vllm-v1-gdn-checkpoint-planner-2026"
+      ],
+      "next_step": "已完成 vllm-project/vllm (commit 5285b9b8: flashmla_sparse.py, index_group.py, hisparse/runtime.py, gdn_attn.py) 源码核验、中英双语文档与离线仿真，证实 352B nvfp4_ds_mla 将 32x128K KV 从 274.50 GiB 压至 83.88 GiB (3.273x)，HiSparse 将热驻留压降 12.8x (4,096 rows, 26,148B SMEM) 且双缓冲将步耗时从 111.79 ms 压至 26.84 ms (4.16x)，IndexGroup 减少 61x 转换，GDN 检查点精确输出 cu_starts=[0,4,12,16] 与 rows=[0,1,7,14]。"
     }
   ],
   "updated_at": "2026-10-20"

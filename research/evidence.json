@@ -3214,6 +3214,190 @@
       "verifier": "python experiments\\mooncake_cx8_data_direct_rdma\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Deterministic PCI-root bandwidth and 4,096-block metadata cache simulator."
+    },
+    {
+      "id": "ev-nccl-gin-symmetric-collectives-impl-2026",
+      "component": "interconnect_and_collectives",
+      "claim": "In NVIDIA/nccl (commit 3e46c089f4ae4732722a419eb6096aead7e47a30, gin.h blob 24ba3855, all_gather_gin.cuh blob 8a39c5a3, reduce_scatter_gin.cuh blob 00ced10c, and 03_rmsnorm_gin/c/main.cu blob 7a50a31f), AllGather_RailRing_LsaSTMC applies a Gray-code bank offset ((lsaRank^(lsaRank>>1))*chunkSize) & -int(1<<18) with chunkSize in [256 KiB, 2 MiB] before NVLS multimem_st_global and inter-node GIN put; rsAlgoHier partitions nWorkerWarps 1:1 between inter-node GIN and intra-node LSA when multimem=true vs (lsaSize+3):3 when multimem=false; RMSNormGIN overlaps 8 ring steps via ncclGin_WeakSignalInc without intermediate flushes and issues a single gin.flush() at loop exit.",
+      "status": "implementation",
+      "source_ids": [
+        "nccl-device-gin-header-api-2026",
+        "nccl-symmetric-allgather-railring-lsastmc-2026",
+        "nccl-symmetric-reducescatter-hier-gin-2026",
+        "nccl-example-rmsnorm-gin-kernel-fusion-2026"
+      ],
+      "artifacts": [
+        "docs/components/nccl-device-gin-symmetric-collectives.md",
+        "docs/components/nccl-device-gin-symmetric-collectives.en.md",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of NVIDIA/nccl gin.h, all_gather_gin.cuh, reduce_scatter_gin.cuh, and 03_rmsnorm_gin/c/main.cu",
+      "verified_at": "2026-10-20",
+      "limitations": "Static CUDA C++ source verification."
+    },
+    {
+      "id": "ev-exp-nccl-gin-symmetric-collectives-2026",
+      "component": "interconnect_and_collectives",
+      "claim": "In own-offline evaluation of 64 GPUs (8 nodes x 8 GPUs) on 400G RoCE/IB + NVLink 5, AllGather_RailRing_LsaSTMC Gray-code multipliers [0, 1, 3, 2, 4, 5, 7, 6] generate 8 unique 256 KiB bank offsets; rsAlgoHier splits 14 worker warps 7:7 with multimem=True vs 11:3 with multimem=False; and single-kernel RMSNormGIN with WeakSignalInc reduces latency from 234.57 us (8-step discrete host-launched NCCL) to 110.92 us (2.11x speedup, 6.38x launch overhead reduction, and 1.18x faster than eager per-step GIN flush at 130.92 us) while cutting HBM traffic by 20.0% (80.0 -> 64.0 MiB).",
+      "status": "own-offline",
+      "source_ids": [
+        "nccl-device-gin-header-api-2026",
+        "nccl-symmetric-allgather-railring-lsastmc-2026",
+        "nccl-symmetric-reducescatter-hier-gin-2026",
+        "nccl-example-rmsnorm-gin-kernel-fusion-2026"
+      ],
+      "artifacts": [
+        "experiments/nccl_gin_symmetric_sim/run.py",
+        "experiments/nccl_gin_symmetric_sim/results.json",
+        "docs/components/nccl-device-gin-symmetric-collectives.md",
+        "docs/components/nccl-device-gin-symmetric-collectives.en.md",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\nccl_gin_symmetric_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic warp-partition, Gray-code bank offset, and GIN pipeline simulator."
+    },
+    {
+      "id": "ev-nccl-rmsnorm-gin-single-flush-2026",
+      "component": "interconnect_and_collectives",
+      "claim": "Replacing per-step gin.flush() with ncclGin_WeakSignalInc across an 8-rank ring and issuing a single gin.flush(ncclCoopThread()) + gin.signal() after the final step eliminates 7 intermediate NIC/PCIe fence stalls (saving 20.0 us across 8 steps) while maintaining causal remote buffer readiness via gin.waitSignal(step + 1).",
+      "status": "own-offline",
+      "source_ids": [
+        "nccl-device-gin-header-api-2026",
+        "nccl-example-rmsnorm-gin-kernel-fusion-2026"
+      ],
+      "artifacts": [
+        "experiments/nccl_gin_symmetric_sim/run.py",
+        "experiments/nccl_gin_symmetric_sim/results.json",
+        "docs/components/nccl-device-gin-symmetric-collectives.md",
+        "docs/components/nccl-device-gin-symmetric-collectives.en.md"
+      ],
+      "verifier": "python experiments\\nccl_gin_symmetric_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic GIN weak-signal vs per-step flush pipeline model."
+    },
+    {
+      "id": "ev-deepgemm-sm100-mega-moe-mhc-impl-2026",
+      "component": "kernel_engineering",
+      "claim": "In deepseek-ai/DeepGEMM (commit 5081f8513af57e61696de4f4f04b0e707ffb503e, heuristics/mega_moe.hpp blob 660223eb, sm100_fp8_fp4_mega_moe.hpp blob b77ed82e, apis/mega_mhc.hpp blob 1cbc0c82, and sm100_mega_mhc.hpp blob 3be09f3f), SM100 Mega-MoE sizes expert token capacity using the 1-sigma binomial bound E + sqrt(E) and narrows epilogue store_block_m_l1/l2 from 32/16 to 24/8 at block_m=240 to fit 5 TMA stages inside 232,448B SMEM; SM100 Mega-mHC fuses Pre-RMSNorm + Sinkhorn (with even dynamic_split_k <= min(num_sms/num_m_blocks, num_k_blocks)) and Post-Combine + FP8 o_proj.",
+      "status": "implementation",
+      "source_ids": [
+        "deepgemm-sm100-mega-moe-heuristics-2026",
+        "deepgemm-sm100-fp8-fp4-mega-moe-impl-2026",
+        "deepgemm-sm100-mega-mhc-apis-2026",
+        "deepgemm-sm100-mega-mhc-impl-2026"
+      ],
+      "artifacts": [
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md",
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of deepseek-ai/DeepGEMM mega_moe.hpp, sm100_fp8_fp4_mega_moe.hpp, and sm100_mega_mhc.hpp",
+      "verified_at": "2026-10-20",
+      "limitations": "Static CUDA C++ JIT kernel inspection."
+    },
+    {
+      "id": "ev-exp-deepgemm-mega-moe-mhc-2026",
+      "component": "kernel_engineering",
+      "claim": "In own-offline evaluation of DeepGEMM SM100 heuristics across B in {32, 256, 1024, 1536} (256 experts, topk=8), the 1-sigma margin E + sqrt(E) selects block_m = [16, 64, 192, 240] with TMA num_stages = [10, 9, 6, 5] under 232,448B SMEM and reduces B=256 expert tile overflow from 51.31% (unbuffered E=64) to 0.01%; at block_m=240, asymmetric store_block_m_l1=24, store_block_m_l2=8 shrinks epilogue smem_cd from 20,480 B to 6,144 B (saving 14,336 B SMEM); for T=4096, H=7168, hc_mult=4, sm100_mega_mhc selects dynamic_split_k=14 (448 blocks across 148 SMs), cutting HBM traffic by 40.09% (984.38 -> 589.75 MiB) and speeding up execution 1.92x (184.79 -> 96.44 us).",
+      "status": "own-offline",
+      "source_ids": [
+        "deepgemm-sm100-mega-moe-heuristics-2026",
+        "deepgemm-sm100-fp8-fp4-mega-moe-impl-2026",
+        "deepgemm-sm100-mega-mhc-apis-2026",
+        "deepgemm-sm100-mega-mhc-impl-2026"
+      ],
+      "artifacts": [
+        "experiments/deepgemm_mega_moe_mhc_sim/run.py",
+        "experiments/deepgemm_mega_moe_mhc_sim/results.json",
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md",
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\deepgemm_mega_moe_mhc_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic SM100 SMEM stage allocator, binomial overflow, and Sinkhorn / mHC HBM traffic simulator."
+    },
+    {
+      "id": "ev-deepgemm-asymmetric-epilogue-smem-2026",
+      "component": "kernel_engineering",
+      "claim": "At SM100 Mega-MoE block_m=240, narrowing epilogue swizzle from store_block_m_l1=32, store_block_m_l2=16 (20,480 B SMEM) to store_block_m_l1=24, store_block_m_l2=8 (6,144 B SMEM, saving 14,336 B) keeps total SMEM at 208,392 B <= 232,448 B while maintaining num_stages=5 TMA pipelining.",
+      "status": "own-offline",
+      "source_ids": [
+        "deepgemm-sm100-mega-moe-heuristics-2026"
+      ],
+      "artifacts": [
+        "experiments/deepgemm_mega_moe_mhc_sim/run.py",
+        "experiments/deepgemm_mega_moe_mhc_sim/results.json",
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md",
+        "docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md"
+      ],
+      "verifier": "python experiments\\deepgemm_mega_moe_mhc_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Exact replication of DeepGEMM csrc/jit_kernels/heuristics/mega_moe.hpp SMEM stage budget equations."
+    },
+    {
+      "id": "ev-vllm-v1-sparse-mla-hisparse-impl-2026",
+      "component": "serving_systems",
+      "claim": "In vllm-project/vllm (commit 5285b9b8646d6d0e8b869c9f5c6d277ccfce637b, flashmla_sparse.py blob 9722256f, index_group.py blob ba787b38, hisparse/runtime.py blob 87916ba4, and gdn_attn.py blob 660ef538), FlashMLASparseBackend supports 4 quantized KV layouts (fp8_ds_mla 656B, fp8_ds_mla_f8s 584B with 576B TMA stride + 8B tail scales, fp8_ds_mla_sf8s 528B, and SM100 nvfp4_ds_mla 352B with _NVFP4_SCALE_PERM 8*(s&3)+(s>>2)), SparseMLAIndexGroup deduplicates top-k block-table index conversions across layers via _convert_once, HiSparseHierarchicalRuntime sizes hot GPU KV buffers to 2*top_k*(1+n_spec) under SMEM budget (2*D+3*T*Q)*4+36 <= dev_smem with double-buffered comm_stream H2D loads, and plan_flashinfer_checkpoints schedules interval-aligned SSM state checkpoints for GDN prefix caching.",
+      "status": "implementation",
+      "source_ids": [
+        "vllm-v1-flashmla-sparse-layouts-2026",
+        "vllm-v1-sparse-mla-index-group-2026",
+        "vllm-v1-hisparse-hierarchical-runtime-2026",
+        "vllm-v1-gdn-attn-flashinfer-checkpoints-2026"
+      ],
+      "artifacts": [
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md",
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html"
+      ],
+      "verifier": "static source inspection of vllm-project/vllm flashmla_sparse.py, index_group.py, hisparse/runtime.py, and gdn_attn.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Static Python/Triton source verification."
+    },
+    {
+      "id": "ev-exp-vllm-v1-sparse-mla-hisparse-2026",
+      "component": "serving_systems",
+      "claim": "In own-offline evaluation of 32 concurrent 128K-context requests across 61 MLA layers, Sparse MLA KV layouts compress BF16 (1,152 B/tok, 274.50 GiB) to fp8_ds_mla (656 B, 156.31 GiB, 1.756x), fp8_ds_mla_f8s (584 B, 139.16 GiB, 1.973x), fp8_ds_mla_sf8s (528 B, 125.81 GiB, 2.182x), and SM100 nvfp4_ds_mla (352 B, 83.88 GiB, 3.273x); HiSparse (top_k=2048) bounds hot GPU KV residency to 4,096 rows/req at q=1 (12.8x HBM reduction, 26,148 B SMEM) and 10,240 rows/req at q=4 (5.12x reduction, 89,892 B SMEM), reducing 61-layer step latency from 111.79 ms (sync PCIe) to 26.84 ms (4.16x speedup at 35% miss); SparseMLAIndexGroup._convert_once eliminates 60/61 redundant index conversions per step (61x launch reduction, saving 0.57 ms/step).",
+      "status": "own-offline",
+      "source_ids": [
+        "vllm-v1-flashmla-sparse-layouts-2026",
+        "vllm-v1-sparse-mla-index-group-2026",
+        "vllm-v1-hisparse-hierarchical-runtime-2026",
+        "vllm-v1-gdn-attn-flashinfer-checkpoints-2026"
+      ],
+      "artifacts": [
+        "experiments/vllm_v1_sparse_mla_hisparse_sim/run.py",
+        "experiments/vllm_v1_sparse_mla_hisparse_sim/results.json",
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md",
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md",
+        "docs/reports/ai-infra-phase22-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\vllm_v1_sparse_mla_hisparse_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic KV byte layout, SMEM budget, double-buffered PCIe H2D, and GDN checkpoint planner simulator."
+    },
+    {
+      "id": "ev-vllm-v1-gdn-checkpoint-planner-2026",
+      "component": "serving_systems",
+      "claim": "In vLLM V1 GDNAttentionMetadataBuilder, plan_flashinfer_checkpoints computes checkpoints_every_n_tokens = block_size * lcm(mamba_Ratio, attn_Ratio) (64 tokens for block_size=16, ratios 2 & 4) and emits checkpoint_cu_starts = [0, 4, 12, 16] with checkpoint_ssm_state_row_indices = [0, 1, 7, 14] across 3 prefill requests (256, 512, 300 tokens), enabling exact prefix-cache recovery for recurrent GDN state without full sequence replay.",
+      "status": "own-offline",
+      "source_ids": [
+        "vllm-v1-gdn-attn-flashinfer-checkpoints-2026"
+      ],
+      "artifacts": [
+        "experiments/vllm_v1_sparse_mla_hisparse_sim/run.py",
+        "experiments/vllm_v1_sparse_mla_hisparse_sim/results.json",
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md",
+        "docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md"
+      ],
+      "verifier": "python experiments\\vllm_v1_sparse_mla_hisparse_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Exact replication of vllm/v1/attention/backends/gdn_attn.py plan_flashinfer_checkpoints algorithm."
     }
   ],
   "updated_at": "2026-10-20"

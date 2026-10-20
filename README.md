@@ -1,13 +1,16 @@
 # AI Infra Research
 
+> **Language / 语言**: **中文 (Chinese)** | [English (英文版)](README.en.md)
+
 **从实现机制到架构决策，而不是 GPU 规格表或每日新闻汇总。**
 
-面向已有云/解决方案架构背景、希望深入 AI Infrastructure 的学习者。中文分析保留 English terminology，研究覆盖 GPU、HBM、互连/网络、存储、分布式训练、推理平台、调度运维以及容量/成本。优先深入 GPU/HBM/Network，再把组件连接到端到端工作负载。
+面向已有云/解决方案架构背景、希望深入 AI Infrastructure 的学习者。中英双语（Chinese & English bilingual）分析保留 English terminology，研究覆盖 GPU、HBM、互连/网络、存储、分布式训练、推理平台、调度运维以及容量/成本。优先深入 GPU/HBM/Network，再把组件连接到端到端工作负载。
 
 ## 阅读入口
 
 | 入口 | 内容 |
 |---|---|
+| [English Repository Entry (`README.en.md`)](README.en.md) · [End-to-End Architecture Case (`EN`)](docs/architectures/end-to-end-ai-infra-case.en.md) | 英文版总入口与端到端全栈参考架构（Bilingual Chinese/English Navigation） |
 | [研究框架](docs/framework.md) | 分层方法、组件深挖契约、来源和结论边界 |
 | [全栈地图](docs/stack-map.md) | 11 个层面、技术栈、架构问题与研究进度 |
 | [架构师学习路线](docs/learning/roadmap.md) | 云架构 → 单 GPU → 多 GPU → 多节点 → 平台架构 |
@@ -86,10 +89,13 @@
 | [DeepEP Engram 表 GPU 直发 RDMA Get、Warp 门铃聚合与 `HybridElasticSymmetricMemory` 异构虚拟内存](docs/components/deepep-engram-hybrid-elastic-symmetric-memory.md) | `deepseek-ai/DeepEP` (`d1faaa50`) `HybridElasticSymmetricMemory`（`SYS_pidfd_open`/`SYS_pidfd_getfd` VMM 映射 `132 GiB` 连续 VA + `NCCL_ELASTIC_BUFFER_REGISTER=1` Host NUMA 省 `16 GiB/GPU` 共 `1,024 GiB` HBM）与 `engram_fetch_impl`（`__ballot_sync` + `AggregateRequests` `threshold=16` 削减 `10.67x` 门铃 + 末 Warp `flush_async`，4 层查找从 `676.08 us` 压至 `33.56 us`，提速 `20.15x`） |
 | [Megatron-FSDP：NCCL 零拷贝用户缓冲 (`nccl_ub`)、双缓冲流水线与混合分片 (`HFSDP`)](docs/components/megatron-fsdp-nccl-ub-double-buffer-hfsdp.md) | `NVIDIA/Megatron-LM` (`888e0cf9`) `HFSDP`（`outer='optim'` 将 `512x B200` 120B 状态显存从 `244.20 GiB` OOM 压降 `4.79x` 至 `51.01 GiB/GPU`）、`nccl_ub=True` + `MaxPoolAllocator`（消除 `38.50 ms` 碎片重分配）、Copy Engine AG（`0/4` SMs vs `16/16` SMs，计算膨胀 `+6.44% -> +0.35%`）与 `fp8_param_gather`（步耗时 `572.35 -> 425.95 ms`，提速 `1.344x`） |
 | [Mooncake Transfer Engine：ConnectX-8 `Data Direct` DMA 拓扑配对与 `BatchRdmaDeviceCache` 零锁批处理](docs/components/mooncake-transfer-engine-cx8-data-direct-rdma.md) | `kvcache-ai/Mooncake` (`b9b11776`) `dataDirectSysfsRoot`（`mlx5dv_get_data_direct_sysfs_path@MLX5_1.25` 按顶层 `firstPciRootSegment` `"pci0009:00"` 配对消除 `75%` 跨根 `ENOTSUPP` 达 `92.0 GB/s`）与 `BatchRdmaDeviceCache`（`99.976%` 命中率削减 `34.71x` CPU 提交耗时至 `0.050 ms`，`64 MiB` KV 传输从 `4.074 ms` 压至 `0.779 ms`，提速 `5.23x`） |
-| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9](docs/reports/ai-infra-phase9-benchmark-cards.html) · [Phase 10](docs/reports/ai-infra-phase10-benchmark-cards.html) · [Phase 11](docs/reports/ai-infra-phase11-benchmark-cards.html) · [Phase 12](docs/reports/ai-infra-phase12-benchmark-cards.html) · [Phase 13](docs/reports/ai-infra-phase13-benchmark-cards.html) · [Phase 14](docs/reports/ai-infra-phase14-benchmark-cards.html) · [Phase 15](docs/reports/ai-infra-phase15-benchmark-cards.html) · [Phase 16](docs/reports/ai-infra-phase16-benchmark-cards.html) · [Phase 17](docs/reports/ai-infra-phase17-benchmark-cards.html) · [Phase 18](docs/reports/ai-infra-phase18-benchmark-cards.html) · [Phase 19](docs/reports/ai-infra-phase19-benchmark-cards.html) · [Phase 20](docs/reports/ai-infra-phase20-benchmark-cards.html) · [Phase 21 7-Card 报告](docs/reports/ai-infra-phase21-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 78 个研究问题与 73 个可复现实验坐标 |
+| [NCCL Device API (`ncclGin`) 与对称集合通信 (`AllGather_RailRing_LsaSTMC` / `rsAlgoHier` / `RMSNormGIN`)](docs/components/nccl-device-gin-symmetric-collectives.md) · [EN](docs/components/nccl-device-gin-symmetric-collectives.en.md) | `NVIDIA/nccl` (`3e46c089`) `gin.h`/`all_gather_gin.cuh`/`reduce_scatter_gin.cuh`：`rsAlgoHier` 14 Warp 在 `multimem=True/False` 下 `7:7` vs `11:3` 切分、`RailRing_LsaSTMC` 格雷码 `g^(g>>1)=[0,1,3,2,4,5,7,6]` 消除 8 节点步 0 争用，单核 `RMSNormGIN` (`ncclGin_WeakSignalInc`) 将 `64 MiB` 延迟从 `234.57 us` 压至 `110.92 us`（提速 `2.11x`，省 `20.0%` HBM 流量） |
+| [DeepGEMM Blackwell SM100 `MegaMoE` 融合专家池与 `MegaMHC` 流行超连接 (`Sinkhorn-Knopp`) 算子](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md) · [EN](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) | `deepseek-ai/DeepGEMM` (`5081f851`) `mega_moe.hpp`/`sm100_mega_mhc.hpp`：1-Sigma `E+sqrt(E)` 路由余量选出 `block_m=[16,64,192,240]` (`stages=[10,9,6,5]`)、非对称 `store_block_m_l1=24, l2=8` 在 `M=240` 省 `14,336 B` SMEM（`20,480 -> 6,144 B`），融合 `sm100_mega_mhc` (`split_k=14`, 20 步 Sinkhorn) 削减 `40.09%` HBM 流量（`984.38 -> 589.75 MiB`，提速 `1.92x`） |
+| [vLLM V1 稀疏 MLA (`FlashMLASparse` `NVFP4/MXFP8`)、`HiSparse` 分级卸载与 `GDN` 混合检查点](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md) · [EN](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md) | `vllm-project/vllm` (`5285b9b8`) `flashmla_sparse.py`/`hisparse`/`gdn_attn.py`：SM100 `nvfp4_ds_mla` (`352 B/tok`, `8*(s&3)+(s>>2)` 缩放重排) 将 61 层 `32x128K` KV 从 `274.50 GiB` 压至 `83.88 GiB` (`3.273x`)，`HiSparse` 热缓冲 (`4,096` 行, `26,148 B` SMEM) 卸载 `12.8x` HBM，`SparseMLAIndexGroup._convert_once` 降 `61x` 索引转换开销，`GDN` 规划 `16` 个前缀检查点 |
+| [交互式 AI Infra 全栈架构师工作台 (H5)](docs/reports/ai-infra-architect-workbench.html) · [Phase 3](docs/reports/ai-infra-phase3-benchmark-cards.html) · [Phase 4](docs/reports/ai-infra-phase4-benchmark-cards.html) · [Phase 5](docs/reports/ai-infra-phase5-benchmark-cards.html) · [Phase 6](docs/reports/ai-infra-phase6-benchmark-cards.html) · [Phase 7](docs/reports/ai-infra-phase7-benchmark-cards.html) · [Phase 8](docs/reports/ai-infra-phase8-benchmark-cards.html) · [Phase 9](docs/reports/ai-infra-phase9-benchmark-cards.html) · [Phase 10](docs/reports/ai-infra-phase10-benchmark-cards.html) · [Phase 11](docs/reports/ai-infra-phase11-benchmark-cards.html) · [Phase 12](docs/reports/ai-infra-phase12-benchmark-cards.html) · [Phase 13](docs/reports/ai-infra-phase13-benchmark-cards.html) · [Phase 14](docs/reports/ai-infra-phase14-benchmark-cards.html) · [Phase 15](docs/reports/ai-infra-phase15-benchmark-cards.html) · [Phase 16](docs/reports/ai-infra-phase16-benchmark-cards.html) · [Phase 17](docs/reports/ai-infra-phase17-benchmark-cards.html) · [Phase 18](docs/reports/ai-infra-phase18-benchmark-cards.html) · [Phase 19](docs/reports/ai-infra-phase19-benchmark-cards.html) · [Phase 20](docs/reports/ai-infra-phase20-benchmark-cards.html) · [Phase 21](docs/reports/ai-infra-phase21-benchmark-cards.html) · [Phase 22 7-Card 报告 (Bilingual)](docs/reports/ai-infra-phase22-benchmark-cards.html) | 零外部依赖交互式 TCO/KV/SHARP 计算器与自包含 `Content-Security-Policy: default-src 'none'` 4:5 视觉卡片组，汇总全仓 81 个研究问题与 76 个可复现实验坐标 |
 | [AI Infra 创新公司深挖](docs/components/ai-infra-innovators.md) · [v2 帕累托深挖](docs/components/ai-infra-innovators-v2.md) | 推理加速（Fireworks / Together / SGLang 自适应 EAGLE-3 / NVFP4 Swizzle）与新型 AI 芯片（Groq TSP / Cerebras WSE）帕累托前沿 |
 | [技术趋势](docs/trends/index.md) | 证据支持的变化、成熟度与采用条件 |
-| [每日研究](docs/daily/2026-10-19.md) | 最新有界研究与限制；按北京时间日期增量归档 |
+| [每日研究](docs/daily/2026-10-20.md) | 最新有界研究与限制；按北京时间日期增量归档 |
 | [原创离线实验](experiments/capacity_roofline/README.md) | 可重算的显存 payload 与 Roofline 理论界限 |
 | [Ring cut 离线算例](experiments/ring_cut/README.md) | rank 顺序、跨节点 payload 与共享 NIC 理论下界 |
 | [Rail channel cut 算例](experiments/rail_channel_cut/README.md) | 多 Channel、Multi-Rail 对齐、跨 Rail 偏斜与机内 `PATH_PHB` 瓶颈反证 |
@@ -162,6 +168,9 @@
 | [DeepEP Engram & hybrid elastic VMM 算例](experiments/deepep_engram_hybrid_symmetric/README.md) | `DeepEP` `HybridElasticSymmetricMemory`（`pidfd_getfd` `132 GiB` VA + Host NUMA 省 `1,024 GiB` HBM）与 `engram_fetch_impl`（`AggregateRequests` 降 `10.67x` 门铃 + 末 Warp `flush_async`，`33.56 us` 提速 `20.15x`）仿真 |
 | [Megatron-FSDP NCCL UB & HFSDP 算例](experiments/megatron_fsdp_nccl_ub_hfsdp/README.md) | `Megatron-FSDP` `HFSDP`（`outer='optim'` 120B 显存降 `4.79x` 至 `51.01 GiB`）、`nccl_ub` + `MaxPoolAllocator` + Copy Engine AG（`0/4` SMs、计算膨胀 `+0.35%`）与 `fp8_param_gather`（`425.95 ms` 提速 `1.344x`）仿真 |
 | [Mooncake CX8 Data Direct RDMA 算例](experiments/mooncake_cx8_data_direct_rdma/README.md) | `Mooncake` `mlx5dv_get_data_direct_sysfs_path` 顶层 `"pci0009:00"` 配对（`92 GB/s` 零跨根 `ENOTSUPP`）与 `BatchRdmaDeviceCache`（`34.71x` 提交加速、`64 MiB` KV `0.779 ms` 提速 `5.23x`）仿真 |
+| [NCCL GIN symmetric collectives 算例](experiments/nccl_gin_symmetric_sim/README.md) | `NVIDIA/nccl` `rsAlgoHier` `7:7` vs `11:3` Warp 切分、`RailRing_LsaSTMC` 格雷码 `[0,1,3,2,4,5,7,6]` 零冲突与单核 `RMSNormGIN`（`110.92 us` 提速 `2.11x`、省 `20.0%` HBM）仿真 |
+| [DeepGEMM SM100 MegaMoE & MegaMHC 算例](experiments/deepgemm_mega_moe_mhc_sim/README.md) | `DeepGEMM` 1-Sigma `E+sqrt(E)` 块大小选择、非对称 `24/8` 存储块省 `14,336 B` SMEM 与 `sm100_mega_mhc`（削减 `40.09%` HBM 流量至 `589.75 MiB`、提速 `1.92x`）仿真 |
+| [vLLM V1 Sparse MLA & HiSparse 算例](experiments/vllm_v1_sparse_mla_hisparse_sim/README.md) | `vLLM V1` `nvfp4_ds_mla` (`352 B/tok`, `3.273x` 压缩)、`HiSparse` 热缓冲 (`12.8x` HBM 卸载)、`SparseMLAIndexGroup._convert_once` (`61x` 去重) 与 `GDN` 检查点仿真 |
 | [合成容量架构练习](docs/architectures/synthetic-inference-budget.md) | 将显存账本、数据流和失败边界连接到方案设计 |
 | [研究执行契约](docs/research-operations.md) | 研究 queue、跨运行续接、分支/PR、防重叠与失败恢复 |
 
@@ -250,6 +259,9 @@ python experiments\vllm_v1_rejection_sampler_spec_decode\run.py --check
 python experiments\deepep_engram_hybrid_symmetric\run.py --check
 python experiments\megatron_fsdp_nccl_ub_hfsdp\run.py --check
 python experiments\mooncake_cx8_data_direct_rdma\run.py --check
+python experiments\nccl_gin_symmetric_sim\run.py --check
+python experiments\deepgemm_mega_moe_mhc_sim\run.py --check
+python experiments\vllm_v1_sparse_mla_hisparse_sim\run.py --check
 python scripts\source_monitor.py
 ```
 
