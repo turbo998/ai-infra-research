@@ -5212,6 +5212,171 @@
       "verifier": "python experiments\\mooncake_hotcache_race_dynamo_kvhash_prefill_gate\\run.py --check",
       "verified_at": "2026-10-21",
       "limitations": "Deterministic Python 3.12 standard-library model."
+    },
+    {
+      "id": "claim-vllm-trtllm-dcp-prefill-empty-shard-mask-2026",
+      "component": "vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale",
+      "claim": "In vLLM FlashInfer DCP prefill (vllm@7b569ec895), TrtllmDCPContextWrapper.fits_workspace gates trtllm-gen context execution on (num_qo_heads * dcp_world_size) * batch_size * round_up(max_q_len, 256) * 8 + 1 MiB <= workspace.nbytes, while run() initializes out = torch.zeros_like(q) and calls mask_dcp_empty_shards_(lse, seq_lens, cum_seq_lens_q) when any request has seq_len == 0 so empty local context shards receive lse = -inf instead of corrupting DCP combine with 0 * NaN = NaN.",
+      "status": "implementation",
+      "source_ids": [
+        "vllm-flashinfer-trtllm-dcp-prefill-2026"
+      ],
+      "artifacts": [
+        "docs/components/vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale.md",
+        "docs/components/vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale.en.md"
+      ],
+      "verified_at": "2026-10-21",
+      "limitations": "Source-verified from vllm/v1/attention/backends/flashinfer.py.",
+      "verifier": "python experiments\\vllm_trtllm_dcp_symm_scratch_megatron_scale\\run.py --check"
+    },
+    {
+      "id": "claim-vllm-symm-scratch-clone-megatron-softmax-scale-2026",
+      "component": "vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale",
+      "claim": "vLLM CudaCommunicator (vllm@8122776fba) clones internal symmetric-memory scratch buffers ('rs_out' when output is None in _reduce_scatter_symm_mem, and 'ag_out' in _all_gather_symm_mem) before returning so subsequent same-role collectives cannot overwrite caller-retained activations; Megatron-LM (Megatron-LM@0156c21373) adds Attention.get_softmax_scale (self.softmax_scale -> self.config.softmax_scale -> d^-0.5) and composes YaRN mscale^2 with config.softmax_scale in MLASelfAttention.__init__.",
+      "status": "implementation",
+      "source_ids": [
+        "vllm-symm-mem-collective-scratch-clone-2026",
+        "megatron-attention-mla-softmax-scale-2026"
+      ],
+      "artifacts": [
+        "docs/components/vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale.md",
+        "docs/components/vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale.en.md"
+      ],
+      "verified_at": "2026-10-21",
+      "limitations": "Source-verified from vLLM cuda_communicator.py and Megatron-LM attention.py / multi_latent_attention.py.",
+      "verifier": "python experiments\\vllm_trtllm_dcp_symm_scratch_megatron_scale\\run.py --check"
+    },
+    {
+      "id": "claim-vllm-trtllm-dcp-symm-scratch-megatron-scale-offline",
+      "component": "vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale",
+      "claim": "Deterministic verifier vllm_trtllm_dcp_symm_scratch_megatron_scale confirms B=4, max_q=1024 (3.00 MiB) fits an 8 MiB trtllm workspace while B=8, max_q=3600 (16.00 MiB) falls back cleanly; empty-shard zero+LSE masking reduces 4-rank DCP combine error from NaN to 0.0; symmetric-memory scratch cloning eliminates 30.75 L1 overwrite error; and MLA softmax_scale fixes a 1.316359x scaling drift at d_q=192.",
+      "status": "own-offline",
+      "source_ids": [
+        "vllm-flashinfer-trtllm-dcp-prefill-2026",
+        "vllm-symm-mem-collective-scratch-clone-2026",
+        "megatron-attention-mla-softmax-scale-2026"
+      ],
+      "artifacts": [
+        "experiments/vllm_trtllm_dcp_symm_scratch_megatron_scale/run.py",
+        "experiments/vllm_trtllm_dcp_symm_scratch_megatron_scale/results/summary.json",
+        "docs/components/vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale.md",
+        "docs/components/vllm-trtllm-dcp-prefill-symm-scratch-megatron-softmax-scale.en.md",
+        "docs/reports/ai-infra-phase34-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\vllm_trtllm_dcp_symm_scratch_megatron_scale\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Deterministic Python 3.12 standard-library model."
+    },
+    {
+      "id": "claim-torchtitan-compiled-real-complex-rope-int32-2026",
+      "component": "torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm",
+      "claim": "In TorchTitan (torchtitan@b95271ed07), ComplexRoPE compiles in real arithmetic via _RotatePairs, gathering the real cache view as floats and packing contiguous bf16 pairs as int32 ((pairs << 16).view(float32) and (pairs & ~0xFFFF).view(float32)) with triton.autotune_pointwise=False, cutting 64k prefill latency on GB300 from 1126.5 -> 224.3 us (5.02x) on Llama 3 8B and 2589.9 -> 426.5 us (6.07x) on DeepSeek-V3 671B while reducing 13-run step-1 loss variants from 9 to 1.",
+      "status": "author-benchmark",
+      "source_ids": [
+        "torchtitan-compiled-real-complex-rope-2026"
+      ],
+      "artifacts": [
+        "docs/components/torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm.md",
+        "docs/components/torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm.en.md"
+      ],
+      "verified_at": "2026-10-21",
+      "limitations": "GB300 microsecond timings and multi-run loss counts are author-reported in pytorch/torchtitan#5196.",
+      "verifier": "python experiments\\torchtitan_compiled_rope_swiglu_fp32_rmsnorm\\run.py --check"
+    },
+    {
+      "id": "claim-torchtitan-swiglu-cat0-muse-fp32-rmsnorm-2026",
+      "component": "torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm",
+      "claim": "TorchTitan's fused_binary_activation (torchtitan@eb48bab350) sets both max_pointwise_cat_inputs=0 and max_complex_pointwise_cat_inputs=0 so Inductor writes SwiGLU backward grad_gate_up [..., 2, F] with one unmasked store per half instead of a masked tl.where kernel (1440.0 -> 1047.8 us, -27.24% on GB300 at T=16k, F=2048); MuseSparkRMSNorm (torchtitan@b78c4aed96) casts bf16 effective_weight_D to input.dtype (fp32) so F.rms_norm runs 1 fused kernel instead of ~20 fallback kernels (-7% 2-layer train time).",
+      "status": "author-benchmark",
+      "source_ids": [
+        "torchtitan-swiglu-bwd-unmasked-cat-stores-2026",
+        "torchtitan-muse-spark-fp32-rmsnorm-fused-2026"
+      ],
+      "artifacts": [
+        "docs/components/torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm.md",
+        "docs/components/torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm.en.md"
+      ],
+      "verified_at": "2026-10-21",
+      "limitations": "GB300 timings are author-reported in pytorch/torchtitan#5460 and #5432.",
+      "verifier": "python experiments\\torchtitan_compiled_rope_swiglu_fp32_rmsnorm\\run.py --check"
+    },
+    {
+      "id": "claim-torchtitan-compiled-rope-swiglu-rmsnorm-offline",
+      "component": "torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm",
+      "claim": "Deterministic verifier torchtitan_compiled_rope_swiglu_fp32_rmsnorm confirms 0 ULP drift between int32-packed bf16 pair rotation and reference complex multiplication, verifies the -27.24% (1440.0 -> 1047.8 us, 1.05x bandwidth floor) SwiGLU backward store model, and proves 0.0 numerical difference when pre-casting bf16 RMSNorm weights to fp32 (collapsing 20 fallback kernels to 1 forward fused kernel).",
+      "status": "own-offline",
+      "source_ids": [
+        "torchtitan-compiled-real-complex-rope-2026",
+        "torchtitan-swiglu-bwd-unmasked-cat-stores-2026",
+        "torchtitan-muse-spark-fp32-rmsnorm-fused-2026"
+      ],
+      "artifacts": [
+        "experiments/torchtitan_compiled_rope_swiglu_fp32_rmsnorm/run.py",
+        "experiments/torchtitan_compiled_rope_swiglu_fp32_rmsnorm/results/summary.json",
+        "docs/components/torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm.md",
+        "docs/components/torchtitan-compiled-complex-rope-swiglu-cat-fp32-rmsnorm.en.md",
+        "docs/reports/ai-infra-phase34-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\torchtitan_compiled_rope_swiglu_fp32_rmsnorm\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Deterministic Python 3.12 standard-library model."
+    },
+    {
+      "id": "claim-trtllm-kvcm-v2-retention-cold-offload-gate-2026",
+      "component": "trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent",
+      "claim": "TensorRT-LLM KVCacheManagerV2 (TensorRT-LLM@41913522c7) implements native per-block KvCacheRetentionConfig (priority 0..100, default 35), drops unreferenced GPU pages below cold_tier_offload_min_priority (default 30) instead of offloading them to cold tiers, detaches pages before mutating priority in StorageManager::updatePriority, scales Helix CP token ranges by _helix_cp_size, and sets claimRetention=false on prefetchReuse.",
+      "status": "implementation",
+      "source_ids": [
+        "trtllm-kvcm-v2-native-retention-priority-2026"
+      ],
+      "artifacts": [
+        "docs/components/trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent.md",
+        "docs/components/trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent.en.md"
+      ],
+      "verified_at": "2026-10-21",
+      "limitations": "Source-verified from TensorRT-LLM C++ and Python KVCM V2 implementation.",
+      "verifier": "python experiments\\trtllm_kvcm_v2_retention_lmcache_l1_tent_notify\\run.py --check"
+    },
+    {
+      "id": "claim-lmcache-l1-orchestrator-mooncake-tent-notify-2026",
+      "component": "trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent",
+      "claim": "LMCache's shared L1 MemoryOrchestrator (LMCache@258746ce77) enforces monotonic aligned bump allocation, WRITING->VALID->CONSUMED transitions, client_incarnation fencing that retires stale WRITING objects and leases, all-or-nothing batch OUT_OF_SPACE, and a 1024-entry SHA-256 _ReplyWindow; Mooncake TENT (Mooncake@5cf142e344) replaces unconditional empty Notify responses with structured error reasons mapped to InvalidArgument (malformed request) or InternalError (unregistered/failed callback).",
+      "status": "implementation",
+      "source_ids": [
+        "lmcache-mp-shared-l1-memory-orchestrator-2026",
+        "mooncake-tent-notify-failure-response-2026"
+      ],
+      "artifacts": [
+        "docs/components/trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent.md",
+        "docs/components/trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent.en.md"
+      ],
+      "verified_at": "2026-10-21",
+      "limitations": "Source-verified from LMCache state.py/service.py and Mooncake control_plane.cpp.",
+      "verifier": "python experiments\\trtllm_kvcm_v2_retention_lmcache_l1_tent_notify\\run.py --check"
+    },
+    {
+      "id": "claim-trtllm-kvcm-v2-lmcache-l1-tent-notify-offline",
+      "component": "trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent",
+      "claim": "Deterministic verifier trtllm_kvcm_v2_retention_lmcache_l1_tent_notify confirms cold_tier_offload_min_priority=30 cuts cold-tier write bytes by 50.0% (1,572,864 -> 786,432 B) and scales Helix CP=4 ranges to [0, 1024); LMCache incarnation=2 registration retires 2 zombie WRITING objects to CONSUMED and rejects mutated request_id replays with ALREADY_EXISTS; and Mooncake TENT reduces silent false-positive Notify acks from 3 to 0.",
+      "status": "own-offline",
+      "source_ids": [
+        "trtllm-kvcm-v2-native-retention-priority-2026",
+        "lmcache-mp-shared-l1-memory-orchestrator-2026",
+        "mooncake-tent-notify-failure-response-2026"
+      ],
+      "artifacts": [
+        "experiments/trtllm_kvcm_v2_retention_lmcache_l1_tent_notify/run.py",
+        "experiments/trtllm_kvcm_v2_retention_lmcache_l1_tent_notify/results/summary.json",
+        "docs/components/trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent.md",
+        "docs/components/trtllm-kvcm-v2-retention-lmcache-l1-orchestrator-mooncake-tent.en.md",
+        "docs/reports/ai-infra-phase34-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "verifier": "python experiments\\trtllm_kvcm_v2_retention_lmcache_l1_tent_notify\\run.py --check",
+      "verified_at": "2026-10-21",
+      "limitations": "Deterministic Python 3.12 standard-library model."
     }
   ],
   "updated_at": "2026-10-21"
