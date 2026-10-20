@@ -13,13 +13,14 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 1. Current Research Baseline (Phase 1 – Phase 26 Complete on `main`)
+## 1. Current Research Baseline (Phase 1 – Phase 27 Complete on `main`)
 
-- **Research Queue (`research/queue.json`)**: **`93 / 93` questions `done`** (`priority: 1` through `priority: 35`, `0` pending, `0` blocked).
-- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`88` standard-library experiments**, all passing `--check`.
-- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`308` first-hand sources** and **`228` audited claims**.
+- **Research Queue (`research/queue.json`)**: **`96 / 96` questions `done`** (`priority: 1` through `priority: 36`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`91` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`317` first-hand sources** and **`237` audited claims**.
 - **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
   - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 27 7-Card 4:5 Benchmark Deck — FlashInfer Cake SM100 Fused GEMM+Lamport AllReduce, TorchTitan Kimi K3 MXFP4 / SimpleFSDP & vLLM V1 UMBP / Slime Straw Rewind (`ai-infra-phase27-benchmark-cards.html`)](docs/reports/ai-infra-phase27-benchmark-cards.html)
   - [Phase 26 7-Card 4:5 Benchmark Deck — FlashMLA SM100 V4.1 Fused Dequant, SGLang KVShard / Uncached Bucket Routing & LMCache DevDAX / Dynamo Relay (`ai-infra-phase26-benchmark-cards.html`)](docs/reports/ai-infra-phase26-benchmark-cards.html)
   - [Phase 25 7-Card 4:5 Benchmark Deck — FA4 SM100 `hdim=256` Bwd `M=64`, NIXL UCX VRAM / Libfabric Ctx & Megatron `CheckpointWithoutOutput` / mFSDP (`ai-infra-phase25-benchmark-cards.html`)](docs/reports/ai-infra-phase25-benchmark-cards.html)
   - [Phase 24 7-Card 4:5 Benchmark Deck — TE Blackwell Grouped MXFP8 Swizzle, Mooncake Auto-GID Reprobe & veRL FP4 Refit / Tail-KL OPD (`ai-infra-phase24-benchmark-cards.html`)](docs/reports/ai-infra-phase24-benchmark-cards.html)
@@ -33,10 +34,13 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 2. Latest Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 35`, `34`, `33`, `32` & `31`, Bilingual EN/ZH)
+## 2. Latest Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 Highlights (`priority: 36`, `35`, `34`, `33`, `32` & `31`, Bilingual EN/ZH)
 
 | Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
 |---|---|---|---|
+| `flashinfer-cake-sm100-gemm-lamport-allreduce-tmem-drain` | [中文](docs/components/flashinfer-cake-sm100-gemm-lamport-allreduce-tmem-drain.md) · [English](docs/components/flashinfer-cake-sm100-gemm-lamport-allreduce-tmem-drain.en.md) | [`experiments/flashinfer_cake_gemm_lamport_allreduce/`](experiments/flashinfer_cake_gemm_lamport_allreduce/README.md) | `flashinfer-ai/flashinfer` (`e563bf9867`, `3bf6d32022` & `b815220c91`): 12 pre-compiled SM100/SM103 cubins dispatch One-Shot NVLS multicast ($M \le 16$, `126,080 B` SMEM) and Two-Shot Lamport scatter/reduce/broadcast ($16 < M \le 128$, `152,704..214,528 B` SMEM, **`1.1x–1.3x` faster** than two-call); `_packed16_sanitize` scrubs BF16 `-0.0` (`0x00008000u`) to prevent `0x80000000u` sentinel hangs; fixed-rank FP32 `add.rn.f32.bf16` guarantees **bitwise-identical outputs (`0x80800080`)** across 8 ranks; `tcgen05.wait::ld` (`1.0000x` B300) and 2-CTA producer-tail (`8.04 us` GB300) eliminate TMEM/mbarrier races. |
+| `torchtitan-kimi-k3-mxfp4-adapter-graph-fsdp-meta-inspect` | [中文](docs/components/torchtitan-kimi-k3-mxfp4-adapter-graph-fsdp-meta-inspect.md) · [English](docs/components/torchtitan-kimi-k3-mxfp4-adapter-graph-fsdp-meta-inspect.en.md) | [`experiments/torchtitan_kimi_k3_mxfp4_adapter_fsdp/`](experiments/torchtitan_kimi_k3_mxfp4_adapter_fsdp/README.md) | `pytorch/torchtitan` (`7d563223d4`, `1d581795cd` & `3b1714ab03`): `KimiK3StateDictAdapter` redistributes sharded KDA `A_log`/`dt_bias` `DTensor`s to `Replicate()` before zero-padding `A_log` `[64] -> [128]` and flattening `dt_bias` `[64,128] -> [8192]` under `to_quantized_layout=True`; `DeepSeekV3StateDictAdapter` filters **`46,596` unsaved index keys** out of `91,991` (retaining `45,395` / `46,183` keys, **`0` empty-dtype header errors**) and clones `3.707 GB` of MTP weights; `SimpleFSDP` `disable_active_parametrization()` cuts `meta`-device `build_operands` calls from `1` (`RuntimeError`) to **`0`**. |
+| `vllm-v1-umbp-kv-connector-slime-straw-rewind` | [中文](docs/components/vllm-v1-umbp-kv-connector-slime-straw-rewind.md) · [English](docs/components/vllm-v1-umbp-kv-connector-slime-straw-rewind.en.md) | [`experiments/vllm_umbp_kv_connector_slime_rewind/`](experiments/vllm_umbp_kv_connector_slime_rewind/README.md) | `vllm-project/vllm` (`82b7dad5e3`) & `THUDM/slime` (`4f204660ab`): UMBP `RankTopology` partitions `TP` by `DCP` (`dcp_rank = tp_rank % dcp_size`, `8` namespaces vs `16`), derives a 32-hex SHA-256 `UMBPNamespace` handshake, caps external KV hits at `num_tokens - 1` (`192` tokens std / `128` EAGLE), and frees exported GPU blocks in reverse order (`[14,12,10]`) after all workers finish; Slime Straw writes `committed_{step}.json` after reverse-depth `fsync`, clamps recovery to `step = 10`, and rewinds cross-epoch cursors to `(epoch=1, offset=95, idx=780)`. |
 | `flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv` | [中文](docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.md) · [English](docs/components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.en.md) | [`experiments/flashmla_sm100_v41_fused_dequant_sim/`](experiments/flashmla_sm100_v41_fused_dequant_sim/README.md) | `deepseek-ai/FlashMLA` (`07a10898` & `ba89a346`): `V41_FP4` compresses KV to **`288 B/token`** (`TMA_K_STRIDE=256`, **`2.2778x`** vs V3.2, **`1.8333x`** vs V41 FP8); `KVBlockDequantizer` `+32B` row padding (`288B` 1-CTA / `160B` 2-CTA) eliminates 4-way `LDS.32` bank conflicts (`1-way`), `e2m1×e4m3` has **`0` BF16 rounding error** across all `2,032` finite pairs, fused `Norm+RoPE+Attn+RoPE+Cast` fits in **`512 / 480` TMEM cols**, and `longlong2` (`16B`) fixes MSVC LLP64 `st.async` truncation. |
 | `sglang-kvshard-pd-transfer-uncached-bucket-routing` | [中文](docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.md) · [English](docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.en.md) | [`experiments/sglang_kvshard_uncached_bucket_sim/`](experiments/sglang_kvshard_uncached_bucket_sim/README.md) | `sgl-project/sglang` (`eb4b167d`, `df13d5dc` & `9db58ab5`): `KVShard` modulo-$N$ page filtering skips **`3` empty non-final RDMA chunks** and tightens bootstrap admission to **`65,216` tokens** (`-320` guard); `--route-by-uncached-tokens` routes `20K` prompts with `15K` cached prefix (`E=5,000`) to `short` (with context-cap fallback and `IdleSpill`); Qwen3 MoE EPLB forwards `ExpertLocationDispatchInfo`. |
 | `lmcache-devdax-offset-apc-attribution-dynamo-relay` | [中文](docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.md) · [English](docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.en.md) | [`experiments/lmcache_devdax_apc_dynamo_relay_sim/`](experiments/lmcache_devdax_apc_dynamo_relay_sim/README.md) | `LMCache/LMCache` (`e8dc1a1d` & `168130df`) & `ai-dynamo/dynamo` (`909ebee0` & `cc02d8b1`): sysfs `check_dax_range` enforces `2 MiB` alignment & disjoint CXL arenas before `mmap`; `lookup.py` excludes APC prefix (`37.5% -> 0.0%` false L1 hit rate, `1,536` deduplicated hit tokens); Dynamo `DcCkfRankReplacement` prunes **`2` zombie candidates** and `RetryManager::rebase_usage` restores `(P'=3, C'=6, cached'=3)`. |
@@ -71,6 +75,7 @@ Every quantitative claim in this repository is backed by:
 - [FlashInfer JIT Multi-Level Cascade Paged KV Attention & Base-2 LSE Merge](docs/components/flashinfer-cascade-paged-kv-attention.md)
 - [DeepGEMM SM100 `MegaMoE` Fused Expert Pool & `MegaMHC` HyperConnection (`Sinkhorn-Knopp`)](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) ([中文](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md), [`experiments/deepgemm_mega_moe_mhc_sim/`](experiments/deepgemm_mega_moe_mhc_sim/README.md))
 - [FlashInfer Frost (`DeepSeek-V4.1`) SM100 Mixed `MXFP8/FP4` Non-Interleaved Decode & `Green Context` SM Split](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md) ([中文](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md), [`experiments/flashinfer_ds41_mixed_decode_sim/`](experiments/flashinfer_ds41_mixed_decode_sim/README.md))
+- [FlashInfer Cake Blackwell SM100/SM103 Fused GEMM + Lamport All-Reduce & `tcgen05` Synchronization Contracts](docs/components/flashinfer-cake-sm100-gemm-lamport-allreduce-tmem-drain.en.md) ([中文](docs/components/flashinfer-cake-sm100-gemm-lamport-allreduce-tmem-drain.md), [`experiments/flashinfer_cake_gemm_lamport_allreduce/`](experiments/flashinfer_cake_gemm_lamport_allreduce/README.md))
 - [TransformerEngine Blackwell FP8 Block-Scaling to MXFP8 Grouped GEMM Swizzle & Dynamic SMEM](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md) ([中文](docs/components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md), [`experiments/te_grouped_mxfp8_swizzle_sim/`](experiments/te_grouped_mxfp8_swizzle_sim/README.md))
 
 ### B. Scale-Up / Scale-Out Fabrics, RDMA & NCCL Internals
@@ -99,6 +104,7 @@ Every quantitative claim in this repository is backed by:
 - [Megatron-Core MoE Aux-Loss-Free Routing (`expert_bias`) & `qb_dual_update`](docs/components/megatron-moe-auxfree-routing-token-drop.md)
 - [Distributed Muon Optimizer: 5-Step Quintic Newton-Schulz & `FSDP2 × TP`](docs/components/distributed-muon-newton-schulz-optimizer.md)
 - [PyTorch TorchTitan `FlexShard` (`BlockShard` / `Owned`) & GB200 NVLink72 `HybridEP`](docs/components/torchtitan-flexshard-distmuon-hybridep.en.md) ([中文](docs/components/torchtitan-flexshard-distmuon-hybridep.md), [`experiments/torchtitan_flexshard_hybridep_sim/`](experiments/torchtitan_flexshard_hybridep_sim/README.md))
+- [TorchTitan Kimi K3 MXFP4 `StateDictAdapter`, DeepSeek-V3 Index Filtering & GraphTrainer `SimpleFSDP` Meta-Device Guard](docs/components/torchtitan-kimi-k3-mxfp4-adapter-graph-fsdp-meta-inspect.en.md) ([中文](docs/components/torchtitan-kimi-k3-mxfp4-adapter-graph-fsdp-meta-inspect.md), [`experiments/torchtitan_kimi_k3_mxfp4_adapter_fsdp/`](experiments/torchtitan_kimi_k3_mxfp4_adapter_fsdp/README.md))
 - [2D Hybrid Context Parallelism (`USP = Ulysses × ZigZag Ring-Attention`)](docs/components/context-parallel-usp-zigzag-ring.md) (`experiments/context_parallel_usp_zigzag/README.md`)
 - [Operator-Level Selective Activation Checkpointing (`SAC`) & NUMA PCIe Gen5 Offload](docs/components/selective-activation-checkpoint-offload.md) (`experiments/selective_activation_offload/README.md`)
 - [Large-Scale Reasoning RL Engine (`verl` Weight Resharding & vLLM `CuMemAllocator`)](docs/components/rl-post-training-engine.md) (`experiments/rl_rollout_resharding/README.md`)
@@ -115,6 +121,7 @@ Every quantitative claim in this repository is backed by:
 - [SGLang Zero-Reallocation PD Role Switching (`role_switch`), `PPConsensusStore` & Incremental Decode KV Offload](docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md) ([中文](docs/components/sglang-pd-role-switch-pp-consensus-offload.md), [`experiments/sglang_pd_role_switch_offload_sim/`](experiments/sglang_pd_role_switch_offload_sim/README.md))
 - [SGLang `KVShard` Page-Interleaved PD Transfer, `sgl-router` Uncached-Token Bucket Routing & Qwen3 MoE EPLB Integrity](docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.en.md) ([中文](docs/components/sglang-kvshard-pd-transfer-uncached-bucket-routing.md), [`experiments/sglang_kvshard_uncached_bucket_sim/`](experiments/sglang_kvshard_uncached_bucket_sim/README.md))
 - [LMCache Device-DAX/CXL L1 Offset Partitioning & APC Hit Attribution, plus Dynamo Cuckoo DC Snapshot Removal Replay & Migration Token Rebasing](docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.en.md) ([中文](docs/components/lmcache-devdax-offset-apc-attribution-dynamo-relay.md), [`experiments/lmcache_devdax_apc_dynamo_relay_sim/`](experiments/lmcache_devdax_apc_dynamo_relay_sim/README.md))
+- [vLLM V1 UMBP Shared KV Connector (`UMBPStoreConnector`) Topology/Layout Contracts & THUDM/slime Straw In-Place Checkpoint Rewind (`rewind.py`)](docs/components/vllm-v1-umbp-kv-connector-slime-straw-rewind.en.md) ([中文](docs/components/vllm-v1-umbp-kv-connector-slime-straw-rewind.md), [`experiments/vllm_umbp_kv_connector_slime_rewind/`](experiments/vllm_umbp_kv_connector_slime_rewind/README.md))
 - [Long-Context Hybrid Attention: FlashMLA, Ring/Ulysses CP & Mamba Checkpoint Pool](docs/components/long-context-hybrid-attention.md) (`experiments/long_context_attention/README.md`)
 - [SGLang `HiRadixCache`, `MLAHostDedupBroadcaster` & Hybrid `TRAILING_PAGES` Intersection](docs/components/sglang-hiradix-cache-mla-dedup-prefetch.md) (`experiments/sglang_hiradix_cache_controller/README.md`)
 - [Prefill/Decode Disaggregation & Tiered KV Cache Routing (`Mooncake` / `NIXL` / `SGLang`)](docs/components/disaggregated-kv-routing.md) (`experiments/disaggregated_kv_routing/README.md`)
@@ -161,13 +168,16 @@ Every quantitative claim in this repository is backed by:
 All validation tools and experiments use the Python 3.12 standard library only:
 
 ```powershell
-# 1. Run the full unit test suite (317 unit tests)
+# 1. Run the full unit test suite (320 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and links
 python scripts\validate_research.py
 
-# 3. Verify Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+# 3. Verify Phase 27, Phase 26, Phase 25, Phase 24, Phase 23 & Phase 22 deterministic experiments
+python experiments\flashinfer_cake_gemm_lamport_allreduce\run.py --check
+python experiments\torchtitan_kimi_k3_mxfp4_adapter_fsdp\run.py --check
+python experiments\vllm_umbp_kv_connector_slime_rewind\run.py --check
 python experiments\flashmla_sm100_v41_fused_dequant_sim\run.py --check
 python experiments\sglang_kvshard_uncached_bucket_sim\run.py --check
 python experiments\lmcache_devdax_apc_dynamo_relay_sim\run.py --check
