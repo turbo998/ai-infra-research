@@ -13,13 +13,14 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 1. Current Research Baseline (Phase 1 – Phase 22 Complete on `main`)
+## 1. Current Research Baseline (Phase 1 – Phase 23 Complete on `main`)
 
-- **Research Queue (`research/queue.json`)**: **`81 / 81` questions `done`** (`priority: 1` through `priority: 31`, `0` pending, `0` blocked).
-- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`76` standard-library experiments**, all passing `--check`.
-- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`263` first-hand sources** and **`192` audited claims**.
+- **Research Queue (`research/queue.json`)**: **`84 / 84` questions `done`** (`priority: 1` through `priority: 32`, `0` pending, `0` blocked).
+- **Deterministic Experiments (`experiments/*/run.py --check`)**: **`79` standard-library experiments**, all passing `--check`.
+- **Evidence Ledger (`research/sources.json` & `research/evidence.json`)**: **`275` first-hand sources** and **`201` audited claims**.
 - **Interactive Dashboards & Visual Reports (`docs/reports/`)**:
   - [Full-Stack AI Infra Architect Workbench (`ai-infra-architect-workbench.html`)](docs/reports/ai-infra-architect-workbench.html)
+  - [Phase 23 7-Card 4:5 Benchmark Deck — FlashInfer Frost DS4.1, TorchTitan FlexShard/HybridEP & SGLang PD Role Switch (`ai-infra-phase23-benchmark-cards.html`)](docs/reports/ai-infra-phase23-benchmark-cards.html)
   - [Phase 22 7-Card 4:5 Benchmark Deck — NCCL GIN Symmetric, SM100 MegaMoE/MHC & vLLM V1 Sparse MLA (`ai-infra-phase22-benchmark-cards.html`)](docs/reports/ai-infra-phase22-benchmark-cards.html)
   - [Phase 21 7-Card 4:5 Benchmark Deck — Mooncake ConnectX-8, Megatron-FSDP & PyTorch DCP (`ai-infra-phase21-benchmark-cards.html`)](docs/reports/ai-infra-phase21-benchmark-cards.html)
   - [Phase 20 7-Card 4:5 Benchmark Deck — NVIDIA Dynamo, DeepSeek 3FS & PyTorch SymmetricMemory (`ai-infra-phase20-benchmark-cards.html`)](docs/reports/ai-infra-phase20-benchmark-cards.html)
@@ -29,17 +30,20 @@ Every quantitative claim in this repository is backed by:
 
 ---
 
-## 2. Latest Phase 22 Highlights (`priority: 31`, Bilingual EN/ZH)
+## 2. Latest Phase 23 & Phase 22 Highlights (`priority: 32` & `31`, Bilingual EN/ZH)
 
 | Topic ID | Bilingual Deep-Dive Docs | Deterministic Experiment (`--check`) | Key Architectural Finding (`own-offline` + `implementation`) |
 |---|---|---|---|
+| `flashinfer-frost-ds41-mixed-mxfp8-fp4-decode` | [中文](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md) · [English](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md) | [`experiments/flashinfer_ds41_mixed_decode_sim/`](experiments/flashinfer_ds41_mixed_decode_sim/README.md) | `flashinfer-ai/flashinfer` (`8dc1163f`): non-interleaved 64-token pages (`swa_mxfp8` `[pages,64,1,528]` + `main_kv_fp4` `[pages,64,1,288]`) compress 640-token active KV reads **`3.0476x` (`-67.19%` BW)**; `tl.div_rn` eliminates **`4.15%` (`9/217`)** E2M1 halfway jumps caused by `x*(1.0/scale)`; `persistent_ctas=80` lifts `B=160` 2-wave grid balance on 148 SMs from `54.05%` to **`100.0%`**; `green_ctx.py` enforces `(8, 8)` SM alignment. |
+| `torchtitan-flexshard-distmuon-hybridep` | [中文](docs/components/torchtitan-flexshard-distmuon-hybridep.md) · [English](docs/components/torchtitan-flexshard-distmuon-hybridep.en.md) | [`experiments/torchtitan_flexshard_hybridep_sim/`](experiments/torchtitan_flexshard_hybridep_sim/README.md) | `pytorch/torchtitan` (`3b1714ab`): `BlockShard(0, (512, 64))` partitions Kimi `wkv_a` `[4608, 4096]` into `16` intact sub-matrices (`0` broken boundaries vs `4` under naive 6-rank `Shard(0)`); `compute_dtype=bfloat16` + 4-bucket overlap speeds up DistMuon **`1.716x` (`8.757 -> 5.103 ms`)**; GB200 NVLink72 `HybridEP` non-blocking `capacity_factor=0.25` saves **`75.0%` buffer memory (`4,033.12 MiB`)** with `0` drops at `1.35x` P99 skew. |
+| `sglang-pd-role-switch-pp-consensus-offload` | [中文](docs/components/sglang-pd-role-switch-pp-consensus-offload.md) · [English](docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md) | [`experiments/sglang_pd_role_switch_offload_sim/`](experiments/sglang_pd_role_switch_offload_sim/README.md) | `sgl-project/sglang` (`df13d5dc`): `handle_pd_role_switch` flips Prefill <-> Decode in **`180 ms` (`233.33x` faster than `42s` cold restart)** without reallocating the token KV pool and gates on `decode_cuda_graph_memory_gb` (`safe_to_restore=True`); `PPConsensusStore` MsgPack 4-tuple `_ReplicationOp` cuts ZMQ payload **`72.31%` (`65 -> 18 B`)** without pickle RCE; `DecodeKVCacheOffloadManager` recovers all **`38` unaligned prompt tail tokens**. |
 | `nccl-device-gin-symmetric-collectives` | [中文](docs/components/nccl-device-gin-symmetric-collectives.md) · [English](docs/components/nccl-device-gin-symmetric-collectives.en.md) | [`experiments/nccl_gin_symmetric_sim/`](experiments/nccl_gin_symmetric_sim/README.md) | `NVIDIA/nccl` (`3e46c089`): `rsAlgoHier` splits `14` worker warps `7:7` with `multimem=True` vs `11:3` without; `AllGather_RailRing_LsaSTMC` Gray-code `g^(g>>1)=[0,1,3,2,4,5,7,6]` eliminates step-0 bank contention across `256 KiB` offsets; 1-kernel `RMSNormGIN` (`ncclGin_WeakSignalInc`) cuts `64 MiB` latency from `234.57 us` to **`110.92 us` (`2.11x`)** and saves **`20.0%` HBM traffic**. |
 | `deepgemm-sm100-mega-moe-mhc-hyperconnection` | [中文](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md) · [English](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) | [`experiments/deepgemm_mega_moe_mhc_sim/`](experiments/deepgemm_mega_moe_mhc_sim/README.md) | `deepseek-ai/DeepGEMM` (`5081f851`): 1-sigma routing margin `E+sqrt(E)` selects `block_m=[16,64,192,240]` (`num_stages=[10,9,6,5]`) inside SM100's `232,448 B` SMEM; asymmetric `store_block_m_l1=24, l2=8` shrinks `smem_cd` at `M=240` from `20,480 B` to **`6,144 B`**; fused `sm100_mega_mhc` (`split_k=14`, 20-iter Sinkhorn-Knopp) cuts HBM traffic by **`40.09%` (`984.38 -> 589.75 MiB`)** and speeds up execution by **`1.92x`**. |
 | `vllm-v1-sparse-mla-hisparse-gdn-hybrid` | [中文](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md) · [English](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md) | [`experiments/vllm_v1_sparse_mla_hisparse_sim/`](experiments/vllm_v1_sparse_mla_hisparse_sim/README.md) | `vllm-project/vllm` (`5285b9b8`): Sparse MLA KV layouts compress `1,152 B/tok` (`274.50 GiB` for 61-layer `32x128K`) to `584 B` (`fp8_ds_mla`, `576B` TMA stride), `528 B` (`mxfp8_ds_mla`, `2.182x`), and SM100 `352 B` (`nvfp4_ds_mla`, **`83.88 GiB`, `3.273x`**, scale permutation `8*(s&3)+(s>>2)`); `HiSparse` hot cache (`4,096` rows, `26,148 B` SMEM) yields **`12.8x` HBM offload**; `SparseMLAIndexGroup._convert_once` reduces index conversions by **`61x`**. |
 
 ---
 
-## 3. Full Component Catalog (Phases 1 – 22)
+## 3. Full Component Catalog (Phases 1 – 23)
 
 ### A. GPU Hardware, SM90/SM100 Kernels & Numerical Formats
 - [GPU & HBM Architecture](docs/components/gpu-hbm.md) (`experiments/capacity_roofline/README.md`)
@@ -52,6 +56,7 @@ Every quantitative claim in this repository is backed by:
 - [DeepSeek MLA & FlashMLA V4.1 Paged Decode: SM90/SM100 2-CTA & `get_mla_metadata`](docs/components/deepseek-mla-flashmla-decode-kernels.md)
 - [FlashInfer JIT Multi-Level Cascade Paged KV Attention & Base-2 LSE Merge](docs/components/flashinfer-cascade-paged-kv-attention.md)
 - [DeepGEMM SM100 `MegaMoE` Fused Expert Pool & `MegaMHC` HyperConnection (`Sinkhorn-Knopp`)](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) ([中文](docs/components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md), [`experiments/deepgemm_mega_moe_mhc_sim/`](experiments/deepgemm_mega_moe_mhc_sim/README.md))
+- [FlashInfer Frost (`DeepSeek-V4.1`) SM100 Mixed `MXFP8/FP4` Non-Interleaved Decode & `Green Context` SM Split](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md) ([中文](docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md), [`experiments/flashinfer_ds41_mixed_decode_sim/`](experiments/flashinfer_ds41_mixed_decode_sim/README.md))
 
 ### B. Scale-Up / Scale-Out Fabrics, RDMA & NCCL Internals
 - [Interconnect & Network Stack Overview](docs/components/interconnect-network.md)
@@ -78,6 +83,7 @@ Every quantitative claim in this repository is backed by:
 - [Megatron-FSDP: NCCL Zero-Copy User Buffer (`nccl_ub`), `MaxPoolAllocator` & `HFSDP`](docs/components/megatron-fsdp-nccl-ub-double-buffer-hfsdp.md) (`experiments/megatron_fsdp_nccl_ub_hfsdp/README.md`)
 - [Megatron-Core MoE Aux-Loss-Free Routing (`expert_bias`) & `qb_dual_update`](docs/components/megatron-moe-auxfree-routing-token-drop.md)
 - [Distributed Muon Optimizer: 5-Step Quintic Newton-Schulz & `FSDP2 × TP`](docs/components/distributed-muon-newton-schulz-optimizer.md)
+- [PyTorch TorchTitan `FlexShard` (`BlockShard` / `Owned`) & GB200 NVLink72 `HybridEP`](docs/components/torchtitan-flexshard-distmuon-hybridep.en.md) ([中文](docs/components/torchtitan-flexshard-distmuon-hybridep.md), [`experiments/torchtitan_flexshard_hybridep_sim/`](experiments/torchtitan_flexshard_hybridep_sim/README.md))
 - [2D Hybrid Context Parallelism (`USP = Ulysses × ZigZag Ring-Attention`)](docs/components/context-parallel-usp-zigzag-ring.md) (`experiments/context_parallel_usp_zigzag/README.md`)
 - [Operator-Level Selective Activation Checkpointing (`SAC`) & NUMA PCIe Gen5 Offload](docs/components/selective-activation-checkpoint-offload.md) (`experiments/selective_activation_offload/README.md`)
 - [Large-Scale Reasoning RL Engine (`verl` Weight Resharding & vLLM `CuMemAllocator`)](docs/components/rl-post-training-engine.md) (`experiments/rl_rollout_resharding/README.md`)
@@ -89,6 +95,7 @@ Every quantitative claim in this repository is backed by:
 ### D. Online Inference, Disaggregated KV & Hybrid Architectures
 - [Inference SLOs, Continuous Batching & P/D Disaggregation](docs/components/inference-slo.md) (`experiments/inference_slo_scheduler/README.md`)
 - [vLLM V1 Sparse MLA (`FlashMLASparse`), `HiSparse` Tiered Offload & `GDN` Hybrid Checkpoints](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md) ([中文](docs/components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md), [`experiments/vllm_v1_sparse_mla_hisparse_sim/`](experiments/vllm_v1_sparse_mla_hisparse_sim/README.md))
+- [SGLang Zero-Reallocation PD Role Switching (`role_switch`), `PPConsensusStore` & Incremental Decode KV Offload](docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md) ([中文](docs/components/sglang-pd-role-switch-pp-consensus-offload.md), [`experiments/sglang_pd_role_switch_offload_sim/`](experiments/sglang_pd_role_switch_offload_sim/README.md))
 - [Long-Context Hybrid Attention: FlashMLA, Ring/Ulysses CP & Mamba Checkpoint Pool](docs/components/long-context-hybrid-attention.md) (`experiments/long_context_attention/README.md`)
 - [SGLang `HiRadixCache`, `MLAHostDedupBroadcaster` & Hybrid `TRAILING_PAGES` Intersection](docs/components/sglang-hiradix-cache-mla-dedup-prefetch.md) (`experiments/sglang_hiradix_cache_controller/README.md`)
 - [Prefill/Decode Disaggregation & Tiered KV Cache Routing (`Mooncake` / `NIXL` / `SGLang`)](docs/components/disaggregated-kv-routing.md) (`experiments/disaggregated_kv_routing/README.md`)
@@ -133,13 +140,16 @@ Every quantitative claim in this repository is backed by:
 All validation tools and experiments use the Python 3.12 standard library only:
 
 ```powershell
-# 1. Run the full unit test suite (293 unit tests)
+# 1. Run the full unit test suite (302 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and links
 python scripts\validate_research.py
 
-# 3. Verify Phase 22 deterministic experiments
+# 3. Verify Phase 23 & Phase 22 deterministic experiments
+python experiments\flashinfer_ds41_mixed_decode_sim\run.py --check
+python experiments\torchtitan_flexshard_hybridep_sim\run.py --check
+python experiments\sglang_pd_role_switch_offload_sim\run.py --check
 python experiments\nccl_gin_symmetric_sim\run.py --check
 python experiments\deepgemm_mega_moe_mhc_sim\run.py --check
 python experiments\vllm_v1_sparse_mla_hisparse_sim\run.py --check

@@ -1771,6 +1771,78 @@
         "ev-vllm-v1-gdn-checkpoint-planner-2026"
       ],
       "next_step": "已完成 vllm-project/vllm (commit 5285b9b8: flashmla_sparse.py, index_group.py, hisparse/runtime.py, gdn_attn.py) 源码核验、中英双语文档与离线仿真，证实 352B nvfp4_ds_mla 将 32x128K KV 从 274.50 GiB 压至 83.88 GiB (3.273x)，HiSparse 将热驻留压降 12.8x (4,096 rows, 26,148B SMEM) 且双缓冲将步耗时从 111.79 ms 压至 26.84 ms (4.16x)，IndexGroup 减少 61x 转换，GDN 检查点精确输出 cu_starts=[0,4,12,16] 与 rows=[0,1,7,14]。"
+    },
+    {
+      "id": "flashinfer-frost-ds41-mixed-mxfp8-fp4-decode",
+      "title": "在 Blackwell SM100 上运行 DeepSeek-V4.1 稀疏混合注意力解码时，为什么 FP4 (E2M1) 量化中常见的倒数乘法 x * (1.0 / scale) 会导致 4.15% 的半值边界发生 +50% 阶梯跳变？FlashInfer Frost (BlackwellV41MixedCacheDecode) 如何通过非交错 64-Token 页面布局（swa_mxfp8 528B + main_kv_fp4 288B）、tl.div_rn 精确舍入、16-Warp Warp-Specialization 与波次均衡 persistent_ctas 实现 3.0476x KV 压缩（省 67.19% 带宽）与 100% 尾波利用率，并配合 green_ctx.py 实现 (8, 8) SM 硬件分区？",
+      "component": "flashinfer-frost-ds41-mixed-mxfp8-fp4-decode",
+      "priority": 32,
+      "depends_on": [
+        "vllm-v1-sparse-mla-hisparse-gdn-hybrid",
+        "deepgemm-sm100-mega-moe-mhc-hyperconnection"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md",
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md",
+        "experiments/flashinfer_ds41_mixed_decode_sim/results.json",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-flashinfer-ds41-non-interleaved-cache-2026",
+        "ev-flashinfer-ds41-adaptive-ws-persistent-cta-2026",
+        "ev-exp-flashinfer-ds41-mixed-decode-2026"
+      ],
+      "next_step": "已完成 flashinfer-ai/flashinfer (commit 8dc1163f: deepseek_v41.py, decode.py, cache.py, green_ctx.py) 源码核验、中英双语文档与离线仿真，证实非交错 64-token 页面将 640-token 活跃 KV 从 655,360 B 压至 215,040 B (3.0476x, -67.19% 带宽)，tl.div_rn 消除 9/217 (4.15%) E2M1 半值跳变，persistent_ctas=80 将 B=160 双波次利用率从 54.05% 提至 100.0%，green_ctx 严格按 (8,8) 对齐为 [24,40,64] SMs。"
+    },
+    {
+      "id": "torchtitan-flexshard-distmuon-hybridep",
+      "title": "在 Kimi 等包含异构融合投影（如 wkv_a 交替拼接 512 行 KV 潜矩阵与 64 行 RoPE 键矩阵）的大模型分布式 Muon 训练中，为什么 FSDP 默认均分 Shard(0) 会切断矩阵边界并破坏 Newton-Schulz 正交化？PyTorch TorchTitan FlexShard (BlockShard / Owned / ComputeLayout) 如何通过周期性整块分片、BF16 compute_dtype 打包重分片流水实现零破坏与 1.716x 步加速，且 GB200 NVLink72 HybridEP 如何通过非阻塞容量因子省去 D2H 同步与 75% 显存？",
+      "component": "torchtitan-flexshard-distmuon-hybridep",
+      "priority": 32,
+      "depends_on": [
+        "megatron-fsdp-nccl-ub-double-buffer-hfsdp",
+        "deepgemm-sm100-mega-moe-mhc-hyperconnection"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.md",
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.en.md",
+        "experiments/torchtitan_flexshard_hybridep_sim/results.json",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-torchtitan-flexshard-blockshard-muon-2026",
+        "ev-torchtitan-hybridep-non-blocking-capacity-2026",
+        "ev-exp-torchtitan-flexshard-hybridep-2026"
+      ],
+      "next_step": "已完成 pytorch/torchtitan (commit 3b1714ab: flex_shard/*, deepep/hybridep.py) 源码核验、中英双语文档与离线仿真，证实 BlockShard(0, (512, 64)) 消除朴素 6-Rank 切分造成的 4 处矩阵边界断裂，BF16 compute_dtype 结合 4 桶流水将 DistMuon 步耗时从 8.7570 ms 压至 5.1033 ms (1.716x)，HybridEP 在 EP=72、cf=0.25 下将预分配缓冲从 16,132.50 MiB 压至 4,033.12 MiB (-75.0%) 且 P99 偏斜零丢包。"
+    },
+    {
+      "id": "sglang-pd-role-switch-pp-consensus-offload",
+      "title": "在 PD 分离推理集群遭遇潮汐流量切换与多级流水线并行（PP）协同时，如何避免 42 秒冷重启分配 KV 池、未认证 ZMQ 套接字的 pickle RCE 漏洞以及 Prefill 未对齐 Prompt 尾部在 HiCache 中的断洞？SGLang 如何通过 role_switch.py 原地角色热切换（180 ms）、PPConsensusStore MsgPack 定长数组复制与 DecodeKVCacheOffloadManager 增量对齐卸载解决上述问题？",
+      "component": "sglang-pd-role-switch-pp-consensus-offload",
+      "priority": 32,
+      "depends_on": [
+        "vllm-v1-sparse-mla-hisparse-gdn-hybrid",
+        "sglang-hiradix-cache-l2-l3-mla-dedup-prefetch"
+      ],
+      "status": "done",
+      "artifacts": [
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.md",
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md",
+        "experiments/sglang_pd_role_switch_offload_sim/results.json",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html",
+        "docs/reports/ai-infra-architect-workbench.html"
+      ],
+      "evidence_ids": [
+        "ev-sglang-pd-role-switch-atomic-headroom-2026",
+        "ev-sglang-pp-consensus-and-decode-offload-2026",
+        "ev-exp-sglang-pd-role-switch-offload-2026"
+      ],
+      "next_step": "已完成 sgl-project/sglang (commit df13d5dc: role_switch.py, pp_consensus_store.py, decode_kvcache_offload_manager.py, checksum.py) 源码核验、中英双语文档与离线仿真，证实零 KV 重分配角色切换提速 233.33x (42,000 ms -> 180 ms) 且在 CUDA Graph 显存余量不足时提前安全拦截 (safe_to_restore=True)，MsgPack 四元组编码缩减 72.31% 报文体积 (65 B -> 18 B)，Decode 增量卸载 100% 回收 38 个未对齐 Prompt 尾部 Token。"
     }
   ],
   "updated_at": "2026-10-20"

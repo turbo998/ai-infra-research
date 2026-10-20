@@ -3398,6 +3398,174 @@
       "verifier": "python experiments\\vllm_v1_sparse_mla_hisparse_sim\\run.py --check",
       "verified_at": "2026-10-20",
       "limitations": "Exact replication of vllm/v1/attention/backends/gdn_attn.py plan_flashinfer_checkpoints algorithm."
+    },
+    {
+      "id": "ev-flashinfer-ds41-non-interleaved-cache-2026",
+      "component": "gpu_kernels",
+      "claim": "In flashinfer-ai/flashinfer (commit 8dc1163f: deepseek_v41.py, cache.py), Frost DeepSeek-V4.1 SM100 decode uses non-interleaved 64-token page pools where all 64 quantized data rows precede all 64 scale rows: swa_mxfp8 has shape [pages,64,1,528] (512B E4M3 data + 16B E8M0 power-of-2 scales) and main_kv_fp4 has shape [pages,64,1,288] (256B E2M1x2 data + 32B E4M3 scales), using round-to-nearest division tl.div_rn(ga, scale) before cvt.rn.satfinite.e2m1x2.f32 to prevent reciprocal multiplication from perturbing E2M1 halfway values.",
+      "status": "implementation",
+      "source_ids": [
+        "flashinfer-deepseek-v41-api",
+        "flashinfer-deepseek-v41-cache"
+      ],
+      "artifacts": [
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md",
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Requires SM100 (10, 0) and page_size=64; inference-only without implicit QAT derivatives."
+    },
+    {
+      "id": "ev-flashinfer-ds41-adaptive-ws-persistent-cta-2026",
+      "component": "gpu_kernels",
+      "claim": "In flashinfer-ai/flashinfer (commit 8dc1163f: decode.py, green_ctx.py), deepseek_v41_decode selects Split-KV (split = min(desired, (128+ck)//64)) for batch <= 64, switches to split=1, dequant_warps=16, phase_chunks=2, use_ws=True for ck==512 and batch>=128, balances multi-wave grids via waves=ceil(B/sm_count) and persistent_ctas=ceil(B/waves), and enforces (8, 8) SM partitioning granularity in green_ctx.py on SM90/SM100.",
+      "status": "implementation",
+      "source_ids": [
+        "flashinfer-deepseek-v41-decode",
+        "flashinfer-green-ctx"
+      ],
+      "artifacts": [
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md",
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Single-token decode (seq_len_q=1) only; MTP and SM103 are outside initial scope."
+    },
+    {
+      "id": "ev-exp-flashinfer-ds41-mixed-decode-2026",
+      "component": "gpu_kernels",
+      "claim": "In deterministic simulator flashinfer_ds41_mixed_decode_sim, the 128 SWA (MXFP8) + 512 Global (FP4) hybrid cache shrinks 640-token active KV bytes read from 655,360 B (BF16) to 215,040 B (3.0476x compression, -67.19% bandwidth); reciprocal multiplication perturbs 9/217 (4.15%) E2M1 halfway boundaries vs 0 for tl.div_rn; and persistent_ctas=80 lifts B=160 2-wave grid utilization on 148 SMs from 54.05% to 100.0%.",
+      "status": "own-offline",
+      "source_ids": [
+        "flashinfer-deepseek-v41-decode",
+        "flashinfer-deepseek-v41-cache",
+        "flashinfer-green-ctx"
+      ],
+      "artifacts": [
+        "experiments/flashinfer_ds41_mixed_decode_sim/run.py",
+        "experiments/flashinfer_ds41_mixed_decode_sim/results.json",
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md",
+        "docs/components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md"
+      ],
+      "verifier": "python experiments\\flashinfer_ds41_mixed_decode_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic arithmetic and schedule planner simulation without physical SM100 hardware execution."
+    },
+    {
+      "id": "ev-torchtitan-flexshard-blockshard-muon-2026",
+      "component": "training_parallelism",
+      "claim": "In pytorch/torchtitan (commit 3b1714ab: flex_shard/README.md, optimizer_reshard.py, _optimizer_reshard_schedule.py), FlexShard decouples persistent DTensor parameter storage from temporary optimizer compute layouts via ComputeLayout, BlockShard(dim, block_sizes) (supporting periodic heterogeneous blocks such as Kimi wkv_a (512, 64)), Owned, and BucketConfig with compute_dtype=torch.bfloat16 to overlap packed redistribution with DistMuon Newton-Schulz orthogonalization.",
+      "status": "implementation",
+      "source_ids": [
+        "torchtitan-flexshard-readme",
+        "torchtitan-flexshard-optimizer-reshard",
+        "torchtitan-flexshard-schedule"
+      ],
+      "artifacts": [
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.md",
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.en.md",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "ComputeLayout is construction-time configuration and is not saved in optimizer state_dict."
+    },
+    {
+      "id": "ev-torchtitan-hybridep-non-blocking-capacity-2026",
+      "component": "training_parallelism",
+      "claim": "In pytorch/torchtitan (commit 3b1714ab: torchtitan/distributed/deepep/hybridep.py), HybridEP supports GB200 NVLink72 MoE training with a non-blocking dispatch mode that pre-allocates num_permuted_tokens = ceil(int(num_tokens * ep_size * min(num_local_experts, top_k) * capacity_factor), pad_multiple) without cudaStreamSynchronize D2H stalls, threads DispatchHandle as a torch.compile opaque reference type, and tracks overflow drops in sticky _over_budget.",
+      "status": "implementation",
+      "source_ids": [
+        "torchtitan-hybridep"
+      ],
+      "artifacts": [
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.md",
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.en.md",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Setting capacity_factor < 1.0 under extreme uncompensated routing skew drops tokens above the pre-allocated buffer."
+    },
+    {
+      "id": "ev-exp-torchtitan-flexshard-hybridep-2026",
+      "component": "training_parallelism",
+      "claim": "In deterministic simulator torchtitan_flexshard_hybridep_sim, BlockShard(0, (512, 64)) partitions Kimi wkv_a [4608, 4096] into 16 intact matrices (whereas naive 6-rank uniform splitting breaks 4 matrix boundaries); BF16 compute_dtype with 4-bucket overlap speeds up the DistMuon step 1.716x (8.7570 ms -> 5.1033 ms); and GB200 EP=72 HybridEP at capacity_factor=0.25 reduces buffer memory by 75.0% (16,132.50 MiB -> 4,033.12 MiB) with 0 drops at 1.35x P99 skew.",
+      "status": "own-offline",
+      "source_ids": [
+        "torchtitan-flexshard-optimizer-reshard",
+        "torchtitan-flexshard-schedule",
+        "torchtitan-hybridep"
+      ],
+      "artifacts": [
+        "experiments/torchtitan_flexshard_hybridep_sim/run.py",
+        "experiments/torchtitan_flexshard_hybridep_sim/results.json",
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.md",
+        "docs/components/torchtitan-flexshard-distmuon-hybridep.en.md"
+      ],
+      "verifier": "python experiments\\torchtitan_flexshard_hybridep_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Analytical pipeline and buffer sizing model without physical NVLink72 hardware execution."
+    },
+    {
+      "id": "ev-sglang-pd-role-switch-atomic-headroom-2026",
+      "component": "serving_systems",
+      "claim": "In sgl-project/sglang (commit df13d5dc: role_switch.py, checksum.py), handle_pd_role_switch flips an idle instance between prefill and decode without reallocating the role-independent token KV pool, validating 7 table-driven _reject_reason rules, is_fully_idle(), and available_graph_gb >= decode_cuda_graph_memory_gb before teardown (returning safe_to_restore=True on pre-check failure, and latching _pd_role_switch_unhealthy=True if teardown/rebuild raises).",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-disagg-role-switch",
+        "sglang-disagg-checksum"
+      ],
+      "artifacts": [
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.md",
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "Rejects instances with SGLANG_DISAGG_STAGING_BUFFER enabled or unsupported transfer backends."
+    },
+    {
+      "id": "ev-sglang-pp-consensus-and-decode-offload-2026",
+      "component": "serving_systems",
+      "claim": "In sgl-project/sglang (commit df13d5dc: pp_consensus_store.py, decode_kvcache_offload_manager.py), PPConsensusStore replicates PP rank metadata to PP0 over ZMQ PUSH/PULL using frozen array-like msgspec.Struct (_ReplicationOp) instead of pickle; DecodeKVCacheOffloadManager offloads incremental decode KV at offload_stride boundaries starting from prefill_offloaded_len = (len(origin_input_ids)//page_size)*page_size, recovering unaligned prompt tails and filtering UnifiedSWAKVPool sink pages via swa_indices > 0.",
+      "status": "implementation",
+      "source_ids": [
+        "sglang-disagg-pp-consensus-store",
+        "sglang-disagg-decode-kvcache-offload"
+      ],
+      "artifacts": [
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.md",
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md",
+        "docs/reports/ai-infra-phase23-benchmark-cards.html"
+      ],
+      "verifier": "python scripts\\validate_research.py",
+      "verified_at": "2026-10-20",
+      "limitations": "GPU KV slots remain allocated during decode and are freed at request finish in _release_finished_req."
+    },
+    {
+      "id": "ev-exp-sglang-pd-role-switch-offload-2026",
+      "component": "serving_systems",
+      "claim": "In deterministic simulator sglang_pd_role_switch_offload_sim, zero-KV-reallocation hot role switching (180 ms) achieves a 233.33x speedup over cold restart (42,000 ms); PPConsensusStore MsgPack 4-tuple encoding shrinks wire payload by 72.31% vs pickle (18 B vs 65 B); and DecodeKVCacheOffloadManager recovers all 38 unaligned prompt tail tokens (L_prompt=230, page=64, stride=128) across chunks [192, 320) and [320, 448) at steps 91 and 219.",
+      "status": "own-offline",
+      "source_ids": [
+        "sglang-disagg-role-switch",
+        "sglang-disagg-pp-consensus-store",
+        "sglang-disagg-decode-kvcache-offload"
+      ],
+      "artifacts": [
+        "experiments/sglang_pd_role_switch_offload_sim/run.py",
+        "experiments/sglang_pd_role_switch_offload_sim/results.json",
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.md",
+        "docs/components/sglang-pd-role-switch-pp-consensus-offload.en.md"
+      ],
+      "verifier": "python experiments\\sglang_pd_role_switch_offload_sim\\run.py --check",
+      "verified_at": "2026-10-20",
+      "limitations": "Deterministic state-machine, wire-framing, and chunking simulation."
     }
   ],
   "updated_at": "2026-10-20"
