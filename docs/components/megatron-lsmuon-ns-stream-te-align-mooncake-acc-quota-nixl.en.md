@@ -1,7 +1,7 @@
 # Megatron-LM LayerShardedMuon Streaming Batched Newton-Schulz & TE 256-Token Alignment, Mooncake Adaptive RDMA Congestion Control / Tenant Quota Policy, and NIXL Immediate `xfer.complete` Tracing
 
 > **中文版本**: [megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl.md](megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl.md)  
-> **Question ID**: `megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl` (`priority: 50`, Phase 41)  
+> **Question ID**: `megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl` (`priority: 51`, Phase 42)  
 > **Offline Experiment**: [`experiments/megatron_lsmuon_stream_mooncake_acc_quota_nixl/run.py`](../../experiments/megatron_lsmuon_stream_mooncake_acc_quota_nixl/run.py) · [`summary.json`](../../experiments/megatron_lsmuon_stream_mooncake_acc_quota_nixl/summary.json)  
 > **Evidence Tier**: `implementation` (primary source audit) + `own-offline` (deterministic Python stdlib model)
 

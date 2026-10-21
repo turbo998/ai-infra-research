@@ -1,7 +1,7 @@
 # Megatron-LM LayerShardedMuon 流式分批 Newton-Schulz 与 TE 256-Token 对齐、Mooncake 自适应 RDMA 拥塞控制 / 多租户配额及 NIXL 即时完成追踪
 
 > **English Version**: [megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl.en.md](megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl.en.md)  
-> **关联问题 ID**: `megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl` (`priority: 50`, Phase 41)  
+> **关联问题 ID**: `megatron-lsmuon-ns-stream-te-align-mooncake-acc-quota-nixl` (`priority: 51`, Phase 42)  
 > **关联离线实验**: [`experiments/megatron_lsmuon_stream_mooncake_acc_quota_nixl/run.py`](../../experiments/megatron_lsmuon_stream_mooncake_acc_quota_nixl/run.py) · [`summary.json`](../../experiments/megatron_lsmuon_stream_mooncake_acc_quota_nixl/summary.json)  
 > **证据等级**: `implementation` (第一手源码审计) + `own-offline` (Python 标准库确定性建模)
 

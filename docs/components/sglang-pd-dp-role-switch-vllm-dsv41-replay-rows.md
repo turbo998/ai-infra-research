@@ -1,7 +1,7 @@
 # SGLang PD 分离 DP / DP-Attention 在线角色切换两阶段预检与 vLLM DeepSeek-V4.1 Replay 目标 Token 计分行保留
 
 > **English Version**: [sglang-pd-dp-role-switch-vllm-dsv41-replay-rows.en.md](sglang-pd-dp-role-switch-vllm-dsv41-replay-rows.en.md)  
-> **关联问题 ID**: `sglang-pd-dp-role-switch-vllm-dsv41-replay-rows` (`priority: 50`, Phase 41)  
+> **关联问题 ID**: `sglang-pd-dp-role-switch-vllm-dsv41-replay-rows` (`priority: 51`, Phase 42)  
 > **关联离线实验**: [`experiments/sglang_pd_dp_role_switch_vllm_dsv41_replay/run.py`](../../experiments/sglang_pd_dp_role_switch_vllm_dsv41_replay/run.py) · [`summary.json`](../../experiments/sglang_pd_dp_role_switch_vllm_dsv41_replay/summary.json)  
 > **证据等级**: `implementation` (第一手源码审计) + `own-offline` (Python 标准库确定性建模)
 

@@ -1,7 +1,7 @@
 # SGLang PD Disaggregation Two-Phase Role Switch under DP / DP-Attention and vLLM DeepSeek-V4.1 Replay Target-Token Row Preservation
 
 > **中文版本**: [sglang-pd-dp-role-switch-vllm-dsv41-replay-rows.md](sglang-pd-dp-role-switch-vllm-dsv41-replay-rows.md)  
-> **Question ID**: `sglang-pd-dp-role-switch-vllm-dsv41-replay-rows` (`priority: 50`, Phase 41)  
+> **Question ID**: `sglang-pd-dp-role-switch-vllm-dsv41-replay-rows` (`priority: 51`, Phase 42)  
 > **Offline Experiment**: [`experiments/sglang_pd_dp_role_switch_vllm_dsv41_replay/run.py`](../../experiments/sglang_pd_dp_role_switch_vllm_dsv41_replay/run.py) · [`summary.json`](../../experiments/sglang_pd_dp_role_switch_vllm_dsv41_replay/summary.json)  
 > **Evidence Tier**: `implementation` (primary source audit) + `own-offline` (deterministic Python stdlib model)
 

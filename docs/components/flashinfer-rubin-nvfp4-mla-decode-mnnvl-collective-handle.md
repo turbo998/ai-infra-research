@@ -1,7 +1,7 @@
 # FlashInfer Cake Rubin (`sm_107a`) NVFP4 MLA Paged Decode 与 Collective MNNVL Handle 协商及确认
 
 > **English Version**: [flashinfer-rubin-nvfp4-mla-decode-mnnvl-collective-handle.en.md](flashinfer-rubin-nvfp4-mla-decode-mnnvl-collective-handle.en.md)  
-> **关联问题 ID**: `flashinfer-rubin-nvfp4-mla-decode-mnnvl-collective-handle` (`priority: 50`, Phase 41)  
+> **关联问题 ID**: `flashinfer-rubin-nvfp4-mla-decode-mnnvl-collective-handle` (`priority: 51`, Phase 42)  
 > **关联离线实验**: [`experiments/flashinfer_rubin_nvfp4_mla_mnnvl_handle/run.py`](../../experiments/flashinfer_rubin_nvfp4_mla_mnnvl_handle/run.py) · [`summary.json`](../../experiments/flashinfer_rubin_nvfp4_mla_mnnvl_handle/summary.json)  
 > **证据等级**: `implementation` (第一手源码审计) + `author-benchmark` (作者在 R200 `sm_107a` 实测，非本仓实测) + `own-offline` (Python 标准库确定性建模)
 
