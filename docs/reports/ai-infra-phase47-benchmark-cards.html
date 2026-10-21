@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+<title>Phase 47 AI Infra 7-Card 4:5 Benchmark Report — FlashInfer Cake FP4 AllReduce &amp; Kimi-K3 / TRT-LLM FLUX NVFP4+FP8 &amp; Gemma4 / Mooncake XPU dma-buf &amp; LMCache gRPC</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --subtle: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --blue-light: #3b82f6;
+    --slate-bar: #cbd5e1;
+    --green-bg: #f0fdf4;
+    --green-border: #86efac;
+    --green-ink: #166534;
+    --red-bg: #fef2f2;
+    --red-border: #fca5a5;
+    --red-ink: #991b1b;
+    --amber-bg: #fffbeb;
+    --amber-ink: #92400e;
+    --dark-box: #0f172a;
+    --dark-ink: #f8fafc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  .deck-header {
+    width: 900px;
+    color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 12px;
+  }
+  .deck-header h1 { font-size: 20px; font-weight: 700; }
+  .deck-header span { font-size: 13px; color: #94a3b8; }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--subtle);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .headline {
+    font-size: 26px;
+    line-height: 1.28;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 14px 0 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #1d4ed8, #0ea5e9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .sublead {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .box {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: #f8fafc;
+  }
+  .box h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--subtle);
+    margin-bottom: 8px;
+  }
+  .box p, .box li {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+  .box ul { padding-left: 16px; }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pill-act { background: var(--green-bg); color: var(--green-ink); border: 1px solid var(--green-border); }
+  .pill-confirm { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid #fcd34d; }
+  .pill-human { background: var(--red-bg); color: var(--red-ink); border: 1px solid var(--red-border); }
+  .pill-choice { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  .pill-score { background: #f3e8ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+  .pill-noul { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+  .bar-row { margin: 8px 0; }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .bar-track {
+    width: 100%;
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .bar-fill-primary { height: 100%; background: var(--blue-light); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate-bar); border-radius: 6px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin-bottom: 16px;
+  }
+  th, td {
+    border-bottom: 1px solid var(--border);
+    padding: 9px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--subtle);
+    background: #f1f5f9;
+  }
+  .code-dark {
+    background: var(--dark-box);
+    color: var(--dark-ink);
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.48;
+    padding: 16px;
+    border-radius: 12px;
+    overflow-x: auto;
+    white-space: pre;
+    margin-bottom: 12px;
+  }
+  .footer-callout {
+    background: var(--dark-box);
+    color: var(--dark-ink);
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .fit-good { background: var(--green-bg); border: 1px solid var(--green-border); color: var(--green-ink); }
+  .fit-bad { background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red-ink); }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>Phase 47 (`priority: 56`) · AI Infra 7-Card 4:5 Benchmark Deck (Bilingual EN / 中文)</h1>
+  <span>Sources S496–S511 · Claims C409–C420 · 2026-10-22</span>
+</div>
+
+<!-- CARD 1 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>1 / 7 · HANDS-ON · AI INFRA KERNELS &amp; DISTRIBUTED KV RUNTIME</span>
+      <span>PHASE 47 · PRIORITY 56</span>
+    </div>
+    <h2 class="headline">
+      <span class="accent">FLUX.1-dev 1.75x Step Speedup</span> on GB300, <span class="accent">3.38x LMCache gRPC Encode</span>, &amp; <span class="accent">80% TP4 Pass-2 L2 Cut</span> in Cake FP4 AllReduce
+    </h2>
+    <p class="sublead">
+      覆盖 16 个上游一手提交（2026-10-20 至 2026-10-21）：FlashInfer Cake FP4 AllReduce 在途 Scale 读取与 Kimi-K3 Round-2、TensorRT-LLM FLUX NVFP4+FP8 MHA 与 Gemma4 异构 KV、Mooncake XPU dma-buf 与 LMCache gRPC 批量编解码。
+    </p>
+    <div class="grid-3">
+      <div class="box">
+        <h3>SCENARIOS &amp; THRESHOLD BANDS</h3>
+        <ul>
+          <li><strong>Act automatically</strong>: Speedup &ge; 1.05x &amp; zero numerical/race regression</li>
+          <li><strong>Confirm</strong>: Hardware/driver guard required (e.g. XPU USM pool off)</li>
+          <li><strong>Send to a human</strong>: Unaligned/non-dedicated dma-buf or non-SM100f MMHA fallback</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>STRUCTURED INPUT COHORT</h3>
+        <ul>
+          <li><strong>FlashInfer</strong>: <code>#6875</code>, <code>#6904</code>, <code>#6928</code>, <code>#6927</code>, <code>#6902</code>, <code>#6621</code></li>
+          <li><strong>TRT-LLM / vLLM / SGLang</strong>: <code>#18396</code>, <code>#20387</code>, <code>#18547</code>, <code>#62244</code>, <code>#59703</code>, <code>#45453</code>, <code>#45439</code></li>
+          <li><strong>Mooncake / LMCache / Dynamo / NIXL / Megatron / TE</strong>: <code>#4378</code>, <code>#5935</code>, <code>#16742</code>, <code>#2479</code>, <code>#8353</code>, <code>#3680</code></li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>TOP QUANTITATIVE DECISIONS</h3>
+        <ul>
+          <li><span class="pill pill-act">Act automatically</span> TRT-LLM FLUX NVFP4+FP8: <strong>54.82 &rarr; 31.26 ms</strong> (1024&times;1024)</li>
+          <li><span class="pill pill-act">Act automatically</span> LMCache gRPC 8K encode: <strong>440 &rarr; 130 us</strong> (3.38x)</li>
+          <li><span class="pill pill-confirm">Confirm</span> Mooncake XPU dma-buf: requires <code>EnableDeviceUsmAllocationPool=0</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="footer-callout">
+    <span><strong>Provenance</strong>: <code>anonymized_reported</code> (upstream PR benchmarks) + <code>measured</code> (deterministic Python 3.12 stdlib verification)</span>
+    <span><code>independently_reproduced=false</code> (multi-node GB300 / B200 / GR100 / Arc Pro B60 hardware numbers from S496–S511)</span>
+  </div>
+</section>
+
+<!-- CARD 2 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>2 / 7 · SCENARIO: TRT-LLM FLUX.1-DEV NVFP4 + CUTEDSL FP8 MHA &amp; CAKE FP4 ALLREDUCE</span>
+      <span>SINGLE-CASE DEEP DIVE</span>
+    </div>
+    <h2 class="headline">
+      Fused DiT QK Norm+RoPE+FP8 Cuts Prep by <span class="accent">1.50x (457.4 &rarr; 305.2 us)</span> While CUTEDSL FMHA Beats FA4 by <span class="accent">17.0%</span>
+    </h2>
+    <div class="box" style="margin-bottom: 16px;">
+      <h3>INPUT QUOTE / HARDWARE TRACE CONTRACT</h3>
+      <p>"Combine static NVFP4 linear layers with static per-tensor FP8 CUTEDSL MHA on Blackwell GB300 (`sm_103a`); fuse GEMM+GELU epilogue (`115.096 -> 80.662 us`) and per-head QK RMSNorm+RoPE+E4M3 quantization (`457.424 -> 305.162 us`); overlap peer scale load in `cake_fp4_allreduce` TP2 (`18.15 -> 17.47 us`)."</p>
+    </div>
+    <div class="box" style="margin-bottom: 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <strong>Decision 1 · FLUX.1-dev 1024&times;1024 &amp; 2048&times;2048 Step Latency (GB300)</strong>
+        <div><span class="pill pill-score">score</span> <span class="pill pill-act">Act automatically</span></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>NVFP4 + CUTEDSL FP8 MHA (1024&times;1024: 31.26 ms / 2048&times;2048: 163.46 ms)</span><span>1.75x / 1.70x</span></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 57.0%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>BF16 Default Baseline (1024&times;1024: 54.82 ms / 2048&times;2048: 278.63 ms)</span><span>1.00x (0.000000 LPIPS &Delta;)</span></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 100%;"></div></div>
+      </div>
+    </div>
+    <div class="box" style="margin-bottom: 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <strong>Decision 2 · FlashInfer <code>cake_fp4_allreduce</code> TP4 Two-Shot Pass-2 L2 Traffic &amp; TP2 Overlap</strong>
+        <div><span class="pill pill-choice">choice</span> <span class="pill pill-act">Act automatically</span></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Pass-2 L2 Bytes per Step After Shared-Memory Value Reuse (16 B scales only)</span><span>-80.0% L2 Traffic</span></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 20.0%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Pass-2 L2 Bytes per Step Before (64 B values + 16 B scales = 80 B)</span><span>100.0% Baseline</span></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 100%;"></div></div>
+      </div>
+    </div>
+    <div class="box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <strong>Decision 3 · LMCache <code>proto_codec.py</code> Bulk C-Level <code>extend(value)</code> for 8K Token IDs</strong>
+        <div><span class="pill pill-score">score</span> <span class="pill pill-act">Act automatically</span></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Bulk C-Level Repeated Scalar Encode / Decode (130 us / 180 us)</span><span>3.38x / 2.50x</span></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 29.5%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Per-Element Python Loop Baseline (440 us / 450 us)</span><span>1.00x Baseline</span></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 100%;"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-callout">
+    <span><strong>Verification</strong>: <code>experiments/trtllm_flux_nvfp4_cutedsl_fp8_custom_mask_gemma4_vllm_sglang/summary.json</code></span>
+    <span>All bar widths scaled directly from sealed latency/byte ratios</span>
+  </div>
+</section>
+
+<!-- CARD 3 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>3 / 7 · WHAT I TESTED</span>
+      <span>FULL EVALUATION MATRIX (12 EMPIRICAL CLAIMS C409–C420)</span>
+    </div>
+    <h2 class="headline">
+      12 Verified Architectural Claims Across <span class="accent">16 Upstream Commits</span> With Explicit Failure-Mode Markers (<span style="color:#dc2626;">&#10005;</span>)
+    </h2>
+    <table>
+      <thead>
+        <tr>
+          <th>SCENARIO</th>
+          <th>QUESTION / TASK</th>
+          <th>MODEL / KERNEL ANSWER</th>
+          <th>ACTION</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>C409 · Cake FP4 AR</strong></td>
+          <td>TP2 in-flight scale + TP4 smem value reuse (<code>#6875</code>)</td>
+          <td><code>1.023x</code> NVFP4 geomean on SM107; <code>80%</code> Pass-2 L2 cut</td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C410 · Kimi-K3 AttnRes</strong></td>
+          <td>Round-2 vendorable package across 582 rows (<code>#6904</code>)</td>
+          <td><code>133</code> programs / <code>161</code> libs; GB300 <code>1.0888x</code> at <code>m5_k5</code></td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C411 · Cake DeepGEMM</strong></td>
+          <td>Batched proj swapped-AB M16 &amp; FP8 1D1D (<code>#6928/#6927</code>)</td>
+          <td>GB300 <code>T=2</code> <code>9.727 us</code> (-8.78%); FP8 1D1D <code>66.801 us</code></td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C412 · SM107 MoE-EP</strong></td>
+          <td>GR100 <code>sm_100f</code> fallback vs native <code>sm_107a</code> (<code>#6621</code>)</td>
+          <td>&#10005; <code>sm_100f</code> fails Mercury Validator on SM107 &rarr; fixed via <code>sm_107a</code></td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C413 · TRT-LLM FLUX</strong></td>
+          <td>NVFP4 linear + CUTEDSL FP8 MHA on GB300 (<code>#18396</code>)</td>
+          <td><code>1.75x</code> (1024&times;1024) &amp; <code>1.70x</code> (2048&times;2048); <code>0.0</code> LPIPS &Delta;</td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C414 · Gemma4 KV &amp; FP8</strong></td>
+          <td>Gemma4 <code>H512/KV1</code> + Triton FP8 custom mask (<code>#18547/#20387</code>)</td>
+          <td>&#10005; Native MMHA fails at <code>H512</code> &rarr; auto <code>KVCacheManagerV2</code> + FA2</td>
+          <td><span class="pill pill-confirm">Confirm</span></td>
+        </tr>
+        <tr>
+          <td><strong>C415 · vLLM XPU OSA</strong></td>
+          <td>8&times;Arc Pro B60 Eagle/OSA full graph + confidence (<code>#62244</code>)</td>
+          <td><code>+11.70%</code> TPS (<code>468.55 tok/s</code>) &amp; <code>-10.98%</code> E2E latency at K=7</td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C416 · SGLang TP KV</strong></td>
+          <td>Disagg decode local poll vs <code>ReduceOp.MAX</code> (<code>#45453/#45439</code>)</td>
+          <td>&#10005; Local poll diverges KV pool across TP &rarr; collective <code>ReduceOp.MAX</code></td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C417 · Mooncake XPU</strong></td>
+          <td>Intel XPU <code>dma-buf</code> RDMA &amp; pooled USM (<code>#4378/#4756/#4643</code>)</td>
+          <td>&#10005; Pooled USM aliases slab offset 0 &rarr; rejected via <code>kExportPooled</code></td>
+          <td><span class="pill pill-human">Send to a human</span></td>
+        </tr>
+        <tr>
+          <td><strong>C418 · LMCache gRPC</strong></td>
+          <td>Bulk repeated integer codec in <code>proto_codec.py</code> (<code>#5935</code>)</td>
+          <td><code>3.38x</code> encode / <code>2.50x</code> decode; <code>+102%</code> 32K lookup TPS</td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C419 · Dynamo &amp; NIXL</strong></td>
+          <td>FPM GIL release + killed session + NIXL exec ID (<code>#16742/#2479</code>)</td>
+          <td>&#10005; Holding GIL in <code>block_on</code> deadlocks callback &rarr; <code>allow_threads</code></td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>C420 · Megatron &amp; TE</strong></td>
+          <td>GDN prefill CUDA Graph &amp; TE JAX Triton mHC (<code>#8353/#3680</code>)</td>
+          <td>&#10005; Sinkhorn bwd smem RAW race &rarr; fixed via <code>tl.debug_barrier()</code></td>
+          <td><span class="pill pill-act">Act automatically</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="grid-2">
+      <div class="box">
+        <h3>THRESHOLD GATING SUMMARY</h3>
+        <p><strong>10 / 12</strong> claims qualify for immediate deployment (<code>Act automatically</code>); <strong>2 / 12</strong> require hardware/env gating (Gemma4 non-SM100f FA2 backend selection and Intel Level Zero <code>EnableDeviceUsmAllocationPool=0</code>).</p>
+      </div>
+      <div class="box">
+        <h3>FAILURE MODE ANALYSIS (&#10005; MARKERS)</h3>
+        <p>Six upstream bugs were caught and neutralized: GR100 <code>sm_100f</code> validator failure, Gemma4 <code>H512</code> MMHA crash, SGLang TP KV pool divergence, XPU pooled <code>dma-buf</code> aliasing, Dynamo FPM GIL deadlock, and TE Triton mHC shared-memory RAW race.</p>
+      </div>
+    </div>
+  </div>
+  <div class="footer-callout">
+    <span><strong>Matrix Coverage</strong>: 100% of Phase 47 claims (C409–C420) backed by deterministic <code>--check</code> assertions</span>
+    <span>7 new unit tests in <code>tests/test_phase47_experiments.py</code></span>
+  </div>
+</section>
+
+<!-- CARD 4 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>4 / 7 · UNDER THE HOOD</span>
+      <span>PROTOCOL &amp; SCORING MECHANICS (BIT-LEVEL &amp; KERNEL CONTRACTS)</span>
+    </div>
+    <h2 class="headline">
+      Exact Bit-Level Contracts: <span class="accent">FP4 <code>-0.0</code> Nibble Detector</span>, Overflow-Safe <span class="accent"><code>dma-buf</code> Range Math</span>, &amp; Sinkhorn Barrier
+    </h2>
+    <p class="sublead">
+      以下展示从上游 CUDA / C++ / Triton 源码提取并在标准库复现脚本中逐位验证的核心算子契约：
+    </p>
+    <div class="code-dark">// [1] FlashInfer #6875: Cake FP4 AllReduce TP2 In-Flight Scale &amp; -0.0 (0x8) Nibble Detector
+unsigned int rsw[1];
+asm volatile("ld.volatile.global.u32 %0, [%1];" : "=r"(rsw[0]) : "l"(os_rs + m_row) : "memory");
+// Sweep j0 == 0 wire packets; detect any nibble == 0x8 (-0.0 sentinel) across 8 nibbles in u32:
+uint32_t vpend = (w &amp; ~((w &amp; 0x77777777u) + 0x77777777u)) &amp; 0x88888888u;
+if (j0 == 0 &amp;&amp; __any_sync(0xFFFFFFFF, rsw[0] == 0x80000000u)) {
+    do { asm volatile("ld.volatile.global.u32 %0, [%1];" : "=r"(rsw[0]) : "l"(os_rs + m_row) : "memory"); }
+    while (rsw[0] == 0x80000000u);
+}</div>
+    <div style="text-align:center;font-weight:800;color:var(--blue);margin:4px 0;">&darr; Deterministic Verifier Flow (&lt;answer&gt;) &darr;</div>
+    <div class="code-dark">// [2] Mooncake #4378: Overflow-Safe Intel XPU dma-buf Slice &amp; Pooled USM Guard
+bool hasDedicatedDmabuf = (base_ptr == ptr &amp;&amp; export_size == length); // rejects pooled USM slab
+bool validateDmabufRange(uint64_t base, uint64_t exp_off, uint64_t exp_sz, uint64_t reg, uint64_t sz, uint64_t* fd_off) {
+    if (reg &lt; base || sz &gt; exp_sz) return false;
+    uint64_t slice_off = reg - base;
+    if (slice_off &gt; exp_sz - sz || exp_off &gt; UINT64_MAX - slice_off) return false;
+    *fd_off = exp_off + slice_off;
+    return true; // passed to ibv_reg_dmabuf_mr(pd, *fd_off, sz, reg, dmabuf_fd, access)
+}
+
+// [3] TransformerEngine #3680: Triton mHC Sinkhorn Backward Shared-Memory Transpose Barrier
+mat = tl.load(tile_base + r_idx * n + c_idx, mask=mask, other=0.0).to(tl.float32)
+tl.debug_barrier() // Prevents fast warps from overwriting (c_idx*n + r_idx) before slow warps load!
+tl.store(tile_base + c_idx * n + r_idx, mat, mask=mask)</div>
+  </div>
+  <div class="footer-callout">
+    <span><strong>Verifier Status</strong>: <code>fp4_wire_values_pending()</code> &amp; <code>validate_dmabuf_range()</code> verified in Python 3.12</span>
+    <span>Zero external dependencies · 100% deterministic</span>
+  </div>
+</section>
+
+<!-- CARD 5 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>5 / 7 · ROBUSTNESS CHECK</span>
+      <span>PERTURBATION, BOUNDARY &amp; MULTI-RANK CONSISTENCY</span>
+    </div>
+    <h2 class="headline">
+      Boundary Perturbations Confirm <span class="accent">Zero Overflow / Deadlock</span> Across XPU <code>dma-buf</code>, SGLang TP KV, &amp; NIXL Reposts
+    </h2>
+    <p class="sublead">
+      对 6 类边界扰动（64 位地址溢出、Attention-TP 异步完成偏斜、NIXL 传输重发拒绝、Triton FP8 极值溢出、Batched Projection 形状切换、Dynamo 预终止会话）进行对比验证：
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>QUESTION / ANSWER</th>
+          <th>ORIGINAL / NOMINAL</th>
+          <th>REVERSED / PERTURBED</th>
+          <th>CHANGE (PTS / DELTA)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Mooncake XPU <code>validateDmabufRange</code></strong></td>
+          <td>Valid slice <code>+0x40000</code> &rarr; <code>fd_off = 0x42000</code></td>
+          <td>Perturbed <code>export_offset = UINT64_MAX - 0x100</code></td>
+          <td><strong>Rejected safely</strong> (0 wraparound)</td>
+        </tr>
+        <tr>
+          <td><strong>SGLang Disagg Decode <code>pop_transferred</code></strong></td>
+          <td>All 4 TP ranks done at step 5 &rarr; <code>max = 0</code> (free)</td>
+          <td>Rank 1 done at step 4 while ranks 0,2,3 in flight</td>
+          <td><strong><code>ReduceOp.MAX = 1</code></strong> (holds all 4 ranks)</td>
+        </tr>
+        <tr>
+          <td><strong>NIXL <code>nixl.xfer_execution</code> Counter</strong></td>
+          <td>Initial <code>postXferReq</code> accepted &rarr; <code>exec_id = 1</code></td>
+          <td>Repost during <code>NIXL_IN_PROG</code> then accepted repost</td>
+          <td><strong><code>[1, None, 2]</code></strong> (no gap on reject)</td>
+        </tr>
+        <tr>
+          <td><strong>TRT-LLM Triton Custom-Mask FP8 Out</strong></td>
+          <td>In-range <code>acc = 224.0, scale = 2.0</code> &rarr; <code>112.0</code></td>
+          <td>Perturbed <code>acc = &plusmn;1000.0, scale = 2.0</code> (&plusmn;500.0)</td>
+          <td><strong>Clamped to <code>&plusmn;448.0</code></strong> (0 NaN)</td>
+        </tr>
+        <tr>
+          <td><strong>FlashInfer Batched Proj Tile (GB300)</strong></td>
+          <td>Standard <code>M=64</code> tile at <code>T=2</code>: <code>10.663 us</code></td>
+          <td>Swapped-AB <code>M=16</code> tile at <code>T=2</code>: <code>9.727 us</code></td>
+          <td><strong>-0.936 us (-8.78%)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Dynamo Stateful Session Lifecycle</strong></td>
+          <td>Normal <code>open_session &rarr; close_session</code></td>
+          <td>Reversed: <code>kill_session</code> arrives before <code>open_session</code></td>
+          <td><strong>Returns <code>SessionKilled</code></strong> (0 leak)</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="box">
+      <h3>KEY ROBUSTNESS TAKEAWAY</h3>
+      <p>Every perturbation either preserves exact numerical equivalence (<code>0.000000</code> LPIPS delta on FLUX, <code>0.0</code> GSM8K strict-match delta on vLLM XPU OSA, finite <code>&plusmn;448.0</code> E4M3 saturation) or fails closed at the boundary before corrupting RDMA memory regions or TP page allocators.</p>
+    </div>
+  </div>
+  <div class="footer-callout">
+    <span><strong>Perturbation Suite</strong>: Verified in <code>tests/test_phase47_experiments.py</code></span>
+    <span>All 6 boundary checks pass deterministically</span>
+  </div>
+</section>
+
+<!-- CARD 6 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>6 / 7 · LATENCY</span>
+      <span>BATCHING &amp; SCALING LATENCY ACROSS LOAD TIERS</span>
+    </div>
+    <h2 class="headline">
+      Paired Latency Scaling Across <span class="accent">GB300 / B200 / SM107</span> Kernels and <span class="accent">LMCache gRPC</span> Control Plane
+    </h2>
+    <p class="sublead">
+      水平成对条形图对比优化路径（<code>#3B82F6</code>）与基线路径（<code>#CBD5E1</code>）在不同负载档位下的实测中位延迟：
+    </p>
+    <div class="box" style="margin-bottom: 12px;">
+      <h3>1. TRT-LLM FLUX.1-dev Diffusion Step Latency on GB300 (ms, lower is better)</h3>
+      <div class="bar-row">
+        <div class="bar-label"><span>1024&times;1024 · Static NVFP4 + CUTEDSL FP8 MHA (Optimized)</span><strong>31.26 ms (-43.0%)</strong></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 11.2%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>1024&times;1024 · BF16 Default (Baseline)</span><strong>54.82 ms</strong></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 19.7%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>2048&times;2048 · Static NVFP4 + CUTEDSL FP8 MHA (Optimized)</span><strong>163.46 ms (-41.3%)</strong></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 58.7%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>2048&times;2048 · BF16 Default (Baseline)</span><strong>278.63 ms</strong></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 100.0%;"></div></div>
+      </div>
+    </div>
+    <div class="box" style="margin-bottom: 12px;">
+      <h3>2. TRT-LLM FLUX Micro-Fusions &amp; LMCache 8K Token gRPC Codec (us, lower is better)</h3>
+      <div class="bar-row">
+        <div class="bar-label"><span>FLUX Fused DiT QK Norm+RoPE+FP8 Quant (Optimized)</span><strong>305.16 us (1.50x)</strong></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 66.7%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>FLUX Unfused QK Norm+RoPE + 3&times;Static Quant (Baseline)</span><strong>457.42 us</strong></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 100.0%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>LMCache 8K Token Repeated-Scalar Encode (Optimized C-extend)</span><strong>130.00 us (3.38x)</strong></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 28.4%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>LMCache 8K Token Repeated-Scalar Encode (Baseline Python loop)</span><strong>440.00 us</strong></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 96.2%;"></div></div>
+      </div>
+    </div>
+    <div class="box">
+      <h3>3. FlashInfer Cake AllReduce &amp; Kimi-K3 Attention-Residual (us, lower is better)</h3>
+      <div class="bar-row">
+        <div class="bar-label"><span>Cake FP4 AllReduce TP4 16K&times;6144 NVFP4 on SM107 (Optimized smem reuse)</span><strong>92.49 us (1.0265x)</strong></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 97.4%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Cake FP4 AllReduce TP4 16K&times;6144 NVFP4 on SM107 (Baseline L2 re-read)</span><strong>94.94 us</strong></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 100.0%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Cake Kimi-K3 Attn-Res <code>serving_m5_k5</code> on GB300 (Round-2)</span><strong>4.096 us (1.0888x)</strong></div>
+        <div class="bar-track"><div class="bar-fill-primary" style="width: 4.3%;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Cake Kimi-K3 Attn-Res <code>serving_m5_k5</code> on GB300 (Round-1)</span><strong>4.448 us</strong></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width: 4.7%;"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-callout">
+    <span><strong>Latency Notes</strong>: CUDA Event median latencies on GB300 / SM107 (`#18396`, `#6875`, `#6904`) &amp; microbenchmark medians (`#5935`)</span>
+    <span>Primary `#3B82F6` vs Baseline `#CBD5E1`</span>
+  </div>
+</section>
+
+<!-- CARD 7 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>7 / 7 · MY TAKE</span>
+      <span>GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+    </div>
+    <h2 class="headline">
+      Production Guidance: Adopt <span class="accent">Fused NVFP4+FP8 DiT</span> &amp; <span class="accent">C-Level Protobuf Extend</span> Now; Gate XPU <code>dma-buf</code> on Unpooled USM
+    </h2>
+    <div class="grid-2" style="margin-top: 14px;">
+      <div class="box fit-good">
+        <h3>&#9989; GOOD FIT (RECOMMENDED)</h3>
+        <ul>
+          <li><strong>Blackwell (`sm_100a`/`sm_103a`) Diffusion Serving</strong>: Enabling static NVFP4 linear + CUTEDSL per-tensor FP8 MHA cuts FLUX.1-dev latency by 41–43% with zero LPIPS loss.</li>
+          <li><strong>TP2 / TP4 Low-Latency AllReduce + RMSNorm</strong>: In-flight peer scale overlap and pass-2 shared-memory value reuse deliver free 1.01–1.038x gains across B200/GB300/GR100.</li>
+          <li><strong>Disaggregated Attention-TP Decode (SGLang) &amp; Multi-Process KV Cache (LMCache)</strong>: Collective <code>ReduceOp.MAX</code> KV release prevents TP pool divergence, while C-level <code>extend()</code> doubles 32K lookup throughput.</li>
+          <li><strong>GDN Hybrid Models in Megatron-LM</strong>: Single-update GDP (`num_householder=1`) with in-place padded chunk descriptors unlocks full prefill+decode CUDA Graphs.</li>
+        </ul>
+      </div>
+      <div class="box fit-bad">
+        <h3>&#9940; NOT FOR (AVOID / GATE CAREFULLY)</h3>
+        <ul>
+          <li><strong>Default Pooled Level Zero USM on Intel XPU RDMA</strong>: Passing pooled USM sub-allocations to <code>ibv_reg_dmabuf_mr</code> aliases slab offset 0; always require <code>EnableDeviceUsmAllocationPool=0</code>.</li>
+          <li><strong>Native TRT-LLM MMHA on Gemma4 Global Layers</strong>: Non-<code>SM100f</code> GPUs cannot run native MMHA at <code>head_dim=512, GQA=16</code>; route to <code>FLASHINFER</code> FA2 with <code>KVCacheManagerV2</code>.</li>
+          <li><strong>Using <code>sm_100f</code> Family Fallback for CUTLASS Kernels on GR100 (`SM107`)</strong>: Fails driver Mercury Validator unless compiled with native <code>sm_107a</code> guards.</li>
+          <li><strong>Holding Python GIL Across Rust Tokio <code>block_on</code></strong>: Deadlocks whenever background tasks invoke Python callbacks; always wrap in <code>py.allow_threads</code>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="box" style="margin-top: 12px;">
+      <h3>ARCHITECTURAL SYNTHESIS (中文总结)</h3>
+      <p>Phase 47 揭示了 AI Infra 演进的三条主线：（1）<strong>寄存器与共享内存级算子内融合</strong>（Cake FP4 AllReduce Pass-2 共享内存 Value 复用削减 80% L2 流量、TRT-LLM FLUX QK Norm+RoPE+FP8 单 Warp/Head 融合提速 1.50x）；（2）<strong>跨层/跨设备契约显式化</strong>（Gemma4 256/512 异构头维自动启用 KVCacheManagerV2、GR100 原生 <code>sm_107a</code> 编译、Intel XPU 拦截池化 USM <code>dma-buf</code>）；（3）<strong>控制面与混合运行时零开销化</strong>（LMCache C 层 Protobuf 批量 <code>extend</code> 提速 3.38x、Dynamo <code>py.allow_threads</code> 消除跨运行时 GIL 死锁、SGLang <code>ReduceOp.MAX</code> 保证跨 TP Rank KV 释放一致性）。</p>
+    </div>
+  </div>
+  <div class="footer-callout">
+    <span><strong>Readiness &amp; License</strong>: Apache-2.0 / MIT upstream commits · Verified by <code>validate_research.py</code> &amp; <code>392/392</code> unit tests</span>
+    <span>CSP: <code>default-src 'none'; style-src 'unsafe-inline'</code></span>
+  </div>
+</section>
+
+</body>
+</html>
