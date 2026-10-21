@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+<title>Phase 46 AI Infra 7-Card 4:5 Benchmark Report — FlashInfer Cake / TRT-LLM &amp; vLLM &amp; SGLang / NIXL &amp; Mooncake &amp; Dynamo</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --subtle: #64748b;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --blue-light: #3b82f6;
+    --slate-bar: #cbd5e1;
+    --green-bg: #f0fdf4;
+    --green-border: #86efac;
+    --green-ink: #166534;
+    --red-bg: #fef2f2;
+    --red-border: #fca5a5;
+    --red-ink: #991b1b;
+    --amber-bg: #fffbeb;
+    --amber-ink: #92400e;
+    --dark-box: #0f172a;
+    --dark-ink: #f8fafc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  .deck-header {
+    width: 900px;
+    color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 12px;
+  }
+  .deck-header h1 { font-size: 20px; font-weight: 700; }
+  .deck-header span { font-size: 13px; color: #94a3b8; }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--subtle);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .headline {
+    font-size: 26px;
+    line-height: 1.28;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 14px 0 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #1d4ed8, #0ea5e9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .sublead {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 10px 0;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 10px 0;
+  }
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: #f8fafc;
+  }
+  .panel h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .panel p, .panel li {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .panel ul { padding-left: 16px; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pill {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #e0e7ff;
+    color: #1e40af;
+  }
+  .pill.act { background: #dcfce7; color: #166534; }
+  .pill.confirm { background: #fef3c7; color: #92400e; }
+  .pill.human { background: #fee2e2; color: #991b1b; }
+  .pill.type { background: #0f172a; color: #f8fafc; }
+  .quote-box {
+    border-left: 4px solid var(--blue);
+    background: #f1f5f9;
+    padding: 12px 16px;
+    border-radius: 0 10px 10px 0;
+    font-size: 13px;
+    color: var(--ink);
+    margin: 8px 0 14px;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 12px; margin: 8px 0; }
+  .decision-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: #ffffff;
+  }
+  .decision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .bar-track {
+    width: 100%;
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 6px 0;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--blue-light);
+    border-radius: 999px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 8px 0;
+  }
+  th, td {
+    border-bottom: 1px solid var(--border);
+    padding: 9px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--subtle);
+    background: #f8fafc;
+  }
+  .code-dark {
+    background: var(--dark-box);
+    color: var(--dark-ink);
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 11.8px;
+    line-height: 1.5;
+    padding: 14px 16px;
+    border-radius: 12px;
+    white-space: pre-wrap;
+    margin: 8px 0;
+  }
+  .arrow-down {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--blue);
+    margin: 2px 0;
+  }
+  .lat-group { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
+  .lat-row {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    background: #f8fafc;
+  }
+  .lat-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .lat-bar-wrap { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .lat-bar-primary { height: 12px; background: #3b82f6; border-radius: 4px; }
+  .lat-bar-base { height: 12px; background: #cbd5e1; border-radius: 4px; }
+  .lat-val { font-size: 11.5px; font-weight: 700; color: var(--ink); min-width: 120px; }
+  .fit-good {
+    border: 1px solid var(--green-border);
+    background: var(--green-bg);
+    color: var(--green-ink);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .fit-bad {
+    border: 1px solid var(--red-border);
+    background: var(--red-bg);
+    color: var(--red-ink);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .fit-good h3, .fit-bad h3 { font-size: 15px; margin-bottom: 10px; }
+  .fit-good li, .fit-bad li { font-size: 12.5px; line-height: 1.55; margin-bottom: 6px; margin-left: 16px; }
+  .footer-dark {
+    background: var(--dark-box);
+    color: var(--dark-ink);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .card-foot {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--subtle);
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>Phase 46 (`priority: 55`) · AI Infra 7-Card 4:5 Benchmark Deck (Bilingual ZH/EN)</h1>
+  <span>2026-10-22 · 23 First-Hand Commits · 3 Deterministic Experiments</span>
+</div>
+
+<!-- CARD 1 -->
+<section class="card" id="card-1">
+  <div>
+    <div class="card-top">
+      <span>1 / 7 · HANDS-ON · PHASE 46 KERNEL &amp; SYSTEMS COHORT</span>
+      <span>PROVENANCE: MEASURED UPSTREAM + DETERMINISTIC REPRO</span>
+    </div>
+    <h2 class="headline">
+      Cake MSA Hopper <span class="accent">3.24x</span> &amp; Blackwell Union Prefill <span class="accent">3.30x</span>, SwapsMmaAb <span class="accent">4.0x</span> Mask Guard, and NIXL GPUNetIO READ <span class="accent">23.03 GB/s (+109.9%)</span>
+    </h2>
+    <p class="sublead">
+      Phase 46 (`priority: 55`) 覆盖 FlashInfer Cake (`SM90a`/`SM100a`/`SM103a`)、TensorRT-LLM / vLLM / SGLang 调度与跨平台运行时，以及 NIXL / Mooncake / Dynamo / TorchTitan / TransformerEngine 23 个一手上游提交的确定性复现。
+    </p>
+
+    <div class="grid-3">
+      <div class="panel">
+        <h3>1. Scenarios &amp; Threshold Bands</h3>
+        <ul>
+          <li><strong>Topic 1 (FlashInfer Cake)</strong>: SM100a `_cg2` &amp; 16-CTA/peer push (`#6865`, `#6761`), 89-prog Hopper MSA (`#6252`), Heavy-First Union Prefill (`#6725`), 17-prog VSA (`#6877`), `tcgen05` TMEM &amp; CTA-pair drain (`#6778`, `#6767`, `#6820`, `#6763`).</li>
+          <li><strong>Topic 2 (TRT-LLM / vLLM / SGLang)</strong>: Chunked MM scheduling (`#19884`), `SwapsMmaAb` mask sizing (`#20223`), KVCM2 progressive host (`#19650`), `libgomp` fork (`#62884`), ROCm iHC (`#58509`), XPU KV (`#40861`).</li>
+          <li><strong>Topic 3 (NIXL / Mooncake / Dynamo)</strong>: GPUNetIO READ coalesce (`#2176`), UCX CPU Proxy EP (`#2327`, `#2328`), `TentRequest` 48B ABI (`#4732`), Planner warmup (`#16843`), TE JAX EP (`#3639`).</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>2. Structured Input Contract</h3>
+        <ul>
+          <li><strong>TMEM Lane Base</strong>: <code>(tid &amp; 96) &lt;&lt; 16</code> maps warpgroup warps <code>0..3</code> to lanes <code>0..31..127</code>.</li>
+          <li><strong>SwapsMmaAb Capacity</strong>: <code>max(KeepsMmaAb, SwapsMmaAb)</code> over <code>stepKv ∈ {128,256}</code>, <code>tileSizeQ ∈ {8,16,32}</code>.</li>
+          <li><strong>GPUNetIO READ Coalesce</strong>: <code>canCoalesceRead(prev, next, 8 MiB)</code> across <code>DOCA_XFER_REQ_SIZE=512</code>.</li>
+          <li><strong>KVCM2 Host Tier</strong>: <code>(2 MiB) &lt;&lt; min(4, log2(Q/1GiB))</code> (`2..32 MiB`).</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>3. Top Verified Decisions</h3>
+        <div class="pill-row">
+          <span class="pill act">Act automatically: 128-lane TMEM &amp; 50-kernel drain</span>
+          <span class="pill act">Act automatically: 2048x WQE reduction (4096→2)</span>
+          <span class="pill act">Act automatically: 4.0x SwapsMmaAb mask buffer</span>
+          <span class="pill confirm">Confirm: 16-CTA/peer push for M=512/1024</span>
+          <span class="pill human">Send to a human: Legacy 40B Rust TentRequest FFI</span>
+        </div>
+        <p style="margin-top:10px;">
+          All 3 Python 3.12 standard-library verification suites (`--check`) pass with 100% deterministic reproducibility.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-dark">
+    <strong>Hardware &amp; Provenance Callout</strong>: Upstream measurements from NVIDIA H100 80GB (`sm_90a`), B200 (`sm_100a`), B300/GB300 (`sm_103a`), 2×H20 Bonded RoCE GPUNetIO, and 16×H100 / 16×GB200 / 8×GB300 UCX EP clusters (`independently_reproduced=false` for multi-GPU hardware timings; `measured` for deterministic algorithmic invariants).
+  </div>
+  <div class="card-foot">
+    <span> turbo998/ai-infra-research · Phase 46 (`priority: 55`)</span>
+    <span>Card 1 of 7</span>
+  </div>
+</section>
+
+<!-- CARD 2 -->
+<section class="card" id="card-2">
+  <div>
+    <div class="card-top">
+      <span>2 / 7 · SCENARIO: BLACKWELL TCGEN05 &amp; NIXL GPUNETIO INVARIANTS</span>
+      <span>SINGLE-CASE DEEP DIVE</span>
+    </div>
+    <h2 class="headline">
+      Fixing 3 Silent Corruption Bugs (<span class="accent">128-Lane TMEM</span>, <span class="accent">50 CTA-Pair Drains</span>, <span class="accent">4.0x Tree Mask</span>) While Doubling GPUNetIO READ Bandwidth
+    </h2>
+    <div class="quote-box">
+      <strong>Input Workload Trace</strong>: (A) Blackwell 128-thread warpgroup reading `tcgen05` TMEM accumulators in `cake_dsa_train` (`#6778`) &amp; `cake_alpha_moe` (`#6767`) + `cta_group::2` multicast `mma_done` release in `cake_minimax_h3` / `cake_dense_projection_gemm` (`#6820`, `#6763`); (B) TRT-LLM Blackwell Eagle/Medusa tree mask (`B=64, Q=64, H_q/kv=8`, `#20223`); (C) NIXL GPUNetIO `4,096 × 4 KiB` (`16 MiB`) contiguous VRAM READ (`#2176`).
+    </div>
+
+    <div class="decision-stack">
+      <div class="decision-card">
+        <div class="decision-header">
+          <strong>Decision 1 · Blackwell `tcgen05.ld` Warpgroup Quarter &amp; `cta_group::2` Multicast Drain (`#6778`, `#6767`, `#6820`, `#6763`)</strong>
+          <div>
+            <span class="pill type">score</span>
+            <span class="pill act">Act automatically · 100.0%</span>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:#475569;">
+          Injects `tmem_lane_base = (tid &amp; 96) &lt;&lt; 16` across 80 `cake_dsa_train` loads (expanding unique TMEM lane coverage from 32 to 128 lanes), enforces warp-uniform `(consumer_warp * 32) &lt;&lt; 16` across 66 `cake_alpha_moe` NVFP4 epilogue sites, and drains the final `min(STAGES, K_steps)` `mma_done` barriers across 50 `cta_group::2` kernels.
+        </p>
+        <div class="bar-track"><div class="bar-fill" style="width: 100%;"></div></div>
+      </div>
+
+      <div class="decision-card">
+        <div class="decision-header">
+          <strong>Decision 2 · TRT-LLM Blackwell `SwapsMmaAb` Custom Mask Upper Bound (`#20223`) &amp; KVCM2 Progressive Commit (`#19650`)</strong>
+          <div>
+            <span class="pill type">choice</span>
+            <span class="pill act">Act automatically · 100.0%</span>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:#475569;">
+          Allocates `2,097,152` `uint32` elements (`8 MiB`) instead of the `KeepsMmaAb`-only `524,288` (`2 MiB`, `4.0x` expansion) for `B=64, Q=64, H_q/kv=8`, and cuts KVCM2 synchronous startup commit at `64 GiB` quota from `64 GiB` to `32 MiB` (`2048x` reduction) via `MAP_NORESERVE`.
+        </p>
+        <div class="bar-track"><div class="bar-fill" style="width: 100%;"></div></div>
+      </div>
+
+      <div class="decision-card">
+        <div class="decision-header">
+          <strong>Decision 3 · NIXL GPUNetIO Cross-Chunk READ Coalescing (`#2176`) &amp; Mooncake 48-Byte `TentRequest` ABI (`#4732`)</strong>
+          <div>
+            <span class="pill type">noul</span>
+            <span class="pill act">Act automatically · 100.0%</span>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:#475569;">
+          Merges contiguous same-key READ descriptors across the 512-input boundary up to `8 MiB`, collapsing `4,096 × 4 KiB` READs from `4,096` WQEs (`8` ring entries) to `2 × 8 MiB` WQEs (`2` ring entries, `23.03 GB/s`, `726 us` p99), while aligning Rust `TentRequest` from `40` to `48` bytes.
+        </p>
+        <div class="bar-track"><div class="bar-fill" style="width: 100%;"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card-foot">
+    <span>Scenario Deep Dive · Zero Unverified Approximations</span>
+    <span>Card 2 of 7</span>
+  </div>
+</section>
+
+<!-- CARD 3 -->
+<section class="card" id="card-3">
+  <div>
+    <div class="card-top">
+      <span>3 / 7 · WHAT I TESTED</span>
+      <span>FULL EVALUATION MATRIX (9 UPSTREAM PRODUCTION SUBSYSTEMS)</span>
+    </div>
+    <h2 class="headline">
+      9/9 Production Subsystems Verified: Legacy Configurations Miss <span class="accent">4/9</span> Correctness &amp; Admission Gates (`✕`)
+    </h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>SCENARIO</th>
+          <th>QUESTION / TASK</th>
+          <th>MODEL / UPSTREAM ANSWER</th>
+          <th>ACTION</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. FlashInfer AGM</strong><br/><code>#6865</code>, <code>#6761</code></td>
+          <td>Route SM100a ws2 `1024x2048` &amp; scale SM100a/SM103a SM-push CTAs</td>
+          <td>Switch ws2 to `_cg2` (`95.4 us`, `1.065x`); launch 16 CTAs/peer on ws4 (`48` CTAs, `1.086x`) &amp; ws8 (`112` CTAs, `1.034x`)</td>
+          <td><span class="pill act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>2. Cake MSA/VSA</strong><br/><code>#6252</code>, <code>#6725</code>, <code>#6877</code></td>
+          <td>Accelerate Hopper MSA/VSA &amp; Blackwell GQA union prefill</td>
+          <td>89 Hopper MSA programs (`3.237x` Top-K); Heavy-First GQA-folded union (`3.300x` GB300 paged); 17 Hopper VSA programs (`1.252x`)</td>
+          <td><span class="pill act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>3. PTX `tcgen05`</strong><br/><code>#6778</code>, <code>#6767</code>, <code>#6820</code></td>
+          <td>Audit warpgroup TMEM lane base &amp; 2-CTA `mma_done` barrier drain</td>
+          <td>✕ Legacy reads only 32/128 lanes &amp; leaves 7/4 stages undrained; Fixed covers 128 lanes + drains all 50 `cta_group::2` kernels</td>
+          <td><span class="pill human">Send to a human (Legacy ✕)</span></td>
+        </tr>
+        <tr>
+          <td><strong>4. TRT-LLM MM Chunk</strong><br/><code>#19884</code></td>
+          <td>Schedule 4-image (`4096`-tok) request under `encoder_max_num_tokens=2048`</td>
+          <td>✕ Legacy whole-request check rejects (`4096 &gt; 2048`); `ContextChunk` + prefix reuse charges `2048` then `1024` tokens</td>
+          <td><span class="pill act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>5. Spec-Dec Mask</strong><br/><code>#20223</code></td>
+          <td>Size Blackwell Eagle/Medusa tree mask for `B=64, Q=64, H_q/kv=8`</td>
+          <td>✕ Legacy `KeepsMmaAb` allocates `524,288` `uint32` (`2 MiB`); `SwapsMmaAb` needs `2,097,152` (`8 MiB`, `4.0x`)</td>
+          <td><span class="pill human">Send to a human (Legacy ✕)</span></td>
+        </tr>
+        <tr>
+          <td><strong>6. KVCM2 &amp; vLLM</strong><br/><code>#19650</code>, <code>#62884</code>, <code>#58509</code></td>
+          <td>Eliminate 64 GiB startup stall, post-fork OpenMP hang &amp; ROCm iHC traffic</td>
+          <td>`MAP_NORESERVE` `32 MiB` initial commit (`2048x`); `omp_pause_resource_all(2)` before `fork`; ROCm fused iHC (`128→80 KiB/tok`, `1.60x`)</td>
+          <td><span class="pill act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>7. SGLang XPU / MoE</strong><br/><code>#40861</code>, <code>#43363</code>, <code>#45437</code></td>
+          <td>Transfer disaggregated KV on Intel XPU &amp; tune CUTLASS MoE prefill</td>
+          <td>Detect XPU via `ptr &amp; (1&lt;&lt;63)`, stage on host with `_await_handles()`, cap prefill `tune_max_num_tokens` at `8192`</td>
+          <td><span class="pill confirm">Confirm</span></td>
+        </tr>
+        <tr>
+          <td><strong>8. NIXL GPUNetIO &amp; UCX</strong><br/><code>#2176</code>, <code>#2327</code>, <code>#2328</code></td>
+          <td>Coalesce `4096×4KiB` READs &amp; scale UCX CPU proxy EP</td>
+          <td>Cross-chunk 8 MiB merge cuts WQEs `4096→2` (`23.03 GB/s`, `726 us` p99); 8ch/8thr CPU proxy hits `82.97/80.23 GB/s` on GB200</td>
+          <td><span class="pill act">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>9. Mooncake / Dynamo / TE</strong><br/><code>#4732</code>, <code>#4688</code>, <code>#16843</code>, <code>#3639</code></td>
+          <td>Verify Rust `TentRequest` FFI, btime sort, Planner warmup &amp; JAX EP handle</td>
+          <td>✕ Legacy Rust `TentRequest` is 40B vs 48B C ABI; Fixed 48B + `TimeKey` snapshot + HTTP 409 warmup + `ncclEpImportHandle`</td>
+          <td><span class="pill human">Send to a human (Legacy ✕)</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Threshold Gating Summary</h3>
+        <p>Deterministic `--check` gates enforce exact bit-level and capacity invariants: `128` TMEM lanes, `0` undrained `mma_done` barriers, `2,097,152` `uint32` mask capacity, `2` GPUNetIO WQEs, and `48`-byte `TentRequest` layout.</p>
+      </div>
+      <div class="panel">
+        <h3>Failure Analysis (`✕` Markers)</h3>
+        <p>Legacy paths fail silently on 4 fronts: 3/4 TMEM accumulator loss + follower CTA barrier race, whole-request multimodal starvation, `4.0x` `SwapsMmaAb` mask buffer overrun, and 8-byte/element Rust-to-C FFI drift.</p>
+      </div>
+    </div>
+  </div>
+  <div class="card-foot">
+    <span>Full Evaluation Matrix · 23 Upstream Commits</span>
+    <span>Card 3 of 7</span>
+  </div>
+</section>
+
+<!-- CARD 4 -->
+<section class="card" id="card-4">
+  <div>
+    <div class="card-top">
+      <span>4 / 7 · UNDER THE HOOD</span>
+      <span>PROTOCOL &amp; SCORING MECHANICS</span>
+    </div>
+    <h2 class="headline">
+      Bit-Exact Hardware &amp; Runtime Contracts: From <span class="accent">`tcgen05` TMEM / `SwapsMmaAb`</span> to <span class="accent">Cross-Chunk GPUNetIO READs</span>
+    </h2>
+
+    <div class="code-dark">// [INPUT CONTRACT] 1. Blackwell PTX tcgen05 TMEM Addressing &amp; 2-CTA Multicast Drain
+// flashinfer#6778 (cake_dsa_train) &amp; flashinfer#6767 (cake_alpha_moe) &amp; flashinfer#6820/#6763
+uint32_t const tmem_lane_base = (tid &amp; 96u) &lt;&lt; 16;          // Warps 0..3 -&gt; Lanes 0, 32, 64, 96
+uint32_t const warp_uniform_base = (consumer_warp * 32u) &lt;&lt; 16; // Uniform across all 32 lanes in warp
+// producer_tail before follower CTA exit in cta_group::2 (multicast::cluster mask 0b11):
+int const tail_stages = min(STAGES, total_k_steps);
+for (int i = 0; i &lt; tail_stages; ++i) {
+  int const s = (total_k_steps - tail_stages + i) % STAGES;
+  mbarrier_wait(mma_done + s, mma_phase[s]);
+}
+
+// [INPUT CONTRACT] 2. TRT-LLM SwapsMmaAb Tree Mask &amp; NIXL Cross-Chunk READ Coalescing
+// TensorRT-LLM#20223 (prepareCustomMask.cu) &amp; nixl#2176 (gpunetio_backend.cpp)
+int32_t const tileSizeQ = ceilDiv(tileSizeQRaw, 32) * 32; // {8,16,32} -&gt; 32
+int32_t const numTilesQ = seqLenQ * ceilDiv(numHeadsQPerKv, tileSizeQ * numInstsQ);
+bool mergeable = (op == NIXL_READ &amp;&amp; staged.num &gt; 0) &amp;&amp;
+                 canCoalesceRead(prev, next, min(8ULL &lt;&lt; 20, DOCA_MAX_XFER));
+if (chunk_desc_count &gt;= DOCA_XFER_REQ_SIZE &amp;&amp; !mergeable) break; // Extend run across 512 boundary!</div>
+
+    <div class="arrow-down">↓</div>
+
+    <div class="code-dark">// [DETERMINISTIC VERIFIER FLOW (&lt;answer&gt;)]
+&lt;answer&gt;
+1. flashinfer_cake_allgather_hopper_msa_vsa_tmem_race/run.py --check:
+   - dsa_train_tmem_lane_quarters: buggy_unique_lanes=32 -&gt; fixed_unique_lanes=128 (80 load sites)
+   - alpha_moe_nvfp4_warp_uniform_tmem: all_warps_uniform=True (66 epilogue sites)
+   - cta_pair_multicast_stage_drain: minimax_h3 (7 stages) + dense_proj (49 kernels, 4 stages) -&gt; safe_exit=True
+2. trtllm_mm_chunk_spec_mask_kvcm2_vllm_ihc_sglang_xpu/run.py --check:
+   - blackwell_spec_dec_mask_sizing (B=64, Q=64, H=8): legacy=524,288 uint32 -&gt; new=2,097,152 uint32 (4.0x)
+   - kvcm2_progressive_host_tier (64 GiB): startup_synchronous_commit=32 MiB (2048.0x reduction)
+   - vllm_rocm_hy_v4_ihc_fusion: unfused=131,072 B/tok -&gt; fused=81,920 B/tok (1.60x reduction)
+3. nixl_gpunetio_read_ucx_proxy_mooncake_tent_dynamo_planner_torchtitan_te/run.py --check:
+   - gpunetio_read_coalescing (4096x4KiB): WQEs 4096 -&gt; 8 (within) -&gt; 2 (combined, 2048x); rings 8 -&gt; 2 (4x)
+   - mooncake_tent_request_abi: sizeof(TentRequest) 40B -&gt; 48B (priority@40, transport_hint@44)
+&lt;/answer&gt;</div>
+  </div>
+  <div class="card-foot">
+    <span>Protocol &amp; Verifier Mechanics · Python 3.12 Standard Library</span>
+    <span>Card 4 of 7</span>
+  </div>
+</section>
+
+<!-- CARD 5 -->
+<section class="card" id="card-5">
+  <div>
+    <div class="card-top">
+      <span>5 / 7 · ROBUSTNESS CHECK</span>
+      <span>PERTURBATION, BOUNDARY DISCONTINUITY &amp; CONCURRENCY CONSISTENCY</span>
+    </div>
+    <h2 class="headline">
+      Zero Boundary Overruns Under <span class="accent">513-Descriptor Discontinuity</span>, Concurrent File Deletion &amp; XLA `lax.scan` Relocation
+    </h2>
+    <p class="sublead">
+      Testing edge-case perturbations across hardware ring boundaries, shared-hash LRU caches, filesystem races, and compiler buffer relocations.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>QUESTION / ANSWER INVARIANT</th>
+          <th>ORIGINAL / NOMINAL</th>
+          <th>PERTURBED / EDGE CASE</th>
+          <th>CHANGE (PTS / DELTA)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. GPUNetIO 512-Input Boundary</strong><br/>(`nixl#2176`)</td>
+          <td>4,096 contiguous 4 KiB READs → `2 × 8 MiB` WQEs across `2` ring entries</td>
+          <td>513 descriptors with address jump at index `512` → Entry 0: `[2 MiB]`, Entry 1: `[4 KiB]` (no overrun)</td>
+          <td><strong>0 corrupt bytes</strong><br/>(`1,440/1,440` H20 checks pass)</td>
+        </tr>
+        <tr>
+          <td><strong>2. Cake MSA Heavy-First Order</strong><br/>(`flashinfer#6725`)</td>
+          <td>FIFO super-tile order `[12,64,18,96,8,80,24,112]` across 4 SMs → max SM load `192` tiles</td>
+          <td>Sorted descending `[112,96,80,64,24,18,12,8]` → max SM load `100` KV tiles</td>
+          <td><strong>-47.9% max SM load</strong><br/>(`1.92x` tail reduction)</td>
+        </tr>
+        <tr>
+          <td><strong>3. Shared Multimodal Hash LRU</strong><br/>(`TensorRT-LLM#19884`)</td>
+          <td>`hash_B` (`ref_count=2`) + `hash_C` (`ref_count=1`), single release query `["hash_B","hash_C"]` → `4 MiB`</td>
+          <td>Both `hash_B` instances released in chunk `["hash_B","hash_B","hash_C"]` → `8 MiB` releasable</td>
+          <td><strong>0 false evictions</strong><br/>(`count &gt;= ref_count` exact)</td>
+        </tr>
+        <tr>
+          <td><strong>4. UCX CPU Proxy Thread Scaling</strong><br/>(`nixl#2327`)</td>
+          <td>`8` channels × `16` peers with `8` threads → `1` channel (`16` rings) per thread (`128` total)</td>
+          <td>`4` channels × `16` peers with `8` threads → peer-strided `stride=2` (`8` rings/thread, `64` total)</td>
+          <td><strong>100% ring coverage</strong><br/>(0 lock contention)</td>
+        </tr>
+        <tr>
+          <td><strong>5. Mooncake Eviction Btime Sort</strong><br/>(`Mooncake#4688`)</td>
+          <td>All files exist during `std::sort` → sorted ascending by `(tv_sec, tv_nsec)`</td>
+          <td>File vanishes mid-scan (`has_btime=False`) → `TimeKey{True, 0, 0}` sorts deterministically last</td>
+          <td><strong>0 strict-weak-order UB</strong><br/>(Snapshot before sort)</td>
+        </tr>
+        <tr>
+          <td><strong>6. Dynamo Planner Revision &amp; Trace</strong><br/>(`dynamo#16843`)</td>
+          <td>Matching `expected_revision` + valid `≤ 16 MiB` (`≤ 4096` steps) trace → atomic predictor swap</td>
+          <td>Stale revision or NaN/negative forecast → rejected with HTTP `409` / `ValueError` before install</td>
+          <td><strong>100% tick continuity</strong><br/>(Live `kv_hit_rate` kept)</td>
+        </tr>
+        <tr>
+          <td><strong>7. TE JAX `lax.scan` &amp; Frozen LoRA</strong><br/>(`TE#3639`, `torchtitan#5389`)</td>
+          <td>Static buffer &amp; trainable decoder → `run_backward=True`, valid `ncclEpHandle_t`</td>
+          <td>XLA `lax.scan` relocates `handle_mem`; frozen decoder + `lm_head` LoRA → `ncclEpImportHandle` &amp; `run_backward=True`</td>
+          <td><strong>0 dangling handles</strong><br/><strong>100% head grad flow</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-foot">
+    <span>Robustness &amp; Perturbation Matrix · Verified by Unit Tests</span>
+    <span>Card 5 of 7</span>
+  </div>
+</section>
+
+<!-- CARD 6 -->
+<section class="card" id="card-6">
+  <div>
+    <div class="card-top">
+      <span>6 / 7 · LATENCY &amp; THROUGHPUT SCALING</span>
+      <span>PAIRED HARDWARE &amp; RUNTIME BENCHMARKS</span>
+    </div>
+    <h2 class="headline">
+      Up to <span class="accent">3.30x</span> Sparse Attention Speedup, <span class="accent">52.1%</span> Lower GPUNetIO p99 Latency, and <span class="accent">104.7%</span> CPU-Proxy EP Parity
+    </h2>
+    <p class="sublead">
+      Primary / Optimized Path (<strong>#3B82F6 Blue</strong>) vs Baseline Path (<strong>#CBD5E1 Slate</strong>) across 6 measured hardware &amp; runtime tiers.
+    </p>
+
+    <div class="lat-group">
+      <div class="lat-row">
+        <div class="lat-label">
+          <span>1. FlashInfer Cake MSA Hopper Top-K (`topk_nvp_forced_h4_tiles512_tq256`, H100 80GB, `#6252`) — Lower is better</span>
+          <span>3.237x Speedup</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-primary" style="width: 24.7%;"></div>
+          <span class="lat-val">4.256 us (Cake SM90)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-base" style="width: 80.0%;"></div>
+          <span class="lat-val">13.775 us (fi_sm90 CuTe DSL)</span>
+        </div>
+      </div>
+
+      <div class="lat-row">
+        <div class="lat-label">
+          <span>2. FlashInfer Cake VSA Hopper (`h1-m512-n8192-k48` &amp; `h8-m128-n32768-k64`, H100 80GB, `#6877`) — Lower is better</span>
+          <span>1.252x / 1.213x Speedup</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-primary" style="width: 65.9%;"></div>
+          <span class="lat-val">28.952 us (Ragged Queue + 4-Box V^T)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-base" style="width: 80.0%;"></div>
+          <span class="lat-val">35.136 us (Baseline SM90 VSA)</span>
+        </div>
+      </div>
+
+      <div class="lat-row">
+        <div class="lat-label">
+          <span>3. FlashInfer Cake All-Gather Matmul (`ws4 512x2560 K=8192` B200 `#6865` &amp; `ws2 1024x2048` `#6865`) — Lower is better</span>
+          <span>1.086x / 1.065x Speedup</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-primary" style="width: 71.3%;"></div>
+          <span class="lat-val">113.7 us (16-CTA/peer Push, 48 CTAs)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-base" style="width: 80.0%;"></div>
+          <span class="lat-val">127.5 us (8-CTA/peer Push, 24 CTAs)</span>
+        </div>
+      </div>
+
+      <div class="lat-row">
+        <div class="lat-label">
+          <span>4. NIXL GPUNetIO `4,096 × 4 KiB` (`16 MiB`) VRAM READ p99 Latency (2×H20 Bonded RoCE, `#2176`) — Lower is better</span>
+          <span>-52.11% p99 Latency (10.97 → 23.03 GB/s)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-primary" style="width: 38.3%;"></div>
+          <span class="lat-val">726 us p99 (Commit B: 2×8MiB WQEs)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-base" style="width: 80.0%;"></div>
+          <span class="lat-val">1516 us p99 (Main: 4096×4KiB WQEs)</span>
+        </div>
+      </div>
+
+      <div class="lat-row">
+        <div class="lat-label">
+          <span>5. NIXL UCX CPU Proxy 8ch/8thr vs Direct GPU RDMA 8ch Combine Bandwidth (16×GB200, `#2328`) — Higher is better</span>
+          <span>104.7% of Direct GPU RDMA</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-primary" style="width: 80.2%;"></div>
+          <span class="lat-val">80.23 GB/s (CPU Proxy 8ch/8thr)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-base" style="width: 76.6%;"></div>
+          <span class="lat-val">76.62 GB/s (Direct GPU RDMA 8ch)</span>
+        </div>
+      </div>
+
+      <div class="lat-row">
+        <div class="lat-label">
+          <span>6. vLLM ROCm HY-V4 Fused `triton_ihc_post_pre_rms_norm` HBM Traffic per Token (`#58509`) — Lower is better</span>
+          <span>1.60x Bandwidth Reduction (3 → 1 Kernel)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-primary" style="width: 50.0%;"></div>
+          <span class="lat-val">80 KiB / token (Fused Post+Pre+RMSNorm)</span>
+        </div>
+        <div class="lat-bar-wrap">
+          <div class="lat-bar-base" style="width: 80.0%;"></div>
+          <span class="lat-val">128 KiB / token (3 Unfused Kernels)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card-foot">
+    <span>Paired Scaling Latency &amp; Bandwidth · Zero Fabricated Coordinates</span>
+    <span>Card 6 of 7</span>
+  </div>
+</section>
+
+<!-- CARD 7 -->
+<section class="card" id="card-7">
+  <div>
+    <div class="card-top">
+      <span>7 / 7 · MY TAKE</span>
+      <span>ARCHITECTURAL FIT, LIMITATIONS &amp; PRODUCTION READINESS</span>
+    </div>
+    <h2 class="headline">
+      Adopt <span class="accent">Cross-Boundary Coalescing, Progressive Host Commit &amp; `tcgen05` Guards</span> Immediately; Respect Kernel &amp; Cap Boundaries
+    </h2>
+
+    <div class="grid-2">
+      <div class="fit-good">
+        <h3>✅ Good Fit (When to Adopt Immediately)</h3>
+        <ul>
+          <li><strong>Blackwell `tcgen05` &amp; Spec-Dec Kernels</strong>: Mandatory adoption of `(tid &amp; 96) &lt;&lt; 16` warpgroup quarter offsets, warp-uniform epilogue `taddr`, `cta_group::2` `producer_tail` stage drain, and `getCustomMaskCapacityUpperBound` (`SwapsMmaAb` 4.0x capacity).</li>
+          <li><strong>Long-Context Multimodal &amp; Large Host KV Tiers</strong>: TRT-LLM chunk-scoped multimodal budgeting (`#19884`) + KVCM2 `MAP_NORESERVE` progressive commit (`#19650`, `2048x` smaller startup stall at `64 GiB`).</li>
+          <li><strong>Contiguous RDMA KV Reads &amp; Multi-Node MoE EP</strong>: NIXL GPUNetIO `8 MiB` cross-chunk READ coalescing (`2.10x` bandwidth on 2×H20) and 8ch/8thr UCX CPU Proxy EP (`82.97/80.23 GB/s` on 16×GB200).</li>
+          <li><strong>Multi-Process Fork, ROCm HY-V4 &amp; Intel XPU</strong>: `omp_pause_resource_all(2)` pre-fork hook, fused `triton_ihc_post_pre_rms_norm`, and XPU bit-63 host-staging KV transfer.</li>
+        </ul>
+      </div>
+
+      <div class="fit-bad">
+        <h3>⛔ Not For (Known Boundaries &amp; Non-Targets)</h3>
+        <ul>
+          <li><strong>Fragmented or Multi-Key GPUNetIO Transfers</strong>: `canCoalesceRead` only merges contiguous same-`lkey`/`rkey` READ ranges up to `8 MiB`; fragmented scatter-gather or WRITE descriptors intentionally keep existing boundaries.</li>
+          <li><strong>Oversubscribed Push CTAs on Small Shapes</strong>: 16-CTA/peer SM-push (`48` or `112` CTAs) is tuned for `M=512` (TP4) and `M=1024` (TP8) `K=8192`; tiny decode tokens (`M &le; 64`) should stay on copy-engine or 8-CTA routes.</li>
+          <li><strong>Unauthenticated Public Exposure of `/engine/planner`</strong>: Dynamo's runtime reconfiguration endpoint (`DYN_SYSTEM_PORT`) adds no application-level auth and must be restricted to trusted cluster management networks.</li>
+          <li><strong>8-Byte `int64` Packed MLA Copy on Intel XPU</strong>: `copy_mla_rows_into_pack` corrupts non-8B-aligned slices on XPU and must remain disabled in favor of per-token RDMA transfers.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-dark" style="margin-top: 14px;">
+      <strong>Readiness, License &amp; Provenance Summary</strong><br/>
+      • <strong>License Compliance</strong>: Apache-2.0 (`flashinfer`, `TensorRT-LLM`, `vllm`, `sglang`, `nixl`, `Mooncake`, `dynamo`, `TransformerEngine`) &amp; BSD-3-Clause (`torchtitan`).<br/>
+      • <strong>Verification Artifacts</strong>: `experiments/flashinfer_cake_allgather_hopper_msa_vsa_tmem_race/summary.json`, `experiments/trtllm_mm_chunk_spec_mask_kvcm2_vllm_ihc_sglang_xpu/summary.json`, `experiments/nixl_gpunetio_read_ucx_proxy_mooncake_tent_dynamo_planner_torchtitan_te/summary.json`, and `tests/test_phase46_experiments.py`.
+    </div>
+  </div>
+  <div class="card-foot">
+    <span>Phase 46 (`priority: 55`) · Self-Contained CSP-Locked 7-Card Deck</span>
+    <span>Card 7 of 7</span>
+  </div>
+</section>
+
+</body>
+</html>
