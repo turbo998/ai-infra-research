@@ -1,0 +1,6 @@
+# SGLang Custom-AllReduce & Linkers, vLLM MRV2 2D Staged Writes & RDNA3 W4A8, TRT-LLM Compact Stop Words & QuACK SwiGLU (Phase 86)
+
+Deterministic Python 3.12 stdlib model auditing 10 primary commits across `sgl-project/sglang`, `vllm-project/vllm`, and `NVIDIA/TensorRT-LLM`:
+- **SGLang PR #34543 (`6563312`), PR #46047 (`8ef5dec`), PR #40595 (`f82af9c`)**: Oversized deterministic all-reduce unreg slicing (`0` leaked IPC handles), diffusion per-step host sync/upload elimination (`50x` fewer H2D uploads), and out-of-tree `UnifiedCacheLinker` factory.
+- **vLLM PR #63613 (`237d2ff`), PR #63495 (`0765565`), PR #62698 (`fc2b6ab`), PR #61791 (`c0f9fff`), PR #60413 (`c0ba7e0`)**: `vllm bench forward` PCP support, Clef metadata single-H2D coalescing (`7 -> 1`), MRV2 2D chunked `_apply_write_kernel` (`1024`-element chunks), UMBP hybrid Mamba+Attention connector, and RDNA3/RDNA3.5 `v_dot4_i32_iu8` MXFP4 W4A8 GEMV.
+- **TensorRT-LLM PR #20679 (`b96ba43`), PR #19773 (`90d4dcb`)**: Per-request compact stop-word allocation (`3338.8x` memory reduction under outlier stop-word workloads) and SM100/SM103 QuACK `gemm_act` BF16 gate/up SwiGLU epilogue fusion (`448 MiB` intermediate traffic saved at `M=8192, I=14336`).
