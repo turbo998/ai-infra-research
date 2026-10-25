@@ -9841,6 +9841,64 @@
         "src-verl-megatron-topk-distill-quant-align-cp-layout-2026",
         "src-mooncake-tent-cambricon-mlu-async-host-device-copy-2026"
       ]
+    },
+    {
+      "id": "ev-flashinfer-nvfp4-mla-decode-moe-allreduce-union-softmax-minimax-h3-2026",
+      "component": "flashinfer-nvfp4-mla-decode-moe-allreduce-union-softmax-shared-tile-minimax-h3",
+      "status": "own-offline",
+      "artifacts": [
+        "docs/components/flashinfer-nvfp4-mla-decode-moe-allreduce-union-softmax-shared-tile-minimax-h3.md",
+        "docs/components/flashinfer-nvfp4-mla-decode-moe-allreduce-union-softmax-shared-tile-minimax-h3.en.md",
+        "experiments/flashinfer_nvfp4_mla_decode_moe_allreduce_union_softmax_shared_tile_minimax_h3/run.py",
+        "experiments/flashinfer_nvfp4_mla_decode_moe_allreduce_union_softmax_shared_tile_minimax_h3/summary.json"
+      ],
+      "verifier": "python experiments/flashinfer_nvfp4_mla_decode_moe_allreduce_union_softmax_shared_tile_minimax_h3/run.py --check",
+      "verified_at": "2026-10-26",
+      "limitations": "Offline stdlib verification of FlashInfer NVFP4 MLA decode byte layout and speedups, one-shot vs two-shot MoE AllReduce Union NVLink traffic ratios, shared-tile cluster softmax occupancy, and MiniMax-H3 256x448 tile geometry.",
+      "claim": "FlashInfer (`923ff1321520`, `7888b26bf6b5`, `ce1758b8b38f`, `fd0e4fdd96b0`, `b8ed186df31b`, `53ecbde224f4`) accelerates SM100/SM103 NVFP4 MLA decode (`288 B/token` 512-wide latent K/V) via native `E2M1 x E4M3` `mul.rn.bf16x2` dequantization by `1.046x-1.124x` on GB300 (`3.55 TB/s` at `B=32, 64K`) and `1.029x-1.074x` on B200; introduces latency-ordered one-shot (`lat_b4`, `lat_late_b5`) and two-shot (`two_shot_b4`, `two_shot_b5`) schedules for fused MoE finalize + all-reduce + residual + RMSNorm (`H=7168`) that cut remote NVLink reads by `4.0x` at `WS=8` and deliver up to `2.645x` on B200 and `2.668x` on B300; adds shared-tile cached-cluster softmax (`c8_t4_s4` 34,432 B SMEM, `c16_t4_s4` 34,944 B SMEM) holding 4 tiles in registers and 4 tiles in shared memory to maintain `4 CTAs/SM` (`1.173x` on GB300 `32x256000`); and widens MiniMax-H3 MXFP8 FC1 tiles to `256x448` (`64` vs `112` N-tiles, `1.068x` on B300) alongside SM120 FP8 varlen attention early PV hand-off (`1.055x` on RTX 5090).",
+      "source_ids": [
+        "src-flashinfer-cake-nvfp4-mla-decode-native-bf16x2-2026",
+        "src-flashinfer-cake-trtllm-moe-allreduce-union-two-shot-2026",
+        "src-flashinfer-cake-softmax-shared-tiles-minimax-h3-sm120-2026"
+      ]
+    },
+    {
+      "id": "ev-sglang-push-allreduce-norm-dsa-cp-qsa-vllm-batch-shard-trtllm-2026",
+      "component": "sglang-push-allreduce-norm-dsa-cp-overlap-qsa-gather-vllm-batch-shard-spec-trtllm",
+      "status": "own-offline",
+      "artifacts": [
+        "docs/components/sglang-push-allreduce-norm-dsa-cp-overlap-qsa-gather-vllm-batch-shard-spec-trtllm.md",
+        "docs/components/sglang-push-allreduce-norm-dsa-cp-overlap-qsa-gather-vllm-batch-shard-spec-trtllm.en.md",
+        "experiments/sglang_push_allreduce_norm_dsa_cp_overlap_qsa_gather_vllm_batch_shard_spec_trtllm/run.py",
+        "experiments/sglang_push_allreduce_norm_dsa_cp_overlap_qsa_gather_vllm_batch_shard_spec_trtllm/summary.json"
+      ],
+      "verifier": "python experiments/sglang_push_allreduce_norm_dsa_cp_overlap_qsa_gather_vllm_batch_shard_spec_trtllm/run.py --check",
+      "verified_at": "2026-10-26",
+      "limitations": "Offline stdlib verification of SGLang RowClusterTrait geometry, DSA CP overlap, QSA single-launch gather, EAGLE HiCache boundary, vLLM batch-sharded adaptive verification and 2D staged writes, and TRT-LLM MiniMax-M3 VL chunked MM slicing.",
+      "claim": "SGLang (`d558ac2f3e7a`, `5971f47bc8ea`, `dba22e9b68dd`, `0ff67ee72aaf`), vLLM (`7050ef881ff0`, `fc2b6ab45ed3`, `2c19f6793e98`, `65bc698356b4`, `ceb01b6ddf6e`), and TensorRT-LLM (`a0cee56d3a6e`) fuse TP all-reduce, residual add, and RMSNorm on the CustomAllReduceV2 push plane via `RowClusterTrait` (`TWO_SHOT_MIN_TOKENS = {4: 48, 8: 8}`, occupancy-adaptive `(1,4)/(1,3)/(2,3)` geometry, and a bumper cluster for leftover push counters); overlap DSA interleave CP KV gather with indexer execution (`1.743x` modeled speedup); replace per-sequence `index_select + torch.cat` with a single 2D Triton byte-copy kernel `_gather_qsa_compressed_keys_kernel` (`17.45x` at 128 sequences); add `_bigram_boundary_tokens` (`+1` token) to PD decode HiCache restore for EAGLE trees; unblock vLLM batch-sharded sampling under GPU adaptive draft verification via `AdmittedDraftCounts` (`16.0x` per-rank logit reduction at `TP=8`) and parallelize MRV2 staged writes in 2D (`16.0x` wave reduction); and add `chat_template_applied` and chunked multimodal embedding slicing for MiniMax-M3 VL in TensorRT-LLM.",
+      "source_ids": [
+        "src-sglang-push-allreduce-norm-dsa-cp-overlap-qsa-hicache-2026",
+        "src-vllm-batch-shard-adaptive-spec-mrv2-dbo-offload-trtllm-minimax-m3-2026"
+      ]
+    },
+    {
+      "id": "ev-verl-mxfp8-megatron-deepgemm-refit-mooncake-xpu-p2p-dynamo-2026",
+      "component": "verl-mxfp8-megatron-sglang-vllm-deepgemm-refit-mooncake-xpu-p2p-dynamo-kvcr",
+      "status": "own-offline",
+      "artifacts": [
+        "docs/components/verl-mxfp8-megatron-sglang-vllm-deepgemm-refit-mooncake-xpu-p2p-dynamo-kvcr.md",
+        "docs/components/verl-mxfp8-megatron-sglang-vllm-deepgemm-refit-mooncake-xpu-p2p-dynamo-kvcr.en.md",
+        "experiments/verl_mxfp8_megatron_sglang_vllm_deepgemm_refit_mooncake_xpu_p2p_dynamo_kvcr/run.py",
+        "experiments/verl_mxfp8_megatron_sglang_vllm_deepgemm_refit_mooncake_xpu_p2p_dynamo_kvcr/summary.json"
+      ],
+      "verifier": "python experiments/verl_mxfp8_megatron_sglang_vllm_deepgemm_refit_mooncake_xpu_p2p_dynamo_kvcr/run.py --check",
+      "verified_at": "2026-10-26",
+      "limitations": "Offline stdlib verification of Megatron MXFP8 THD padding, SGLang/vLLM DeepGEMM KL tables, Float32 1-ULP raw log-prob detection, VeOmni negative speedup analysis, Mooncake Intel XPU P2P/IPC transfer latency and generation safety, and Dynamo KVCR filter ordering and token batching.",
+      "claim": "veRL (`d1390eea0c94`, `5265d561a3bf`, `619c397dc991`, `16ec093cc4a2`, `fb55b9288560`), Mooncake (`db4f146ecb5a`), and Dynamo (`8bf042187a8f`, `906e89d3a304`) pad Megatron MXFP8 THD sequences to `lcm(32, align_size)` via `get_fp8_align_size`, cutting 4xB200 Qwen3-30B-A3B DAPO step time from `506s` to `452s` (`1.120x`, generation `-23.88%` from `134s` to `102s`, `kl=0.0045`); stage MXFP8 scales and MXFP4/NVFP4 expert weights across all sync buckets in SGLang/vLLM and standardize on DeepGEMM (`VLLM_USE_DEEP_GEMM_E8M0=0` for Hopper FP32 scales), cutting Qwen3.5-35B-A3B MXFP4 MoE `k3_kl` by `5.643x` on vLLM (`0.00790 -> 0.00140`) and `2.855x` on SGLang (`0.00571 -> 0.00200`) with matching QAT; add `training/rollout_logprobs_mismatch_count` to catch Float32 1-ULP differences (`7.45e-9`) missed by `exp(log_prob)`; document that VeOmni `low_precision_reduce_scatter_comm` slows 428M dense Qwen3 on 2xH200 (`117.02 -> 130.85 ms`); enable Mooncake TENT intra-node Intel XPU PCIe P2P and `pidfd_getfd(2)` + `generation` Level Zero IPC (`2.667x` over 8 MB host bounce); and filter Dynamo KVCR recurrent events before geometry checks while batching output token counters by `LOCAL_FLUSH_TOKENS = 64` (`64x` fewer shared atomic adds).",
+      "source_ids": [
+        "src-verl-mxfp8-megatron-sglang-vllm-deepgemm-refit-logprob-veomni-2026",
+        "src-mooncake-xpu-p2p-level-zero-ipc-dynamo-kvcr-token-batch-2026"
+      ]
     }
   ],
   "updated_at": "2026-10-26"
