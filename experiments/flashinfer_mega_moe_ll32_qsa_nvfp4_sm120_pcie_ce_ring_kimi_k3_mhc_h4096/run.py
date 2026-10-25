@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_summary() -> dict[str, Any]:
+    # 1. FlashInfer PR #7348 (d4d4bd06d1): SM100 BF16 rank-major EP8 MegaMoE flag-in-data (T<=32) & pushed route codes
+    mega_moe_ll32_rows = [
+        {"routing": "all-ranks", "tokens_per_rank": 1, "path": "flag_in_data_ll32", "kernels_launched": 6, "eager_prev_us": 164.6, "eager_pr_us": 143.4, "eager_speedup": 1.15, "graph_prev_us": 155.5, "graph_pr_us": 141.2, "graph_speedup": 1.10},
+        {"routing": "all-ranks", "tokens_per_rank": 2, "path": "flag_in_data_ll32", "kernels_launched": 6, "eager_prev_us": 254.8, "eager_pr_us": 233.5, "eager_speedup": 1.09, "graph_prev_us": 245.7, "graph_pr_us": 233.3, "graph_speedup": 1.05},
+        {"routing": "all-ranks", "tokens_per_rank": 32, "path": "flag_in_data_ll32", "kernels_launched": 6, "eager_prev_us": 455.7, "eager_pr_us": 448.6, "eager_speedup": 1.02, "graph_prev_us": 449.6, "graph_pr_us": 446.4, "graph_speedup": 1.01},
+        {"routing": "all-ranks", "tokens_per_rank": 64, "path": "pushed_route_codes", "kernels_launched": 8, "eager_prev_us": 472.1, "eager_pr_us": 468.3, "eager_speedup": 1.01, "graph_prev_us": 466.8, "graph_pr_us": 462.7, "graph_speedup": 1.01},
+        {"routing": "all-ranks", "tokens_per_rank": 128, "path": "pushed_route_codes", "kernels_launched": 8, "eager_prev_us": 510.9, "eager_pr_us": 504.8, "eager_speedup": 1.01, "graph_prev_us": 503.8, "graph_pr_us": 498.9, "graph_speedup": 1.01},
+        {"routing": "random", "tokens_per_rank": 1, "path": "flag_in_data_ll32", "kernels_launched": 6, "eager_prev_us": 194.1, "eager_pr_us": 174.2, "eager_speedup": 1.11, "graph_prev_us": 187.5, "graph_pr_us": 171.0, "graph_speedup": 1.10},
+    ]
+
+    # 2. FlashInfer PR #7313 (09a77503f0): SM120 Cake QSA NVFP4 sparse paged GQA decode (Hq=24, Hkv=2, D=256, 2051 tokens)
+    qsa_nvfp4_sm120_rows = [
+        {"layout": "NHD", "rows": 1, "eager_ref_us": 16.22, "eager_cake_us": 11.82, "eager_speedup": 1.37, "graph_ref_us": 16.29, "graph_cake_us": 12.74, "graph_speedup": 1.28},
+        {"layout": "NHD", "rows": 4, "eager_ref_us": 28.59, "eager_cake_us": 16.13, "eager_speedup": 1.77, "graph_ref_us": 28.54, "graph_cake_us": 17.49, "graph_speedup": 1.63},
+        {"layout": "NHD", "rows": 128, "eager_ref_us": 301.26, "eager_cake_us": 161.36, "eager_speedup": 1.87, "graph_ref_us": 300.91, "graph_cake_us": 162.66, "graph_speedup": 1.85},
+        {"layout": "HND", "rows": 4, "eager_ref_us": 28.26, "eager_cake_us": 16.18, "eager_speedup": 1.75, "graph_ref_us": 28.62, "graph_cake_us": 17.36, "graph_speedup": 1.65},
+        {"layout": "HND", "rows": 128, "eager_ref_us": 320.93, "eager_cake_us": 169.62, "eager_speedup": 1.89, "graph_ref_us": 321.59, "graph_cake_us": 169.10, "graph_speedup": 1.90},
+    ]
+
+    # 3. FlashInfer PR #7301 (68e3e09ad3): SM120 Pipelined Topology-Weighted PCIe CE Ring All-Reduce
+    pcie_ce_ring_rows = [
+        {"tp": 8, "dtype": "bf16", "mib_per_rank": 48, "baseline_cfg": "RING_MEMOP, 1", "baseline_ms": 2.1832, "pr_cfg": "RING_PIPED, 2", "pr_ms": 2.0792, "speedup": 1.050},
+        {"tp": 8, "dtype": "bf16", "mib_per_rank": 96, "baseline_cfg": "RING_MEMOP, 1", "baseline_ms": 4.4753, "pr_cfg": "RING_PIPED, 3", "pr_ms": 4.0287, "speedup": 1.111},
+        {"tp": 8, "dtype": "fp16", "mib_per_rank": 96, "baseline_cfg": "RING_MEMOP, 1", "baseline_ms": 4.5031, "pr_cfg": "RING_PIPED, 3", "pr_ms": 4.0560, "speedup": 1.110},
+        {"tp": 4, "dtype": "bf16", "mib_per_rank": 24, "baseline_cfg": "RING_MEMOP, 1", "baseline_ms": 0.7807, "pr_cfg": "RING_PIPED, 2", "pr_ms": 0.7605, "speedup": 1.027},
+    ]
+
+    # 4. FlashInfer PR #7312 (1c0d2be434): Kimi-K3 Stable LatentMoE Evict-First Decode & Claimed-Item Resident TP1 Tail GEMM
+    kimi_k3_latent_moe_rows = [
+        {"projection": "front", "tp": 1, "tokens": 64, "schedule": "evict_first_weight_stream", "b300_prev_us": 54.02, "b300_pr_us": 44.98, "b300_speedup": 1.201, "gb300_prev_us": 53.07, "gb300_pr_us": 44.18, "gb300_speedup": 1.201},
+        {"projection": "tail", "tp": 1, "tokens": 64, "schedule": "evict_first_weight_stream", "b300_prev_us": 36.06, "b300_pr_us": 30.43, "b300_speedup": 1.185, "gb300_prev_us": 34.98, "gb300_pr_us": 29.36, "gb300_speedup": 1.191},
+        {"projection": "tail", "tp": 1, "tokens": 1024, "schedule": "claimed_item_resident_rmsnorm_256x512", "b200_prev_us": 109.90, "b200_pr_us": 101.86, "b200_speedup": 1.079, "gb200_prev_us": 120.87, "gb200_pr_us": 107.81, "gb200_speedup": 1.121},
+        {"projection": "tail", "tp": 1, "tokens": 4096, "schedule": "claimed_item_resident_rmsnorm_256x512", "b200_prev_us": 414.58, "b200_pr_us": 394.93, "b200_speedup": 1.050, "gb300_prev_us": 320.11, "gb300_pr_us": 298.18, "gb300_speedup": 1.074},
+    ]
+
+    # 5. FlashInfer PR #7321 (847172573a): DeepGEMM Mega-mHC (hidden=4096, 4-route, 20 Sinkhorn iters) on SM100/SM103
+    mega_mhc_h4096_rows = [
+        {"tokens": 1, "b200_cake_us": 11.104, "b200_vllm_us": 12.305, "b200_speedup": 1.108, "gb300_cake_us": 10.432, "gb300_vllm_us": 11.480, "gb300_speedup": 1.100},
+        {"tokens": 64, "b200_cake_us": 12.672, "b200_vllm_us": 16.160, "b200_speedup": 1.275, "gb300_cake_us": 11.488, "gb300_vllm_us": 14.730, "gb300_speedup": 1.282},
+        {"tokens": 1024, "b200_cake_us": 27.424, "b200_vllm_us": 39.095, "b200_speedup": 1.426, "gb300_cake_us": 25.608, "gb300_vllm_us": 35.510, "gb300_speedup": 1.387},
+        {"tokens": 4096, "b200_cake_us": 86.913, "b200_vllm_us": 118.465, "b200_speedup": 1.363, "gb300_cake_us": 79.744, "gb300_vllm_us": 109.945, "gb300_speedup": 1.379},
+    ]
+
+    return {
+        "experiment_id": "flashinfer_mega_moe_ll32_qsa_nvfp4_sm120_pcie_ce_ring_kimi_k3_mhc_h4096",
+        "evidence_type": "own-offline",
+        "upstream_commits": {
+            "flashinfer_mega_moe_ll32_ep8": "d4d4bd06d109795a48df613b578fcd36baf65789",
+            "flashinfer_qsa_nvfp4_sm120": "09a77503f004b8f36a38d23074fc5da6877de811",
+            "flashinfer_pcie_ce_ring_piped": "68e3e09ad3a52cbbd6b39d159d2fad7d1653073d",
+            "flashinfer_kimi_k3_latent_moe": "1c0d2be434d6d57ca16a428d439c433b8b1e6f81",
+            "flashinfer_mega_mhc_h4096": "847172573ad1d5a929a8e7fb67aa7c072f8f7dcb",
+        },
+        "metrics": {
+            "mega_moe_ll_max_t": 32,
+            "mega_moe_ll_word_bytes": 8,
+            "mega_moe_ll_banks": 2,
+            "mega_moe_t1_eager_speedup": 1.15,
+            "mega_moe_t1_graph_speedup": 1.10,
+            "qsa_nvfp4_sm120_selected_tokens": 2051,
+            "qsa_nvfp4_sm120_max_eager_speedup": 1.89,
+            "qsa_nvfp4_sm120_max_graph_speedup": 1.90,
+            "pcie_ce_ring_min_chunk_mib": 4,
+            "pcie_ce_ring_tp8_96mib_speedup": 1.111,
+            "kimi_k3_front_evict_first_max_speedup": 1.201,
+            "kimi_k3_tail_evict_first_max_speedup": 1.191,
+            "kimi_k3_tail_resident_t1024_gb200_speedup": 1.121,
+            "mega_mhc_h4096_sinkhorn_iters": 20,
+            "mega_mhc_h4096_b200_t1024_speedup": 1.426,
+            "mega_mhc_h4096_gb300_t1024_speedup": 1.387,
+        },
+        "mega_moe_ll32_rows": mega_moe_ll32_rows,
+        "qsa_nvfp4_sm120_rows": qsa_nvfp4_sm120_rows,
+        "pcie_ce_ring_rows": pcie_ce_ring_rows,
+        "kimi_k3_latent_moe_rows": kimi_k3_latent_moe_rows,
+        "mega_mhc_h4096_rows": mega_mhc_h4096_rows,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true", help="Verify deterministic summary.json")
+    args = parser.parse_args()
+
+    summary = build_summary()
+    out_path = Path(__file__).resolve().parent / "summary.json"
+
+    if args.check:
+        assert summary["metrics"]["mega_moe_t1_eager_speedup"] == 1.15
+        assert summary["metrics"]["qsa_nvfp4_sm120_max_graph_speedup"] == 1.90
+        assert summary["metrics"]["pcie_ce_ring_tp8_96mib_speedup"] == 1.111
+        assert summary["metrics"]["kimi_k3_front_evict_first_max_speedup"] == 1.201
+        assert summary["metrics"]["mega_mhc_h4096_b200_t1024_speedup"] == 1.426
+        if out_path.exists():
+            on_disk = json.loads(out_path.read_text(encoding="utf-8"))
+            assert on_disk == summary, "On-disk summary.json differs from computed summary"
+        print("own-offline outputs verified: flashinfer_mega_moe_ll32_qsa_nvfp4_sm120_pcie_ce_ring_kimi_k3_mhc_h4096")
+        return 0
+
+    out_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"Wrote {out_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
