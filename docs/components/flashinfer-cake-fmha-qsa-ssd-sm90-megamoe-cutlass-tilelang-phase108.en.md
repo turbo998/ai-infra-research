@@ -1,0 +1,22 @@
+# FlashInfer Cake FMHA NVFP4 Paged Context, QSA Workspace Reuse, Rubin SSD & CUTLASS/TileLang Guards (Phase 108 · Priority 117)
+
+> **中文版本**: [flashinfer-cake-fmha-qsa-ssd-sm90-megamoe-cutlass-tilelang-phase108.md](flashinfer-cake-fmha-qsa-ssd-sm90-megamoe-cutlass-tilelang-phase108.md)  
+> **Evidence Boundary**: `implementation` (first-hand commits) + `own-offline` (deterministic stdlib modeling: `experiments/flashinfer_cake_fmha_qsa_ssd_sm90_megamoe_phase108/run.py --check`)
+
+## 1. First-Hand Code Evidence & Core Implementation Paths
+
+1. **`flashinfer-ai/flashinfer@07cc0d60a9` (`#7512`: `csrc/cake_fmha/cuda/context_*/sm_100a|sm_103a/*.cu`, `csrc/cake_fmha/registry.json`)**:
+   - **20 Blackwell (`sm_100a` / `sm_103a`) Cake FMHA Paged Context Attention Programs**: Adds 20 in-module paged prefill kernels (`head_dim = 128`, bottom-right causal mask) behind `trtllm_batch_context_with_kv_cache(backend="cake")` supporting `BF16`, `FP8`, and `NVFP4` KV caches. Configures `l2_swizzle = 1, num_m_blocks = 11, tok_per_stage = 25` for `page_size = 32` and `l2_swizzle = 8, num_m_blocks = 6, tok_per_stage = 25` for `page_size = 1024`. At `seq_len = 8,192, num_kv_heads = 8, head_dim = 128`, `NVFP4` KV (`0.5 B` payload + `1 B` FP8 E4M3 scale per 16 elements = `0.5625 B/elem`) cuts KV read volume from `33,554,432 B` (BF16) to **`9,437,184 B` (`3.5556x` bandwidth reduction, `1.7778x` vs FP8)**.
+2. **`flashinfer-ai/flashinfer@fa8fb88e0f` (`#7514`: `flashinfer/experimental/cake_qsa_nvfp4/cake_backend.py`)**:
+   - **Cake QSA NVFP4 Cross-Call Workspace Carve Reuse**: Across the 3 `tcgen05` (CC 10.0/10.3/10.7) and 3 `mma.sync` (CC 8.0/9.0/12.0) sparse decode kernels, validates the caller's 256-byte-aligned `workspace_buffer` and zeroes `uint32 [rows * num_kv_heads]` counters once on first storage observation, reusing the checked carve across subsequent calls (**reducing host validation/carve operations over `1,000` steps from `1,000` to `1`, a `99.9%` reduction**) and bypassing partial buffer allocation when `splits == 1`.
+3. **`flashinfer-ai/flashinfer@a8b8245be2` (`#7499`) & `5b732d7271` (`#7488`)**:
+   - **Rubin (`sm_107a`) 56 Mamba2 SSD Combined Kernels & Blackwell 4-Head/CTA Selective State Update**: `#7499` ships 56 `sm_107a` Mamba2 SSD programs across exact-scan (fused one-launch, two-kernel with factorized persistent segment preprocess, and tail form), three-phase chunk-parallel, and look-back chunk-parallel variants for BF16/FP16/FP32 states; `#7488` accelerates `sm_100a`/`sm_103a` Mamba2 decode via lean-acquire TMA synchronization, pipelined reduction, and 4-head-per-CTA (`__launch_bounds__(288)`) execution.
+4. **`flashinfer-ai/flashinfer@a3452cd405` (`#7438`: `flashinfer/cudnn/prefill.py`) & `479c38bbfc` (`#6999`: `flashinfer/moe_ep/`)**:
+   - **cuDNN Prefill Explicit Length Separation & SM90 NVFP4×FP8 CuTe DSL MegaMoE**: `#7438` decouples valid attention lengths (`seq_lens_q`) from physical ragged storage offsets (`q_offsets = [0, 320, 512]`), preventing `35` trailing padding rows (`512 - 477`) from leaking into the causal attention mask when `seq_lens_q = [300, 177]`; `#6999` adds Hopper SM90 NVFP4 weight × FP8 E4M3 activation single-promotion CuTe DSL MegaMoE to `moe_ep.MoEEpLayer`.
+5. **`NVIDIA/cutlass@a2b29f847b` (`#3464`), `1d7cde107f` (`#3278`) & `tile-ai/tilelang@876a59e6eb` (`#2818`), `b69e0c2c0c` (`#3576`)**:
+   - CUTLASS `#3464` recursively traverses `spec.TupleParam` in `find_env_stream`; `#3278` guards `byte_pointer += params_.increment_group` with `if (!ScatterD)` in `PredicatedTileIterator`, eliminating `6,144 B` cross-group pointer drift. TileLang `#2818` rejects partial K atoms (`chunk = 8` for `MMA K = 16`), requiring explicit K padding to `16` or guarded FMA fallback; `#3576` parameterizes `CumSum1D` with `thread_offset` for non-zero participating thread subgroups.
+
+## 2. Architect Design Exercises & Falsifiable Questions
+
+- **Calculation Exercise**: For a single context attention layer with `seq_len = 8,192`, `num_kv_heads = 8`, and `head_dim = 128`, compute the exact KV byte footprint for BF16 (`2 B/elem`) versus NVFP4 (`0.5 B/elem` payload + `1 B` FP8 scale per 16 elements = `0.5625 B/elem`), and verify why the bandwidth ratio is identically $32 / 9 \approx 3.5556\times$.
+- **Falsifiable Hypothesis**: Inferring prefill sequence lengths from adjacent storage offsets `q_offsets = [0, 320, 512]` when `seq_lens_q = [300, 177]` was explicitly supplied leaks `35` uninitialized padding rows into the attention softmax (falsified and eliminated by `flashinfer #7438`).
