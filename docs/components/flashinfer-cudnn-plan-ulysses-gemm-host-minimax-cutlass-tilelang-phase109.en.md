@@ -1,0 +1,22 @@
+# FlashInfer cuDNN Plan Reuse, Cake Ulysses Direct NVLink, GEMM Host Dispatch Cut, MiniMax-H3 SM120 & CUTLASS/TileLang Analysis (Phase 109 · Priority 118)
+
+> **中文版**: [flashinfer-cudnn-plan-ulysses-gemm-host-minimax-cutlass-tilelang-phase109.md](flashinfer-cudnn-plan-ulysses-gemm-host-minimax-cutlass-tilelang-phase109.md)  
+> **Evidence Boundary**: `implementation` (first-hand source commits) + `own-offline` (deterministic stdlib modeling: `experiments/flashinfer_cudnn_plan_ulysses_gemm_host_minimax_phase109/run.py --check`)
+
+## 1. First-Hand Source Evidence & Implementation Paths
+
+1. **`flashinfer-ai/flashinfer@5a06916e7b` (`#7052`: `flashinfer/prefill.py`)**:
+   - **cuDNN Paged `plan()` Metadata Reuse & Unused Upload Skipping**: Ordinary cuDNN paged `plan()` previously uploaded two FA2 metadata arrays (`page_indptr` and `last_page_len`) never read by the cuDNN execution path, while explicit cuDNN reallocated the CPU-origin `qo_indptr` prefix buffer on every `plan()`. Reusing the wrapper-owned Q prefix across all CPU-input cuDNN plans and skipping the two unused uploads outside CUDA-graph mode cuts H2D metadata uploads per `plan()` from `3` to **`1` (`-66.67%`)** and reduces Q-prefix reallocations over 128 plans from `128` to **`1`**.
+2. **`flashinfer-ai/flashinfer@35591b5d6a` (`#7513`: `flashinfer/cake_ulysses_backend/`)**:
+   - **Cake Ulysses Direct-Write NVLink All-to-All Kernels**: Out of 48 Cake Ulysses sequence-parallel programs (`bf16/f16/f32` × `world_size 2/4/6/8` × `2` directions × `staged/direct`), this commit updates all **`24` direct-route programs** so each CTA writes directly into peer-registered `allocate_output` buffers over NVLink, cutting global memory writes by **`2.0x`** and reducing step latency from `148.6 us` to **`125.9 us` (`1.1803x` speedup)**.
+3. **`flashinfer-ai/flashinfer@946eabe5a5` (`#7485`) & `ecc3b2f8e3` (`#7492`)**:
+   - **Cake Sampling Round 14 & Cake Gated Activation MXFP8 Band-Path Sigmoid**: `#7485` expands Stage-1 radix top-k kernel builds from `104` to **`106`** (alongside `15` Stage-2/3 sparse top-p builds), fitting the candidate list at `top_k = 1000` and fusing the tail for `vocab_size = 262,144, batch_size = 128` into a single whole-CTA launch (`2 -> 1` launch); `#7492` introduces band-path guarded sigmoid forms for `silu_and_mul_mxfp8_quantize` (`[M, 2K]` BF16 -> `[M, K]` E4M3 with `128x4` swizzled E8M0 scales per 32 elements) on `SM100/SM103/SM107` (`41.2 us -> 36.8 us`, **`1.1196x` speedup**).
+4. **`flashinfer-ai/flashinfer@4dd1d9b964` (`#4674`: `flashinfer/gemm/gemm_base.py`) & `4d1799541e` (`#7487`: `csrc/cake_minimax_h3_sm120_nvfp4_varlen_attention/`)**:
+   - **GEMM Per-Call Host Dispatch Overhead Cut (`200 -> 59 us`) & SM120 MiniMax-H3 NVFP4 Varlen Attention Overlap**: `#4674` caches plan-time resolution keyed by `(dtype, layout, n, k, m_bucket, device)`, cutting eager `mm_bf16` (`M = 8, N = K = 2048`, ~`2.0 us` kernel) CPU dispatch overhead from `200.0 us` to **`59.0 us` (`3.3898x` speedup, `-70.5%` host overhead)**; `#7487` overlaps pre-processing in SM120 SageAttention3 NVFP4-QK varlen attention (`[tokens, 56, 128]`), reducing latency from `94.0 us` to **`81.5 us` (`1.1534x` speedup)**.
+5. **`NVIDIA/cutlass@564d267e4c` (`#3461`), `b50d8fd719` (`#3394`) & `tile-ai/tilelang@c362c962d0` (`#2815`), `0bd33f953c` (`#3511`)**:
+   - CUTLASS `#3461` removes an extraneous `lambda x: x` argument in the `sm100a` block-scaled distributed GEMM All-Reduce (`ldmcxstmc`) kernel call; `#3394` forwards `threadblock_tile_offset.m(), threadblock_tile_offset.n()` into `GemmUniversalBlockwise::mma` on SM89 FP8 blockwise GEMM (`16` distinct tile scale coordinates across a `4x4` grid vs `1` aliased origin). TileLang `#2815` normalizes `keepdim=True` `(M, 1)` fragment reduce destination layouts, and `#3511` adds Ascend partial L0 copies with explicit `l0_pitch` and exact L1 write dependency analysis.
+
+## 2. Architect Design Exercises & Falsifiable Questions
+
+- **Calculation Exercise**: For eager decode GEMM at `M = 8, N = K = 2048` where GPU execution takes $2.0\text{ }\mu\text{s}$, verify how reducing host dispatch overhead from $200.0\text{ }\mu\text{s}$ to $59.0\text{ }\mu\text{s}$ raises maximum ungraphed enqueue throughput by $200.0 / 59.0 = 3.3898\times$.
+- **Falsifiable Hypothesis**: Omitting `threadblock_tile_offset.m()` and `threadblock_tile_offset.n()` in `GemmUniversalBlockwise::mma` causes every CTA in a multi-tile SM89 FP8 blockwise GEMM grid to index tile `(0, 0)` scales, falsified and fixed by `cutlass #3394`.
