@@ -1,0 +1,6 @@
+# Phase 127 Track B: SGLang Unified KV Subpool/ID-Space/Pricing Architecture, vLLM Spec-Decode DP Padding & DSv4.1 Tiled NVFP4 Gather, and TRT-LLM MiniMax-M3 NVFP4 Loader
+
+Deterministic offline verification for Phase 127 Track B (`priority: 136`):
+- **SGLang 6-Commit Unified KV Memory-Cache Refactor (`306a699a`, `3b597cb7`, `cf3d21b0`, `5f6075fa`, `ccc71fa5`, `3355d668`)**: Consolidates 3 sub-pool allocators into 1 `MultiEndedAllocator`, centralizes unified KV capacity pricing/admission (`12.5% -> 0.0%` Mamba state overcommit), routes layer views via subpool descriptors and `IdSpaceKind`, and forwards HiCache completion events to recurrent state (`0` unready Mamba reads).
+- **vLLM Speculative Decode Adaptive Draft Prefill Graph Padding (`5118d990`) & DeepSeek-V4.1 Tiled NVFP4 Compressed-KV Dequant-Gather (`6abdff59`)**: Synchronizes `max_query_len` in `DPSyncState` across DP ranks and tiles NVFP4 compressed-KV dequant-gather (`TILE=16` achieves `1.753x` speedup via exact `e2m1 * 2^-14 * scale * 2^14` bitwise FP16 placement).
+- **TensorRT-LLM MiniMax-M3 `compressed-tensors` NVFP4 Weight Loader (`1f9b7072`)**: Shared `convert_compressed_tensors_nvfp4_weights` mapper inverting `weight_global_scale` and `input_global_scale` with safe zero-scale handling for uncalibrated experts.

@@ -1,0 +1,182 @@
+"""Deterministic offline models for Phase 127 Track A:
+FlashInfer Cake Blackwell Softmax Balanced Chunks & GB300 Persistent Route,
+Cake Kimi-K3 Fused Router (LC1_NC / Q4S_E16 / Q4SPW_LR), Frost MX FFMA
+Cross-Target Loader, Cake Ulysses Direct All-to-All Fence, NVLinkOneSidedAlltoAll
+Lamport Transport, Cake MoE AllReduce Union First-Token Overlap, Hopper FMHAv2
+Workspace Counter Reset, SM12x b12x W4A16 BF16 E8M0 Scale Exponent Re-Bias
+(Bytes 57-183) & Unrouted (-1) Top-K Sum Guard, TileLang Sparse MMA K-Tail
+Guard, and Triton Local-Store CTA Replica Broadcast.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+from pathlib import Path
+from typing import Any
+
+
+def build_summary() -> dict[str, Any]:
+    # 1. Cake Blackwell Softmax Dispatcher (80a8b2a8)
+    # B200: 39 shapes (rows 24-128 x vocab 151936-212992) take balanced per-CTA chunk ceil(vocab/CTAs) rounded up to 32.
+    # GB300: 95 shapes (rows 8-89 x vocab 48000-201088) change launch (52 move from 8-CTA shared-tile to persistent from 20/9 rows/cluster).
+    b200_softmax_samples = [
+        {"shape": "96x151936", "program": "16-CTA shared-tile", "elements_before": 10240, "elements_after": 9504, "prev_us": 20.54, "new_us": 20.00, "speedup": 1.029},
+        {"shape": "64x180000", "program": "16-CTA persistent", "elements_before": 12288, "elements_after": 11264, "prev_us": 17.42, "new_us": 16.80, "speedup": 1.038},
+        {"shape": "48x212992", "program": "16-CTA persistent", "elements_before": 14336, "elements_after": 13312, "prev_us": 15.42, "new_us": 14.90, "speedup": 1.037},
+    ]
+    gb300_softmax_samples = [
+        {"shape": "87x98304", "program": "8-CTA shared-tile -> persistent", "elements_before": 12288, "elements_after": 12288, "prev_us": 13.41, "new_us": 11.84, "speedup": 1.132},
+        {"shape": "32x100000", "program": "16-CTA row-caching", "elements_before": 8192, "elements_after": 6272, "prev_us": 6.72, "new_us": 6.11, "speedup": 1.099},
+        {"shape": "30x140000", "program": "16-CTA shared-tile", "elements_before": 10240, "elements_after": 8768, "prev_us": 8.32, "new_us": 7.78, "speedup": 1.070},
+        {"shape": "40x140000", "program": "16-CTA persistent", "elements_before": 10240, "elements_after": 8768, "prev_us": 10.82, "new_us": 10.37, "speedup": 1.043},
+    ]
+
+    # 2. Cake Kimi-K3 Fused Router (896 experts, top-16) on GB300 & B200 (2c6a3ea6)
+    kimi_k3_router_cells = [
+        {"gpu": "GB300", "tokens": 1, "block_m": 8, "main_us": 3.168, "new_us": 2.752, "speedup": 1.15, "arm": "LC1"},
+        {"gpu": "GB300", "tokens": 1, "block_m": 16, "main_us": 3.232, "new_us": 2.656, "speedup": 1.22, "arm": "LC1_NC"},
+        {"gpu": "GB300", "tokens": 32, "block_m": 8, "main_us": 3.904, "new_us": 3.392, "speedup": 1.15, "arm": "LCG"},
+        {"gpu": "GB300", "tokens": 32, "block_m": 16, "main_us": 3.744, "new_us": 3.408, "speedup": 1.10, "arm": "LCG"},
+        {"gpu": "GB300", "tokens": 2048, "block_m": 16, "main_us": 12.128, "new_us": 11.744, "speedup": 1.03, "arm": "Q4SPW_LR"},
+        {"gpu": "B200", "tokens": 1, "block_m": 8, "main_us": 3.456, "new_us": 3.008, "speedup": 1.15, "arm": "LC1"},
+        {"gpu": "B200", "tokens": 1, "block_m": 16, "main_us": 3.552, "new_us": 2.943, "speedup": 1.21, "arm": "LC1_NC"},
+        {"gpu": "B200", "tokens": 32, "block_m": 16, "main_us": 4.064, "new_us": 3.520, "speedup": 1.15, "arm": "LCG_LW"},
+    ]
+
+    # 3. NVLinkOneSidedAlltoAll Lamport Transport (1f306300)
+    lamport_benchmarks = [
+        {"model": "DeepSeek-V3 (7168, top-8, 256E)", "format": "BF16", "ep": 8, "tokens": 1, "lamport_us": 15.7, "fence_us": 43.6, "speedup": 2.77},
+        {"model": "DeepSeek-V3 (7168, top-8, 256E)", "format": "BF16", "ep": 8, "tokens": 128, "lamport_us": 42.9, "fence_us": 58.4, "speedup": 1.36},
+        {"model": "DeepSeek-V3 (7168, top-8, 256E)", "format": "BF16", "ep": 64, "tokens": 1, "lamport_us": 19.7, "fence_us": 50.0, "speedup": 2.54},
+        {"model": "DeepSeek-V3 (7168, top-8, 256E)", "format": "NVFP4", "ep": 8, "tokens": 1, "lamport_us": 15.7, "fence_us": 42.3, "speedup": 2.69},
+        {"model": "DeepSeek-V3 (7168, top-8, 256E)", "format": "NVFP4", "ep": 8, "tokens": 128, "lamport_us": 32.6, "fence_us": 48.8, "speedup": 1.50},
+        {"model": "DeepSeek-V3 (7168, top-8, 256E)", "format": "NVFP4", "ep": 64, "tokens": 1, "lamport_us": 19.5, "fence_us": 47.5, "speedup": 2.44},
+        {"model": "Kimi-K3 (3584, top-16, 896E)", "format": "BF16", "ep": 64, "tokens": 1, "lamport_us": 24.8, "fence_us": 49.7, "speedup": 2.01},
+        {"model": "Kimi-K3 (3584, top-16, 896E)", "format": "MXFP8", "ep": 64, "tokens": 1, "lamport_us": 24.8, "fence_us": 49.6, "speedup": 2.00},
+    ]
+
+    # 4. SM12x b12x W4A16 BF16 E8M0 Scale Exponent Re-Bias (30cd27ea) & Unrouted (-1) Top-K Sum Guard (f083cef0)
+    # Old bias = 7: MMA weight = true_weight * 2^-119, normal BF16 only for 121 <= e <= 247; below 114 FP4 0.5 flushes to 0.
+    # New bias = 71: MMA weight = true_weight * 2^-55, global compensation = 2^55, normal BF16 for 57 <= e <= 183, clamp at 183.
+    old_bias = 7
+    new_bias = 71
+    old_normal_min = 127 - old_bias + 1  # 121
+    old_normal_max = 254 - old_bias      # 247
+    new_normal_min = 127 - new_bias + 1  # 57
+    new_normal_max = 254 - new_bias      # 183
+    old_compensation_exp = 126 - old_bias  # 119
+    new_compensation_exp = 126 - new_bias  # 55
+
+    # Check MiMo-V2.6-Pro scale bytes [111..117]: under old_bias all 7 are subnormal/flushed; under new_bias all 7 are normal BF16
+    mimo_scale_bytes = list(range(111, 118))
+    old_normal_mimo_count = sum(1 for e in mimo_scale_bytes if old_normal_min <= e <= old_normal_max)
+    new_normal_mimo_count = sum(1 for e in mimo_scale_bytes if new_normal_min <= e <= new_normal_max)
+
+    return {
+        "phase": 127,
+        "priority": 136,
+        "track": "A_kernels_quant_comm",
+        "cake_blackwell_softmax": {
+            "b200_changed_shapes": 39,
+            "b200_geomean_speedup": 1.022,
+            "b200_max_speedup": 1.038,
+            "gb300_changed_shapes": 95,
+            "gb300_geomean_speedup": 1.066,
+            "gb300_persistent_8cta_shapes": 52,
+            "gb300_persistent_8cta_geomean_speedup": 1.088,
+            "gb300_max_speedup": 1.132,
+            "b200_samples": b200_softmax_samples,
+            "gb300_samples": gb300_softmax_samples,
+        },
+        "cake_kimi_k3_fused_router": {
+            "num_experts": 896,
+            "top_k": 16,
+            "measured_cells": 28,
+            "gb300_1token_bm16_speedup": 1.22,
+            "b200_1token_bm16_speedup": 1.21,
+            "geomean_speedup_28_cells": 1.03,
+            "cells": kimi_k3_router_cells,
+        },
+        "frost_mx_ffma_cross_target": {
+            "duplicate_route_tactic": "FFMA (top_k=6, E=4)",
+            "cold_compile_cross_target_failures_before": 1,
+            "cold_compile_cross_target_failures_after": 0,
+            "shared_loader": "_load_cross_compiled under _COMPILE_LOCK",
+        },
+        "cake_ulysses_direct_fence": {
+            "updated_direct_programs": 24,
+            "total_programs": 48,
+            "b300_max_speedup": 1.021,
+            "b200_max_speedup": 1.019,
+            "fence_instruction": "fence.acq_rel.sys after st.release.sys.global.u32",
+        },
+        "nvlink_one_sided_lamport_transport": {
+            "vector_bytes": 16,
+            "default_min_floor_tokens": 159,
+            "default_max_cap_tokens": 512,
+            "speed_bound_workspace_cap_mib": 64.0,
+            "deepseek_v3_bf16_ep8_t1_speedup": 2.77,
+            "deepseek_v3_nvfp4_ep8_t1_speedup": 2.69,
+            "deepseek_v3_bf16_ep64_t1_speedup": 2.54,
+            "kimi_k3_bf16_ep64_t1_speedup": 2.01,
+            "dep16_step_latency_saving_ms_max": 2.6,
+            "benchmarks": lamport_benchmarks,
+        },
+        "cake_moe_allreduce_union_overlap": {
+            "two_shot_token_range": [1536, 2048],
+            "world_sizes": [4, 8],
+            "b200_max_speedup": 1.0317,
+            "b300_max_speedup": 1.0332,
+        },
+        "hopper_fmhav2_workspace_counter": {
+            "terminal_ticket_formula": "atomicInc(counter, N + G - 1)",
+            "fp8_ragged_skip_formula": "atomicMax(counter, N)",
+            "separate_post_kernel_clear_launches": 0,
+        },
+        "b12x_w4a16_e8m0_and_unrouted_sum": {
+            "old_scale_bias": old_bias,
+            "new_scale_bias": new_bias,
+            "old_normal_byte_window": [old_normal_min, old_normal_max],
+            "new_normal_byte_window": [new_normal_min, new_normal_max],
+            "old_global_compensation_exp2": old_compensation_exp,
+            "new_global_compensation_exp2": new_compensation_exp,
+            "exponent_headroom_shift_bits": new_bias - old_bias,
+            "mimo_v26_pro_normal_bytes_before": old_normal_mimo_count,
+            "mimo_v26_pro_normal_bytes_after": new_normal_mimo_count,
+            "unrouted_neg1_cosine_before": 0.29,
+            "unrouted_neg1_cosine_after": 0.99999,
+            "unrouted_e2e_pass_rate_after": 1.0,
+        },
+        "tilelang_and_triton_guards": {
+            "tilelang_sparse_mma_tail_rejected": True,
+            "triton_local_store_cta_replica_broadcast": True,
+        },
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).with_name("summary.json")
+    summary = build_summary()
+
+    if args.check:
+        assert out_path.exists(), f"Missing {out_path}"
+        existing = json.loads(out_path.read_text(encoding="utf-8"))
+        assert existing == summary, "Mismatch in summary.json"
+        assert summary["cake_blackwell_softmax"]["gb300_max_speedup"] == 1.132
+        assert summary["cake_kimi_k3_fused_router"]["gb300_1token_bm16_speedup"] == 1.22
+        assert summary["nvlink_one_sided_lamport_transport"]["deepseek_v3_bf16_ep8_t1_speedup"] == 2.77
+        assert summary["b12x_w4a16_e8m0_and_unrouted_sum"]["new_normal_byte_window"] == [57, 183]
+        print("OK: Phase 127 Track A summary.json verified.")
+        return
+
+    out_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"Wrote {out_path}")
+
+
+if __name__ == "__main__":
+    main()

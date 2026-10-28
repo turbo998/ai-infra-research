@@ -1,4 +1,4 @@
-> **Executive Summary / 核心概览**：本文件完整归档 `ai-infra-research` 第 1–126 阶段（Priority 1–135）的全部 **393 个研究问题、388 套确定性物理实验与 100+ 篇组件级深度技术报告全量索引表（650 KB）**。快速浏览 11 层智算架构图与六大主题域精选表请返回 **[中文精简主入口 (`../README.md`)](../README.md)** | **[English Concise Index (`../README.en.md`)](../README.en.md)**。
+> **Executive Summary / 核心概览**：本文件完整归档 `ai-infra-research` 第 1–127 阶段（Priority 1–136）的全部 **396 个研究问题、391 套确定性物理实验与 100+ 篇组件级深度技术报告全量索引表（650 KB）**。快速浏览 11 层智算架构图与六大主题域精选表请返回 **[中文精简主入口 (`../README.md`)](../README.md)** | **[English Concise Index (`../README.en.md`)](../README.en.md)**。
 
 # AI Infra Research
 

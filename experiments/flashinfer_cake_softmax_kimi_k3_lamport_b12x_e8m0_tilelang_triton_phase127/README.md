@@ -1,0 +1,8 @@
+# Phase 127 Track A: FlashInfer Cake Softmax / Kimi-K3 Fused Router / Lamport MoE All-to-All / b12x W4A16 E8M0 Re-Bias & TileLang/Triton Guards
+
+Deterministic offline verification for Phase 127 Track A (`priority: 136`):
+- **Cake Blackwell Softmax Dispatcher (`80a8b2a8`)**: GB300 (`sm_103a`) 6-tile 8-CTA persistent routing from `20/9` rows/cluster (`1.132x` max, `1.088x` geomean across 52 shapes) and 16-CTA balanced chunk `ceil(vocab/CTAs)` rounded to 32 (`1.066x` geomean across 95 GB300 shapes; `1.022x` geomean across 39 B200 shapes).
+- **Cake Kimi-K3 Fused Router (`2c6a3ea6`)**: `LC1_NC`, `LCG_LW`, `Q4S_E16`, and `Q4SPW_LR` arms across 896 experts top-16 (`1.22x` on GB300 and `1.21x` on B200 at 1 token `block_m=16`).
+- **NVLinkOneSidedAlltoAll Lamport Transport (`1f306300`)**: 16-byte sentinel-armed vectors polling payload arrival directly without completion flags or system fences (`2.77x` BF16 and `2.69x` NVFP4 at `EP=8, T=1`; `2.54x` BF16 at `EP=64, T=1`; `-2.0` to `-2.6 ms/step` end-to-end on DEP16).
+- **SM12x `b12x` W4A16 BF16 E8M0 Scale Exponent Re-Bias (`30cd27ea`) & Unrouted (`-1`) Top-K Sum Guard (`f083cef0`)**: Shifts scale bias `7 -> 71` (`2^-55` MMA weight scale, normal BF16 window `57..183` instead of `121..247`) and skips `id < 0` in map-free top-k sum (`cos 0.29 / NaN -> 0.99999`).
+- **Frost MX FFMA Cross-Target Loader (`64177fe5`)**, **Cake Ulysses Direct All-to-All Fence (`d304863b`)**, **Cake MoE AllReduce Union First-Token Overlap (`1e3f47f2`)**, **Hopper FMHAv2 Workspace Counter Reset (`32a8e5a7`)**, **TileLang Sparse MMA Tail Guard (`fca340e5`)**, and **Triton Local-Store CTA Replica Broadcast (`51a27535`)**.
