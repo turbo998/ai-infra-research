@@ -1,5 +1,8 @@
 # AI Infra 全栈地图
 
+> **Executive Summary / 核心概览**：本文件提供 `ai-infra-research` **全栈分层地图（Layer 0 工作负载 → Layer 10 容量与机架经济学）**，将每一层的硬件物理约束、核心开源组件、待解工程问题与已完成的深度报告/确定性实验（[`experiments/`](../experiments/)）建立一一映射。
+
+
 本表是研究范围及问题地图，不是全部完成清单。首轮完成 GPU/HBM 基础与互连分层；其余按 [queue](../research/queue.json) 逐题推进。
 
 | 层 | 关键组件/技术栈 | 实现研究问题 | 架构产出/状态 |

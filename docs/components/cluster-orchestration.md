@@ -1,5 +1,8 @@
 # 集群调度、拓扑感知与多租户故障隔离：Kubernetes (Topology Manager / Kueue TAS)、Slurm (`topology/block` & `tree`)、NVIDIA Device Plugin 与 PyTorch `torchelastic` 源码深挖
 
+> **Executive Summary / 核心概览**：本报告基于 `Kubernetes v1.37`、`Kueue v0.20`、`NVIDIA Device Plugin`、`Slurm 26.05` 与 `PyTorch torchelastic` 源码，深度剖析 **CPU/GPU/RDMA NIC 同 NUMA 按位与亲和准入、Kueue TAS 与 Slurm `topology/block & tree` 紧致分配、MIG 切片级 XID 故障隔离** 以及万卡作业弹性重配置有效吞吐（Goodput）。
+
+
 - **组件归属**：AI Infra 全栈研究第 9 层（集群与运维：Slurm vs Kubernetes、GPU/RDMA 拓扑感知调度、MIG/Time-Slicing 隔离、健康监控、弹性容错与 Goodput）
 - **先修依赖**：[分布式训练并行策略与通信重叠](training-parallelism.md)、[Prefill/Decode 分离与推理 SLO 调度](inference-slo.md)、[RDMA Verbs 生命周期与队列语义](rdma-lifecycle.md)
 - **面向对象**：需要设计百卡至万卡级 GPU/RDMA 训练与推理集群、定位跨 NUMA/跨 Leaf 交换机降速根因、规划 MIG/Time-Slicing 多租户隔离边界并量化故障恢复有效吞吐（Goodput）的云解决方案架构师

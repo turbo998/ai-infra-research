@@ -1,5 +1,8 @@
 # AI Infra 创新公司深挖：推理加速平台（Fireworks / Together）与新型 AI 芯片（Groq / Cerebras）
 
+> **Executive Summary / 核心概览**：本专题基于第一性原理（显存带宽墙、片间通信原语与编译分派链路）深度解构四大 AI Infra 创新代表：**Fireworks AI**（Blackwell SM100 M3 块稀疏注意力与前缀路由）、**Together AI**（Hopper FA3 异步流水线与 Sequoia 投机卸载树）、**Groq TSP/LPU**（片上 `20–55 TiB/s` SRAM 确定性流架构）与 **Cerebras WSE**（晶圆级 2D Mesh 单色 AllReduce）。
+
+
 状态：2026-10-18（持续更新自 2026-10-14），基于固定开源代码提交与同行评审/预印本论文正文的**有界公开研究**。
 先修：[GPU/HBM 深入研究](gpu-hbm.md)、[互连与网络分层](interconnect-network.md)。
 **严格边界声明**：本文仅依据公开源码（`implementation`）、架构论文（`specification` / `author-benchmark`）及本仓库合成公式推导立论；**未调用任何商业付费 API，未在 B200/H100/Groq LPU/Cerebras WSE 硬件上实测**，作者披露的跑分均显式标注为 `author-benchmark`，绝不冒充本项目独立重测（`own-hardware`）。

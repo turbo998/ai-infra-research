@@ -1,5 +1,8 @@
 # 分布式训练 6D 并行与 FSDP2/ZeRO 联合状态与通信机制：从 TorchTitan `ParallelDims`、DTensor TP/CP/PP 到 DeepEP v2 路由去重
 
+> **Executive Summary / 核心概览**：本报告基于 `PyTorch v2.6` 与 `TorchTitan v0.3.0` 源码，系统推导 **6D 混合并行（`DP Replicate × FSDP2 Shard × TP × CP × PP × MoE EP`）** 下每张 GPU 的静态状态切分、双缓冲 AllGather 瞬态预取峰值、Ring/Ulysses 序列并行因果负载均衡及 `DeepEP v2` 紧凑去重通信量。
+
+
 - **组件归属**：AI Infra 全栈研究第 7 层（分布式训练：`DP`/`TP`/`PP`/`CP`/`EP`、`FSDP`/`ZeRO`、计算通信重叠、混合精度与数值稳定性）
 - **面向对象**：熟悉云架构与 RDMA/NCCL 集合通信先修知识、需要掌握大模型 6D 混合并行如何联合决定每张 GPU 的静态状态切分、瞬态预取缓冲峰值、动态激活内存以及跨层集合通信流量的解决方案架构师
 - **核验日期**：`2026-10-17`（UTC+08:00）

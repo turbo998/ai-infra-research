@@ -1,5 +1,8 @@
 # 架构师练习与评分依据
 
+> **Executive Summary / 核心概览**：本练习集收录覆盖 11 层 AI Infra 技术栈的 **100+ 道架构师定量自测题与评分标准**，涵盖显存 Payload 核算、Roofline 算术强度、Ring/PAT/NVLS 集合通信流量、SM100 TMEM/FA4/FlashMLA 算子边界、Mooncake/Dynamo/LMCache 分离式 KV 路由、6D 混合并行与 800VDC 液冷容错。所有算例均为确定性解析推导，配套实验见 [`experiments/`](../../experiments/)。
+
+
 先独立作答，再读提示。以下是原创合成问题，不是设备 benchmark。
 
 ## 1. 显存 payload

@@ -1,5 +1,8 @@
 # 机架功率密度、液冷/风冷边界与机柜级故障域：从 CDU 热力学、Slurm 令牌桶浪涌限流到 DCGM MNNVL/IMEX 故障域
 
+> **Executive Summary / 核心概览**：本报告基于 `NVIDIA DCGM v4.6` 与 `Slurm 26.05` 源码，量化 **100kW–130kW+ 机柜级多节点 NVLink（如 GB200 NVL72）的冷板液冷（DLC）与 CDU 热力学边界、Slurm 令牌桶与 GPU 硬件 `Power Smoothing` 瞬态浪涌（`dP/dt`）抑制机制**，以及 `IMEX` 72-GPU 机柜级故障爆炸半径。
+
+
 - **状态**：已建立基于 NVIDIA DCGM `v4.6.1`、SchedMD Slurm `26.05.5-1` 与创新芯片（Groq LPU、Cerebras CS-3 WSE-3）一手源码/规范的静态实现分析（`implementation` / `specification`）与可复核离线热力学/功率控制模型（`own-offline`）；未在真实 100kW+ 液冷机柜、CDU 管路、IPMI/XCC BMC 或 MNNVL NVSwitch 硬件上执行实机压测（`own-hardware` 未生成）。
 - **读取版本/范围**：
   - [NVIDIA DCGM `v4.6.1`](https://github.com/NVIDIA/DCGM/blob/64df9f894541e426e416131a9820cae97aa4dd81/modules/health/DcgmHealthWatch.cpp)（commit `64df9f894541e426e416131a9820cae97aa4dd81`，发布于 `2026-08-19`）：`modules/health/DcgmHealthWatch.cpp`（全文 3,808 行，`git_blob_sha: e3c7a5f811eebba2b0c8ae4190eea3d6f90d5b36`）、`modules/policy/DcgmPolicyManager.cpp`（全文 1,272 行，`git_blob_sha: e95b31f8b956a1ac1fee2559e6f281c791dc2c5c`）及 `dcgmlib/dcgm_fields.h`（全文 3,993 行，`git_blob_sha: aa65ab23eb0d0ca3f60a062e61e6a62148ba1b21`）。

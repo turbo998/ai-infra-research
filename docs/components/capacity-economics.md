@@ -1,5 +1,8 @@
 # 容量、成本与吞吐经济学：TorchTitan MFU、vLLM SLO Goodput、Prefill/Decode 分离配比、Slurm 能耗积分与创新芯片 I/O 边界源码深挖
 
+> **Executive Summary / 核心概览**：本报告基于 `TorchTitan v0.3.0`、`vLLM v0.8.2`、`Slurm 26.05` 与 `Sequoia` 一手源码，建立从 **单 Token 真实训练/推理 FLOPs 账本、Gamma 突发流量下的 SLO Goodput 排队模型、Prefill/Decode 分离实例最佳配比** 到 **cgroups 级 GPU 焦耳能耗积分** 的完整容量与成本经济学体系。
+
+
 - **组件归属**：AI Infra 全栈研究第 10 层（容量与成本建模：有效 MFU vs 理论峰值、训练每百万 Token 成本、推理 Prefill/Decode 实例配比、突发流量排队冗余、Prefix Cache 经济学与 GPU 能耗核算）
 - **先修依赖**：[分布式训练并行策略与通信重叠](training-parallelism.md)、[Prefill/Decode 分离与推理 SLO 调度](inference-slo.md)、[集群调度、拓扑感知与多租户故障隔离](cluster-orchestration.md)、[GPU/HBM 深入研究](gpu-hbm.md)
 - **面向对象**：需要为百卡至万卡级训练与高并发在线推理制定容量预算、核算 $/1M Tokens 真实成本、决定 Prefill/Decode 分离比例及评估创新推理加速方案的云解决方案架构师
