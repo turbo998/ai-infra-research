@@ -1,14 +1,14 @@
 # AI Infrastructure Full-Stack Research & Architecture Workbench
 
-> 🌐 **Language / 语言切换**: **[中文](README.md)** | **[English](README.en.md)** | **[📚 Full 130-Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)** | **[📚 完整 130 阶段中文全量目录 (`docs/full-catalog-zh.md`)](docs/full-catalog-zh.md)** | **[🗺️ 11-Layer Stack Map (`docs/stack-map.md`)](docs/stack-map.md)**
+> 🌐 **Language / 语言切换**: **[中文](README.md)** | **[English](README.en.md)** | **[📚 Full 131-Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)** | **[📚 完整 131 阶段中文全量目录 (`docs/full-catalog-zh.md`)](docs/full-catalog-zh.md)** | **[🗺️ 11-Layer Stack Map (`docs/stack-map.md`)](docs/stack-map.md)**
 
 ---
 
 ## 📌 Executive Overview Summary
 
-> **Current Verified Baseline (Phase 1 – Phase 130 Complete on `main`, Priority 139 · 130-Phase & 400-Experiment-Suite Milestone)**
+> **Current Verified Baseline (Phase 1 – Phase 131 Complete on `main`, Priority 140 · 408-Question & 403-Experiment-Suite Baseline)**
 > This repository delivers an evidence-driven engineering encyclopedia and deterministic simulation workbench across the **11-Layer AI Compute & Systems Stack**, grounded in pinned primary open-source implementations (`implementation`), architectural specifications (`specification`), and zero-dependency Python 3.12 physics/protocol models (`own-offline`):
-> - **Scale & Verification Ledger**: **`405` core engineering research questions** (`403 done` + `2 blocked` on paywalled external standards; `405/405` covered by reproducible offline models), **`400` zero-dependency Python 3.12 experiment suites** (`--check`), **`2,211` pinned commit/blob primary source citations** ([`research/sources.json`](research/sources.json)), **`706` graded evidence claims** ([`research/evidence.json`](research/evidence.json)), **`648` passing unit tests**, and **`130` self-contained 7-Card 4:5 visual benchmark decks** (`docs/reports/`, latest **[Phase 130 7-Card Benchmark Deck](docs/reports/ai-infra-phase130-benchmark-cards.html)**).
+> - **Scale & Verification Ledger**: **`408` core engineering research questions** (`406 done` + `2 blocked` on paywalled external standards; `408/408` covered by reproducible offline models), **`403` zero-dependency Python 3.12 experiment suites** (`--check`), **`2,241` pinned commit/blob primary source citations** ([`research/sources.json`](research/sources.json)), **`709` graded evidence claims** ([`research/evidence.json`](research/evidence.json)), **`651` passing unit tests**, and **`131` self-contained 7-Card 4:5 visual benchmark decks** (`docs/reports/`, latest **[Phase 131 7-Card Benchmark Deck](docs/reports/ai-infra-phase131-benchmark-cards.html)**).
 > - **L01 GPU / SM100 Blackwell Kernels & Low-Precision Numerics**: Deep dives into `tcgen05`, 512-column `TMEM` in-place aliasing (eliminating `64 KiB` SMEM spill), `FlashAttention-4` (`FFMA2` polynomial emulation breaking the `MUFU.EX2` bottleneck to reach **`2,790.1 TFLOPS`** on B200 and **`3,200.0 TFLOPS`** on SM103 B300), `FlashMLA V4.1` (`+32B` TMA row padding eliminating 4-way `LDS.32` bank conflicts and `get_mla_metadata` cutting **`89.88%`** tail-wave skew), `CUTLASS CLC` dynamic work stealing, and `NVFP4/MXFP8` block scaling.
 > - **L02 & L04 Tiered KV Cache & Disaggregated Prefill-Decode Serving**: Quantifies the 4-tier KV hierarchy (VRAM → Host Pinned DRAM → CXL 3.0 `Device-DAX` `2 MiB`-aligned arenas → GDS/3FS), `Mooncake Transfer Engine` (ConnectX-8 `Data Direct` zero-lock batching, 7-tier Auto-GID reprobing, and bounded `W=4` Scatter lifting throughput from **`313.0 -> 357.85 Gbps`**), `NVIDIA Dynamo` (2-tier `kvcr` connectors & `NIXL` UCX/Libfabric memory-type hints), `vLLM V1` (`HiSparse` MLA & rejection sampling), and `SGLang` (`HiRadixCache` & `EAGLE-3` speculative trees).
 > - **L03 & L09 Supernode Fabrics, `IBGDA` GPU-Initiated RDMA & Co-Packaged Optics (`CPO`/`OCS`)**: Models `PyTorch CUDASymmetricMemory` + `NVLS multimem` (**`6.22x`** traffic reduction over unicast 1-Shot), `NCCL Gin` symmetric collectives & `PAT` binomial trees (`1,023 -> 7` hops at 1,024 GPUs), `DeepEP V2.5` GPU-initiated RDMA (**`10.67x`** doorbell reduction via Warp aggregation), `UEC 1.0` 64B packet trimming (**`69.9%`** lower P99 tail latency under 32-to-1 incast), and `1.6T CPO + 3D MEMS OCS` 100K-GPU optical power/blast-radius models.
@@ -35,13 +35,13 @@
 | **L08 · Checkpoint / Restore & Fault Tolerance** | `PyTorch DCP AsyncStager` · `NVRx In-Process Warm Standby` · `FlightRecorder + NCCL RAS` · `Grey-Failure Straggler Detector` | Compresses `cudaHostRegister` checkpoint stalls from `3.737 s` to `0.048 s` via persistent pinned shared-memory pools; pairs half-world cross-rack replication with `< 650 ms` silent-deadlock patient-zero localization. |
 | **L09 · Optical Interconnects, CPO & OCS** | `1.6T Co-Packaged Optics (9 pJ/bit)` · `Linear Pluggable Optics (LPO)` · `3D MEMS OCS` · `ELSFP External Laser` | Cuts pluggable DSP optical power by `65%+`, isolates external laser thermal failure domains (`ELSFP`), and dynamically reconfigures spine topologies via 3D MEMS optical circuit switches. |
 | **L10 · 800VDC Power & Direct-to-Chip Liquid Cooling** | `±400V / 800VDC Busway` · `130kW+ NVL72 Cold-Plate DLC` · `CDU Heat Exchanger` · `Slurm Token-Bucket & DCGM Power Brake` | Models CDU secondary loop thermodynamics, 72-GPU MNNVL `IMEX` rack blast radius, and hardware power smoothing + BESS peak shaving against synchronous Tensor Core `dP/dt` power transients. |
-| **L11 · Deterministic Benchmark Harness** | `scripts/validate_research.py` · `400 Python 3.12 Experiments` · `648 Unit Tests` · `130 7-Card 4:5 Benchmark Decks` | Pure Python 3.12 standard-library verification engine reproducing all analytical bounds, state machines, and 7-card visual reports offline with zero external dependencies. |
+| **L11 · Deterministic Benchmark Harness** | `scripts/validate_research.py` · `403 Python 3.12 Experiments` · `651 Unit Tests` · `131 7-Card 4:5 Benchmark Decks` | Pure Python 3.12 standard-library verification engine reproducing all analytical bounds, state machines, and 7-card visual reports offline with zero external dependencies. |
 
 ---
 
 ## 🗂️ 6 Thematic Domain Summary Tables (Flagship Studies & Deep Dives)
 
-> 💡 **Full 665 KB Encyclopedia Catalog**: The tables below highlight flagship studies across 6 thematic domains. For the complete, unabridged table of all **130 Phases, 405 Research Questions, and 400 Experiment Suites**, open:
+> 💡 **Full 665 KB Encyclopedia Catalog**: The tables below highlight flagship studies across 6 thematic domains. For the complete, unabridged table of all **131 Phases, 408 Research Questions, and 403 Experiment Suites**, open:
 > 👉 **[📚 English Complete Component & Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)** | **[📚 中文全量组件与阶段百科表 (`docs/full-catalog-zh.md`)](docs/full-catalog-zh.md)**
 
 ### Domain 1: GPU Silicon, SM90/SM100 Blackwell Kernels & Low-Precision Numerics (L01)
@@ -122,16 +122,16 @@
 | **[Capacity, Token Economics & Goodput (`TorchTitan` MFU & `vLLM` SLO)](docs/components/capacity-economics.md)** | $/1M token training/inference cost accounting, Gamma burstiness queueing headroom, prefix-cache economics, and energy integration | [`capacity_economics`](experiments/capacity_economics/README.md) · [`ai_factory_tco_simulator`](experiments/ai_factory_tco_simulator/README.md) |
 | **[AI Infra Innovators (Fireworks / Together / Groq / Cerebras)](docs/components/ai-infra-innovators.md)** · **[v2 Deep Dive](docs/components/ai-infra-innovators-v2.md)** | Block-sparse M3 Attention, Sequoia speculative offload, Groq TSP on-chip SRAM determinism, and Cerebras WSE 2D Mesh | [`innovator_arch_tradeoffs`](experiments/innovator_arch_tradeoffs/README.md) · [`innovator_pareto_v2`](experiments/innovator_pareto_v2/README.md) |
 | **[Alibaba Cloud AI Infra ("Tong-Yun-Ge" Full-Stack Architecture)](docs/alibaba-cloud-ai-infra/README.md)** | T-Head Zhenwu PPU / Zhenyue SSD / Yitian CPU, Panjiu AL128 supernode, HPN 7.0 dual-plane RDMA, and PAI tidal scheduling | [`docs/alibaba-cloud-ai-infra/evidence.json`](docs/alibaba-cloud-ai-infra/evidence.json) |
-| **[End-to-End Architecture Case](docs/architectures/end-to-end-ai-infra-case.md)** · **[Synthetic Budget](docs/architectures/synthetic-inference-budget.md)** · **[Architect Exercises](docs/learning/exercises.md)** | End-to-end cluster sizing combining memory ledgers, network fabrics, PD disaggregation, rack power, and self-assessment problems | **[📚 Full 130-Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)** |
+| **[End-to-End Architecture Case](docs/architectures/end-to-end-ai-infra-case.md)** · **[Synthetic Budget](docs/architectures/synthetic-inference-budget.md)** · **[Architect Exercises](docs/learning/exercises.md)** | End-to-end cluster sizing combining memory ledgers, network fabrics, PD disaggregation, rack power, and self-assessment problems | **[📚 Full 131-Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)** |
 
 ---
 
 ## 🧪 Verification & Reproducibility Commands
 
-All validation tools and 400 experiment suites use the **Python 3.12 standard library only** (no GPU or third-party packages required):
+All validation tools and 403 experiment suites use the **Python 3.12 standard library only** (no GPU or third-party packages required):
 
 ```powershell
-# 1. Run the full unit test suite (648 unit tests)
+# 1. Run the full unit test suite (651 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and all Markdown links
