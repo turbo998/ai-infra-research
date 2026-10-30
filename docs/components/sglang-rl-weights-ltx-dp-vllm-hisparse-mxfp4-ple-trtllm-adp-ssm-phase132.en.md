@@ -1,0 +1,13 @@
+# SGLang RL Weight Subset Hashing & Prompt KV Weight-Version Spans, LTX Diffusion `@replay_launches` & DP Controller Simplification, vLLM `HiSparse` Admission Host-Page Reservation, KV Offload Prefix-Order Tuple, ROCm `gfx942` Kimi-K3 `MXFP4->INT4` Pure-TP Chunking & `Qwen4Exp` PLE Disk Offload, and TensorRT-LLM Attention-DP Per-Rank KV Metrics, Attention/SSM Buffer Reuse & PP `NCCL_GRAPH_REGISTER=0` (Phase 132 · Priority 141)
+
+> **中文版**: [sglang-rl-weights-ltx-dp-vllm-hisparse-mxfp4-ple-trtllm-adp-ssm-phase132.md](sglang-rl-weights-ltx-dp-vllm-hisparse-mxfp4-ple-trtllm-adp-ssm-phase132.md)  
+> **Evidence Anchor**: `ev-sglang-rl-weights-ltx-dp-vllm-hisparse-mxfp4-ple-trtllm-adp-ssm-phase132-2026` (`own-offline` + `implementation`)  
+> **Reproducible Experiment**: `python experiments/sglang_rl_weights_ltx_dp_vllm_hisparse_mxfp4_ple_trtllm_adp_ssm_phase132/run.py --check`
+
+---
+
+## 1. Primary Source Matrix
+
+- **`sgl-project/sglang` (`75a5da7`, `e7dd1d0`, `24268cc` & `2271894`)**: Filtering `check_weights` by tensor `names` (**`32.0x` faster** single-layer RL weight verification); reporting half-open `[start, end)` `prefill_weight_versions` spans across prompt tokens to expose prefix-cached KV blocks computed under older RL policy weights (**`1 -> 0` untracked stale prompt KV spans**); adding `@replay_launches` to LTX-2/2.3 diffusion `head_gate_mul` while reusing CFG ranks for Stage-2 Ulysses SP; and unifying `DataParallelController.update_active_ranks`.
+- **`vllm-project/vllm` (`8493b34`, `dfe4d99`, `8a2a5e4` & `b44a48c`)**: Reserving `import_step_tokens = 1 + num_speculative_tokens` host pages at `HiSparse` admission (**`12.5% -> 0.0%` host-page overcommitment**); changing `TransferJobStatus.keys` from `set` to `tuple` to preserve prefix block ordering (`1 -> 0` out-of-order completions); sizing `gfx942` Kimi-K3 `MXFP4 -> INT4` load-time requantization chunks by `_K3_INT4_CONVERT_CHUNK_VALUES = 1 << 27` unpacked values (**`512.0 MiB` peak FP32 staging** vs `> 20 GiB` unchunked, cutting pure `TP=8` chunk launches **`64 -> 8`, `4.85x` faster**); and adding `Qwen4Exp` `disk_offload` to read PLE rows directly from host `safetensors` (**`32.0 -> 0.0 GiB` resident memory** on unified-memory GPUs like DGX Spark).
+- **`NVIDIA/TensorRT-LLM` (`dc634e7`, `f58c2fe` & `1d46219`)**: Preserving per-rank `attentionDpRank` KV cache snapshots across **`8/8` ranks** without `TLLM_METRICS_ALL_RANKS`; supporting strongly typed `CacheGroupId` layer/buffer reuse policies across Attention and SSM layers in `kv_cache_manager_v2`; and defaulting `NCCL_GRAPH_REGISTER=0` before creating pipeline-parallel NCCL communicators.
