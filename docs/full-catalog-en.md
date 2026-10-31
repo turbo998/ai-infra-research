@@ -1145,3 +1145,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang Joint-LRU Unified KV Eviction & Rust DP-Abort Broadcast, vLLM NIXL 1.5.2 & TRT-LLM Owning Fragment](components/sglang-joint-lru-dp-abort-vllm-nixl152-trtllm-own-frag-phase161.en.md)
 - [NCCL 2.32.3, RCCL DMABUF Disable Guard & amd-smi Migration, NIXL GPUNetIO, Mooncake Loopback Binding & LMCache Real gRPC Validation](components/nccl-2323-rccl-dmabuf-amdsmi-nixl-gpunetio-mooncake-lmcache-phase161.en.md)
 - [Phase 161 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase161-benchmark-cards.html)
+
+### Phase 162 (`priority: 171` · 2026-11-01 · 501-Question Milestone)
+- [FlashInfer CAKE Det Loss Per-Thread State & B200/GB300/R200 RMSNorm Retuning, FlashAttention ROCm System AITER & Triton AMD MIR CodeGen](components/flashinfer-det-loss-rmsnorm-fa-aiter-triton-mir-phase162.en.md)
+- [SGLang M3 Reasoning-Effort Enum Guard & LTX-2.5 / Pika-H3-Flex Diffusion, vLLM GB300 AgentX & Full MI355 MoE, TRT-LLM PyExecutor & DeepEP SM90](components/sglang-m3-enum-ltx25-vllm-gb300-mi355-trtllm-deepep-sm90-phase162.en.md)
+- [NCCL 2.32.3 nccl4py Bindings, NIXL Mooncake Plugin Governance, Mooncake TENT T-One Dual-Stack E2E & LMCache XPU Subprocess Probe](components/nccl4py-2323-rccl-nixl-mooncake-tent-tone-lmcache-xpu-phase162.en.md)
+- [Phase 162 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase162-benchmark-cards.html)

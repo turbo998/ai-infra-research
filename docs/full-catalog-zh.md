@@ -1407,3 +1407,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang Joint-LRU 混合 KV 驱逐与 Rust Attention-DP Abort 广播、vLLM NIXL 1.5.2 及 TRT-LLM Owning Fragment](components/sglang-joint-lru-dp-abort-vllm-nixl152-trtllm-own-frag-phase161.md)
 - [NCCL 2.32.3、RCCL DMABUF 禁用门控与 amd-smi 迁移、NIXL GPUNetIO、Mooncake Loopback 元数据绑定及 LMCache gRPC 实服验证](components/nccl-2323-rccl-dmabuf-amdsmi-nixl-gpunetio-mooncake-lmcache-phase161.md)
 - [Phase 161 7-Card 4:5 视觉基准报告](reports/ai-infra-phase161-benchmark-cards.html)
+
+### Phase 162 (`priority: 171` · 2026-11-01 · 501 题里程碑)
+- [FlashInfer CAKE Det Loss 逐线程状态与 B200/GB300/R200 RMSNorm 重调优、FlashAttention ROCm System AITER 及 Triton AMD MIR CodeGen](components/flashinfer-det-loss-rmsnorm-fa-aiter-triton-mir-phase162.md)
+- [SGLang M3 推理强度枚举校验与 LTX-2.5 / Pika-H3-Flex 扩散模型、vLLM GB300 AgentX 与全卡 MI355 MoE、TRT-LLM PyExecutor 及 DeepEP SM90 兼容](components/sglang-m3-enum-ltx25-vllm-gb300-mi355-trtllm-deepep-sm90-phase162.md)
+- [NCCL 2.32.3 nccl4py 绑定生成、NIXL Mooncake 插件治理、Mooncake TENT T-One 双栈 E2E 与 LMCache XPU 子进程探测](components/nccl4py-2323-rccl-nixl-mooncake-tent-tone-lmcache-xpu-phase162.md)
+- [Phase 162 7-Card 4:5 视觉基准报告](reports/ai-infra-phase162-benchmark-cards.html)
