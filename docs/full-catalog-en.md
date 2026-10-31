@@ -1241,3 +1241,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Systems: vLLM ROCm Skinny-GEMM Guard, Kimi-K3 Adaptive KDA Verification & SGLang AMD Muse-Spark](components/inference-vllm-rocm-skinny-gemm-kimi-k3-kda-sglang-muse-spark-phase177.en.md)
 - [Distributed Training & Interconnect: Megatron GDP FP32 State Invariants, TE Grouped Linear CPU Reduction & NCCL Encryption Config](components/distributed-training-megatron-gdp-fp32-te-grouped-cpu-nccl-encryption-phase177.en.md)
 - [7-Card Visual Benchmark Report (Phase 177)](reports/ai-infra-phase177-benchmark-cards.html)
+
+### Phase 178 (`priority: 187`)
+- [GPU Software Stack: FlashInfer SM100/103 Global-Ticket DSA Scan, SiLU-Gated RMSNorm Fwd/Bwd & FA SM100 Sparse MLA Sentinel Guard](components/gpu-software-stack-flashinfer-dsa-ticket-silu-rmsnorm-fa-sparse-mla-phase178.en.md)
+- [Inference Systems: vLLM MI355X DeepSeek-V4.1-Flash & Mistral-Large-4, P2P Handshake Wait & SGLang gfx1250 AITER](components/inference-vllm-mi355x-dsv41-mistral4-p2p-handshake-sglang-gfx1250-phase178.en.md)
+- [Distributed Training & Interconnect: TE Device Grouped-Split Alignment, NCCL AllGather A2A Tuning & Separate Backend XML Topo](components/distributed-training-te-grouped-split-align-nccl-allgather-a2a-topo-phase178.en.md)
+- [7-Card Visual Benchmark Report (Phase 178)](reports/ai-infra-phase178-benchmark-cards.html)

@@ -1503,3 +1503,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理系统：vLLM ROCm Skinny-GEMM 守卫、Kimi-K3 自适应 KDA 校验与 SGLang AMD Muse-Spark](components/inference-vllm-rocm-skinny-gemm-kimi-k3-kda-sglang-muse-spark-phase177.md)
 - [分布式训练与互连：Megatron GDP FP32 状态保持、TE Grouped Linear CPU 减负与 NCCL 加密配置](components/distributed-training-megatron-gdp-fp32-te-grouped-cpu-nccl-encryption-phase177.md)
 - [7-Card 视觉评测报告 (Phase 177)](reports/ai-infra-phase177-benchmark-cards.html)
+
+### Phase 178 (`priority: 187`)
+- [GPU 软件栈：FlashInfer SM100/103 全局 Ticket DSA 扫描、SiLU 门控 RMSNorm 训推内核与 FA SM100 稀疏 MLA 哨兵保护](components/gpu-software-stack-flashinfer-dsa-ticket-silu-rmsnorm-fa-sparse-mla-phase178.md)
+- [推理系统：vLLM MI355X DeepSeek-V4.1-Flash 与 Mistral-Large-4、P2P 握手等待及 SGLang gfx1250 AITER](components/inference-vllm-mi355x-dsv41-mistral4-p2p-handshake-sglang-gfx1250-phase178.md)
+- [分布式训练与互连：TE 设备端 Grouped-Split 对齐校验、NCCL AllGather A2A 调优与独立网络后端 XML 拓扑](components/distributed-training-te-grouped-split-align-nccl-allgather-a2a-topo-phase178.md)
+- [7-Card 视觉评测报告 (Phase 178)](reports/ai-infra-phase178-benchmark-cards.html)
