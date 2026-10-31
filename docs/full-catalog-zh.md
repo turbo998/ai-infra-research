@@ -1479,3 +1479,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理系统：vLLM ROCm DeepSeek-V3 NIXL 精度门禁与 SGLang DSV4-Flash W8A8 / MI355X GLM-5.2](components/inference-vllm-rocm-dsv3-nixl-sglang-dsv4-glm52-phase173.md)
 - [分布式训练与互连：Megatron MFSDP ShortcutMoEBlock 分片与 TE BF16 融合分组 MLP](components/distributed-training-megatron-mfsdp-te-grouped-mlp-nixl-phase173.md)
 - [7-Card 视觉评测报告 (Phase 173)](reports/ai-infra-phase173-benchmark-cards.html)
+
+### Phase 174 (`priority: 183`)
+- [GPU 软件栈：FlashInfer Cake SM100a 8-Warp GEMM、DSV4 稀疏 MLA 与 TritonGPU Volatile 加载](components/gpu-software-stack-flashinfer-cake-sm100-dsv4-triton-volatile-phase174.md)
+- [推理系统：vLLM MRV2 投机草稿后端覆盖、HYV4 工具解析与 SGLang MiniMax-M3.1-Flash](components/inference-vllm-mrv2-spec-decode-hyv4-sglang-minimax-phase174.md)
+- [分布式训练与互连：Megatron GDP 原地分片保存、TE cuDNN 分组 GEMM 规范布局与 NCCL RAS](components/distributed-training-megatron-gdp-te-cudnn-grouped-nccl-ras-phase174.md)
+- [7-Card 视觉评测报告 (Phase 174)](reports/ai-infra-phase174-benchmark-cards.html)

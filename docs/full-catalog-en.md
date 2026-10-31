@@ -1217,3 +1217,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Systems: vLLM ROCm DeepSeek-V3 NIXL Accuracy & SGLang DSV4-Flash W8A8 / MI355X GLM-5.2](components/inference-vllm-rocm-dsv3-nixl-sglang-dsv4-glm52-phase173.en.md)
 - [Distributed Training & Interconnect: Megatron MFSDP ShortcutMoEBlock Sharding & TE BF16 Fused Grouped MLP](components/distributed-training-megatron-mfsdp-te-grouped-mlp-nixl-phase173.en.md)
 - [7-Card Visual Benchmark Report (Phase 173)](reports/ai-infra-phase173-benchmark-cards.html)
+
+### Phase 174 (`priority: 183`)
+- [GPU Software Stack: FlashInfer Cake SM100a 8-Warp GEMM, DSV4 Sparse-MLA & TritonGPU Volatile Loads](components/gpu-software-stack-flashinfer-cake-sm100-dsv4-triton-volatile-phase174.en.md)
+- [Inference Systems: vLLM MRV2 Speculative Draft Backend Overrides, HYV4 Parser & SGLang MiniMax-M3.1-Flash](components/inference-vllm-mrv2-spec-decode-hyv4-sglang-minimax-phase174.en.md)
+- [Distributed Training & Interconnect: Megatron In-Place GDP Shards, TE cuDNN Grouped Layouts & NCCL RAS](components/distributed-training-megatron-gdp-te-cudnn-grouped-nccl-ras-phase174.en.md)
+- [7-Card Visual Benchmark Report (Phase 174)](reports/ai-infra-phase174-benchmark-cards.html)
