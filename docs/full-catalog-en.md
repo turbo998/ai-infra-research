@@ -1181,3 +1181,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference & Sparse Indexing Phase 167: SGLang dsv41 SM90 Paged Decode Tile Balancing, Disaggregation First-Refusal Stop & vLLM Fused Top-K Prefill](components/inference-sglang-dsv41-sm90-disagg-vllm-fused-topk-phase167.en.md)
 - [Interconnect & KV Fabric Phase 167: NCCL EFA-GDA Per-Peer CQ FlushAsync/Wait, ROCm rocjitsu VMEM/CDNA4 GDS EXP Accounting & Mooncake/NIXL/LMCache](components/interconnect-nccl-efa-gda-flush-rocjitsu-vmem-lmcache-phase167.en.md)
 - [Phase 167 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase167-benchmark-cards.html)
+
+### Phase 168 (`priority: 177`, 519-Question / 514-Suite Baseline)
+- [GPU Software Stack Phase 168: FlashInfer Frost FP4 Wide-Load & Invalid-Route Masking, Rubin SM107 MegaMoE Fused Quant, Cake TinyGEMM2 PACKED_M64_N8 & FA SM90 Backward / Causal Sliding Window Fixes](components/gpu-software-stack-flashinfer-frost-rubin-fa-sm90-bwd-phase168.en.md)
+- [Inference & Unified Memory/EP Scheduling Phase 168: SGLang Host-Sync-Free SWA Page Binding, HiCache mlock Pinning, DeepEP Internode CUDA Graph & vLLM Rust Tool-Call Delta Accounting](components/inference-sglang-swa-async-hicache-mlock-deepep-graph-phase168.en.md)
+- [Interconnect & Emulation Governance Phase 168: NCCL EFA-GDA 128B WQE Inline PutValue & 2.32 CFT/NVLS Config, ROCm hip-tests clock64() Delay Removal & NIXL/Mooncake/LMCache](components/interconnect-nccl-efa-inline-put-cft-rocm-clock64-phase168.en.md)
+- [Phase 168 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase168-benchmark-cards.html)

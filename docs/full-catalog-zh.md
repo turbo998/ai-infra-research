@@ -1443,3 +1443,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理加速与稀疏索引 Phase 167：SGLang dsv41 SM90 Paged Decode Tile 均衡、PD 分离首拒止损与 vLLM 单次启动融合 Top-K Prefill](components/inference-sglang-dsv41-sm90-disagg-vllm-fused-topk-phase167.md)
 - [互连与键值存储系统 Phase 167：NCCL EFA-GDA 按对等端 CQ 完成归因 FlushAsync/Wait、ROCm rocjitsu VMEM/CDNA4 GDS EXP 竞态核算与 Mooncake/NIXL/LMCache 演进](components/interconnect-nccl-efa-gda-flush-rocjitsu-vmem-lmcache-phase167.md)
 - [Phase 167 7-Card 4:5 视觉评测报告](reports/ai-infra-phase167-benchmark-cards.html)
+
+### Phase 168 (`priority: 177`, 519 题 / 514 实验套件基线)
+- [GPU 软件栈 Phase 168：FlashInfer Frost FP4 宽加载解码与无效路由掩码、Rubin SM107 MegaMoE 融合量化、Cake TinyGEMM2 PACKED_M64_N8 及 FA SM90 反向与因果滑动窗口修复](components/gpu-software-stack-flashinfer-frost-rubin-fa-sm90-bwd-phase168.md)
+- [推理与统一显存/通信调度 Phase 168：SGLang 统一内存 SWA 尾部无同步绑页与 HiCache mlock 锁页、DeepEP 跨节点分发 CUDA Graph 及 vLLM Rust 工具调用 Token 计量](components/inference-sglang-swa-async-hicache-mlock-deepep-graph-phase168.md)
+- [互连与仿真治理 Phase 168：NCCL EFA-GDA 128B WQE 内联 PutValue 与 2.32 CFT/NVLS 主机配置、ROCm hip-tests 移除固定 clock64() 自旋延迟及 NIXL/Mooncake/LMCache 多进程演进](components/interconnect-nccl-efa-inline-put-cft-rocm-clock64-phase168.md)
+- [Phase 168 7-Card 4:5 视觉评测报告](reports/ai-infra-phase168-benchmark-cards.html)
