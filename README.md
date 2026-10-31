@@ -198,8 +198,20 @@ un.py --check
   - [`docs/components/megatron-mla-rope-nvls-symmmem-mooncake-dfs-lmcache-nixl-redis-phase154.md`](docs/components/megatron-mla-rope-nvls-symmmem-mooncake-dfs-lmcache-nixl-redis-phase154.md)（英文版：[`.en.md`](docs/components/megatron-mla-rope-nvls-symmmem-mooncake-dfs-lmcache-nixl-redis-phase154.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase154-benchmark-cards.html`](docs/reports/ai-infra-phase154-benchmark-cards.html)
 
-- **Phase 156 (`priority: 164`，2026-10-31）**：
+- **Phase 155 (`priority: 164`，2026-10-31）**：
   - [`docs/components/flashinfer-vsa-sdsa-fp4-minimax-triton-gluon-tti-tilelang-sm120-phase155.md`](docs/components/flashinfer-vsa-sdsa-fp4-minimax-triton-gluon-tti-tilelang-sm120-phase155.md)（英文版：[`.en.md`](docs/components/flashinfer-vsa-sdsa-fp4-minimax-triton-gluon-tti-tilelang-sm120-phase155.en.md)）
   - [`docs/components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.md`](docs/components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.md)（英文版：[`.en.md`](docs/components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.en.md)）
   - [`docs/components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.md`](docs/components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.md)（英文版：[`.en.md`](docs/components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase155-benchmark-cards.html`](docs/reports/ai-infra-phase155-benchmark-cards.html)
+
+- **Phase 156 (`priority: 165`，2026-10-31）**：
+  - [`docs/components/flashinfer-megamoe-sm103a-mhc-kda-ulysses-triton-tilelang-phase156.md`](docs/components/flashinfer-megamoe-sm103a-mhc-kda-ulysses-triton-tilelang-phase156.md)（英文版：[`.en.md`](docs/components/flashinfer-megamoe-sm103a-mhc-kda-ulysses-triton-tilelang-phase156.en.md)）
+  - [`docs/components/sglang-pp-kv-minimax-glm5-vllm-hisparse-muse-trtllm-qwen38-phase156.md`](docs/components/sglang-pp-kv-minimax-glm5-vllm-hisparse-muse-trtllm-qwen38-phase156.md)（英文版：[`.en.md`](docs/components/sglang-pp-kv-minimax-glm5-vllm-hisparse-muse-trtllm-qwen38-phase156.en.md)）
+  - [`docs/components/megatron-fsdp-layout-rl-logprobs-dsa-mooncake-efa-lmcache-nixl-phase156.md`](docs/components/megatron-fsdp-layout-rl-logprobs-dsa-mooncake-efa-lmcache-nixl-phase156.md)（英文版：[`.en.md`](docs/components/megatron-fsdp-layout-rl-logprobs-dsa-mooncake-efa-lmcache-nixl-phase156.en.md)）
+  - 7-Card 报告：[`docs/reports/ai-infra-phase156-benchmark-cards.html`](docs/reports/ai-infra-phase156-benchmark-cards.html)
+
+- **Phase 157 (`priority: 166`，2026-10-31）**：
+  - [`docs/components/flashinfer-tns-detloss-mhc-sm107a-allreduce-megamoe-triton-tilelang-phase157.md`](docs/components/flashinfer-tns-detloss-mhc-sm107a-allreduce-megamoe-triton-tilelang-phase157.md)（英文版：[`.en.md`](docs/components/flashinfer-tns-detloss-mhc-sm107a-allreduce-megamoe-triton-tilelang-phase157.en.md)）
+  - [`docs/components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.md`](docs/components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.md)（英文版：[`.en.md`](docs/components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.en.md)）
+  - [`docs/components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.md`](docs/components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.md)（英文版：[`.en.md`](docs/components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.en.md)）
+  - 7-Card 报告：[`docs/reports/ai-infra-phase157-benchmark-cards.html`](docs/reports/ai-infra-phase157-benchmark-cards.html)

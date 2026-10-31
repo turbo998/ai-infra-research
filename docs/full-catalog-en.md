@@ -1115,3 +1115,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang PP KV Consensus, MiniMax DSpark, vLLM HiSparse Fused, Muse Spark Hybrid MoE & TRT-LLM Qwen3.8/SpecDecode](components/sglang-pp-kv-minimax-glm5-vllm-hisparse-muse-trtllm-qwen38-phase156.en.md)
 - [Megatron FSDP GlobalLayout Reuse, RL Vocab-Parallel Logprobs, DSA Precision, PyTorch IPC & Mooncake/LMCache/NIXL](components/megatron-fsdp-layout-rl-logprobs-dsa-mooncake-efa-lmcache-nixl-phase156.en.md)
 - [Phase 156 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase156-benchmark-cards.html)
+
+### Phase 157 (`priority: 166` · 2026-10-31)
+- [FlashInfer SM100a Tail-N-Split GEMM, DetLoss K-Slice Clamp, SM107a (R200) Fast Coeff mHC, SM103a AllReduce/Preemption & Triton/TileLang](components/flashinfer-tns-detloss-mhc-sm107a-allreduce-megamoe-triton-tilelang-phase157.en.md)
+- [SGLang Page-Envelope & DSA Host Pools, Qwen3/ROCm Fused QK-Norm/RoPE, vLLM Skinny GEMM & Direct RL Reload, TRT-LLM MiniMax-M3 NVFP4 & Morton Order](components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.en.md)
+- [Megatron Single-Copy MXFP8 Expert Refit & Fused Sigmoid Top-K, PyTorch ROCm Static Remainder, Mooncake fmix64 Shards & Chunk Refcount, LMCache/Dynamo/NIXL](components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.en.md)
+- [Phase 157 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase157-benchmark-cards.html)

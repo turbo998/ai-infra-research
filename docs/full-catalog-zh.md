@@ -1377,3 +1377,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang PP KV 一致性、MiniMax DSpark、vLLM HiSparse 融合失效、Muse Spark 混合 MoE 与 TRT-LLM Qwen3.8/SpecDecode](components/sglang-pp-kv-minimax-glm5-vllm-hisparse-muse-trtllm-qwen38-phase156.md)
 - [Megatron FSDP GlobalLayout 复用、RL 词表并行 Logprobs、DSA 精度控制、PyTorch IPC 与 Mooncake/LMCache/NIXL](components/megatron-fsdp-layout-rl-logprobs-dsa-mooncake-efa-lmcache-nixl-phase156.md)
 - [Phase 156 7-Card 4:5 视觉基准报告](reports/ai-infra-phase156-benchmark-cards.html)
+
+### Phase 157 (`priority: 166` · 2026-10-31)
+- [FlashInfer SM100a Tail-N-Split GEMM、确定性 Loss dX K-Slice 钳位、SM107a (R200) 快速系数链、SM103a AllReduce/抢占修复与 Triton/TileLang](components/flashinfer-tns-detloss-mhc-sm107a-allreduce-megamoe-triton-tilelang-phase157.md)
+- [SGLang Page-Envelope 与 DSA 主机池、Qwen3/ROCm 融合 QK-Norm/RoPE、vLLM Skinny GEMM 与 RL 原地热重载、TRT-LLM MiniMax-M3 NVFP4 与 Morton 排序](components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.md)
+- [Megatron 单副本 MXFP8 专家 Refit 与融合 Sigmoid Top-K、PyTorch ROCm 静态尾块核、Mooncake fmix64 锁分片与块引用计数、LMCache/Dynamo/NIXL](components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.md)
+- [Phase 157 7-Card 4:5 视觉基准报告](reports/ai-infra-phase157-benchmark-cards.html)
