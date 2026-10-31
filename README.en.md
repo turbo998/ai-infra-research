@@ -131,7 +131,7 @@
 All validation tools and 409 experiment suites use the **Python 3.12 standard library only** (no GPU or third-party packages required):
 
 ```powershell
-# 1. Run the full unit test suite (699 unit tests)
+# 1. Run the full unit test suite (702 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and all Markdown links
@@ -155,8 +155,14 @@ un.py --check
 - **Strict Evidence Separation**: [`research/sources.json`](research/sources.json), [`research/evidence.json`](research/evidence.json), [`research/queue.json`](research/queue.json), and [`research/progress.json`](research/progress.json) separate `announcement`, `specification`, `implementation`, `author-benchmark`, `own-offline`, `own-hardware`, and `unverified` claims. Static source inspection and offline analytical models are never misrepresented as physical GPU cluster benchmarks.
 - **Third-Party Rights**: This repository stores original engineering analysis, public source citations, and zero-dependency synthetic models. Third-party trademarks and referenced projects remain the property of their respective owners; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`docs/research-operations.md`](docs/research-operations.md).
 
-### Phase 147 (2026-10-31 · priority: 156)
+### Phase 148 (2026-10-31 · priority: 157)
 - [FlashInfer Cake VSA / QSA / SM120 GDN / MSA / MoE EP & Triton / TileLang (EN)](docs/components/flashinfer-cake-vsa-qsa-gdn-sm120-msa-triton-tilelang-phase147.en.md)
 - [SGLang AMD Determinism / AITER & vLLM Qwen4Exp Int64 / Rust & TRT-LLM LTX-2.3 (EN)](docs/components/sglang-amd-aiter-ct-fp8-vllm-qwen4-rust-trtllm-glm-ltx23-phase147.en.md)
 - [Megatron CG+CP / Fork-Free Cleanup & PyTorch NEON/MTIA & Mooncake S3 / LMCache / NIXL (EN)](docs/components/megatron-cg-cp-nofork-rl-pytorch-mooncake-s3-lmcache-nixl-phase147.en.md)
-- [Phase 147 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase147-benchmark-cards.html)
+- [Phase 148 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase147-benchmark-cards.html)
+
+### Phase 148 (2026-10-31 · priority: 157)
+- [FlashInfer LM-Head Loss / FP4 RMSNorm / GDN / Cake FMHA & Triton / TileLang (EN)](docs/components/flashinfer-lmhead-rmsnorm-fp4-gdn-fmha-triton-tilelang-phase148.en.md)
+- [SGLang AMD DSv4.1 FP8 wo_a & vLLM Anthropic/Rust & TRT-LLM Responses (EN)](docs/components/sglang-dsv4-woa-fp8-vllm-anthropic-rust-trtllm-responses-phase148.en.md)
+- [Megatron RL/TrainState & PyTorch Metal/Dynamo & Mooncake/LMCache/Dynamo/NIXL GDS (EN)](docs/components/megatron-rl-trainstate-pytorch-mooncake-part-lmcache-nixl-gds-phase148.en.md)
+- [Phase 148 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase148-benchmark-cards.html)
