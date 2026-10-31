@@ -1175,3 +1175,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang AMD MoRI AITER Activation Contract & Pre-KV MegaMoE Symmetric Buffers, vLLM V2 Chunked Prompt Logprobs Memory Reduction & DeepEP NVSHMEM 3.5 CUDA RDC Fix](components/sglang-mori-aiter-megamoe-sym-vllm-logprobs-deepep-rdc-phase166.en.md)
 - [NCCL NIIN Multi-Context GPUNetIO Atomics & Topology-Aware Host Collectives, RCCL DDA LL Reduce-Scatter Prefetch/Batching & NIXL Prometheus-MP Parity](components/nccl-niin-multictx-rccl-dda-prefetch-nixl-prom-mooncake-phase166.en.md)
 - [Phase 166 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase166-benchmark-cards.html)
+
+### Phase 167 (`priority: 176`, 516-Question / 511-Suite Baseline)
+- [GPU Software Stack Phase 167: FlashInfer SM120 Paged FP8 MQA Logits Native-Atom Routing, Cake SM100a Chunked LM-Head Loss Barrier Ordering & FA SM100 Softmax/Sink](components/gpu-software-stack-flashinfer-sm120-mqa-cake-fa-sm100-sink-phase167.en.md)
+- [Inference & Sparse Indexing Phase 167: SGLang dsv41 SM90 Paged Decode Tile Balancing, Disaggregation First-Refusal Stop & vLLM Fused Top-K Prefill](components/inference-sglang-dsv41-sm90-disagg-vllm-fused-topk-phase167.en.md)
+- [Interconnect & KV Fabric Phase 167: NCCL EFA-GDA Per-Peer CQ FlushAsync/Wait, ROCm rocjitsu VMEM/CDNA4 GDS EXP Accounting & Mooncake/NIXL/LMCache](components/interconnect-nccl-efa-gda-flush-rocjitsu-vmem-lmcache-phase167.en.md)
+- [Phase 167 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase167-benchmark-cards.html)

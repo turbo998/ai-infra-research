@@ -1437,3 +1437,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang AMD MoRI AITER 激活契约直连与 MegaMoE 对称缓冲区前置分配、vLLM V2 分块 Prompt Logprobs 峰值显存优化及 DeepEP NVSHMEM 3.5 CUDA RDC 修复](components/sglang-mori-aiter-megamoe-sym-vllm-logprobs-deepep-rdc-phase166.md)
 - [NCCL NIIN 多上下文 GPUNetIO 原子轮询与拓扑感知主机集合通信、RCCL DDA LL Reduce-Scatter 预取与批量重轮询及 NIXL Prometheus-MP 指标对齐](components/nccl-niin-multictx-rccl-dda-prefetch-nixl-prom-mooncake-phase166.md)
 - [Phase 166 7-Card 4:5 视觉基准报告](reports/ai-infra-phase166-benchmark-cards.html)
+
+### Phase 167 (`priority: 176`, 516 题 / 511 实验套件基线)
+- [GPU 软件栈 Phase 167：FlashInfer SM120 Paged FP8 MQA Logits 原生指令路由、Cake SM100a 分块 LM-Head Loss 屏障时序与 FA SM100 Softmax 零溢出/MLA Sink](components/gpu-software-stack-flashinfer-sm120-mqa-cake-fa-sm100-sink-phase167.md)
+- [推理加速与稀疏索引 Phase 167：SGLang dsv41 SM90 Paged Decode Tile 均衡、PD 分离首拒止损与 vLLM 单次启动融合 Top-K Prefill](components/inference-sglang-dsv41-sm90-disagg-vllm-fused-topk-phase167.md)
+- [互连与键值存储系统 Phase 167：NCCL EFA-GDA 按对等端 CQ 完成归因 FlushAsync/Wait、ROCm rocjitsu VMEM/CDNA4 GDS EXP 竞态核算与 Mooncake/NIXL/LMCache 演进](components/interconnect-nccl-efa-gda-flush-rocjitsu-vmem-lmcache-phase167.md)
+- [Phase 167 7-Card 4:5 视觉评测报告](reports/ai-infra-phase167-benchmark-cards.html)
