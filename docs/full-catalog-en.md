@@ -1169,3 +1169,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang Muse-Spark Fused 2shot_push All-Reduce & Nomas KV Budget Reclamation, vLLM UMBP MORI Integration & DeepEP EPv2 Multi-Parallel Architecture](components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.en.md)
 - [NCCL NIIN Local LSA Specialization & TMA/GPUNetIO Transports, ROCm Rocjitsu Python Session Isolation & NIXL GPUNETIO/ASIO Architecture](components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.en.md)
 - [Phase 165 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase165-benchmark-cards.html)
+
+### Phase 166 (`priority: 175` · 2026-11-01 · 513-Question & 508-Suite Baseline)
+- [FlashInfer SM103a MegaMoE v3 TP/EP Rank Retuning & Windows Macro Fix, FlashAttention CuTe SM100 hd256 2-CTA Alignment & FlashMLA >1M Grid Reordering](components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.en.md)
+- [SGLang AMD MoRI AITER Activation Contract & Pre-KV MegaMoE Symmetric Buffers, vLLM V2 Chunked Prompt Logprobs Memory Reduction & DeepEP NVSHMEM 3.5 CUDA RDC Fix](components/sglang-mori-aiter-megamoe-sym-vllm-logprobs-deepep-rdc-phase166.en.md)
+- [NCCL NIIN Multi-Context GPUNetIO Atomics & Topology-Aware Host Collectives, RCCL DDA LL Reduce-Scatter Prefetch/Batching & NIXL Prometheus-MP Parity](components/nccl-niin-multictx-rccl-dda-prefetch-nixl-prom-mooncake-phase166.en.md)
+- [Phase 166 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase166-benchmark-cards.html)

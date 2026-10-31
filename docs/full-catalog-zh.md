@@ -1431,3 +1431,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang Muse-Spark 融合 `2shot_push` All-Reduce 与 Nomas KV 预算回收、vLLM UMBP MORI 集成及 DeepEP EPv2 多维并行架构](components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.md)
 - [NCCL NIIN 本地 LSA 原子特化与 TMA/GPUNetIO 传输、ROCm Rocjitsu Python 会话隔离及 NIXL GPUNETIO/ASIO 去 ETCD 架构](components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.md)
 - [Phase 165 7-Card 4:5 视觉基准报告](reports/ai-infra-phase165-benchmark-cards.html)
+
+### Phase 166 (`priority: 175` · 2026-11-01 · 513 题与 508 实验基线)
+- [FlashInfer SM103a MegaMoE v3 TP/EP Rank 调度重调与 Windows `interface` 宏冲突修复、FlashAttention CuTe SM100 `hd256` 2-CTA 向量对齐与 `seqused` 支持及 FlashMLA >1M 超长序列 Grid 维度重排](components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.md)
+- [SGLang AMD MoRI AITER 激活契约直连与 MegaMoE 对称缓冲区前置分配、vLLM V2 分块 Prompt Logprobs 峰值显存优化及 DeepEP NVSHMEM 3.5 CUDA RDC 修复](components/sglang-mori-aiter-megamoe-sym-vllm-logprobs-deepep-rdc-phase166.md)
+- [NCCL NIIN 多上下文 GPUNetIO 原子轮询与拓扑感知主机集合通信、RCCL DDA LL Reduce-Scatter 预取与批量重轮询及 NIXL Prometheus-MP 指标对齐](components/nccl-niin-multictx-rccl-dda-prefetch-nixl-prom-mooncake-phase166.md)
+- [Phase 166 7-Card 4:5 视觉基准报告](reports/ai-infra-phase166-benchmark-cards.html)

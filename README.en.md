@@ -263,3 +263,9 @@ un.py --check
   - [`docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.en.md`](docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.en.md) (ZH: [`.md`](docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.md))
   - [`docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.en.md`](docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.en.md) (ZH: [`.md`](docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.md))
   - 7-Card Report: [`docs/reports/ai-infra-phase165-benchmark-cards.html`](docs/reports/ai-infra-phase165-benchmark-cards.html)
+
+- **Phase 166 (`priority: 175`, 2026-11-01 · 513-Question & 508-Suite Baseline)**:
+  - [`docs/components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.en.md`](docs/components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.en.md) (ZH: [`.md`](docs/components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.md))
+  - [`docs/components/sglang-mori-aiter-megamoe-sym-vllm-logprobs-deepep-rdc-phase166.en.md`](docs/components/sglang-mori-aiter-megamoe-sym-vllm-logprobs-deepep-rdc-phase166.en.md) (ZH: [`.md`](docs/components/sglang-mori-aiter-megamoe-sym-vllm-logprobs-deepep-rdc-phase166.md))
+  - [`docs/components/nccl-niin-multictx-rccl-dda-prefetch-nixl-prom-mooncake-phase166.en.md`](docs/components/nccl-niin-multictx-rccl-dda-prefetch-nixl-prom-mooncake-phase166.en.md) (ZH: [`.md`](docs/components/nccl-niin-multictx-rccl-dda-prefetch-nixl-prom-mooncake-phase166.md))
+  - 7-Card Report: [`docs/reports/ai-infra-phase166-benchmark-cards.html`](docs/reports/ai-infra-phase166-benchmark-cards.html)
