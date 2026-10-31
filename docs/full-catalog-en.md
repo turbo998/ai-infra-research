@@ -1091,3 +1091,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - `experiments/flashinfer_muse_norm_gdn_pairs_dproj_sampling_phase152/run.py`
 - `experiments/sglang_strided_moe_vllm_nixl_mamba_trtllm_minimax_phase152/run.py`
 - `experiments/megatron_dsa_routing_mooncake_heal_dynamo_ucx_phase152/run.py`
+
+### Phase 153 (`priority: 162` · 2026-10-31)
+- [FlashInfer KDA TMEM Epilogue Release & Comm-Free KCP Recompute, Triton Hoist Conversions & TileLang NVFP4 UE4M3 NaN](components/flashinfer-kda-tmem-kcp-recompute-triton-hoist-tilelang-ue4m3-phase153.en.md) ([ZH](components/flashinfer-kda-tmem-kcp-recompute-triton-hoist-tilelang-ue4m3-phase153.md))
+- [SGLang DSv4.1 EPLB Routing Glue Removal & Mamba Single-Tile Conv Verify, vLLM MI355X TP8 Mono Decode & TRT-LLM MiniMax-H3 TP](components/sglang-dsv41-eplb-mamba-conv-vllm-mi355x-mono-trtllm-minimax-h3-phase153.en.md) ([ZH](components/sglang-dsv41-eplb-mamba-conv-vllm-mi355x-mono-trtllm-minimax-h3-phase153.md))
+- [Megatron MIMO Context Parallelism & TE Fused MTP Argmax, Mooncake DynamicReplicationController & NIXL CPU Proxy Runtime](components/megatron-mimo-cp-mtp-argmax-mooncake-repl-ctrl-dynamo-nixl-proxy-phase153.en.md) ([ZH](components/megatron-mimo-cp-mtp-argmax-mooncake-repl-ctrl-dynamo-nixl-proxy-phase153.md))
+- [Phase 153 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase153-benchmark-cards.html)

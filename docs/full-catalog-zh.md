@@ -1353,3 +1353,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - `experiments/flashinfer_muse_norm_gdn_pairs_dproj_sampling_phase152/run.py`
 - `experiments/sglang_strided_moe_vllm_nixl_mamba_trtllm_minimax_phase152/run.py`
 - `experiments/megatron_dsa_routing_mooncake_heal_dynamo_ucx_phase152/run.py`
+
+### Phase 153 (`priority: 162` · 2026-10-31)
+- [FlashInfer KDA TMEM 写释放与 KCP 无通信重计算、Triton 转换外提与 TileLang NVFP4 UE4M3 NaN](components/flashinfer-kda-tmem-kcp-recompute-triton-hoist-tilelang-ue4m3-phase153.md) ([EN](components/flashinfer-kda-tmem-kcp-recompute-triton-hoist-tilelang-ue4m3-phase153.en.md))
+- [SGLang DSv4.1 EPLB 路由胶水消除与 Mamba 单 Tile 校验、vLLM MI355X TP8 Mono 解码与 TRT-LLM MiniMax-H3 TP](components/sglang-dsv41-eplb-mamba-conv-vllm-mi355x-mono-trtllm-minimax-h3-phase153.md) ([EN](components/sglang-dsv41-eplb-mamba-conv-vllm-mi355x-mono-trtllm-minimax-h3-phase153.en.md))
+- [Megatron MIMO 上下文并行与 TE 融合 MTP Argmax、Mooncake 动态副本控制器与 NIXL CPU Proxy 运行时](components/megatron-mimo-cp-mtp-argmax-mooncake-repl-ctrl-dynamo-nixl-proxy-phase153.md) ([EN](components/megatron-mimo-cp-mtp-argmax-mooncake-repl-ctrl-dynamo-nixl-proxy-phase153.en.md))
+- [Phase 153 7-Card 4:5 视觉基准报告](reports/ai-infra-phase153-benchmark-cards.html)
