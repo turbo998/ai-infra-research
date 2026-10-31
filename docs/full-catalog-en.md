@@ -1157,3 +1157,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang Disagg Late STAGING_REQ Guard & 3-Wave Ulysses Diffusion, vLLM ROCm AITER v0.1.27 & DeepEP V2 Single-Node Intra-EP](components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.en.md)
 - [NCCL SM100 90.2 GB/s Search Restoration, RCCL LL128 Register Lane State & NCCL_RINGS Validation, NIXL Torch 2.16 & LMCache XPU DeepSeek-V4 HMA](components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.en.md)
 - [Phase 163 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase163-benchmark-cards.html)
+
+### Phase 164 (`priority: 173` · 2026-11-01 · 507-Question & 502-Suite Milestone)
+- [FlashInfer MoE Finalize+AllReduce Route Prefetch & Deterministic Naming, FlashAttention CuTe Bwd Empty Q/K & FlashMLA DeepSeek-V4.1 256-Splits](components/flashinfer-route-pref-fa-bwd-zero-flashmla-v41-phase164.en.md)
+- [SGLang PD Sampler Customized-Info Preservation & Cosmos3 GPU BLAKE3 Hashing, vLLM MI300 MXFP4 Guard & DeepEP Internode Dispatch](components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.en.md)
+- [NCCL EFA-GDA FlushAsync Revert & NIIN Nonblocking Threadgroup, rocSHMEM Collectives, NIXL cuObject S3 & LMCache XPU Long-Doc L2 SHM](components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.en.md)
+- [Phase 164 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase164-benchmark-cards.html)

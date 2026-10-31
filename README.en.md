@@ -251,3 +251,9 @@ un.py --check
   - [`docs/components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.en.md`](docs/components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.en.md) (ZH: [`.md`](docs/components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.md))
   - [`docs/components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.en.md`](docs/components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.en.md) (ZH: [`.md`](docs/components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.md))
   - 7-Card Report: [`docs/reports/ai-infra-phase163-benchmark-cards.html`](docs/reports/ai-infra-phase163-benchmark-cards.html)
+
+- **Phase 164 (`priority: 173`, 2026-11-01 · 507-Question & 502-Suite Milestone)**:
+  - [`docs/components/flashinfer-route-pref-fa-bwd-zero-flashmla-v41-phase164.en.md`](docs/components/flashinfer-route-pref-fa-bwd-zero-flashmla-v41-phase164.en.md) (ZH: [`.md`](docs/components/flashinfer-route-pref-fa-bwd-zero-flashmla-v41-phase164.md))
+  - [`docs/components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.en.md`](docs/components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.en.md) (ZH: [`.md`](docs/components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.md))
+  - [`docs/components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.en.md`](docs/components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.en.md) (ZH: [`.md`](docs/components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.md))
+  - 7-Card Report: [`docs/reports/ai-infra-phase164-benchmark-cards.html`](docs/reports/ai-infra-phase164-benchmark-cards.html)

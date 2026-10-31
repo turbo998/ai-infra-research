@@ -1419,3 +1419,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang PD 分离迟到 STAGING_REQ 过滤与三波次 Ulysses 注意力、vLLM ROCm AITER v0.1.27 及 DeepEP V2 单机 Intra-EP 修复](components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.md)
 - [NCCL SM100 90.2 GB/s 拓扑搜索恢复、RCCL LL128 寄存器通道状态与 NCCL_RINGS 校验、NIXL Torch 2.16 及 LMCache XPU DeepSeek-V4 HMA 验证](components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.md)
 - [Phase 163 7-Card 4:5 视觉基准报告](reports/ai-infra-phase163-benchmark-cards.html)
+
+### Phase 164 (`priority: 173` · 2026-11-01 · 507 题与 502 实验里程碑)
+- [FlashInfer MoE Finalize+AllReduce 路由索引预取与确定性包命名、FlashAttention CuTe 空 Q/K 零梯度保护及 FlashMLA DeepSeek-V4.1 256-Splits 扩展](components/flashinfer-route-pref-fa-bwd-zero-flashmla-v41-phase164.md)
+- [SGLang PD 分离采样器 customized_info 透传与 Cosmos3 GPU BLAKE3 哈希、vLLM MI300 MXFP4 门控及 DeepEP 跨节点分发修复](components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.md)
+- [NCCL EFA-GDA FlushAsync 回滚与 NIIN 非阻塞线程组、ROCm rocSHMEM 集合通信扩展、NIXL cuObject S3 加速及 LMCache XPU 长文档 L2 SHM](components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.md)
+- [Phase 164 7-Card 4:5 视觉基准报告](reports/ai-infra-phase164-benchmark-cards.html)
