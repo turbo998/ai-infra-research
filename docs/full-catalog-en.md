@@ -1229,3 +1229,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Systems: SGLang HiCache Protected Credit, TRT-LLM RowLinearNorm Fusion & LMCache Deterministic KV Fill](components/inference-sglang-hicache-credit-trtllm-rownorm-lmcache-phase175.en.md)
 - [Distributed Training & Interconnect: TE Delayed WGrad on Tied Params & NCCL 2.32.1 PAT Uneven Ranks](components/distributed-training-te-delayed-wgrad-nccl-pat-uneven-phase175.en.md)
 - [7-Card Visual Benchmark Report (Phase 175)](reports/ai-infra-phase175-benchmark-cards.html)
+
+### Phase 176 (`priority: 185`)
+- [GPU Software Stack: FlashInfer SM103/SM120 NVFP4, CUTLASS SM120 Blockscale TileN=8,16 & FA4 First-Tile Flag](components/gpu-software-stack-flashinfer-nvfp4-sm103-cutlass-sm120-fa4-phase176.en.md)
+- [Inference Systems: vLLM GB300 Kimi-K3 KV-Balanced Decode & SGLang MI355X Qwen3.8 / GLM-5.2 DCP4 MXFP4](components/inference-vllm-gb300-kimi-k3-sglang-mi355x-qwen38-dcp4-phase176.en.md)
+- [Distributed Training & Interconnect: TE Deterministic MoE Router, Dynamic EP Handle & XPU P2P](components/distributed-training-te-det-moe-router-nccl-pool-xpu-p2p-phase176.en.md)
+- [7-Card Visual Benchmark Report (Phase 176)](reports/ai-infra-phase176-benchmark-cards.html)
