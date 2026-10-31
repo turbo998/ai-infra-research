@@ -131,7 +131,7 @@
 All validation tools and 409 experiment suites use the **Python 3.12 standard library only** (no GPU or third-party packages required):
 
 ```powershell
-# 1. Run the full unit test suite (663 unit tests)
+# 1. Run the full unit test suite (666 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and all Markdown links
