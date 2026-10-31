@@ -1193,3 +1193,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference & Cross-Process EP Runtime Phase 169: DeepEP cuMem Cross-Process Shared Memory, TRT-LLM Cached MPI Pool Drain, SGLang EFA 1.51.0 & vLLM ROCm CI / AITER MXFP4](components/inference-deepep-cumem-sglang-efa151-trtllm-mpi-drain-phase169.en.md)
 - [Interconnect Security & Emulation Phase 169: NCCL OpenSSL TLS 1.3 PSK Enforcement & EFA Phase Bit, ROCm rocjitsu Instruction Encoding & gfx1250 Rev-0 Trap PC Fixup, and NIXL/Mooncake](components/interconnect-nccl-tls-psk-efa-bit-rocjitsu-gfx1250-phase169.en.md)
 - [Phase 169 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase169-benchmark-cards.html)
+
+### Phase 170 (`priority: 179`, 525-Question / 520-Suite Baseline)
+- [GPU Software Stack Phase 170: FlashInfer Qwen 3.5 GDN frost SM100 Backend, Cake Softmax Chunk Rules & FA SM100 Non-Multiple-of-32 head_dim Backward](components/gpu-software-stack-flashinfer-qwen35-gdn-fa-sm100-non32-phase170.en.md)
+- [Inference Frontend Hashing & Multimodal Verification Phase 170: vLLM Rust Prompt Block Hashing, ROCm DSv4.1 gfx942 Skinny-GEMM & TRT-LLM Nemotron VL Teacher-Forced Logits](components/inference-vllm-rust-hash-rocm-dsv41-trtllm-nemotron-phase170.en.md)
+- [Interconnect Datapath & Host Storage Backend Phase 170: NCCL EFA-GDA efa-dp-direct 1.1.0 (backendVersion 2), ROCm hipFile Host Backend & NIXL TSan Metadata Wait](components/interconnect-nccl-efa-dp-direct110-hipfile-host-nixl-phase170.en.md)
+- [Phase 170 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase170-benchmark-cards.html)

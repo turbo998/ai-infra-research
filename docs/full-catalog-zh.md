@@ -1455,3 +1455,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理与专家并行进程间通信 Phase 169：DeepEP cuMem 跨进程共享内存、TRT-LLM 子进程派生前排空缓存 MPI 池、SGLang EFA 1.51.0 及 vLLM ROCm CI 收敛与 AITER MXFP4](components/inference-deepep-cumem-sglang-efa151-trtllm-mpi-drain-phase169.md)
 - [互连安全与指令集仿真 Phase 169：NCCL OpenSSL TLS 1.3 PSK 握手校验与 EFA 相位位直写、ROCm rocjitsu 8B 指令编码捕获与 gfx1250 Rev-0 Trap PC 修复及 NIXL/Mooncake](components/interconnect-nccl-tls-psk-efa-bit-rocjitsu-gfx1250-phase169.md)
 - [Phase 169 7-Card 4:5 视觉评测报告](reports/ai-infra-phase169-benchmark-cards.html)
+
+### Phase 170 (`priority: 179`, 525 题 / 520 实验套件基线)
+- [GPU 软件栈 Phase 170：FlashInfer Qwen 3.5 GDN frost SM100 后端、Cake Softmax 分块规则及 FA SM100 非 32 倍数 head_dim 反向传播](components/gpu-software-stack-flashinfer-qwen35-gdn-fa-sm100-non32-phase170.md)
+- [推理前端哈希与多模态校验 Phase 170：vLLM Rust 前端块哈希、ROCm DSv4.1 gfx942 窄 GEMM 及 TRT-LLM Nemotron VL 教师强制对比](components/inference-vllm-rust-hash-rocm-dsv41-trtllm-nemotron-phase170.md)
+- [互连数据面与主机存储后端 Phase 170：NCCL EFA-GDA efa-dp-direct 1.1.0 (backendVersion 2)、ROCm hipFile Host 后端及 NIXL TSan 元数据等待](components/interconnect-nccl-efa-dp-direct110-hipfile-host-nixl-phase170.md)
+- [Phase 170 7-Card 4:5 视觉评测报告](reports/ai-infra-phase170-benchmark-cards.html)
