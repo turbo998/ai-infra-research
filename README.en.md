@@ -221,3 +221,9 @@ un.py --check
   - [`docs/components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.en.md`](docs/components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.en.md) (ZH: [`.md`](docs/components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.md))
   - [`docs/components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.en.md`](docs/components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.en.md) (ZH: [`.md`](docs/components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.md))
   - 7-Card Report: [`docs/reports/ai-infra-phase158-benchmark-cards.html`](docs/reports/ai-infra-phase158-benchmark-cards.html)
+
+- **Phase 159 (`priority: 168`, 2026-11-01)**:
+  - [`docs/components/flashinfer-kimi-k3-fmha-fp8-sm120-mqa-triton-fp4-phase159.en.md`](docs/components/flashinfer-kimi-k3-fmha-fp8-sm120-mqa-triton-fp4-phase159.en.md) (ZH: [`.md`](docs/components/flashinfer-kimi-k3-fmha-fp8-sm120-mqa-triton-fp4-phase159.md))
+  - [`docs/components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.en.md`](docs/components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.en.md) (ZH: [`.md`](docs/components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.md))
+  - [`docs/components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.en.md`](docs/components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.en.md) (ZH: [`.md`](docs/components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.md))
+  - 7-Card Report: [`docs/reports/ai-infra-phase159-benchmark-cards.html`](docs/reports/ai-infra-phase159-benchmark-cards.html)

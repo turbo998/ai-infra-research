@@ -1127,3 +1127,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang PD Aux-Lengths Frame Alignment & MXFP8 L3 Multi-Buffer HiCache, ROCm Ulysses Head-Group Pipeline, vLLM Batch-Invariant Kernel Pinning & NIXL Layer-Paired KV, and TRT-LLM Immediate Cache Reset](components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.en.md)
 - [Megatron PretrainConfig Data Section & Inductor Fork Guard, PyTorch AVX2 zero_mask 16-Bit Fix, Mooncake etcd TLS/mTLS & GIL-Free Registration, LMCache/Dynamo/NIXL](components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.en.md)
 - [Phase 158 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase158-benchmark-cards.html)
+
+### Phase 159 (`priority: 168` · 2026-11-01)
+- [FlashInfer Kimi-K3 B200/B300/GB300 Dense Routes, One-Stage FP8 Context, SM120 CTA-Parallel MQA & Triton FP4 / gfx1250 TDM Scatter](components/flashinfer-kimi-k3-fmha-fp8-sm120-mqa-triton-fp4-phase159.en.md)
+- [SGLang Blackwell Subtile Diffusion, vLLM Owned-Tensor Zero-Clone Loader, TensorRT-LLM Single-GPU GDN Alignment & PyTorch AOTI XPU](components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.en.md)
+- [NCCL GIN Cooperative Put/Get/Signal, RCCL DMABUF & Malloc Guards, NIXL EP Stream Decoupling & Mooncake/LMCache Lifecycle](components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.en.md)
+- [Phase 159 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase159-benchmark-cards.html)

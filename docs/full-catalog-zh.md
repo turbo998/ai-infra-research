@@ -1389,3 +1389,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang PD 辅助长度帧对齐与 MXFP8 L3 双缓冲 HiCache、ROCm Ulysses 头组流水线、vLLM 批不变性内核锁定与 NIXL 按层 KV 配对及 TensorRT-LLM 即时缓存重置](components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.md)
 - [Megatron PretrainConfig 数据容器与 Inductor 防死锁、PyTorch AVX2 zero_mask 16 位修复、Mooncake etcd TLS/mTLS 与无 GIL 内存注册、LMCache/Dynamo/NIXL](components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.md)
 - [Phase 158 7-Card 4:5 视觉基准报告](reports/ai-infra-phase158-benchmark-cards.html)
+
+### Phase 159 (`priority: 168` · 2026-11-01)
+- [FlashInfer Kimi-K3 B200/B300/GB300 稠密路由、单阶段 FP8 Paged Context、SM120 CTA 并行 MQA 与 Triton 原生 FP4 / gfx1250 TDM Scatter](components/flashinfer-kimi-k3-fmha-fp8-sm120-mqa-triton-fp4-phase159.md)
+- [SGLang Blackwell Subtile 扩散注意力、vLLM 零拷贝权重加载、TensorRT-LLM 单卡 GDN 对齐与 PyTorch AOTI XPU](components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.md)
+- [NCCL GIN 协作式 Put/Get/Signal、RCCL DMABUF 与 Malloc 安全守卫、NIXL EP 流解耦及 Mooncake/LMCache 生命周期治理](components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.md)
+- [Phase 159 7-Card 4:5 视觉基准报告](reports/ai-infra-phase159-benchmark-cards.html)
