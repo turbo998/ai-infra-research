@@ -1497,3 +1497,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理系统：vLLM GB300 Kimi-K3 KV 均衡解码与 SGLang MI355X Qwen3.8 / GLM-5.2 DCP4 MXFP4](components/inference-vllm-gb300-kimi-k3-sglang-mi355x-qwen38-dcp4-phase176.md)
 - [分布式训练与互连：TE 无全局原子操作确定性 MoE Router、动态 EP 句柄与 XPU P2P](components/distributed-training-te-det-moe-router-nccl-pool-xpu-p2p-phase176.md)
 - [7-Card 视觉评测报告 (Phase 176)](reports/ai-infra-phase176-benchmark-cards.html)
+
+### Phase 177 (`priority: 186`)
+- [GPU 软件栈：FlashInfer SM107a UE8M0 Group-128、SM120 GDN 融合循环、CUTLASS Blockwise Group GEMM 与 FA 可学习 Sink 反向](components/gpu-software-stack-flashinfer-sm107a-ue8m0-gdn-sm120-fa-sink-phase177.md)
+- [推理系统：vLLM ROCm Skinny-GEMM 守卫、Kimi-K3 自适应 KDA 校验与 SGLang AMD Muse-Spark](components/inference-vllm-rocm-skinny-gemm-kimi-k3-kda-sglang-muse-spark-phase177.md)
+- [分布式训练与互连：Megatron GDP FP32 状态保持、TE Grouped Linear CPU 减负与 NCCL 加密配置](components/distributed-training-megatron-gdp-fp32-te-grouped-cpu-nccl-encryption-phase177.md)
+- [7-Card 视觉评测报告 (Phase 177)](reports/ai-infra-phase177-benchmark-cards.html)

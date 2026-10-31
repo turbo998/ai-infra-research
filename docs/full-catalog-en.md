@@ -1235,3 +1235,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Systems: vLLM GB300 Kimi-K3 KV-Balanced Decode & SGLang MI355X Qwen3.8 / GLM-5.2 DCP4 MXFP4](components/inference-vllm-gb300-kimi-k3-sglang-mi355x-qwen38-dcp4-phase176.en.md)
 - [Distributed Training & Interconnect: TE Deterministic MoE Router, Dynamic EP Handle & XPU P2P](components/distributed-training-te-det-moe-router-nccl-pool-xpu-p2p-phase176.en.md)
 - [7-Card Visual Benchmark Report (Phase 176)](reports/ai-infra-phase176-benchmark-cards.html)
+
+### Phase 177 (`priority: 186`)
+- [GPU Software Stack: FlashInfer SM107a UE8M0 Group-128, SM120 GDN Fused Loop, CUTLASS Blockwise Group GEMM & FA Learnable Sink Bwd](components/gpu-software-stack-flashinfer-sm107a-ue8m0-gdn-sm120-fa-sink-phase177.en.md)
+- [Inference Systems: vLLM ROCm Skinny-GEMM Guard, Kimi-K3 Adaptive KDA Verification & SGLang AMD Muse-Spark](components/inference-vllm-rocm-skinny-gemm-kimi-k3-kda-sglang-muse-spark-phase177.en.md)
+- [Distributed Training & Interconnect: Megatron GDP FP32 State Invariants, TE Grouped Linear CPU Reduction & NCCL Encryption Config](components/distributed-training-megatron-gdp-fp32-te-grouped-cpu-nccl-encryption-phase177.en.md)
+- [7-Card Visual Benchmark Report (Phase 177)](reports/ai-infra-phase177-benchmark-cards.html)
