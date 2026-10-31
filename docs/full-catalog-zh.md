@@ -1383,3 +1383,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang Page-Envelope 与 DSA 主机池、Qwen3/ROCm 融合 QK-Norm/RoPE、vLLM Skinny GEMM 与 RL 原地热重载、TRT-LLM MiniMax-M3 NVFP4 与 Morton 排序](components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.md)
 - [Megatron 单副本 MXFP8 专家 Refit 与融合 Sigmoid Top-K、PyTorch ROCm 静态尾块核、Mooncake fmix64 锁分片与块引用计数、LMCache/Dynamo/NIXL](components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.md)
 - [Phase 157 7-Card 4:5 视觉基准报告](reports/ai-infra-phase157-benchmark-cards.html)
+
+### Phase 158 (`priority: 167` · 2026-11-01)
+- [FlashInfer SM100a MQA 并行调度、PDL QK-RoPE-Append 重叠、SM107a TinyGEMM2 路由、Causal Conv1D bwd_grid_mult、mHC 图捕获守卫与 Triton/TileLang](components/flashinfer-mqa-pdl-tinygemm2-conv1d-mhc-triton-tilelang-phase158.md)
+- [SGLang PD 辅助长度帧对齐与 MXFP8 L3 双缓冲 HiCache、ROCm Ulysses 头组流水线、vLLM 批不变性内核锁定与 NIXL 按层 KV 配对及 TensorRT-LLM 即时缓存重置](components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.md)
+- [Megatron PretrainConfig 数据容器与 Inductor 防死锁、PyTorch AVX2 zero_mask 16 位修复、Mooncake etcd TLS/mTLS 与无 GIL 内存注册、LMCache/Dynamo/NIXL](components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.md)
+- [Phase 158 7-Card 4:5 视觉基准报告](reports/ai-infra-phase158-benchmark-cards.html)

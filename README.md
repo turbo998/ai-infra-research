@@ -215,3 +215,9 @@ un.py --check
   - [`docs/components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.md`](docs/components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.md)（英文版：[`.en.md`](docs/components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.en.md)）
   - [`docs/components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.md`](docs/components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.md)（英文版：[`.en.md`](docs/components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase157-benchmark-cards.html`](docs/reports/ai-infra-phase157-benchmark-cards.html)
+
+- **Phase 158 (`priority: 167`，2026-11-01）**：
+  - [`docs/components/flashinfer-mqa-pdl-tinygemm2-conv1d-mhc-triton-tilelang-phase158.md`](docs/components/flashinfer-mqa-pdl-tinygemm2-conv1d-mhc-triton-tilelang-phase158.md)（英文版：[`.en.md`](docs/components/flashinfer-mqa-pdl-tinygemm2-conv1d-mhc-triton-tilelang-phase158.en.md)）
+  - [`docs/components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.md`](docs/components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.md)（英文版：[`.en.md`](docs/components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.en.md)）
+  - [`docs/components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.md`](docs/components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.md)（英文版：[`.en.md`](docs/components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.en.md)）
+  - 7-Card 报告：[`docs/reports/ai-infra-phase158-benchmark-cards.html`](docs/reports/ai-infra-phase158-benchmark-cards.html)

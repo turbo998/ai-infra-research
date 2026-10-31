@@ -1121,3 +1121,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang Page-Envelope & DSA Host Pools, Qwen3/ROCm Fused QK-Norm/RoPE, vLLM Skinny GEMM & Direct RL Reload, TRT-LLM MiniMax-M3 NVFP4 & Morton Order](components/sglang-page-envelope-qwen3-dsa-vllm-skinny-reload-trtllm-minimax-phase157.en.md)
 - [Megatron Single-Copy MXFP8 Expert Refit & Fused Sigmoid Top-K, PyTorch ROCm Static Remainder, Mooncake fmix64 Shards & Chunk Refcount, LMCache/Dynamo/NIXL](components/megatron-mxfp8-refit-sigmoid-moe-rocm-mooncake-fmix64-lmcache-nixl-phase157.en.md)
 - [Phase 157 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase157-benchmark-cards.html)
+
+### Phase 158 (`priority: 167` · 2026-11-01)
+- [FlashInfer SM100a MQA Parallel-Schedule, PDL QK-RoPE-Append Overlap, SM107a TinyGEMM2 Routing, Causal Conv1D bwd_grid_mult, mHC Graph-Capture Guard & Triton/TileLang](components/flashinfer-mqa-pdl-tinygemm2-conv1d-mhc-triton-tilelang-phase158.en.md)
+- [SGLang PD Aux-Lengths Frame Alignment & MXFP8 L3 Multi-Buffer HiCache, ROCm Ulysses Head-Group Pipeline, vLLM Batch-Invariant Kernel Pinning & NIXL Layer-Paired KV, and TRT-LLM Immediate Cache Reset](components/sglang-pd-aux-mxfp8-ulysses-vllm-nixl-pcp-trtllm-phase158.en.md)
+- [Megatron PretrainConfig Data Section & Inductor Fork Guard, PyTorch AVX2 zero_mask 16-Bit Fix, Mooncake etcd TLS/mTLS & GIL-Free Registration, LMCache/Dynamo/NIXL](components/megatron-pretrain-inductor-avx2-mooncake-tls-lmcache-nixl-phase158.en.md)
+- [Phase 158 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase158-benchmark-cards.html)
