@@ -1187,3 +1187,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference & Unified Memory/EP Scheduling Phase 168: SGLang Host-Sync-Free SWA Page Binding, HiCache mlock Pinning, DeepEP Internode CUDA Graph & vLLM Rust Tool-Call Delta Accounting](components/inference-sglang-swa-async-hicache-mlock-deepep-graph-phase168.en.md)
 - [Interconnect & Emulation Governance Phase 168: NCCL EFA-GDA 128B WQE Inline PutValue & 2.32 CFT/NVLS Config, ROCm hip-tests clock64() Delay Removal & NIXL/Mooncake/LMCache](components/interconnect-nccl-efa-inline-put-cft-rocm-clock64-phase168.en.md)
 - [Phase 168 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase168-benchmark-cards.html)
+
+### Phase 169 (`priority: 178`, 522-Question / 517-Suite Baseline)
+- [GPU Software Stack Phase 169: FlashInfer Kimi-K3 896-Expert Fused Router, ReplaySSM Int64 Indexing, Block-Scale FP8 SF Guard, cuDNN Tactic Check & FA SM100 hdim=64 TMEM Slots](components/gpu-software-stack-flashinfer-kimik3-sf-fa-sm100-tmem-phase169.en.md)
+- [Inference & Cross-Process EP Runtime Phase 169: DeepEP cuMem Cross-Process Shared Memory, TRT-LLM Cached MPI Pool Drain, SGLang EFA 1.51.0 & vLLM ROCm CI / AITER MXFP4](components/inference-deepep-cumem-sglang-efa151-trtllm-mpi-drain-phase169.en.md)
+- [Interconnect Security & Emulation Phase 169: NCCL OpenSSL TLS 1.3 PSK Enforcement & EFA Phase Bit, ROCm rocjitsu Instruction Encoding & gfx1250 Rev-0 Trap PC Fixup, and NIXL/Mooncake](components/interconnect-nccl-tls-psk-efa-bit-rocjitsu-gfx1250-phase169.en.md)
+- [Phase 169 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase169-benchmark-cards.html)

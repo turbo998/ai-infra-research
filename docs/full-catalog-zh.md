@@ -1449,3 +1449,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理与统一显存/通信调度 Phase 168：SGLang 统一内存 SWA 尾部无同步绑页与 HiCache mlock 锁页、DeepEP 跨节点分发 CUDA Graph 及 vLLM Rust 工具调用 Token 计量](components/inference-sglang-swa-async-hicache-mlock-deepep-graph-phase168.md)
 - [互连与仿真治理 Phase 168：NCCL EFA-GDA 128B WQE 内联 PutValue 与 2.32 CFT/NVLS 主机配置、ROCm hip-tests 移除固定 clock64() 自旋延迟及 NIXL/Mooncake/LMCache 多进程演进](components/interconnect-nccl-efa-inline-put-cft-rocm-clock64-phase168.md)
 - [Phase 168 7-Card 4:5 视觉评测报告](reports/ai-infra-phase168-benchmark-cards.html)
+
+### Phase 169 (`priority: 178`, 522 题 / 517 实验套件基线)
+- [GPU 软件栈 Phase 169：FlashInfer Kimi-K3 896 专家融合路由、ReplaySSM Int64 索引、块缩放 FP8 SF 下溢防护、cuDNN Tactic 校验及 FA SM100 hdim=64 专用 TMEM 槽位](components/gpu-software-stack-flashinfer-kimik3-sf-fa-sm100-tmem-phase169.md)
+- [推理与专家并行进程间通信 Phase 169：DeepEP cuMem 跨进程共享内存、TRT-LLM 子进程派生前排空缓存 MPI 池、SGLang EFA 1.51.0 及 vLLM ROCm CI 收敛与 AITER MXFP4](components/inference-deepep-cumem-sglang-efa151-trtllm-mpi-drain-phase169.md)
+- [互连安全与指令集仿真 Phase 169：NCCL OpenSSL TLS 1.3 PSK 握手校验与 EFA 相位位直写、ROCm rocjitsu 8B 指令编码捕获与 gfx1250 Rev-0 Trap PC 修复及 NIXL/Mooncake](components/interconnect-nccl-tls-psk-efa-bit-rocjitsu-gfx1250-phase169.md)
+- [Phase 169 7-Card 4:5 视觉评测报告](reports/ai-infra-phase169-benchmark-cards.html)
