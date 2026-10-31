@@ -1425,3 +1425,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang PD 分离采样器 customized_info 透传与 Cosmos3 GPU BLAKE3 哈希、vLLM MI300 MXFP4 门控及 DeepEP 跨节点分发修复](components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.md)
 - [NCCL EFA-GDA FlushAsync 回滚与 NIIN 非阻塞线程组、ROCm rocSHMEM 集合通信扩展、NIXL cuObject S3 加速及 LMCache XPU 长文档 L2 SHM](components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.md)
 - [Phase 164 7-Card 4:5 视觉基准报告](reports/ai-infra-phase164-benchmark-cards.html)
+
+### Phase 165 (`priority: 174` · 2026-11-01 · 510 题与 505 实验基线)
+- [FlashInfer SM107a Mamba2 SSD 单序列 Varlen `seq_idx` 快检、FlashAttention CuTe SM90 反向 SwapAB MMA 布局修复与 FlashMLA Ascend 950 Token 交错 KV 架构](components/flashinfer-ssd-seq-idx-fa-bwd-swapab-flashmla-ascend-phase165.md)
+- [SGLang Muse-Spark 融合 `2shot_push` All-Reduce 与 Nomas KV 预算回收、vLLM UMBP MORI 集成及 DeepEP EPv2 多维并行架构](components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.md)
+- [NCCL NIIN 本地 LSA 原子特化与 TMA/GPUNetIO 传输、ROCm Rocjitsu Python 会话隔离及 NIXL GPUNETIO/ASIO 去 ETCD 架构](components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.md)
+- [Phase 165 7-Card 4:5 视觉基准报告](reports/ai-infra-phase165-benchmark-cards.html)

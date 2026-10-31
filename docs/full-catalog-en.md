@@ -1163,3 +1163,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang PD Sampler Customized-Info Preservation & Cosmos3 GPU BLAKE3 Hashing, vLLM MI300 MXFP4 Guard & DeepEP Internode Dispatch](components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.en.md)
 - [NCCL EFA-GDA FlushAsync Revert & NIIN Nonblocking Threadgroup, rocSHMEM Collectives, NIXL cuObject S3 & LMCache XPU Long-Doc L2 SHM](components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.en.md)
 - [Phase 164 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase164-benchmark-cards.html)
+
+### Phase 165 (`priority: 174` · 2026-11-01 · 510-Question & 505-Suite Baseline)
+- [FlashInfer SM107a Mamba2 SSD Single-Seq Varlen Check, FlashAttention CuTe SM90 Swapped Bwd MMA Fix & FlashMLA Ascend 950 Token-Interleaved KV](components/flashinfer-ssd-seq-idx-fa-bwd-swapab-flashmla-ascend-phase165.en.md)
+- [SGLang Muse-Spark Fused 2shot_push All-Reduce & Nomas KV Budget Reclamation, vLLM UMBP MORI Integration & DeepEP EPv2 Multi-Parallel Architecture](components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.en.md)
+- [NCCL NIIN Local LSA Specialization & TMA/GPUNetIO Transports, ROCm Rocjitsu Python Session Isolation & NIXL GPUNETIO/ASIO Architecture](components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.en.md)
+- [Phase 165 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase165-benchmark-cards.html)

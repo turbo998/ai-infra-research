@@ -257,3 +257,9 @@ un.py --check
   - [`docs/components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.en.md`](docs/components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.en.md) (ZH: [`.md`](docs/components/sglang-pd-sampler-blake3-vllm-mxfp4-deepep-internode-phase164.md))
   - [`docs/components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.en.md`](docs/components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.en.md) (ZH: [`.md`](docs/components/nccl-efa-gda-niin-rocshmem-nixl-cuobject-lmcache-l2-shm-phase164.md))
   - 7-Card Report: [`docs/reports/ai-infra-phase164-benchmark-cards.html`](docs/reports/ai-infra-phase164-benchmark-cards.html)
+
+- **Phase 165 (`priority: 174`, 2026-11-01 · 510-Question & 505-Suite Baseline)**:
+  - [`docs/components/flashinfer-ssd-seq-idx-fa-bwd-swapab-flashmla-ascend-phase165.en.md`](docs/components/flashinfer-ssd-seq-idx-fa-bwd-swapab-flashmla-ascend-phase165.en.md) (ZH: [`.md`](docs/components/flashinfer-ssd-seq-idx-fa-bwd-swapab-flashmla-ascend-phase165.md))
+  - [`docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.en.md`](docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.en.md) (ZH: [`.md`](docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.md))
+  - [`docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.en.md`](docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.en.md) (ZH: [`.md`](docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.md))
+  - 7-Card Report: [`docs/reports/ai-infra-phase165-benchmark-cards.html`](docs/reports/ai-infra-phase165-benchmark-cards.html)
