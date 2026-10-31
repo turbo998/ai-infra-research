@@ -1,14 +1,14 @@
 # AI Infra Research — 全栈智算与系统工程研究工作台
 
-> 🌐 **Language / 语言切换**: **[中文](README.md)** | **[English](README.en.md)** | **[📚 完整 132 阶段全量目录归档 (`docs/full-catalog-zh.md`)](docs/full-catalog-zh.md)** | **[📚 Full 132-Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)** | **[🗺️ 11 层全栈地图 (`docs/stack-map.md`)](docs/stack-map.md)**
+> 🌐 **Language / 语言切换**: **[中文](README.md)** | **[English](README.en.md)** | **[📚 完整 133 阶段全量目录归档 (`docs/full-catalog-zh.md`)](docs/full-catalog-zh.md)** | **[📚 Full 133-Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)** | **[🗺️ 11 层全栈地图 (`docs/stack-map.md`)](docs/stack-map.md)**
 
 ---
 
 ## 📌 Executive Overview Summary（执行摘要与核心架构结论）
 
-> **核心研究基线（Phase 1 – Phase 132 全量合入 `main`，Priority 141 · 411 题 & 406 套实验基线）**
+> **核心研究基线（Phase 1 – Phase 133 全量合入 `main`，Priority 142 · 414 题 & 409 套实验基线）**
 > 本仓库围绕 **11 层 AI 算力与分布式系统工程栈** 展开基于一手固定版本源码（`implementation`）、架构规范（`specification`）与零依赖 Python 3.12 确定性仿真模型（`own-offline`）的深度技术研究，累计完成 **100+ 篇双语深度专题报告**，所有定量结论均通过自动化校验测试，**零未核验主观臆断**：
-> - **研究规模与可复现账本**：累计完成 **`411` 个核心工程研究问题**（`409 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`406` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`2,271` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`712` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`654` 项全绿单元测试** 以及 **`132` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[Phase 132 7-Card 评测报告](docs/reports/ai-infra-phase132-benchmark-cards.html)**）。
+> - **研究规模与可复现账本**：累计完成 **`414` 个核心工程研究问题**（`412 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`409` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`2,301` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`715` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`657` 项全绿单元测试** 以及 **`133` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[Phase 133 7-Card 评测报告](docs/reports/ai-infra-phase133-benchmark-cards.html)**）。
 > - **L01 GPU / SM100 Blackwell 算子与低精度数值**：剖析 `tcgen05`、512 列 `TMEM` 原位混叠（消除 `64 KiB` SMEM 溢出）、`FlashAttention-4`（`FFMA2` 多项式仿真突破 `MUFU.EX2` 瓶颈，在 B200 达 **`2,790.1 TFLOPS`**、SM103 B300 达 **`3,200.0 TFLOPS`**）、`FlashMLA V4.1`（`+32B` TMA 行填充消除 `LDS.32` 4 路冲突，`get_mla_metadata` 削减 **`89.88%`** 偏斜尾波）、`CUTLASS CLC` 动态窃取及 `NVFP4/MXFP8` 分块缩放。
 > - **L02 & L04 分层 KV 缓存与 Prefill-Decode 分离推理**：解构四级 KV 缓存层次（VRAM → Host Pinned DRAM → CXL 3.0 `Device-DAX` `2 MiB` 对齐 → GDS/3FS），结合 `Mooncake Transfer Engine`（ConnectX-8 `Data Direct` 零锁批处理、7 级 Auto-GID 重探测与 `W=4` 有界 Scatter 将有效带宽从 **`313.0 -> 357.85 Gbps`** 提升）、`NVIDIA Dynamo`（二级 `kvcr` 连接器与 `NIXL` UCX/Libfabric 显存类型探测）、`vLLM V1`（`HiSparse` 稀疏 MLA 与拒绝采样）及 `SGLang`（`HiRadixCache` 与 `EAGLE-3` 投机树）。
 > - **L03 & L09 超节点互连、`IBGDA` 直发 RDMA 与共封装光学（CPO/OCS）**：验证 `PyTorch CUDASymmetricMemory` + `NVLS multimem`（流量较 Unicast 1-Shot 降低 **`6.22x`**）、`NCCL Gin` 对称集合通信与 `PAT` 并行聚合二项式树（1,024 卡跳数从 `1,023 -> 7`）、`DeepEP V2.5` GPU 直发 RDMA（Warp 门铃聚合削减 **`10.67x`** MMIO 开销）、`UEC 1.0` 64B 包裁剪 + 逐包喷洒（32-to-1 Incast 下 P99 尾延迟降低 **`69.9%`**），以及 `1.6T CPO + 3D MEMS OCS` 十万卡光互连功耗与故障半径模型。
@@ -35,13 +35,13 @@
 | **L08 · Checkpoint 容错与万卡自愈** | `PyTorch DCP AsyncStager` · `NVRx In-Process Warm Standby` · `FlightRecorder + NCCL RAS` · `Grey-Failure Straggler Detector` | `WeakIdKeyDictionary` 持久化锁页共享内存池将每次保存的 `cudaHostRegister` 开销从 `3.737 s` 降至 `0.048 s`；跨机架半世界双副本与 `< 650 ms` 零号病人死锁定位将万卡有效训练时间（Goodput）保持在 `93%+`。 |
 | **L09 · 硅光互连（CPO/LPO）与光交换（OCS）** | `1.6T Co-Packaged Optics (9 pJ/bit)` · `Linear Pluggable Optics (LPO)` · `3D MEMS OCS` · `ELSFP External Laser` | 将可插拔 DSP 光模块功耗降低 `65%+`，消除热敏激光器贴近 ASIC 引发的热失效爆炸半径，并通过 3D MEMS OCS 实现跨 Pod 拓扑动态重配置与故障绕行。 |
 | **L10 · 800VDC 高压供电与冷板液冷** | `±400V / 800VDC Busway` · `130kW+ NVL72 Cold-Plate DLC` · `CDU Heat Exchanger` · `Slurm Token-Bucket & DCGM Power Brake` | 建模 CDU 二次侧流量/温升、MNNVL `IMEX` 72-GPU 机柜级热耦合故障域，以及通过硬件 `Power Smoothing`、Slurm 令牌桶与 BESS 储能削峰抑制千卡同步迭代 `dP/dt` 电网冲击。 |
-| **L11 · 确定性物理仿真与证据核验底座** | `scripts/validate_research.py` · `406 Python 3.12 Experiments` · `654 Unit Tests` · `132 7-Card 4:5 Benchmark Decks` | 纯 Python 3.12 标准库实现，100% 离线确定性复现所有公式、协议状态机与性能边界，严格区分 `implementation`、`author-benchmark` 与 `own-offline`。 |
+| **L11 · 确定性物理仿真与证据核验底座** | `scripts/validate_research.py` · `409 Python 3.12 Experiments` · `657 Unit Tests` · `133 7-Card 4:5 Benchmark Decks` | 纯 Python 3.12 标准库实现，100% 离线确定性复现所有公式、协议状态机与性能边界，严格区分 `implementation`、`author-benchmark` 与 `own-offline`。 |
 
 ---
 
 ## 🗂️ 六大主题域核心研究报告索引（6 Thematic Domain Summary Tables）
 
-> 💡 **完整百科全量表入口**：本页精选展示六大主题域的代表性旗舰专题。如需查阅全部 **132 个研究阶段、411 个研究问题与 406 套实验的完整 650KB+ 百科对照表**，请直接访问：
+> 💡 **完整百科全量表入口**：本页精选展示六大主题域的代表性旗舰专题。如需查阅全部 **133 个研究阶段、414 个研究问题与 409 套实验的完整 650KB+ 百科对照表**，请直接访问：
 > 👉 **[📚 中文全量组件与阶段百科表 (`docs/full-catalog-zh.md`)](docs/full-catalog-zh.md)** | **[📚 English Complete Component & Phase Catalog (`docs/full-catalog-en.md`)](docs/full-catalog-en.md)**
 
 ### 域 1：GPU 架构、SM90/SM100 Blackwell 内核与低精度数值（L01）
@@ -128,21 +128,26 @@
 
 ## 🧪 验证与可复现运行命令（Verification & Reproducibility）
 
-本仓库所有验证脚本与 403 套实验均仅使用 **Python 3.12 标准库**，无需 GPU 或第三方依赖：
+本仓库所有验证脚本与 409 套实验均仅使用 **Python 3.12 标准库**，无需 GPU 或第三方依赖：
 
 ```powershell
-# 1. 运行全量单元测试套件（651 项单元测试）
+# 1. 运行全量单元测试套件（657 项单元测试）
 python -m unittest discover -s tests
 
 # 2. 校验研究队列、证据台账、一手信源引用、隐私边界与全部 Markdown 相对链接
 python scriptsalidate_research.py
 
 # 3. 抽检代表性确定性物理仿真实验
-python experiments\capacity_rooflineun.py --check
-python experiments\sm100_blackwell_fmha_fa4un.py --check
-python experiments\disaggregated_kv_routingun.py --check
-python experiments\ibgda_gpu_initiated_rdmaun.py --check
-python experimentsi_factory_tco_simulatorun.py --check
+python experiments\capacity_roofline
+un.py --check
+python experiments\sm100_blackwell_fmha_fa4
+un.py --check
+python experiments\disaggregated_kv_routing
+un.py --check
+python experiments\ibgda_gpu_initiated_rdma
+un.py --check
+python experimentsi_factory_tco_simulator
+un.py --check
 ```
 
 ## 🛡️ 证据分级与公开边界（Evidence & Publication Boundaries）
