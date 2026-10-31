@@ -166,3 +166,9 @@ un.py --check
 - [SGLang AMD DSv4.1 FP8 wo_a 与 vLLM Anthropic/Rust 及 TRT-LLM Responses（中文）](docs/components/sglang-dsv4-woa-fp8-vllm-anthropic-rust-trtllm-responses-phase148.md)
 - [Megatron RL/TrainState 与 PyTorch Metal/Dynamo 及 Mooncake/LMCache/Dynamo/NIXL GDS（中文）](docs/components/megatron-rl-trainstate-pytorch-mooncake-part-lmcache-nixl-gds-phase148.md)
 - [Phase 148 7-Card 视觉基准报告卡](docs/reports/ai-infra-phase148-benchmark-cards.html)
+
+### Phase 149（2026-10-31 · priority: 158）
+- [FlashInfer MXFP8 Band-Path / MoK Rubin EP8 / KG1 128-Row / MiniMax-H3 与 Triton / TileLang（中文）](docs/components/flashinfer-mxfp8-band-mok-rubin-kg1-minimax-triton-tilelang-phase149.md)
+- [SGLang AMD AITER FAv3 / XPU page_size=1 / Ascend FIAS-v2 与 vLLM Rust / TRT-LLM TPOT（中文）](docs/components/sglang-aiter-fav3-xpu-ascend-vllm-rust-trtllm-tpot-phase149.md)
+- [Megatron WandB / MFSDP 与 PyTorch Metal/Dynamo 及 Mooncake / LMCache / Dynamo / NIXL（中文）](docs/components/megatron-wandb-mfsdp-pytorch-mooncake-lmcache-dynamo-nixl-phase149.md)
+- [Phase 149 7-Card 视觉基准报告卡](docs/reports/ai-infra-phase149-benchmark-cards.html)

@@ -1061,3 +1061,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang AMD DSv4.1 FP8 wo_a & vLLM Anthropic/Rust & TRT-LLM Responses (EN)](components/sglang-dsv4-woa-fp8-vllm-anthropic-rust-trtllm-responses-phase148.en.md)
 - [Megatron RL/TrainState & PyTorch Metal/Dynamo & Mooncake/LMCache/Dynamo/NIXL GDS (EN)](components/megatron-rl-trainstate-pytorch-mooncake-part-lmcache-nixl-gds-phase148.en.md)
 - [Phase 148 7-Card Visual Benchmark Deck](reports/ai-infra-phase148-benchmark-cards.html)
+
+### Phase 149 (2026-10-31 · priority: 158)
+- [FlashInfer MXFP8 Band-Path / MoK Rubin EP8 / KG1 128-Row / MiniMax-H3 & Triton / TileLang (EN)](components/flashinfer-mxfp8-band-mok-rubin-kg1-minimax-triton-tilelang-phase149.en.md)
+- [SGLang AMD AITER FAv3 / XPU page_size=1 / Ascend FIAS-v2 & vLLM Rust / TRT-LLM TPOT (EN)](components/sglang-aiter-fav3-xpu-ascend-vllm-rust-trtllm-tpot-phase149.en.md)
+- [Megatron WandB / MFSDP & PyTorch Metal/Dynamo & Mooncake / LMCache / Dynamo / NIXL (EN)](components/megatron-wandb-mfsdp-pytorch-mooncake-lmcache-dynamo-nixl-phase149.en.md)
+- [Phase 149 7-Card Visual Benchmark Deck](reports/ai-infra-phase149-benchmark-cards.html)

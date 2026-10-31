@@ -131,7 +131,7 @@
 All validation tools and 409 experiment suites use the **Python 3.12 standard library only** (no GPU or third-party packages required):
 
 ```powershell
-# 1. Run the full unit test suite (702 unit tests)
+# 1. Run the full unit test suite (705 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and all Markdown links
@@ -166,3 +166,9 @@ un.py --check
 - [SGLang AMD DSv4.1 FP8 wo_a & vLLM Anthropic/Rust & TRT-LLM Responses (EN)](docs/components/sglang-dsv4-woa-fp8-vllm-anthropic-rust-trtllm-responses-phase148.en.md)
 - [Megatron RL/TrainState & PyTorch Metal/Dynamo & Mooncake/LMCache/Dynamo/NIXL GDS (EN)](docs/components/megatron-rl-trainstate-pytorch-mooncake-part-lmcache-nixl-gds-phase148.en.md)
 - [Phase 148 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase148-benchmark-cards.html)
+
+### Phase 149 (2026-10-31 · priority: 158)
+- [FlashInfer MXFP8 Band-Path / MoK Rubin EP8 / KG1 128-Row / MiniMax-H3 & Triton / TileLang (EN)](docs/components/flashinfer-mxfp8-band-mok-rubin-kg1-minimax-triton-tilelang-phase149.en.md)
+- [SGLang AMD AITER FAv3 / XPU page_size=1 / Ascend FIAS-v2 & vLLM Rust / TRT-LLM TPOT (EN)](docs/components/sglang-aiter-fav3-xpu-ascend-vllm-rust-trtllm-tpot-phase149.en.md)
+- [Megatron WandB / MFSDP & PyTorch Metal/Dynamo & Mooncake / LMCache / Dynamo / NIXL (EN)](docs/components/megatron-wandb-mfsdp-pytorch-mooncake-lmcache-dynamo-nixl-phase149.en.md)
+- [Phase 149 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase149-benchmark-cards.html)
