@@ -1461,3 +1461,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理前端哈希与多模态校验 Phase 170：vLLM Rust 前端块哈希、ROCm DSv4.1 gfx942 窄 GEMM 及 TRT-LLM Nemotron VL 教师强制对比](components/inference-vllm-rust-hash-rocm-dsv41-trtllm-nemotron-phase170.md)
 - [互连数据面与主机存储后端 Phase 170：NCCL EFA-GDA efa-dp-direct 1.1.0 (backendVersion 2)、ROCm hipFile Host 后端及 NIXL TSan 元数据等待](components/interconnect-nccl-efa-dp-direct110-hipfile-host-nixl-phase170.md)
 - [Phase 170 7-Card 4:5 视觉评测报告](reports/ai-infra-phase170-benchmark-cards.html)
+
+### Phase 171 (`priority: 180`, 528 题 / 523 实验套件基线)
+- [GPU 软件栈 Phase 171：FlashInfer sm_107a Mega-mHC 与 Causal Conv1D Autograd、FA SM100 动态掩码编译及 Triton 合并依赖复用](components/gpu-software-stack-flashinfer-sm107a-mhc-fa-sm100-mask-phase171.md)
+- [推理模板信任与调度器瘦身 Phase 171：vLLM 结构化决策模板信任与 Kimi-K2.5 ViT 编译解耦及 SGLang 死字段清理](components/inference-vllm-template-trust-kimi-vit-sglang-sched-phase171.md)
+- [互连诊断隔离与按进程日志 Phase 171：NCCL 诊断子进程 OMPI_* 剥离、ROCm rocjitsu FP64 跳过收尾及 NIXL 按进程轮转日志](components/interconnect-nccl-ompi-strip-rocjitsu-fp64-nixl-log-phase171.md)
+- [Phase 171 7-Card 4:5 视觉评测报告](reports/ai-infra-phase171-benchmark-cards.html)

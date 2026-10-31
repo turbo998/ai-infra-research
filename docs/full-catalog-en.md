@@ -1199,3 +1199,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Frontend Hashing & Multimodal Verification Phase 170: vLLM Rust Prompt Block Hashing, ROCm DSv4.1 gfx942 Skinny-GEMM & TRT-LLM Nemotron VL Teacher-Forced Logits](components/inference-vllm-rust-hash-rocm-dsv41-trtllm-nemotron-phase170.en.md)
 - [Interconnect Datapath & Host Storage Backend Phase 170: NCCL EFA-GDA efa-dp-direct 1.1.0 (backendVersion 2), ROCm hipFile Host Backend & NIXL TSan Metadata Wait](components/interconnect-nccl-efa-dp-direct110-hipfile-host-nixl-phase170.en.md)
 - [Phase 170 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase170-benchmark-cards.html)
+
+### Phase 171 (`priority: 180`, 528-Question / 523-Suite Baseline)
+- [GPU Software Stack Phase 171: FlashInfer sm_107a Mega-mHC & Causal Conv1D Autograd, FA SM100 Dynamic Mask Compilation & Triton Coalescing Reuse](components/gpu-software-stack-flashinfer-sm107a-mhc-fa-sm100-mask-phase171.en.md)
+- [Inference Template Trust & Scheduler Pruning Phase 171: vLLM Structured Decision Template Trust & Kimi-K2.5 ViT De-Compile, and SGLang Dead decoded_text Removal](components/inference-vllm-template-trust-kimi-vit-sglang-sched-phase171.en.md)
+- [Interconnect Diagnostics Isolation & Per-Process Logging Phase 171: NCCL Diagnostics Child OMPI_* Stripping, ROCm rocjitsu FP64 Finishing Bypass & NIXL Rotated Logs](components/interconnect-nccl-ompi-strip-rocjitsu-fp64-nixl-log-phase171.en.md)
+- [Phase 171 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase171-benchmark-cards.html)
