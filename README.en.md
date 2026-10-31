@@ -131,7 +131,7 @@
 All validation tools and 409 experiment suites use the **Python 3.12 standard library only** (no GPU or third-party packages required):
 
 ```powershell
-# 1. Run the full unit test suite (708 unit tests)
+# 1. Run the full unit test suite (711 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and all Markdown links
@@ -178,3 +178,9 @@ un.py --check
 - [SGLang NPU DSpark / MLA k_scale=1.0 Bypass & vLLM Rust UMBP / Fast-Start & TRT-LLM TF32 (EN)](docs/components/sglang-npu-dspark-mla-kscale-vllm-umbp-preload-trtllm-openengine-phase150.en.md)
 - [Megatron Checkpoint Retain / Shortcut MoE & PyTorch Metal/Dynamo & Mooncake HA / Dynamo / NIXL (EN)](docs/components/megatron-ckpt-retain-shortcut-moe-pytorch-mooncake-ha-dynamo-nixl-phase150.en.md)
 - [Phase 150 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase150-benchmark-cards.html)
+
+### Phase 151 (`priority: 160`, 2026-10-31) — Cake LM-Head Valid-Row Budget, SM120 NVFP4 Varlen Overlap, ROCm W4A16 64-Bit Offsets, Muse Spark CUDA Routing & Mooncake/NIXL Concurrency
+- **Track 1 (GPU Kernel & Compiler)**: [EN](docs/components/flashinfer-lmhead-minimax-kda-mxfp8-fmha-triton-gsan-tilelang-phase151.en.md) | [ZH](docs/components/flashinfer-lmhead-minimax-kda-mxfp8-fmha-triton-gsan-tilelang-phase151.md) — FlashInfer Cake LM-head valid-row & step-peak budget (`-37.5%` FLOPs, `512 MB` cap), SM120 NVFP4 varlen overlap (`1.2912x`), KDA N32 plain work bins (`1.3122x`), grouped MXFP8 L2 prefetch (`1.2842x`), GB300 FP8 FMHA S-column reuse (`1.1964x`), Triton GSan profiler & class constexpr serialization (`0` preload errors).
+- **Track 2 (Inference & Serving)**: [EN](docs/components/sglang-paged-experts-mhc-vllm-w4a16-muse-trtllm-b12x-phase151.en.md) | [ZH](docs/components/sglang-paged-experts-mhc-vllm-w4a16-muse-trtllm-b12x-phase151.md) — SGLang exact paged-experts pinning (`-37.5%` host pinned RAM), `deep_select` 3-CTA tier (`1.3082x`), vLLM ROCm Triton W4A16 64-bit offsets, Muse Spark CUDA routing (`3.8222x`), GLM-5.3-Flash EPD metadata-only inputs (`400x` smaller), TensorRT-LLM DSpark target page size (`4.0x` fewer entries) & B12x MoE input contract.
+- **Track 3 (Training & KV Fabric)**: [EN](docs/components/megatron-gdn-fp64-pytorch-mooncake-uring-dynamo-nixl-phase151.en.md) | [ZH](docs/components/megatron-gdn-fp64-pytorch-mooncake-uring-dynamo-nixl-phase151.md) — Megatron slot-indexed GDN decode (`1.4661x`) & FP64 batch-invariant MoE combine (`0.0` drift), PyTorch cuBLAS handle retry & ROCm Kineto exit guard, Mooncake TENT short `io_uring` rejection & dense indexing (`7.5897x`), Dynamo off-actor candidate building (`-83.81%` lock hold), NIXL Libfabric rail EP mutex.
+- **7-Card 4:5 Visual Benchmark Deck**: [`docs/reports/ai-infra-phase151-benchmark-cards.html`](docs/reports/ai-infra-phase151-benchmark-cards.html) (`2,841` sources, `769` claims, `468` questions, `463` experiments, `711` unit tests).

@@ -1073,3 +1073,12 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang NPU DSpark / MLA k_scale=1.0 Bypass & vLLM Rust UMBP / Fast-Start & TRT-LLM TF32 (EN)](components/sglang-npu-dspark-mla-kscale-vllm-umbp-preload-trtllm-openengine-phase150.en.md)
 - [Megatron Checkpoint Retain / Shortcut MoE & PyTorch Metal/Dynamo & Mooncake HA / Dynamo / NIXL (EN)](components/megatron-ckpt-retain-shortcut-moe-pytorch-mooncake-ha-dynamo-nixl-phase150.en.md)
 - [Phase 150 7-Card Visual Benchmark Deck](reports/ai-infra-phase150-benchmark-cards.html)
+
+## Phase 151 (`priority: 160`, 2026-10-31)
+- `docs/components/flashinfer-lmhead-minimax-kda-mxfp8-fmha-triton-gsan-tilelang-phase151.md` / `.en.md`
+- `docs/components/sglang-paged-experts-mhc-vllm-w4a16-muse-trtllm-b12x-phase151.md` / `.en.md`
+- `docs/components/megatron-gdn-fp64-pytorch-mooncake-uring-dynamo-nixl-phase151.md` / `.en.md`
+- `docs/reports/ai-infra-phase151-benchmark-cards.html`
+- `experiments/flashinfer_lmhead_minimax_kda_mxfp8_fmha_phase151/run.py`
+- `experiments/sglang_paged_experts_mhc_vllm_w4a16_trtllm_b12x_phase151/run.py`
+- `experiments/megatron_gdn_fp64_mooncake_uring_dynamo_nixl_phase151/run.py`
