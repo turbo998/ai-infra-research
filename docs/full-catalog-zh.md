@@ -1344,3 +1344,12 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - `experiments/flashinfer_lmhead_minimax_kda_mxfp8_fmha_phase151/run.py`
 - `experiments/sglang_paged_experts_mhc_vllm_w4a16_trtllm_b12x_phase151/run.py`
 - `experiments/megatron_gdn_fp64_mooncake_uring_dynamo_nixl_phase151/run.py`
+
+## Phase 152 (`priority: 161`, 2026-10-31)
+- `docs/components/flashinfer-muse-norm-sm120-gdn-dproj-sampling-triton-tilelang-phase152.md` / `.en.md`
+- `docs/components/sglang-strided-moe-vllm-nixl-mamba-trtllm-minimax-indexk-phase152.md` / `.en.md`
+- `docs/components/megatron-dsa-minmem-routing-mooncake-heal-dynamo-ucx-sgl-phase152.md` / `.en.md`
+- `docs/reports/ai-infra-phase152-benchmark-cards.html`
+- `experiments/flashinfer_muse_norm_gdn_pairs_dproj_sampling_phase152/run.py`
+- `experiments/sglang_strided_moe_vllm_nixl_mamba_trtllm_minimax_phase152/run.py`
+- `experiments/megatron_dsa_routing_mooncake_heal_dynamo_ucx_phase152/run.py`
