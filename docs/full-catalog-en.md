@@ -1109,3 +1109,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
   - [`docs/components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.en.md`](components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.en.md) (ZH: [`.md`](components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.md))
   - [`docs/components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.en.md`](components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.en.md) (ZH: [`.md`](components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.md))
   - 7-Card Report: [`docs/reports/ai-infra-phase155-benchmark-cards.html`](reports/ai-infra-phase155-benchmark-cards.html)
+
+### Phase 156 (`priority: 165` · 2026-10-31)
+- [FlashInfer SM103a MegaMoE v3 W4A8, mHC Train, KDA M64, Ulysses NVLink, NVFP4 Sparse MLA & Triton/TileLang](components/flashinfer-megamoe-sm103a-mhc-kda-ulysses-triton-tilelang-phase156.en.md)
+- [SGLang PP KV Consensus, MiniMax DSpark, vLLM HiSparse Fused, Muse Spark Hybrid MoE & TRT-LLM Qwen3.8/SpecDecode](components/sglang-pp-kv-minimax-glm5-vllm-hisparse-muse-trtllm-qwen38-phase156.en.md)
+- [Megatron FSDP GlobalLayout Reuse, RL Vocab-Parallel Logprobs, DSA Precision, PyTorch IPC & Mooncake/LMCache/NIXL](components/megatron-fsdp-layout-rl-logprobs-dsa-mooncake-efa-lmcache-nixl-phase156.en.md)
+- [Phase 156 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase156-benchmark-cards.html)

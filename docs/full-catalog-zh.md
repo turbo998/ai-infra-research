@@ -1371,3 +1371,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
   - [`docs/components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.md`](components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.md)（英文版：[`.en.md`](components/sglang-pd-poll-rust-cpuset-vllm-dsv41-kv-gather-trtllm-mamba-phase155.en.md)）
   - [`docs/components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.md`](components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.md)（英文版：[`.en.md`](components/megatron-gtp-remat-owner-p2p-mhc-mooncake-mnnvl-lmcache-apc-nixl-phase155.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase155-benchmark-cards.html`](reports/ai-infra-phase155-benchmark-cards.html)
+
+### Phase 156 (`priority: 165` · 2026-10-31)
+- [FlashInfer SM103a MegaMoE v3 W4A8、mHC 训练算子、KDA M64、Ulysses NVLink、NVFP4 稀疏 MLA 与 Triton/TileLang](components/flashinfer-megamoe-sm103a-mhc-kda-ulysses-triton-tilelang-phase156.md)
+- [SGLang PP KV 一致性、MiniMax DSpark、vLLM HiSparse 融合失效、Muse Spark 混合 MoE 与 TRT-LLM Qwen3.8/SpecDecode](components/sglang-pp-kv-minimax-glm5-vllm-hisparse-muse-trtllm-qwen38-phase156.md)
+- [Megatron FSDP GlobalLayout 复用、RL 词表并行 Logprobs、DSA 精度控制、PyTorch IPC 与 Mooncake/LMCache/NIXL](components/megatron-fsdp-layout-rl-logprobs-dsa-mooncake-efa-lmcache-nixl-phase156.md)
+- [Phase 156 7-Card 4:5 视觉基准报告](reports/ai-infra-phase156-benchmark-cards.html)
