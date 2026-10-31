@@ -1485,3 +1485,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理系统：vLLM MRV2 投机草稿后端覆盖、HYV4 工具解析与 SGLang MiniMax-M3.1-Flash](components/inference-vllm-mrv2-spec-decode-hyv4-sglang-minimax-phase174.md)
 - [分布式训练与互连：Megatron GDP 原地分片保存、TE cuDNN 分组 GEMM 规范布局与 NCCL RAS](components/distributed-training-megatron-gdp-te-cudnn-grouped-nccl-ras-phase174.md)
 - [7-Card 视觉评测报告 (Phase 174)](reports/ai-infra-phase174-benchmark-cards.html)
+
+### Phase 175 (`priority: 184`)
+- [GPU 软件栈：FlashInfer Cake 128x64 分组 FP8 GEMM、SM120 突发生产者与 FA SM100 SplitKV 死锁修复](components/gpu-software-stack-flashinfer-grouped-fp8-sm120-fa-sm100-phase175.md)
+- [推理系统：SGLang HiCache 受保护信用扣留、TRT-LLM RowLinearNorm 融合与 LMCache 确定性 KV 填充](components/inference-sglang-hicache-credit-trtllm-rownorm-lmcache-phase175.md)
+- [分布式训练与互连：TE 绑定参数延迟 WGrad 累加与 NCCL 2.32.1 PAT 非均匀 Rank 连接跳过](components/distributed-training-te-delayed-wgrad-nccl-pat-uneven-phase175.md)
+- [7-Card 视觉评测报告 (Phase 175)](reports/ai-infra-phase175-benchmark-cards.html)

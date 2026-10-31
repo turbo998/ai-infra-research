@@ -1223,3 +1223,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Systems: vLLM MRV2 Speculative Draft Backend Overrides, HYV4 Parser & SGLang MiniMax-M3.1-Flash](components/inference-vllm-mrv2-spec-decode-hyv4-sglang-minimax-phase174.en.md)
 - [Distributed Training & Interconnect: Megatron In-Place GDP Shards, TE cuDNN Grouped Layouts & NCCL RAS](components/distributed-training-megatron-gdp-te-cudnn-grouped-nccl-ras-phase174.en.md)
 - [7-Card Visual Benchmark Report (Phase 174)](reports/ai-infra-phase174-benchmark-cards.html)
+
+### Phase 175 (`priority: 184`)
+- [GPU Software Stack: FlashInfer Cake 128x64 Grouped FP8 GEMM, SM120 Burst Producers & FA SM100 SplitKV Fix](components/gpu-software-stack-flashinfer-grouped-fp8-sm120-fa-sm100-phase175.en.md)
+- [Inference Systems: SGLang HiCache Protected Credit, TRT-LLM RowLinearNorm Fusion & LMCache Deterministic KV Fill](components/inference-sglang-hicache-credit-trtllm-rownorm-lmcache-phase175.en.md)
+- [Distributed Training & Interconnect: TE Delayed WGrad on Tied Params & NCCL 2.32.1 PAT Uneven Ranks](components/distributed-training-te-delayed-wgrad-nccl-pat-uneven-phase175.en.md)
+- [7-Card Visual Benchmark Report (Phase 175)](reports/ai-infra-phase175-benchmark-cards.html)
