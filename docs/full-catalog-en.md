@@ -1139,3 +1139,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang TTFT Breakdown & Metadata Fill Kernels, vLLM MORI EP V2 & gRPC Drain, TRT-LLM NVFP4 MoE & DeepEP Mixed-Fabric GIN Barrier](components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.en.md)
 - [NCCL GIN Request Aggregation & GDAKI MCST, RCCL BF16 MinMax & Direct AG, NIXL Sender Progress & OBJ Batching, Mooncake TENT/EP Guards & LMCache Inprocess Architecture](components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.en.md)
 - [Phase 160 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase160-benchmark-cards.html)
+
+### Phase 161 (`priority: 170` · 2026-11-01)
+- [FlashInfer CAKE DeepGEMM Dense MQA 8-Block Chain & mHC Autograd, FlashAttention SM100 Sparse MLA, CUTLASS 4.8 & Triton Proton Isolation](components/flashinfer-cake-mqa-mhc-fa-sm100-cutlass-48-triton-proton-phase161.en.md)
+- [SGLang Joint-LRU Unified KV Eviction & Rust DP-Abort Broadcast, vLLM NIXL 1.5.2 & TRT-LLM Owning Fragment](components/sglang-joint-lru-dp-abort-vllm-nixl152-trtllm-own-frag-phase161.en.md)
+- [NCCL 2.32.3, RCCL DMABUF Disable Guard & amd-smi Migration, NIXL GPUNetIO, Mooncake Loopback Binding & LMCache Real gRPC Validation](components/nccl-2323-rccl-dmabuf-amdsmi-nixl-gpunetio-mooncake-lmcache-phase161.en.md)
+- [Phase 161 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase161-benchmark-cards.html)

@@ -233,3 +233,9 @@ un.py --check
   - [`docs/components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.md`](docs/components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.md)
   - [`docs/components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.md`](docs/components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.md)
   - 7-Card 报告：[`docs/reports/ai-infra-phase160-benchmark-cards.html`](docs/reports/ai-infra-phase160-benchmark-cards.html)
+
+- **Phase 161 (`priority: 170`，2026-11-01）**：
+  - [`docs/components/flashinfer-cake-mqa-mhc-fa-sm100-cutlass-48-triton-proton-phase161.md`](docs/components/flashinfer-cake-mqa-mhc-fa-sm100-cutlass-48-triton-proton-phase161.md)（英文版：[`.en.md`](docs/components/flashinfer-cake-mqa-mhc-fa-sm100-cutlass-48-triton-proton-phase161.en.md)）
+  - [`docs/components/sglang-joint-lru-dp-abort-vllm-nixl152-trtllm-own-frag-phase161.md`](docs/components/sglang-joint-lru-dp-abort-vllm-nixl152-trtllm-own-frag-phase161.md)（英文版：[`.en.md`](docs/components/sglang-joint-lru-dp-abort-vllm-nixl152-trtllm-own-frag-phase161.en.md)）
+  - [`docs/components/nccl-2323-rccl-dmabuf-amdsmi-nixl-gpunetio-mooncake-lmcache-phase161.md`](docs/components/nccl-2323-rccl-dmabuf-amdsmi-nixl-gpunetio-mooncake-lmcache-phase161.md)（英文版：[`.en.md`](docs/components/nccl-2323-rccl-dmabuf-amdsmi-nixl-gpunetio-mooncake-lmcache-phase161.en.md)）
+  - 7-Card 报告：[`docs/reports/ai-infra-phase161-benchmark-cards.html`](docs/reports/ai-infra-phase161-benchmark-cards.html)

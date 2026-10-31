@@ -1401,3 +1401,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang TTFT 阶段拆解与元数据填充内核、vLLM MORI EP V2 与 gRPC 排空、TRT-LLM NVFP4 MoE 与 DeepEP 跨网络 GIN 屏障](components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.md)
 - [NCCL GIN 请求聚合与 GDAKI MCST、RCCL BF16 归约修复与直接 AllGather、NIXL 发送端推进与多批次对象映射、Mooncake TENT/EP 校验与 LMCache 进程内架构](components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.md)
 - [Phase 160 7-Card 4:5 视觉基准报告](reports/ai-infra-phase160-benchmark-cards.html)
+
+### Phase 161 (`priority: 170` · 2026-11-01)
+- [FlashInfer CAKE DeepGEMM Dense MQA 8-Block 链扩展与 mHC Autograd、FlashAttention SM100 Sparse MLA、CUTLASS 4.8 与 Triton Proton Trace 隔离](components/flashinfer-cake-mqa-mhc-fa-sm100-cutlass-48-triton-proton-phase161.md)
+- [SGLang Joint-LRU 混合 KV 驱逐与 Rust Attention-DP Abort 广播、vLLM NIXL 1.5.2 及 TRT-LLM Owning Fragment](components/sglang-joint-lru-dp-abort-vllm-nixl152-trtllm-own-frag-phase161.md)
+- [NCCL 2.32.3、RCCL DMABUF 禁用门控与 amd-smi 迁移、NIXL GPUNetIO、Mooncake Loopback 元数据绑定及 LMCache gRPC 实服验证](components/nccl-2323-rccl-dmabuf-amdsmi-nixl-gpunetio-mooncake-lmcache-phase161.md)
+- [Phase 161 7-Card 4:5 视觉基准报告](reports/ai-infra-phase161-benchmark-cards.html)
