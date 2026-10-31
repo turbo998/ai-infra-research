@@ -245,3 +245,9 @@ un.py --check
   - [`docs/components/sglang-m3-enum-ltx25-vllm-gb300-mi355-trtllm-deepep-sm90-phase162.md`](docs/components/sglang-m3-enum-ltx25-vllm-gb300-mi355-trtllm-deepep-sm90-phase162.md)（英文版：[`.en.md`](docs/components/sglang-m3-enum-ltx25-vllm-gb300-mi355-trtllm-deepep-sm90-phase162.en.md)）
   - [`docs/components/nccl4py-2323-rccl-nixl-mooncake-tent-tone-lmcache-xpu-phase162.md`](docs/components/nccl4py-2323-rccl-nixl-mooncake-tent-tone-lmcache-xpu-phase162.md)（英文版：[`.en.md`](docs/components/nccl4py-2323-rccl-nixl-mooncake-tent-tone-lmcache-xpu-phase162.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase162-benchmark-cards.html`](docs/reports/ai-infra-phase162-benchmark-cards.html)
+
+- **Phase 163 (`priority: 172`，2026-11-01 · 504 题基线）**：
+  - [`docs/components/flashinfer-dw-fp32-wcx-fa-packgqa-flashmla-abi-phase163.md`](docs/components/flashinfer-dw-fp32-wcx-fa-packgqa-flashmla-abi-phase163.md)（英文版：[`.en.md`](docs/components/flashinfer-dw-fp32-wcx-fa-packgqa-flashmla-abi-phase163.en.md)）
+  - [`docs/components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.md`](docs/components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.md)（英文版：[`.en.md`](docs/components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.en.md)）
+  - [`docs/components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.md`](docs/components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.md)（英文版：[`.en.md`](docs/components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.en.md)）
+  - 7-Card 报告：[`docs/reports/ai-infra-phase163-benchmark-cards.html`](docs/reports/ai-infra-phase163-benchmark-cards.html)

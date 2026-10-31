@@ -1413,3 +1413,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang M3 推理强度枚举校验与 LTX-2.5 / Pika-H3-Flex 扩散模型、vLLM GB300 AgentX 与全卡 MI355 MoE、TRT-LLM PyExecutor 及 DeepEP SM90 兼容](components/sglang-m3-enum-ltx25-vllm-gb300-mi355-trtllm-deepep-sm90-phase162.md)
 - [NCCL 2.32.3 nccl4py 绑定生成、NIXL Mooncake 插件治理、Mooncake TENT T-One 双栈 E2E 与 LMCache XPU 子进程探测](components/nccl4py-2323-rccl-nixl-mooncake-tent-tone-lmcache-xpu-phase162.md)
 - [Phase 162 7-Card 4:5 视觉基准报告](reports/ai-infra-phase162-benchmark-cards.html)
+
+### Phase 163 (`priority: 172` · 2026-11-01 · 504 题基线)
+- [FlashInfer CAKE Det Loss FP32 稀疏权重清零与 SM90 WCX 压缩专家、FlashAttention CuTe PackGQA 谓词修复与 FlashMLA 稳定 ABI](components/flashinfer-dw-fp32-wcx-fa-packgqa-flashmla-abi-phase163.md)
+- [SGLang PD 分离迟到 STAGING_REQ 过滤与三波次 Ulysses 注意力、vLLM ROCm AITER v0.1.27 及 DeepEP V2 单机 Intra-EP 修复](components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.md)
+- [NCCL SM100 90.2 GB/s 拓扑搜索恢复、RCCL LL128 寄存器通道状态与 NCCL_RINGS 校验、NIXL Torch 2.16 及 LMCache XPU DeepSeek-V4 HMA 验证](components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.md)
+- [Phase 163 7-Card 4:5 视觉基准报告](reports/ai-infra-phase163-benchmark-cards.html)

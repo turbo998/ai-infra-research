@@ -1151,3 +1151,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang M3 Reasoning-Effort Enum Guard & LTX-2.5 / Pika-H3-Flex Diffusion, vLLM GB300 AgentX & Full MI355 MoE, TRT-LLM PyExecutor & DeepEP SM90](components/sglang-m3-enum-ltx25-vllm-gb300-mi355-trtllm-deepep-sm90-phase162.en.md)
 - [NCCL 2.32.3 nccl4py Bindings, NIXL Mooncake Plugin Governance, Mooncake TENT T-One Dual-Stack E2E & LMCache XPU Subprocess Probe](components/nccl4py-2323-rccl-nixl-mooncake-tent-tone-lmcache-xpu-phase162.en.md)
 - [Phase 162 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase162-benchmark-cards.html)
+
+### Phase 163 (`priority: 172` · 2026-11-01 · 504-Question Baseline)
+- [FlashInfer CAKE Det Loss FP32 Sparse dW Zero-Fill & SM90 WCX Mega-MoE, FlashAttention CuTe PackGQA Predication & FlashMLA Stable ABI](components/flashinfer-dw-fp32-wcx-fa-packgqa-flashmla-abi-phase163.en.md)
+- [SGLang Disagg Late STAGING_REQ Guard & 3-Wave Ulysses Diffusion, vLLM ROCm AITER v0.1.27 & DeepEP V2 Single-Node Intra-EP](components/sglang-late-staging-ulysses-3wave-vllm-aiter0127-deepep-v2-phase163.en.md)
+- [NCCL SM100 90.2 GB/s Search Restoration, RCCL LL128 Register Lane State & NCCL_RINGS Validation, NIXL Torch 2.16 & LMCache XPU DeepSeek-V4 HMA](components/nccl-sm100-902-rccl-ll128-regs-nixl-torch216-lmcache-dsv4-hma-phase163.en.md)
+- [Phase 163 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase163-benchmark-cards.html)

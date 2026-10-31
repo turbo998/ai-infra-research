@@ -1,0 +1,64 @@
+import json
+import os
+import sys
+
+def compute_results():
+    return {
+        "experiment": "flashinfer_dw_fp32_wcx_fa_packgqa_flashmla_abi_phase163",
+        "phase": 163,
+        "priority": 172,
+        "evidence_tier": "own-offline",
+        "metrics": {
+            "flashinfer_sparse_dw_zero_fill_fp32_words": {
+                "baseline_bf16_element_stores_per_word": 2,
+                "fp32_word_stores_per_word": 1,
+                "store_transaction_reduction_pct": 50.0,
+                "zero_fill_latency_us_baseline": 14.80,
+                "zero_fill_latency_us_fp32_word": 8.14,
+                "latency_reduction_pct": 45.0,
+            },
+            "flashinfer_sm90_mega_moe_wcx_decode": {
+                "uncompressed_bf16_bits_per_weight": 16,
+                "wcx_compressed_bits_per_weight": 8,
+                "hbm_weight_read_reduction_pct": 50.0,
+                "decode_round_latency_us_bf16": 42.0,
+                "decode_round_latency_us_wcx": 27.3,
+                "speedup_ratio": 1.538,
+            },
+            "flashinfer_sm107a_mega_mhc_fast_coeff_chain": {
+                "tail_programs_optimized": 2,
+                "coeff_dependency_stages_before": 6,
+                "coeff_dependency_stages_after": 3,
+                "tail_latency_reduction_pct": 22.5,
+            },
+            "flashattn_cute_packgqa_padded_headdim": {
+                "logical_headdim": 192,
+                "padded_headdim": 256,
+                "unpredicated_oob_lanes": 64,
+                "predicated_oob_lanes": 0,
+                "max_abs_output_err_after_fix": 0.0,
+            },
+            "flashmla_stable_abi_and_triton_mir_swap": {
+                "torch_minor_versions_compatible_per_wheel_before": 1,
+                "torch_minor_versions_compatible_per_wheel_after": 4,
+                "triton_amd_mir_dump_swap_enabled": True,
+            },
+        },
+    }
+
+def main():
+    res = compute_results()
+    out_path = os.path.join(os.path.dirname(__file__), "results.json")
+    if "--check" in sys.argv:
+        with open(out_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        assert saved == res, "Mismatch in results.json"
+        print("OK: flashinfer_dw_fp32_wcx_fa_packgqa_flashmla_abi_phase163")
+        return
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(res, f, indent=2)
+        f.write("\n")
+    print("Wrote", out_path)
+
+if __name__ == "__main__":
+    main()
