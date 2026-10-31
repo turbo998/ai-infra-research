@@ -1211,3 +1211,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Re-Entrant Cache Reset & Device Normalization Phase 172: vLLM Re-Entrant reset_cache, Nemotron VL GPU Norm & SGLang ReqKvInfo](components/inference-vllm-kv-reset-nemotron-sglang-reqkvinfo-phase172.en.md)
 - [Interconnect DDA Epoch Zeroing Order & DDN Infinia 2.5 Phase 172: ROCm RCCL DDA Scratch/Epoch Zeroing, rocjitsu FLOAT32 Stores & NIXL Infinia 2.5](components/interconnect-rccl-dda-epoch-zero-rocjitsu-f32-nixl-infinia-phase172.en.md)
 - [Phase 172 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase172-benchmark-cards.html)
+
+### Phase 173 (`priority: 182`)
+- [GPU Software Stack: FlashInfer Cake DSA Ticket Zeroing, CUTLASS Hopper CuTeDSL FP8 GELU & FA4 CUDA Graph](components/gpu-software-stack-flashinfer-cake-dsa-cutlass-fp8-fa4-phase173.en.md)
+- [Inference Systems: vLLM ROCm DeepSeek-V3 NIXL Accuracy & SGLang DSV4-Flash W8A8 / MI355X GLM-5.2](components/inference-vllm-rocm-dsv3-nixl-sglang-dsv4-glm52-phase173.en.md)
+- [Distributed Training & Interconnect: Megatron MFSDP ShortcutMoEBlock Sharding & TE BF16 Fused Grouped MLP](components/distributed-training-megatron-mfsdp-te-grouped-mlp-nixl-phase173.en.md)
+- [7-Card Visual Benchmark Report (Phase 173)](reports/ai-infra-phase173-benchmark-cards.html)

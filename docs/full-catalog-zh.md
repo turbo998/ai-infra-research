@@ -1473,3 +1473,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理可重入缓存重置与多模态归一化 Phase 172：vLLM 可重入 reset_cache、Nemotron VL GPU 归一化及 SGLang ReqKvInfo](components/inference-vllm-kv-reset-nemotron-sglang-reqkvinfo-phase172.md)
 - [互连 DDA 纪元清零序与 DDN Infinia 2.5 Phase 172：ROCm RCCL DDA Scratch/Epoch 清零序、rocjitsu FLOAT32 存储及 NIXL Infinia 2.5](components/interconnect-rccl-dda-epoch-zero-rocjitsu-f32-nixl-infinia-phase172.md)
 - [Phase 172 7-Card 4:5 视觉评测报告](reports/ai-infra-phase172-benchmark-cards.html)
+
+### Phase 173 (`priority: 182`)
+- [GPU 软件栈：FlashInfer Cake DSA 工单归零、CUTLASS Hopper CuTeDSL FP8 GELU 与 FA4 CUDA Graph](components/gpu-software-stack-flashinfer-cake-dsa-cutlass-fp8-fa4-phase173.md)
+- [推理系统：vLLM ROCm DeepSeek-V3 NIXL 精度门禁与 SGLang DSV4-Flash W8A8 / MI355X GLM-5.2](components/inference-vllm-rocm-dsv3-nixl-sglang-dsv4-glm52-phase173.md)
+- [分布式训练与互连：Megatron MFSDP ShortcutMoEBlock 分片与 TE BF16 融合分组 MLP](components/distributed-training-megatron-mfsdp-te-grouped-mlp-nixl-phase173.md)
+- [7-Card 视觉评测报告 (Phase 173)](reports/ai-infra-phase173-benchmark-cards.html)
