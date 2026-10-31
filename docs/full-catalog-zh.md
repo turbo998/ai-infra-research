@@ -1467,3 +1467,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理模板信任与调度器瘦身 Phase 171：vLLM 结构化决策模板信任与 Kimi-K2.5 ViT 编译解耦及 SGLang 死字段清理](components/inference-vllm-template-trust-kimi-vit-sglang-sched-phase171.md)
 - [互连诊断隔离与按进程日志 Phase 171：NCCL 诊断子进程 OMPI_* 剥离、ROCm rocjitsu FP64 跳过收尾及 NIXL 按进程轮转日志](components/interconnect-nccl-ompi-strip-rocjitsu-fp64-nixl-log-phase171.md)
 - [Phase 171 7-Card 4:5 视觉评测报告](reports/ai-infra-phase171-benchmark-cards.html)
+
+### Phase 172 (`priority: 181`, 531 题 / 526 实验套件基线)
+- [GPU 软件栈 Phase 172：FlashInfer MoE 早停跳过重算、B300 持久 QK-RoPE、NVFP4 H512 回退及 Triton GSan mbarrier 表定界](components/gpu-software-stack-flashinfer-moe-ckpt-b300-triton-gsan-phase172.md)
+- [推理可重入缓存重置与多模态归一化 Phase 172：vLLM 可重入 reset_cache、Nemotron VL GPU 归一化及 SGLang ReqKvInfo](components/inference-vllm-kv-reset-nemotron-sglang-reqkvinfo-phase172.md)
+- [互连 DDA 纪元清零序与 DDN Infinia 2.5 Phase 172：ROCm RCCL DDA Scratch/Epoch 清零序、rocjitsu FLOAT32 存储及 NIXL Infinia 2.5](components/interconnect-rccl-dda-epoch-zero-rocjitsu-f32-nixl-infinia-phase172.md)
+- [Phase 172 7-Card 4:5 视觉评测报告](reports/ai-infra-phase172-benchmark-cards.html)

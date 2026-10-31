@@ -1205,3 +1205,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Template Trust & Scheduler Pruning Phase 171: vLLM Structured Decision Template Trust & Kimi-K2.5 ViT De-Compile, and SGLang Dead decoded_text Removal](components/inference-vllm-template-trust-kimi-vit-sglang-sched-phase171.en.md)
 - [Interconnect Diagnostics Isolation & Per-Process Logging Phase 171: NCCL Diagnostics Child OMPI_* Stripping, ROCm rocjitsu FP64 Finishing Bypass & NIXL Rotated Logs](components/interconnect-nccl-ompi-strip-rocjitsu-fp64-nixl-log-phase171.en.md)
 - [Phase 171 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase171-benchmark-cards.html)
+
+### Phase 172 (`priority: 181`, 531-Question / 526-Suite Baseline)
+- [GPU Software Stack Phase 172: FlashInfer MoE Early-Stop Recompute Skip, B300 Persistent QK-RoPE, NVFP4 H512 Fallback & Triton GSan mbarrier Table Sizing](components/gpu-software-stack-flashinfer-moe-ckpt-b300-triton-gsan-phase172.en.md)
+- [Inference Re-Entrant Cache Reset & Device Normalization Phase 172: vLLM Re-Entrant reset_cache, Nemotron VL GPU Norm & SGLang ReqKvInfo](components/inference-vllm-kv-reset-nemotron-sglang-reqkvinfo-phase172.en.md)
+- [Interconnect DDA Epoch Zeroing Order & DDN Infinia 2.5 Phase 172: ROCm RCCL DDA Scratch/Epoch Zeroing, rocjitsu FLOAT32 Stores & NIXL Infinia 2.5](components/interconnect-rccl-dda-epoch-zero-rocjitsu-f32-nixl-infinia-phase172.en.md)
+- [Phase 172 7-Card 4:5 Visual Benchmark Report](reports/ai-infra-phase172-benchmark-cards.html)
