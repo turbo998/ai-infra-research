@@ -131,7 +131,7 @@
 All validation tools and 409 experiment suites use the **Python 3.12 standard library only** (no GPU or third-party packages required):
 
 ```powershell
-# 1. Run the full unit test suite (705 unit tests)
+# 1. Run the full unit test suite (708 unit tests)
 python -m unittest discover -s tests
 
 # 2. Validate research queue, evidence ledger, source citations, and all Markdown links
@@ -172,3 +172,9 @@ un.py --check
 - [SGLang AMD AITER FAv3 / XPU page_size=1 / Ascend FIAS-v2 & vLLM Rust / TRT-LLM TPOT (EN)](docs/components/sglang-aiter-fav3-xpu-ascend-vllm-rust-trtllm-tpot-phase149.en.md)
 - [Megatron WandB / MFSDP & PyTorch Metal/Dynamo & Mooncake / LMCache / Dynamo / NIXL (EN)](docs/components/megatron-wandb-mfsdp-pytorch-mooncake-lmcache-dynamo-nixl-phase149.en.md)
 - [Phase 149 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase149-benchmark-cards.html)
+
+### Phase 150 (2026-10-31 · priority: 159 · 150-Phase Milestone)
+- [FlashInfer Rubin sm_107a SSD / Warp Decode / GB200 NVFP4 MLA / SM120 MQA & Triton / TileLang (EN)](docs/components/flashinfer-ssd-sm107a-warpdecode-nvfp4-mla-sm120-mqa-triton-tilelang-phase150.en.md)
+- [SGLang NPU DSpark / MLA k_scale=1.0 Bypass & vLLM Rust UMBP / Fast-Start & TRT-LLM TF32 (EN)](docs/components/sglang-npu-dspark-mla-kscale-vllm-umbp-preload-trtllm-openengine-phase150.en.md)
+- [Megatron Checkpoint Retain / Shortcut MoE & PyTorch Metal/Dynamo & Mooncake HA / Dynamo / NIXL (EN)](docs/components/megatron-ckpt-retain-shortcut-moe-pytorch-mooncake-ha-dynamo-nixl-phase150.en.md)
+- [Phase 150 7-Card Visual Benchmark Deck](docs/reports/ai-infra-phase150-benchmark-cards.html)

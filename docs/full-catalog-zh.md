@@ -1329,3 +1329,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang AMD AITER FAv3 / XPU page_size=1 / Ascend FIAS-v2 与 vLLM Rust / TRT-LLM TPOT（中文）](components/sglang-aiter-fav3-xpu-ascend-vllm-rust-trtllm-tpot-phase149.md)
 - [Megatron WandB / MFSDP 与 PyTorch Metal/Dynamo 及 Mooncake / LMCache / Dynamo / NIXL（中文）](components/megatron-wandb-mfsdp-pytorch-mooncake-lmcache-dynamo-nixl-phase149.md)
 - [Phase 149 7-Card 视觉基准报告卡](reports/ai-infra-phase149-benchmark-cards.html)
+
+### Phase 150（2026-10-31 · priority: 159 · 150 阶段里程碑）
+- [FlashInfer Rubin sm_107a SSD / Warp Decode / GB200 NVFP4 MLA / SM120 MQA 与 Triton / TileLang（中文）](components/flashinfer-ssd-sm107a-warpdecode-nvfp4-mla-sm120-mqa-triton-tilelang-phase150.md)
+- [SGLang NPU DSpark / MLA k_scale=1.0 旁路与 vLLM Rust UMBP / Fast-Start 及 TRT-LLM TF32（中文）](components/sglang-npu-dspark-mla-kscale-vllm-umbp-preload-trtllm-openengine-phase150.md)
+- [Megatron 检查点保留 / Shortcut MoE 与 PyTorch Metal/Dynamo 及 Mooncake HA / Dynamo / NIXL（中文）](components/megatron-ckpt-retain-shortcut-moe-pytorch-mooncake-ha-dynamo-nixl-phase150.md)
+- [Phase 150 7-Card 视觉基准报告卡](reports/ai-infra-phase150-benchmark-cards.html)

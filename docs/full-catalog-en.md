@@ -1067,3 +1067,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang AMD AITER FAv3 / XPU page_size=1 / Ascend FIAS-v2 & vLLM Rust / TRT-LLM TPOT (EN)](components/sglang-aiter-fav3-xpu-ascend-vllm-rust-trtllm-tpot-phase149.en.md)
 - [Megatron WandB / MFSDP & PyTorch Metal/Dynamo & Mooncake / LMCache / Dynamo / NIXL (EN)](components/megatron-wandb-mfsdp-pytorch-mooncake-lmcache-dynamo-nixl-phase149.en.md)
 - [Phase 149 7-Card Visual Benchmark Deck](reports/ai-infra-phase149-benchmark-cards.html)
+
+### Phase 150 (2026-10-31 · priority: 159 · 150-Phase Milestone)
+- [FlashInfer Rubin sm_107a SSD / Warp Decode / GB200 NVFP4 MLA / SM120 MQA & Triton / TileLang (EN)](components/flashinfer-ssd-sm107a-warpdecode-nvfp4-mla-sm120-mqa-triton-tilelang-phase150.en.md)
+- [SGLang NPU DSpark / MLA k_scale=1.0 Bypass & vLLM Rust UMBP / Fast-Start & TRT-LLM TF32 (EN)](components/sglang-npu-dspark-mla-kscale-vllm-umbp-preload-trtllm-openengine-phase150.en.md)
+- [Megatron Checkpoint Retain / Shortcut MoE & PyTorch Metal/Dynamo & Mooncake HA / Dynamo / NIXL (EN)](components/megatron-ckpt-retain-shortcut-moe-pytorch-mooncake-ha-dynamo-nixl-phase150.en.md)
+- [Phase 150 7-Card Visual Benchmark Deck](reports/ai-infra-phase150-benchmark-cards.html)
