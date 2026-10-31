@@ -227,3 +227,9 @@ un.py --check
   - [`docs/components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.en.md`](docs/components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.en.md) (ZH: [`.md`](docs/components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.md))
   - [`docs/components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.en.md`](docs/components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.en.md) (ZH: [`.md`](docs/components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.md))
   - 7-Card Report: [`docs/reports/ai-infra-phase159-benchmark-cards.html`](docs/reports/ai-infra-phase159-benchmark-cards.html)
+
+- **Phase 160 (`priority: 169`, 2026-11-01)**:
+  - [`docs/components/flashinfer-gdn-bwd-rubin-megamoe-fa4-swapab-triton-gsan-phase160.en.md`](docs/components/flashinfer-gdn-bwd-rubin-megamoe-fa4-swapab-triton-gsan-phase160.en.md)
+  - [`docs/components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.en.md`](docs/components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.en.md)
+  - [`docs/components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.en.md`](docs/components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.en.md)
+  - 7-Card Report: [`docs/reports/ai-infra-phase160-benchmark-cards.html`](docs/reports/ai-infra-phase160-benchmark-cards.html)

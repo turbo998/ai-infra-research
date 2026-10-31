@@ -1395,3 +1395,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [SGLang Blackwell Subtile 扩散注意力、vLLM 零拷贝权重加载、TensorRT-LLM 单卡 GDN 对齐与 PyTorch AOTI XPU](components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.md)
 - [NCCL GIN 协作式 Put/Get/Signal、RCCL DMABUF 与 Malloc 安全守卫、NIXL EP 流解耦及 Mooncake/LMCache 生命周期治理](components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.md)
 - [Phase 159 7-Card 4:5 视觉基准报告](reports/ai-infra-phase159-benchmark-cards.html)
+
+### Phase 160 (`priority: 169` · 2026-11-01)
+- [FlashInfer GDN 确定性反向传播、Rubin MegaMoE Autotune v2、FA4 SM100 Swap-AB Decode 与 Triton GSan 非对齐屏障](components/flashinfer-gdn-bwd-rubin-megamoe-fa4-swapab-triton-gsan-phase160.md)
+- [SGLang TTFT 阶段拆解与元数据填充内核、vLLM MORI EP V2 与 gRPC 排空、TRT-LLM NVFP4 MoE 与 DeepEP 跨网络 GIN 屏障](components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.md)
+- [NCCL GIN 请求聚合与 GDAKI MCST、RCCL BF16 归约修复与直接 AllGather、NIXL 发送端推进与多批次对象映射、Mooncake TENT/EP 校验与 LMCache 进程内架构](components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.md)
+- [Phase 160 7-Card 4:5 视觉基准报告](reports/ai-infra-phase160-benchmark-cards.html)

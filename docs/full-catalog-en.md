@@ -1133,3 +1133,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [SGLang Blackwell Subtile Diffusion, vLLM Owned-Tensor Zero-Clone Loader, TensorRT-LLM Single-GPU GDN Alignment & PyTorch AOTI XPU](components/sglang-diffusion-subtile-vllm-weight-clone-trtllm-gdn-phase159.en.md)
 - [NCCL GIN Cooperative Put/Get/Signal, RCCL DMABUF & Malloc Guards, NIXL EP Stream Decoupling & Mooncake/LMCache Lifecycle](components/nccl-gin-coop-rccl-dmabuf-nixl-ep-mooncake-lmcache-phase159.en.md)
 - [Phase 159 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase159-benchmark-cards.html)
+
+### Phase 160 (`priority: 169` · 2026-11-01)
+- [FlashInfer GDN Deterministic Backward, Rubin MegaMoE Autotune v2, FA4 SM100 Swap-AB Decode & Triton GSan Unaligned Barriers](components/flashinfer-gdn-bwd-rubin-megamoe-fa4-swapab-triton-gsan-phase160.en.md)
+- [SGLang TTFT Breakdown & Metadata Fill Kernels, vLLM MORI EP V2 & gRPC Drain, TRT-LLM NVFP4 MoE & DeepEP Mixed-Fabric GIN Barrier](components/sglang-ttft-fill-vllm-mori-ep-trtllm-nvfp4-deepep-gin-phase160.en.md)
+- [NCCL GIN Request Aggregation & GDAKI MCST, RCCL BF16 MinMax & Direct AG, NIXL Sender Progress & OBJ Batching, Mooncake TENT/EP Guards & LMCache Inprocess Architecture](components/nccl-gin-mcst-rccl-bf16-nixl-obj-mooncake-tent-lmcache-phase160.en.md)
+- [Phase 160 7-Card 4:5 Visual Benchmark Deck](reports/ai-infra-phase160-benchmark-cards.html)
