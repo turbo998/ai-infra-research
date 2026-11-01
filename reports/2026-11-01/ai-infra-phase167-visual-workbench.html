@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek DeepInfer &amp; $38/GPU-Hour Economics — Interactive Visual Chart Report &amp; Workbench</title>
+<meta name="description" content="Interactive AI Infra visual chart report and unit economics workbench dissecting deepseek-ai/DeepInfer (DeepSeek-V4.1-Flash), per-GPU token Pareto curves, E/P/D disaggregation, 100 PiB 3FS KV cache, and the exact $38/GPU-hour & 155T tokens/day cost/revenue calculation.">
+<style>
+  :root {
+    --bg: #070b14;
+    --panel: #0f172a;
+    --panel2: #1e293b;
+    --ink: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #10b981;
+    --purple: #a855f7;
+    --amber: #f59e0b;
+    --danger: #ef4444;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.55;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand {
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .badge {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .badge.green {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent2);
+    border-color: rgba(16, 185, 129, 0.4);
+  }
+  .top-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    background: var(--panel2);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 6px 13px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.15s;
+  }
+  .btn:hover, .btn.active {
+    background: var(--accent);
+    color: #070b14;
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+  .wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+  .hero {
+    background: radial-gradient(circle at top right, rgba(56,189,248,0.14), rgba(16,185,129,0.05) 50%, var(--panel) 90%);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+  .hero h1 {
+    margin: 10px 0 12px;
+    font-size: 28px;
+    line-height: 1.25;
+  }
+  .grad {
+    background: linear-gradient(90deg, #38bdf8, #10b981);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+    gap: 14px;
+    margin-top: 20px;
+  }
+  .kpi {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .kpi .val {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .kpi .val.green { color: var(--accent2); }
+  .kpi .val.amber { color: var(--amber); }
+  .kpi .lbl {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .section h2 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section p.lead {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+    gap: 20px;
+  }
+  .grid3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .chart-box {
+    background: #090e1a;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .chart-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .calc-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1.25fr;
+    gap: 22px;
+  }
+  @media (max-width: 960px) {
+    .calc-grid, .grid2 { grid-template-columns: 1fr; }
+  }
+  .control-group {
+    margin-bottom: 14px;
+    background: var(--panel2);
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .control-group label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .control-group input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .waterfall-card {
+    background: #090e1a;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .wf-row {
+    margin-bottom: 12px;
+  }
+  .wf-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .wf-bar-bg {
+    height: 16px;
+    background: #1e293b;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .wf-bar {
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.2s;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .formula-box {
+    background: #060911;
+    border-left: 4px solid var(--accent2);
+    padding: 14px 16px;
+    border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: #e2e8f0;
+    margin: 12px 0;
+    overflow-x: auto;
+  }
+  [data-lang="en"] { display: none; }
+  body.lang-en [data-lang="en"] { display: block; }
+  body.lang-en [data-lang="zh"] { display: none; }
+  span[data-lang="en"], span[data-lang="zh"] { display: inline; }
+  body.lang-en span[data-lang="zh"] { display: none; }
+  body:not(.lang-en) span[data-lang="en"] { display: none; }
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="brand">
+    <span class="badge green">AI INFRA MILESTONE CASE STUDY</span>
+    <span data-lang="zh">DeepSeek DeepInfer 与“单卡时薪 $38 / 日吞吐 155T”可视化研究工作台</span>
+    <span data-lang="en">DeepSeek DeepInfer &amp; "$38/GPU-Hour / 155T/Day" Visual Research Workbench</span>
+  </div>
+  <div class="top-actions">
+    <button class="btn active" id="btn-zh" onclick="setLang('zh')">🇨🇳 中文</button>
+    <button class="btn" id="btn-en" onclick="setLang('en')">🇬🇧 English</button>
+    <a class="btn" href="cards.html" target="_blank" rel="noopener">📊 7-Card Deck ↗</a>
+    <a class="btn" href="https://github.com/deepseek-ai/DeepInfer" target="_blank" rel="noopener">deepseek-ai/DeepInfer ↗</a>
+    <a class="btn" href="https://github.com/turbo998/ai-infra-research" target="_blank" rel="noopener">GitHub Repo ↗</a>
+    <a class="btn" href="../../zh.html" data-lang="zh">← 返回主页</a>
+    <a class="btn" href="../../index.html" data-lang="en">← Back to Home</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <!-- HERO -->
+  <header class="hero">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <span class="badge">DEEPSEEK-V4.1-FLASH (552B MoE · 8B/16B ACTIVE)</span>
+      <span class="badge green">SM100 BLACKWELL &amp; HUAWEI ASCEND 950</span>
+      <span class="badge">100 PiB 3FS KV CACHE (96% HIT)</span>
+    </div>
+    <h1 data-lang="zh">为什么 DeepSeek 一张卡每小时能赚 <span class="grad">$38 美元</span>？<br>DeepInfer 每卡 Token 产效、E/P/D 分离与成本账本全拆解</h1>
+    <h1 data-lang="en">Why Does One DeepSeek GPU Earn <span class="grad">$38 / Hour</span>?<br>Per-GPU Token Pareto, E/P/D Disaggregation &amp; 155T/Day Cost Ledger</h1>
+    <p style="color:var(--muted);margin:0;font-size:14px;" data-lang="zh">
+      基于 <code>deepseek-ai/DeepInfer</code> 一手开源架构文档、vLLM × SemiAnalysis <code>GB300 NVL72</code> 独立复现报告与【第四种黑猩猩】财务拆解：深度还原单集群 <strong>155 万亿 Tokens/天</strong> 背后的 <strong>25× 缓存杠杆（54 亿输入 Token/卡/小时）</strong>、<strong>DSpark 动态投机验证（-30% 验证量）</strong>、<strong>SWA 140-Token 有界重放</strong> 与 <strong>1P:1D $38/GPU-hr 谷电价收入公式</strong>。
+    </p>
+    <p style="color:var(--muted);margin:0;font-size:14px;" data-lang="en">
+      Grounded in primary documentation from <code>deepseek-ai/DeepInfer</code>, the independent <code>vLLM × SemiAnalysis GB300 NVL72</code> reproduction, and the viral "$38/GPU-hour" financial audit: quantifying how <strong>96% 3FS prefix hits (5.4B input tokens/GPU-hr)</strong>, <strong>DSpark confidence verification (-30% draft verify)</strong>, and <strong>140-token SWA bounded replay</strong> drive <strong>$38.00/GPU-hr off-peak ($76.00/hr peak)</strong> across a 1:1 Prefill/Decode pool.
+    </p>
+
+    <div class="kpi-strip">
+      <div class="kpi">
+        <div class="val green">$38.00 / hr</div>
+        <div class="lbl" data-lang="zh">单卡谷电价每小时毛营收（高峰正价 <strong>$76.00/hr</strong>，1P:1D 均值）</div>
+        <div class="lbl" data-lang="en">Per-GPU Off-Peak Hourly Revenue (<strong>$76.00/hr</strong> Peak, 1P:1D Avg)</div>
+      </div>
+      <div class="kpi">
+        <div class="val">155T / Day</div>
+        <div class="lbl" data-lang="zh">单集群日吞吐量（<strong>17.94 亿 tok/s</strong>，约 19×128 卡单元 = 2,432 卡）</div>
+        <div class="lbl" data-lang="en">Single-Cluster Daily Throughput (<strong>1.794B tok/s</strong>, ~2,371 active GPUs)</div>
+      </div>
+      <div class="kpi">
+        <div class="val">1.50M tok/s</div>
+        <div class="lbl" data-lang="zh">Prefill 单卡等效总输入吞吐（<code>60K</code> 物理计算 × <code>96%</code> 3FS 命中 25× 放大 = <strong>54亿/小时</strong>）</div>
+        <div class="lbl" data-lang="en">Effective Prefill Input Throughput/GPU (<code>60K</code> uncached × 25× @ <code>96%</code> hit = <strong>5.4B/hr</strong>)</div>
+      </div>
+      <div class="kpi">
+        <div class="val amber">25,600 tok/s</div>
+        <div class="lbl" data-lang="zh">Decode 单卡离线峰值输出（线上甜点 <strong>14,466 tok/s/卡 @ 230 tok/s/user</strong>）</div>
+        <div class="lbl" data-lang="en">Decode Offline Peak Output/GPU (Online sweet spot <strong>14,466 tok/s @ 230 tok/s/user</strong>)</div>
+      </div>
+      <div class="kpi">
+        <div class="val green">890 B / tok</div>
+        <div class="lbl" data-lang="zh">全局 Block KV 极致压缩（省 <strong>75%</strong> HBM），配 <strong>100 PiB 3FS</strong>（14.4 TB/卡）</div>
+        <div class="lbl" data-lang="en">Global Block KV Footprint (<strong>-75% HBM</strong>), backed by <strong>100 PiB 3FS</strong> (14.4 TB/GPU)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- SECTION 1: INTERACTIVE $38/GPU-HR COST & REVENUE CALCULATOR -->
+  <section class="section" id="calculator">
+    <h2>
+      <span>🧮</span>
+      <span data-lang="zh">交互式推演沙盘：一张卡如何每小时赚到 $38 美元？（实时调参计算器）</span>
+      <span data-lang="en">Interactive Economic Simulator: How 1 GPU Earns $38/Hour (Live Parameter Sandbox)</span>
+    </h2>
+    <p class="lead" data-lang="zh">
+      拖动下方滑块，实时验证【第四种黑猩猩】视频与官方披露的精确账本：当缓存命中率（默认 <code>96%</code>）、Prefill 物理算力（默认 <code>60K tok/s</code>）、Decode 计费速率或计费时段变化时，观察 <strong>96% 缓存白菜价收入（$15.55）</strong>、<strong>4% 未命中高单价收入（$32.40）</strong> 与 <strong>1P:1D 集群单卡净毛利</strong> 的动态变化。
+    </p>
+    <p class="lead" data-lang="en">
+      Adjust the sliders below to verify the exact "$38/GPU-Hour" ledger in real time: observe how prefix cache hit rate (default <code>96%</code>), uncached prefill compute (default <code>60K tok/s</code>), decode output rate, and pricing tier shape <strong>96% cached revenue ($15.55)</strong>, <strong>4% uncached revenue ($32.40)</strong>, and <strong>1P:1D blended gross margin</strong>.
+    </p>
+
+    <div class="calc-grid">
+      <div>
+        <div class="control-group">
+          <label>
+            <span data-lang="zh">1. 3FS 前缀缓存命中率 (Prefix Cache Hit Rate)</span>
+            <span data-lang="en">1. 3FS Prefix Cache Hit Rate</span>
+            <span id="lbl-hit" style="color:var(--accent2);">96.0% (25.0× 放大)</span>
+          </label>
+          <input type="range" id="sl-hit" min="0" max="98" step="1" value="96" oninput="updateCalc()">
+          <div style="font-size:11px;color:var(--muted);" data-lang="zh">DeepSeek 线上默认值：96%（Agent 缓存保留 3 天，Chatbot 保留 7 天）</div>
+          <div style="font-size:11px;color:var(--muted);" data-lang="en">DeepSeek production default: 96% (3-day Agent TTL, 7-day Chatbot TTL in 100 PiB 3FS)</div>
+        </div>
+
+        <div class="control-group">
+          <label>
+            <span data-lang="zh">2. Prefill 单卡冷计算吞吐 (Uncached Input tok/s/GPU)</span>
+            <span data-lang="en">2. Prefill Uncached Compute (tok/s/GPU)</span>
+            <span id="lbl-prefill" style="color:var(--accent);">60,000 tok/s</span>
+          </label>
+          <input type="range" id="sl-prefill" min="20000" max="90000" step="2000" value="60000" oninput="updateCalc()">
+          <div style="font-size:11px;color:var(--muted);" data-lang="zh">SM100 EP4DP4 实测：4K batch 为 60,000 tok/s（2.16亿/小时），64K batch 峰值 90,000 tok/s</div>
+          <div style="font-size:11px;color:var(--muted);" data-lang="en">SM100 EP4DP4 benchmark: 60,000 tok/s at 4K batch (216M/hr), up to 90,000 tok/s at 64K batch</div>
+        </div>
+
+        <div class="control-group">
+          <label>
+            <span data-lang="zh">3. Decode 单卡每小时有效计费输出 (Output M tokens/hr)</span>
+            <span data-lang="en">3. Decode Billable Output (M tokens/hr/GPU)</span>
+            <span id="lbl-decode" style="color:var(--amber);">46.75 M/hr (~13.0K tok/s)</span>
+          </label>
+          <input type="range" id="sl-decode" min="10" max="92" step="0.25" value="46.75" oninput="updateCalc()">
+          <div style="font-size:11px;color:var(--muted);" data-lang="zh">线上稳态约 13K–14.5K tok/s/卡（46.75M–52M/小时）；离线极限 25.6K tok/s（92.16M/小时）</div>
+          <div style="font-size:11px;color:var(--muted);" data-lang="en">Online sweet spot ~13K–14.5K tok/s (46.75M–52M/hr); offline peak 25.6K tok/s (92.16M/hr)</div>
+        </div>
+
+        <div class="control-group">
+          <label>
+            <span data-lang="zh">4. 计费时段与单卡硬件成本 (Pricing Tier &amp; GPU Cost)</span>
+            <span data-lang="en">4. Pricing Tier &amp; Hourly GPU Cost</span>
+            <span id="lbl-cost" style="color:var(--ink);">谷电价 (1.0×) · 成本 $7.50/hr</span>
+          </label>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button class="btn active" id="tier-off" onclick="setTier(1.0)">🌙 谷电价 Off-Peak (1× · $38 基线)</button>
+            <button class="btn" id="tier-peak" onclick="setTier(2.0)">☀️ 高峰价 Peak (2× · $76 上限)</button>
+            <button class="btn" id="btn-reset" onclick="resetCalc()">↺ 恢复官方基线</button>
+          </div>
+          <input type="range" id="sl-cost" min="4.0" max="15.0" step="0.5" value="7.5" oninput="updateCalc()">
+        </div>
+      </div>
+
+      <div class="waterfall-card">
+        <div>
+          <div class="chart-title">
+            <span data-lang="zh">📊 实时单卡每小时收入瀑布图与 1P:1D 账本拆解</span>
+            <span data-lang="en">📊 Live Per-GPU Hourly Revenue Waterfall &amp; 1P:1D Breakdown</span>
+            <span class="badge green" id="out-margin-badge">硬件毛利率: 80.3%</span>
+          </div>
+
+          <div class="wf-row">
+            <div class="wf-head">
+              <span data-lang="zh">① Prefill 缓存命中收入 (96% 流量 · $0.003/M 谷电价)</span>
+              <span data-lang="en">① Prefill Cache-Hit Revenue (96% stream · $0.003/M off-peak)</span>
+              <span id="out-hit-rev" style="color:var(--accent2);">$15.55 / hr (5,184M tok)</span>
+            </div>
+            <div class="wf-bar-bg"><div class="wf-bar" id="bar-hit" style="width:32.4%;background:var(--accent2);"></div></div>
+          </div>
+
+          <div class="wf-row">
+            <div class="wf-head">
+              <span data-lang="zh">② Prefill 缓存未命中重算收入 (4% 流量 · $0.15/M 谷电价)</span>
+              <span data-lang="en">② Prefill Cache-Miss Revenue (4% stream · $0.15/M off-peak)</span>
+              <span id="out-miss-rev" style="color:var(--accent);">$32.40 / hr (216M tok)</span>
+            </div>
+            <div class="wf-bar-bg"><div class="wf-bar" id="bar-miss" style="width:67.6%;background:var(--accent);"></div></div>
+          </div>
+
+          <div class="wf-row">
+            <div class="wf-head">
+              <span data-lang="zh">③ 单张 Prefill 卡每小时总创收 (① + ②，处理 54 亿输入 Token)</span>
+              <span data-lang="en">③ Total Prefill GPU Revenue/hr (① + ②, 5.4B input tokens)</span>
+              <span id="out-prefill-total" style="color:#fff;">$47.95 / hr (¥326.1/hr)</span>
+            </div>
+            <div class="wf-bar-bg"><div class="wf-bar" id="bar-prefill" style="width:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));"></div></div>
+          </div>
+
+          <div class="wf-row">
+            <div class="wf-head">
+              <span data-lang="zh">④ 单张 Decode 卡每小时输出创收 ($0.60/M 谷电价)</span>
+              <span data-lang="en">④ Total Decode GPU Revenue/hr ($0.60/M off-peak)</span>
+              <span id="out-decode-total" style="color:var(--amber);">$28.05 / hr (46.75M tok)</span>
+            </div>
+            <div class="wf-bar-bg"><div class="wf-bar" id="bar-decode" style="width:58.5%;background:var(--amber);"></div></div>
+          </div>
+
+          <div class="wf-row" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
+            <div class="wf-head" style="font-size:15px;">
+              <span data-lang="zh">🎯 1P : 1D 集群综合单卡时薪 = (Prefill + Decode) / 2</span>
+              <span data-lang="en">🎯 1P : 1D Cluster Blended Revenue = (Prefill + Decode) / 2</span>
+              <span id="out-blended" style="color:var(--accent2);font-size:18px;">$38.00 / GPU-hr (¥258.4/hr)</span>
+            </div>
+            <div class="wf-bar-bg" style="height:20px;"><div class="wf-bar" id="bar-blended" style="width:79.2%;background:linear-gradient(90deg,#10b981,#38bdf8);"></div></div>
+          </div>
+        </div>
+
+        <div class="formula-box" id="out-formula">
+          Prefill_Rev = 5,184M × $0.003 + 216M × $0.15 = $15.55 + $32.40 = $47.95/hr<br>
+          Decode_Rev  = 46.75M × $0.60 = $28.05/hr  |  Blended (1P:1D) = ($47.95 + $28.05)/2 = $38.00/GPU-hr
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: VISUAL CHARTS FOR PER-GPU TOKEN PRODUCTION (PREFILL & DECODE PARETO + DSPARK) -->
+  <section class="section" id="pareto-charts">
+    <h2>
+      <span>📈</span>
+      <span data-lang="zh">第一部分可视化：每卡生产 Token 帕累托曲线与 DSpark 动态投机解码收益</span>
+      <span data-lang="en">Pillar 1 Visualizations: Per-GPU Token Pareto Curves &amp; DSpark Speculative Speedup</span>
+    </h2>
+    <p class="lead" data-lang="zh">
+      左侧展示 <code>EP4DP4</code> Prefill 单卡吞吐与 <code>EP64DP64</code> Decode 帕累托边界（128K 上下文，SM100 实测）；右侧展示 <code>DSpark</code> 置信度动态验证相比固定验证 5 个 Token 的吞吐增益（省 30% 验证算力，高负载净提速 +11%）。
+    </p>
+    <p class="lead" data-lang="en">
+      Left: Official SM100 128K-context Pareto curves for <code>EP4DP4</code> Prefill and <code>EP64DP64</code> Decode (`nextn=3, tau=3.25`). Right: <code>DSpark</code> confidence-scheduled verification cutting verified draft tokens by ~30% and lifting throughput up to +11.0%.
+    </p>
+
+    <div class="grid2">
+      <!-- SVG CHART 1: DECODE & PREFILL PARETO -->
+      <div class="chart-box">
+        <div class="chart-title">
+          <span data-lang="zh">图 1：SM100 Decode 帕累托曲线 (EP64DP64, 128K Ctx) &amp; Prefill 阶梯</span>
+          <span data-lang="en">Fig 1: SM100 Decode Pareto Curve (EP64DP64, 128K) &amp; Prefill Scaling</span>
+          <span class="badge">25,600 Out tok/s Peak</span>
+        </div>
+        <svg viewBox="0 0 560 300" style="width:100%;height:auto;background:#060a12;border-radius:8px;">
+          <!-- Grid lines -->
+          <g stroke="#1e293b" stroke-width="1">
+            <line x1="60" y1="30" x2="530" y2="30"/>
+            <line x1="60" y1="85" x2="530" y2="85"/>
+            <line x1="60" y1="140" x2="530" y2="140"/>
+            <line x1="60" y1="195" x2="530" y2="195"/>
+            <line x1="60" y1="250" x2="530" y2="250"/>
+          </g>
+          <!-- Y-axis labels (User Speed tok/s/user: 0 to 350) -->
+          <g fill="#94a3b8" font-size="10" text-anchor="end">
+            <text x="52" y="34">350 tok/s</text>
+            <text x="52" y="89">275 tok/s</text>
+            <text x="52" y="144">200 tok/s</text>
+            <text x="52" y="199">125 tok/s</text>
+            <text x="52" y="254">50 tok/s</text>
+          </g>
+          <!-- X-axis labels (Output Throughput tok/s/GPU: 0 to 28,000) -->
+          <g fill="#94a3b8" font-size="10" text-anchor="middle">
+            <text x="60" y="272">0</text>
+            <text x="177" y="272">7,000</text>
+            <text x="295" y="272">14,000</text>
+            <text x="412" y="272">21,000</text>
+            <text x="525" y="272">28,000 tok/s/GPU</text>
+          </g>
+          <!-- SLA 100 tok/s threshold line -->
+          <line x1="60" y1="214" x2="530" y2="214" stroke="#f59e0b" stroke-dasharray="4 4" stroke-width="1.2"/>
+          <text x="415" y="208" fill="#f59e0b" font-size="10">100 tok/s/user SLA Floor</text>
+
+          <!-- Decode Pareto Curve:
+               (2480, 310) -> x=101, y=59
+               (4480, 280) -> x=135, y=81
+               (8160, 255) -> x=197, y=100
+               (14000, 233) -> x=295, y=116
+               (20480, 160) -> x=403, y=170
+               (25600, 100) -> x=490, y=214
+          -->
+          <polyline fill="none" stroke="#38bdf8" stroke-width="3" points="101,59 135,81 197,100 295,116 403,170 490,214"/>
+          <polygon fill="rgba(56,189,248,0.12)" points="101,250 101,59 135,81 197,100 295,116 403,170 490,214 490,250"/>
+
+          <!-- Points -->
+          <circle cx="101" cy="59" r="5" fill="#38bdf8"/>
+          <text x="108" y="54" fill="#e2e8f0" font-size="10" font-weight="700">conc=8 (310 tok/s/user, 2.48K/GPU)</text>
+
+          <circle cx="197" cy="100" r="5" fill="#38bdf8"/>
+          <text x="204" y="96" fill="#94a3b8" font-size="10">conc=32 (255 tok/s, 8.16K/GPU)</text>
+
+          <circle cx="295" cy="116" r="6.5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+          <text x="250" y="135" fill="#10b981" font-size="10.5" font-weight="800">★ 线上主力甜点 conc=60 (14.5K tok/s/GPU @ 230 tok/s)</text>
+
+          <circle cx="403" cy="170" r="5" fill="#38bdf8"/>
+          <text x="345" y="162" fill="#94a3b8" font-size="10">conc=128 (20.5K/GPU)</text>
+
+          <circle cx="490" cy="214" r="6" fill="#f59e0b" stroke="#fff" stroke-width="1.5"/>
+          <text x="355" y="232" fill="#f59e0b" font-size="10.5" font-weight="800">★ 离线吞吐极限 conc=256 (25.6K tok/s/GPU)</text>
+
+          <text x="295" y="292" fill="#cbd5e1" font-size="11" font-weight="700" text-anchor="middle">X: 单卡输出吞吐 (Output Tokens/s/GPU) · Y: 单用户生成速度 (Tokens/s/User)</text>
+        </svg>
+      </div>
+
+      <!-- SVG CHART 2: DSPARK DYNAMIC VERIFICATION & SWA BOUNDED REPLAY -->
+      <div class="chart-box">
+        <div class="chart-title">
+          <span data-lang="zh">图 2：DSpark 动态投机验证吞吐对比 (Fixed-5 vs Dynamic Varlen)</span>
+          <span data-lang="en">Fig 2: DSpark Confidence-Scheduled Verification vs. Fixed-5 Baseline</span>
+          <span class="badge green">-28% ~ -35% Draft Verify</span>
+        </div>
+        <svg viewBox="0 0 560 300" style="width:100%;height:auto;background:#060a12;border-radius:8px;">
+          <!-- Bars for Concurrency 16, 32, 48, 60, 72, 96 -->
+          <g font-size="10" fill="#94a3b8">
+            <text x="15" y="22" fill="#e2e8f0" font-weight="700">并发档位 (EP64/DP64) · 灰=固定验证5个Token | 蓝=DSpark动态截断验证 | 绿字=验证Token节省率</text>
+
+            <!-- conc=32 -->
+            <text x="15" y="60">conc=32</text>
+            <rect x="85" y="45" width="180" height="10" rx="3" fill="#475569"/>
+            <rect x="85" y="57" width="183" height="10" rx="3" fill="#38bdf8"/>
+            <text x="275" y="62" fill="#e2e8f0">9,111 vs 8,964 tok/s (<tspan fill="#10b981" font-weight="700">+1.6% · 省 27.0% 验证</tspan>)</text>
+
+            <!-- conc=48 -->
+            <text x="15" y="105">conc=48</text>
+            <rect x="85" y="90" width="242" height="10" rx="3" fill="#475569"/>
+            <rect x="85" y="102" width="251" height="10" rx="3" fill="#38bdf8"/>
+            <text x="344" y="107" fill="#e2e8f0">12,467 vs 12,032 (<tspan fill="#10b981" font-weight="700">+3.6% · 省 21.2% 验证</tspan>)</text>
+
+            <!-- conc=60 -->
+            <text x="15" y="150" fill="#10b981" font-weight="700">conc=60 ★</text>
+            <rect x="85" y="135" width="276" height="10" rx="3" fill="#475569"/>
+            <rect x="85" y="147" width="291" height="10" rx="3" fill="#10b981"/>
+            <text x="383" y="152" fill="#10b981" font-weight="700">14,466 vs 13,730 (+5.4% · 省 28.4%)</text>
+
+            <!-- conc=72 -->
+            <text x="15" y="195">conc=72</text>
+            <rect x="85" y="180" width="301" height="10" rx="3" fill="#475569"/>
+            <rect x="85" y="192" width="321" height="10" rx="3" fill="#38bdf8"/>
+            <text x="413" y="197" fill="#e2e8f0">15,961 vs 14,962 (<tspan fill="#10b981" font-weight="700">+6.7% · 省 35.2%</tspan>)</text>
+
+            <!-- conc=96 -->
+            <text x="15" y="240" fill="#38bdf8" font-weight="700">conc=96</text>
+            <rect x="85" y="225" width="338" height="10" rx="3" fill="#475569"/>
+            <rect x="85" y="237" width="375" height="10" rx="3" fill="#38bdf8"/>
+            <text x="466" y="242" fill="#38bdf8" font-weight="700">18,660 (+11.0%)</text>
+          </g>
+
+          <!-- Bottom callout inside SVG for SWA Bounded Replay -->
+          <rect x="15" y="258" width="530" height="32" rx="6" fill="#0f172a" stroke="#334155"/>
+          <text x="25" y="278" fill="#cbd5e1" font-size="10.5">
+            <tspan fill="#f59e0b" font-weight="700">SWA Bounded Replay (KEEP_TOKENS=140):</tspan> Decoder 后缀重算从 51,200 降至 2,800 Layer-Tokens (<tspan fill="#10b981" font-weight="700">-94.53%</tspan>，总 Prefill 算力省 ~50%)
+          </text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: E/P/D DISAGGREGATION & 100 PiB 3FS ARCHITECTURE DIAGRAM -->
+  <section class="section" id="epd-architecture">
+    <h2>
+      <span>🏗️</span>
+      <span data-lang="zh">第二部分可视化：E/P/D 三相物理分离、100 PiB 3FS KV 存储池与四级负载均衡架构图</span>
+      <span data-lang="en">Pillar 2 Architecture: E/P/D Physical Disaggregation, 100 PiB 3FS KV Pool &amp; 4-Tier Load Balancers</span>
+    </h2>
+    <p class="lead" data-lang="zh">
+      DeepSeek 线上将 <strong>Vision Encoder (1卡)</strong>、<strong>Prefill (8卡节点 EP2–8)</strong> 与 <strong>Decode (64–128卡超节点 EP64–128)</strong> 按 <code>1P : 1D</code> 比例解耦，并通过独立的 <strong>100 PiB 3FS 全闪集群（890 B/tok Block KV）+ 主机内存 SWA StateBlock（1.415 MB/seq）</strong> 实现全局任意节点零冲突命中前缀缓存。
+    </p>
+    <p class="lead" data-lang="en">
+      Production decouples <strong>Vision Encoder (1 GPU)</strong>, <strong>Prefill (8-GPU nodes at EP2–8)</strong>, and <strong>Decode (64–128 GPU supernodes at EP64–128)</strong> at a <code>1P : 1D</code> ratio, backed by a dedicated <strong>100 PiB 3FS cluster (`890 B/tok` Block KV) + Host RAM SWA StateBlock (`1.415 MB/seq`)</strong>.
+    </p>
+
+    <div class="chart-box">
+      <svg viewBox="0 0 1120 340" style="width:100%;height:auto;background:#060a12;border-radius:10px;">
+        <!-- Column 1: Entrypoint & deepseek-recipe -->
+        <rect x="20" y="25" width="230" height="290" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="35" y="52" fill="#38bdf8" font-size="13" font-weight="800">1. 流量入口与协议层 (MIT 开源)</text>
+        <rect x="35" y="68" width="200" height="72" rx="8" fill="#1e293b"/>
+        <text x="45" y="90" fill="#f8fafc" font-size="11.5" font-weight="700">deepseek-recipe (Rust + Py)</text>
+        <text x="45" y="108" fill="#94a3b8" font-size="10.5">• 64KB 分段并行 BPE 分词</text>
+        <text x="45" y="124" fill="#94a3b8" font-size="10.5">• 增量 KMP 流式解析 Reasoning/Tool</text>
+
+        <rect x="35" y="152" width="200" height="72" rx="8" fill="#1e293b"/>
+        <text x="45" y="174" fill="#f8fafc" font-size="11.5" font-weight="700">Entrypoint 全局路由层</text>
+        <text x="45" y="192" fill="#94a3b8" font-size="10.5">• 分区内存目录定位 SWA 宿主机器</text>
+        <text x="45" y="208" fill="#94a3b8" font-size="10.5">• 平均输入 77K · 全局 TTFT 400ms</text>
+
+        <rect x="35" y="236" width="200" height="62" rx="8" fill="#1e293b"/>
+        <text x="45" y="258" fill="#a855f7" font-size="11.5" font-weight="700">Vision Encoder LB (VE 池)</text>
+        <text x="45" y="276" fill="#94a3b8" font-size="10.5">• 单实例 1 卡 · 按最少 Patch 数路由</text>
+
+        <!-- Arrows Col 1 -> Col 2 -->
+        <line x1="250" y1="120" x2="295" y2="120" stroke="#38bdf8" stroke-width="2"/>
+        <polygon points="295,115 305,120 295,125" fill="#38bdf8"/>
+
+        <!-- Column 2: Prefill Pool (64 GPUs min) -->
+        <rect x="305" y="25" width="255" height="290" rx="12" fill="#0f172a" stroke="#10b981" stroke-width="1.5"/>
+        <text x="320" y="52" fill="#10b981" font-size="13" font-weight="800">2. Prefill 引擎池 (PE · 8卡节点)</text>
+        <rect x="320" y="68" width="225" height="75" rx="8" fill="#1e293b"/>
+        <text x="330" y="88" fill="#f8fafc" font-size="11.5" font-weight="700">小并行 EP2–8 / DP2–8 (8B 激活)</text>
+        <text x="330" y="106" fill="#94a3b8" font-size="10.5">• DEP2 仅 5.9% DP 等待损失 (64.4K/s)</text>
+        <text x="330" y="122" fill="#10b981" font-size="10.5" font-weight="700">• 60K 冷算 × 96% 命中 = 150万 tok/s/卡</text>
+
+        <rect x="320" y="153" width="225" height="78" rx="8" fill="#1e293b"/>
+        <text x="330" y="173" fill="#f59e0b" font-size="11.5" font-weight="700">Prefill LB (闭源 · 4档长度分桶)</text>
+        <text x="330" y="191" fill="#94a3b8" font-size="10.5">• &lt;16K / 16-64K / 64-256K / &gt;=256K</text>
+        <text x="330" y="207" fill="#94a3b8" font-size="10.5">• 二次方程配额 cost(q,c)&lt;=quota (32K上限)</text>
+        <text x="330" y="222" fill="#94a3b8" font-size="10.5">• DP 内 all-reduce MIN 对齐 + 140-tok 重放</text>
+
+        <rect x="320" y="241" width="225" height="58" rx="8" fill="#1e293b"/>
+        <text x="330" y="261" fill="#f8fafc" font-size="11.5" font-weight="700">主机内存 SWA StateBlock</text>
+        <text x="330" y="279" fill="#94a3b8" font-size="10.5">• 1.415 MB/seq (20L×134×528B) · &gt;98%命中</text>
+
+        <!-- Arrows Col 2 <-> Col 3 -->
+        <line x1="560" y1="110" x2="605" y2="110" stroke="#10b981" stroke-width="2"/>
+        <polygon points="605,105 615,110 605,115" fill="#10b981"/>
+        <text x="587" y="98" fill="#10b981" font-size="9.5" text-anchor="middle">1P : 1D</text>
+
+        <!-- Column 3: Decode Supernode Pool (64 GPUs min) -->
+        <rect x="615" y="25" width="245" height="290" rx="12" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="630" y="52" fill="#f59e0b" font-size="13" font-weight="800">3. Decode 超节点池 (64–128卡)</text>
+        <rect x="630" y="68" width="215" height="75" rx="8" fill="#1e293b"/>
+        <text x="640" y="88" fill="#f8fafc" font-size="11.5" font-weight="700">Wide-EP64–128 / DP64–128 (16B激活)</text>
+        <text x="640" y="106" fill="#94a3b8" font-size="10.5">• 每卡仅驻留 7 个专家 (含1冗余)</text>
+        <text x="640" y="122" fill="#f59e0b" font-size="10.5" font-weight="700">• 线上 14.5K tok/s/卡 @ 230 tok/s/user</text>
+
+        <rect x="630" y="153" width="215" height="78" rx="8" fill="#1e293b"/>
+        <text x="640" y="173" fill="#f59e0b" font-size="11.5" font-weight="700">Decode LB &amp; EPLB (闭源核心)</text>
+        <text x="640" y="191" fill="#94a3b8" font-size="10.5">• DualPath 二维均衡 (请求数 × KV 总长)</text>
+        <text x="640" y="207" fill="#94a3b8" font-size="10.5">• NVLink symm_mem 在线重排 (moe_lb=1.09)</text>
+        <text x="640" y="222" fill="#94a3b8" font-size="10.5">• DSpark 动态验证 (-30% 验证, +6% 吞吐)</text>
+
+        <rect x="630" y="241" width="215" height="58" rx="8" fill="#1e293b"/>
+        <text x="640" y="261" fill="#ef4444" font-size="11.5" font-weight="700">弹性护栏 (0.8 配额锁 + 1min 排空)</text>
+        <text x="640" y="279" fill="#94a3b8" font-size="10.5">• 利用率 &gt;0.8 禁止缩容 (强制 20%+ 冗余)</text>
+
+        <!-- Arrows to Col 4 (100 PiB 3FS) -->
+        <line x1="860" y1="170" x2="895" y2="170" stroke="#38bdf8" stroke-width="2"/>
+        <polygon points="895,165 905,170 895,175" fill="#38bdf8"/>
+
+        <!-- Column 4: 100 PiB 3FS Distributed Storage Cluster -->
+        <rect x="905" y="25" width="195" height="290" rx="12" fill="#0f172a" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="920" y="52" fill="#a855f7" font-size="13" font-weight="800">4. 100 PiB 3FS 存储池</text>
+        <rect x="920" y="68" width="165" height="230" rx="8" fill="#1e293b"/>
+        <text x="930" y="92" fill="#f8fafc" font-size="11" font-weight="700">Global Block KV: 890 B/tok</text>
+        <text x="930" y="112" fill="#10b981" font-size="10.5">• HBM 省 75% / SSD 省 87.5%</text>
+        <text x="930" y="132" fill="#94a3b8" font-size="10.5">• 每张在线 GPU 配 14.4 TB</text>
+        <text x="930" y="152" fill="#94a3b8" font-size="10.5">• 10+2 纠删码 (查 11 返 10)</text>
+        <text x="930" y="172" fill="#38bdf8" font-size="10.5" font-weight="700">• 聚合读峰值: 10 TiB/s</text>
+        <text x="930" y="192" fill="#94a3b8" font-size="10.5">• 聚合写峰值: 850 GiB/s</text>
+        <text x="930" y="212" fill="#f59e0b" font-size="10.5" font-weight="700">• Agent 留存 3 天</text>
+        <text x="930" y="232" fill="#f59e0b" font-size="10.5" font-weight="700">• Chatbot 留存 7 天</text>
+        <text x="930" y="254" fill="#10b981" font-size="10.5" font-weight="700">• GDR RDMA 零 SM 换入</text>
+        <text x="930" y="274" fill="#94a3b8" font-size="10">任意节点可命中全局任意前缀!</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- SECTION 4: CROSS-PLATFORM COMPARISON & CACHE HIT SENSITIVITY TABLE -->
+  <section class="section" id="comparison">
+    <h2>
+      <span>⚖️</span>
+      <span data-lang="zh">第三部分对比矩阵：为什么普通公司买显卡跑 vLLM 赚不到 $38/小时？</span>
+      <span data-lang="en">Pillar 3 Matrix: Why Buying GPUs &amp; Running Naive vLLM Won't Earn $38/Hour</span>
+    </h2>
+    <p class="lead" data-lang="zh">
+      对比单机 H200、单机 B300、DeepSeek 生产集群与 vLLM <code>GB300 NVL72</code>（<code>8P1D + Wide-EP DEP32</code>）的实测单位经济学，以及当缓存命中率从 <code>96%</code> 跌落时的收入衰减。
+    </p>
+    <p class="lead" data-lang="en">
+      Comparing single-node H200, single-node B300, DeepSeek production DeepInfer + 3FS, and vLLM on <code>GB300 NVL72</code> (`8P1D + Wide-EP DEP32`), alongside the prefix cache hit rate sensitivity table.
+    </p>
+
+    <div class="grid2">
+      <div>
+        <h3 style="margin-top:0;font-size:15px;" data-lang="zh">表 1：四种硬件与推理栈形态的每卡时薪对比（谷电价基线）</h3>
+        <h3 style="margin-top:0;font-size:15px;" data-lang="en">Table 1: Per-GPU Hourly Revenue Across 4 Serving Configurations (Off-Peak)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>部署方案 / 硬件</th>
+              <th>总吞吐 (tok/s/卡)</th>
+              <th>谷电时薪 ($/hr)</th>
+              <th>高峰时薪 ($/hr)</th>
+              <th>硬件毛利率</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. 单机 vLLM (8× H200)</strong><br><span style="color:var(--muted);font-size:11px;">无 PD 分离 / 无 Wide-EP</span></td>
+              <td><code>16,600</code></td>
+              <td style="color:var(--danger);font-weight:800;">$0.79 / hr</td>
+              <td>$1.58 / hr</td>
+              <td><span class="badge" style="color:var(--danger);border-color:var(--danger);">-583.5% 巨亏</span></td>
+            </tr>
+            <tr>
+              <td><strong>2. 单机 vLLM (8× B300)</strong><br><span style="color:var(--muted);font-size:11px;">无 PD 分离 / 无 Wide-EP</span></td>
+              <td><code>317,400</code></td>
+              <td style="color:var(--amber);font-weight:800;">$14.88 / hr</td>
+              <td>$29.77 / hr</td>
+              <td><span class="badge">+42.9% (仅39%产能)</span></td>
+            </tr>
+            <tr>
+              <td><strong>3. DeepSeek DeepInfer + 3FS</strong><br><span style="color:var(--muted);font-size:11px;">128+ SM100/昇腾950 (1P:1D)</span></td>
+              <td><code>~756,500</code><br><span style="color:var(--accent2);font-size:11px;">(230 tok/s/user)</span></td>
+              <td style="color:var(--accent2);font-weight:800;">$38.00 / hr</td>
+              <td style="color:var(--accent2);font-weight:800;">$76.00 / hr</td>
+              <td><span class="badge green">80.3% – 86.8%</span></td>
+            </tr>
+            <tr>
+              <td><strong>4. vLLM GB300 NVL72</strong><br><span style="color:var(--muted);font-size:11px;">8P1D + DEP2/DEP32 + MTP5</span></td>
+              <td><code>954,000</code><br><span style="color:var(--accent);font-size:11px;">(196 tok/s/user)</span></td>
+              <td style="color:var(--accent);font-weight:800;">$38.96 / hr</td>
+              <td style="color:var(--accent);font-weight:800;">$77.92 / hr</td>
+              <td><span class="badge green">76.9% (7.9× 提速)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <h3 style="margin-top:0;font-size:15px;" data-lang="zh">表 2：3FS 前缀缓存命中率衰减对总吞吐与用户成本的冲击</h3>
+        <h3 style="margin-top:0;font-size:15px;" data-lang="en">Table 2: Impact of Prefix Cache Hit Rate Degradation (`96% → 0%`)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>缓存命中率</th>
+              <th>Prefill 等效总吞吐</th>
+              <th>用户综合输入单价</th>
+              <th>Prefill 时薪</th>
+              <th>1P:1D 综合时薪</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong style="color:var(--accent2);">96.0% (官方基线)</strong></td>
+              <td><strong>1,500,000 tok/s</strong> (25×)</td>
+              <td style="color:var(--accent2);font-weight:700;">¥0.0592 / 1M</td>
+              <td><strong>$47.95 / hr</strong></td>
+              <td style="color:var(--accent2);font-weight:800;">$38.00 / hr</td>
+            </tr>
+            <tr>
+              <td><strong>90.0%</strong></td>
+              <td>600,000 tok/s (10×)</td>
+              <td>¥0.1180 / 1M</td>
+              <td>$38.23 / hr</td>
+              <td>$33.14 / hr</td>
+            </tr>
+            <tr>
+              <td><strong>80.0%</strong></td>
+              <td>300,000 tok/s (5×)</td>
+              <td style="color:var(--amber);">¥0.2160 / 1M (+265%)</td>
+              <td>$34.99 / hr</td>
+              <td>$31.52 / hr</td>
+            </tr>
+            <tr>
+              <td><strong>50.0%</strong></td>
+              <td>120,000 tok/s (2×)</td>
+              <td>¥0.5100 / 1M</td>
+              <td>$33.05 / hr</td>
+              <td>$30.55 / hr</td>
+            </tr>
+            <tr>
+              <td><strong style="color:var(--danger);">0.0% (无缓存)</strong></td>
+              <td>60,000 tok/s (1×)</td>
+              <td style="color:var(--danger);font-weight:700;">¥1.0000 / 1M (暴涨16.9×)</td>
+              <td>$32.40 / hr</td>
+              <td>$30.23 / hr (需求归零)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: THE 4 HIDDEN MOATS & EMBEDDED 7-CARD LINK -->
+  <section class="section">
+    <h2>
+      <span>🛡️</span>
+      <span data-lang="zh">四大隐性成本与护城河总结（【第四种黑猩猩】核心洞察）</span>
+      <span data-lang="en">The Four Hidden Costs &amp; Engineering Moats ("Why Hardware Alone Fails")</span>
+    </h2>
+    <div class="grid3" style="margin-top:14px;">
+      <div class="chart-box">
+        <div class="chart-title"><span style="color:var(--accent2);">01 · 96% 缓存命中与流量护城河</span></div>
+        <p style="font-size:12.5px;color:var(--muted);margin:0;">
+          单卡每小时处理 54 亿输入 Token 的前提是 <strong>96% 的 Token 根本不需要 GPU 算</strong>，而是直接从 100 PiB 3FS 硬盘读取并白赚 <code>$15.55/hr</code>。没有日均百T级的连续 Agent/Chatbot 流量，缓存命中率与夜间利用率会双双崩塌。
+        </p>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title"><span style="color:var(--accent);">02 · 128 卡起步超节点与 100 PiB 3FS</span></div>
+        <p style="font-size:12.5px;color:var(--muted);margin:0;">
+          DeepInfer 仅支持 <strong>NVIDIA SM100</strong> 与 <strong>华为昇腾 950</strong>，且最小高效单元为 <strong>64张 Prefill 卡 + 64张 Decode 超节点卡 = 128 张卡</strong>，外加每卡 <code>14.4 TB</code> NVMe 存储与 <code>400G</code> RDMA 网络，中小团队无法跨过硬件门槛。
+        </p>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title"><span style="color:var(--amber);">03 · 闭源四级负载均衡与 20%+ 冗余成本</span></div>
+        <p style="font-size:12.5px;color:var(--muted);margin:0;">
+          开源仅含离线引擎（F1 发动机），而 <code>kvcache-store</code> 与四大负载均衡器（Prefill LB、Decode LB、EPLB、Autoscaler）并未开源；且线上要求<strong>配额利用率 &gt;0.8 严禁缩容（至少 20% 冗余热备卡）</strong>并承担 SLA 宕机赔付。
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  let currentTier = 1.0;
+  let currentLang = 'zh';
+
+  function setLang(lang) {
+    currentLang = lang;
+    if (lang === 'en') {
+      document.body.classList.add('lang-en');
+      document.getElementById('btn-en').classList.add('active');
+      document.getElementById('btn-zh').classList.remove('active');
+    } else {
+      document.body.classList.remove('lang-en');
+      document.getElementById('btn-zh').classList.add('active');
+      document.getElementById('btn-en').classList.remove('active');
+    }
+    updateCalc();
+  }
+
+  function setTier(mult) {
+    currentTier = mult;
+    document.getElementById('tier-off').classList.toggle('active', mult === 1.0);
+    document.getElementById('tier-peak').classList.toggle('active', mult === 2.0);
+    updateCalc();
+  }
+
+  function resetCalc() {
+    document.getElementById('sl-hit').value = 96;
+    document.getElementById('sl-prefill').value = 60000;
+    document.getElementById('sl-decode').value = 46.75;
+    document.getElementById('sl-cost').value = 7.5;
+    setTier(1.0);
+  }
+
+  function updateCalc() {
+    const hitPct = parseFloat(document.getElementById('sl-hit').value);
+    const uncachedTokS = parseFloat(document.getElementById('sl-prefill').value);
+    const decodeMhr = parseFloat(document.getElementById('sl-decode').value);
+    const gpuCost = parseFloat(document.getElementById('sl-cost').value);
+
+    const hitRate = hitPct / 100.0;
+    const missRate = Math.max(0.02, 1.0 - hitRate);
+    const mult = 1.0 / missRate;
+
+    const uncachedMhr = (uncachedTokS * 3600.0) / 1e6; // 216M at 60K tok/s
+    const totalInputMhr = uncachedMhr / missRate;     // 5400M at 96% hit
+    const cachedMhr = totalInputMhr - uncachedMhr;    // 5184M at 96% hit
+
+    const priceHit = 0.003 * currentTier;
+    const priceMiss = 0.15 * currentTier;
+    const priceOut = 0.60 * currentTier;
+
+    const revHit = cachedMhr * priceHit;
+    const revMiss = uncachedMhr * priceMiss;
+    const revPrefill = revHit + revMiss;
+    const revDecode = decodeMhr * priceOut;
+    const revBlended = (revPrefill + revDecode) / 2.0;
+
+    const marginPct = ((revBlended - gpuCost) / revBlended) * 100.0;
+
+    document.getElementById('lbl-hit').textContent = `${hitPct.toFixed(1)}% (${mult.toFixed(1)}× 放大)`;
+    document.getElementById('lbl-prefill').textContent = `${uncachedTokS.toLocaleString()} tok/s (${uncachedMhr.toFixed(0)}M/hr)`;
+    document.getElementById('lbl-decode').textContent = `${decodeMhr.toFixed(2)} M/hr (~${Math.round(decodeMhr * 1e6 / 3600).toLocaleString()} tok/s)`;
+    document.getElementById('lbl-cost').textContent = `${currentTier === 1.0 ? '谷电价 (1.0×)' : '高峰正价 (2.0×)'} · 成本 $${gpuCost.toFixed(2)}/hr`;
+
+    document.getElementById('out-hit-rev').textContent = `$${revHit.toFixed(2)} / hr (${Math.round(cachedMhr).toLocaleString()}M tok)`;
+    document.getElementById('out-miss-rev').textContent = `$${revMiss.toFixed(2)} / hr (${Math.round(uncachedMhr).toLocaleString()}M tok)`;
+    document.getElementById('out-prefill-total').textContent = `$${revPrefill.toFixed(2)} / hr (¥${(revPrefill * 6.8).toFixed(1)}/hr)`;
+    document.getElementById('out-decode-total').textContent = `$${revDecode.toFixed(2)} / hr (${decodeMhr.toFixed(2)}M tok)`;
+    document.getElementById('out-blended').textContent = `$${revBlended.toFixed(2)} / GPU-hr (¥${(revBlended * 6.8).toFixed(1)}/hr)`;
+    document.getElementById('out-margin-badge').textContent = `硬件毛利率: ${marginPct.toFixed(1)}%`;
+
+    const maxRef = Math.max(revPrefill, revDecode, 50.0);
+    document.getElementById('bar-hit').style.width = `${Math.min(100, (revHit / revPrefill) * 100)}%`;
+    document.getElementById('bar-miss').style.width = `${Math.min(100, (revMiss / revPrefill) * 100)}%`;
+    document.getElementById('bar-prefill').style.width = `${Math.min(100, (revPrefill / maxRef) * 100)}%`;
+    document.getElementById('bar-decode').style.width = `${Math.min(100, (revDecode / maxRef) * 100)}%`;
+    document.getElementById('bar-blended').style.width = `${Math.min(100, (revBlended / maxRef) * 100)}%`;
+
+    document.getElementById('out-formula').innerHTML =
+      `Prefill_Rev = ${Math.round(cachedMhr).toLocaleString()}M × $${priceHit.toFixed(3)} + ${Math.round(uncachedMhr).toLocaleString()}M × $${priceMiss.toFixed(2)} = $${revHit.toFixed(2)} + $${revMiss.toFixed(2)} = <strong>$${revPrefill.toFixed(2)}/hr</strong><br>` +
+      `Decode_Rev  = ${decodeMhr.toFixed(2)}M × $${priceOut.toFixed(2)} = <strong>$${revDecode.toFixed(2)}/hr</strong> &nbsp;|&nbsp; <strong>1P:1D Blended = ($${revPrefill.toFixed(2)} + $${revDecode.toFixed(2)}) / 2 = $${revBlended.toFixed(2)} / GPU-hr</strong>`;
+  }
+
+  updateCalc();
+</script>
+</body>
+</html>

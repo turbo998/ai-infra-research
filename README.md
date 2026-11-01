@@ -120,6 +120,7 @@
 | :--- | :--- | :--- |
 | **[机架功率密度、液冷/风冷边界与 MNNVL 机柜级故障域](docs/components/rack-power-cooling.md)** | 130kW+ NVL72 冷板液冷（DLC）与 CDU 热力学、DCGM `IMEX` 72-GPU 爆炸半径、Slurm 令牌桶浪涌限流 | [`rack_power_cooling`](experiments/rack_power_cooling/README.md) · [`rack_power_transients`](experiments/rack_power_transients/README.md) |
 | **[容量、成本与吞吐经济学（TorchTitan MFU、vLLM Goodput 与 PD 配比）](docs/components/capacity-economics.md)** | 单 Token 真实训练/推理成本核算、Gamma 突发到达下的排队冗余、Prefix Cache 命中经济学与能耗积分 | [`capacity_economics`](experiments/capacity_economics/README.md) · [`ai_factory_tco_simulator`](experiments/ai_factory_tco_simulator/README.md) |
+| **[DeepSeek DeepInfer 与“单卡时薪 $38 / 日吞吐 155T”生产经济学](reports/2026-11-01/ai-infra-phase167-deepinfer-v41-pd-economics-2026-11-01.md)** · **[EN](reports/2026-11-01/ai-infra-phase167-deepinfer-v41-pd-economics-2026-11-01.en.md)** | `V4.1-Flash` `1:1` E/P/D 分离、`DSpark` 动态投机、`140-token` SWA 重放、`100 PiB` 3FS (`890 B/tok`) 与 `$38/GPU-hr` 拆账 | [`simulate_deepinfer_economics.py`](experiments/phase167_deepinfer_v41_economics/simulate_deepinfer_economics.py) · [7-Card 报告](reports/2026-11-01/ai-infra-phase167-benchmark-cards.html) · [视觉工作台](reports/2026-11-01/ai-infra-phase167-visual-workbench.html) |
 | **[AI Infra 创新公司深挖（Fireworks / Together / Groq / Cerebras）](docs/components/ai-infra-innovators.md)** · **[v2 进阶](docs/components/ai-infra-innovators-v2.md)** | 块稀疏 M3 Attention、Sequoia 投机卸载、Groq TSP 片上 SRAM 确定性流水与 Cerebras WSE 晶圆级 2D Mesh | [`innovator_arch_tradeoffs`](experiments/innovator_arch_tradeoffs/README.md) · [`innovator_pareto_v2`](experiments/innovator_pareto_v2/README.md) |
 | **[阿里云 AI Infra（“通-云-哥”全栈架构）深度测评报告](docs/alibaba-cloud-ai-infra/README.md)** | 平头哥真武 PPU / 镇岳 SSD / 倚天 CPU、磐久 AL128 超节点、HPN 7.0 双平面网络与 PAI 灵骏潮汐调度 | [`docs/alibaba-cloud-ai-infra/evidence.json`](docs/alibaba-cloud-ai-infra/evidence.json) |
 | **[端到端综合架构设计案例](docs/architectures/end-to-end-ai-infra-case.md)** · **[合成容量预算](docs/architectures/synthetic-inference-budget.md)** · **[架构师实战题库](docs/learning/exercises.md)** | 将显存账本、通信拓扑、PD 分离配比、机架功耗与故障恢复串联为可落地的集群架构方案与自测练习 | **[📚 完整 131 阶段目录 (`docs/full-catalog-zh.md`)](docs/full-catalog-zh.md)** |
@@ -263,6 +264,12 @@ un.py --check
   - [`docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.md`](docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.md)（英文版：[`.en.md`](docs/components/sglang-muse-2shot-nomas-kv-vllm-umbp-mori-deepep-v2-phase165.en.md)）
   - [`docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.md`](docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.md)（英文版：[`.en.md`](docs/components/nccl-niin-tma-local-rocjitsu-py-nixl-gpunetio-mooncake-phase165.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase165-benchmark-cards.html`](docs/reports/ai-infra-phase165-benchmark-cards.html)
+
+- **Phase 167 (`priority: 176`，2026-11-01 · DeepSeek DeepInfer & "$38/GPU-Hour / 155T Tokens/Day" 专题）**：
+  - 专题研究报告：[`reports/2026-11-01/ai-infra-phase167-deepinfer-v41-pd-economics-2026-11-01.md`](reports/2026-11-01/ai-infra-phase167-deepinfer-v41-pd-economics-2026-11-01.md)（英文版：[`.en.md`](reports/2026-11-01/ai-infra-phase167-deepinfer-v41-pd-economics-2026-11-01.en.md)）
+  - 7-Card 4:5 视觉评测卡片：[`reports/2026-11-01/ai-infra-phase167-benchmark-cards.html`](reports/2026-11-01/ai-infra-phase167-benchmark-cards.html)
+  - 交互式视觉工作台：[`reports/2026-11-01/ai-infra-phase167-visual-workbench.html`](reports/2026-11-01/ai-infra-phase167-visual-workbench.html)
+  - 确定性经济学仿真套件：[`experiments/phase167_deepinfer_v41_economics/simulate_deepinfer_economics.py`](experiments/phase167_deepinfer_v41_economics/simulate_deepinfer_economics.py)（汇总数据：[`deepinfer_economics_summary.json`](experiments/phase167_deepinfer_v41_economics/deepinfer_economics_summary.json)）
 
 - **Phase 178 (`priority: 181`，2026-11-01 · 549 题与 526 实验基线）**：
   - [`docs/components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.md`](docs/components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.md)（英文版：[`.en.md`](docs/components/flashinfer-megamoe-sm103a-fa-sm100-hd256-flashmla-1m-phase166.en.md)）
