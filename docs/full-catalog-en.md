@@ -1247,3 +1247,9 @@ python experiments\trtllm_helix_gdn_megatron_gdp_pytorch_inductor_mooncake_dynam
 - [Inference Systems: vLLM MI355X DeepSeek-V4.1-Flash & Mistral-Large-4, P2P Handshake Wait & SGLang gfx1250 AITER](components/inference-vllm-mi355x-dsv41-mistral4-p2p-handshake-sglang-gfx1250-phase178.en.md)
 - [Distributed Training & Interconnect: TE Device Grouped-Split Alignment, NCCL AllGather A2A Tuning & Separate Backend XML Topo](components/distributed-training-te-grouped-split-align-nccl-allgather-a2a-topo-phase178.en.md)
 - [7-Card Visual Benchmark Report (Phase 178)](reports/ai-infra-phase178-benchmark-cards.html)
+
+### Phase 179 (`priority: 188`, 552-Question / 547-Suite Baseline)
+- [GPU Software Stack: FlashInfer Rubin SM107a GDN Ring State-Fixup, B200/B300 Kimi-K3 Token-Queue Persistent Routing, CuTe SM100 Varlen Dynamic Persistent Scheduler, CUTLASS Thor SM110 tcgen05 & Triton NVFP4-to-MXFP8 Scale Absorption](components/gpu-software-stack-flashinfer-gdn-sm107a-kimi-k3-cutlass-sm110-triton-nvfp4-phase179.en.md)
+- [Inference Systems: vLLM Per-Layer KV Dtype Resolution & Fused MoE Padding Skip, SGLang DeepSeek-V4.1 Whole-Wave Rounding & PD Linker Page Deduplication, and TRT-LLM GB300 Qwen3.5 AgentX](components/inference-vllm-kv-dtype-moe-pad-sglang-dsv41-wave-pd-linker-phase179.en.md)
+- [Distributed Training & Interconnect: Megatron-LM MFSDP v2 Outer-Stream Overlap & MXFP8 Dual-Plane Backward Unsharding, TE THD CP Shared-Memory Guard, NCCL Bidirectional P2P KernelCh & Mooncake Multi-Context URMA Retention](components/distributed-training-megatron-mfsdp-v2-mxfp8-te-thd-cp-nccl-mooncake-urma-phase179.en.md)
+- [7-Card Visual Benchmark Report (Phase 179)](reports/ai-infra-phase179-benchmark-cards.html)

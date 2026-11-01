@@ -1509,3 +1509,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理系统：vLLM MI355X DeepSeek-V4.1-Flash 与 Mistral-Large-4、P2P 握手等待及 SGLang gfx1250 AITER](components/inference-vllm-mi355x-dsv41-mistral4-p2p-handshake-sglang-gfx1250-phase178.md)
 - [分布式训练与互连：TE 设备端 Grouped-Split 对齐校验、NCCL AllGather A2A 调优与独立网络后端 XML 拓扑](components/distributed-training-te-grouped-split-align-nccl-allgather-a2a-topo-phase178.md)
 - [7-Card 视觉评测报告 (Phase 178)](reports/ai-infra-phase178-benchmark-cards.html)
+
+### Phase 179 (`priority: 188`, 552 题 / 547 实验套件基线)
+- [GPU 软件栈：FlashInfer Rubin SM107a GDN Ring 状态修正、B200/B300 Kimi-K3 Token-Queue 持久路由、CuTe SM100 Varlen 动态持久调度、CUTLASS Thor SM110 tcgen05 与 Triton NVFP4→MXFP8 行缩放吸收](components/gpu-software-stack-flashinfer-gdn-sm107a-kimi-k3-cutlass-sm110-triton-nvfp4-phase179.md)
+- [推理系统：vLLM 逐层 KV Dtype 动态解析与融合 MoE Padding 跳过、SGLang DeepSeek-V4.1 整波次对齐与 PD Linker 页面去重，以及 TRT-LLM GB300 Qwen3.5 AgentX](components/inference-vllm-kv-dtype-moe-pad-sglang-dsv41-wave-pd-linker-phase179.md)
+- [分布式训练与互连：Megatron-LM MFSDP v2 外层 DP 专属归约流重叠与 MXFP8 双平面反向解分片、TE THD CP 共享内存感知守卫、NCCL P2P KernelCh 双向剖析与 Mooncake 多 UB 上下文 URMA 保活](components/distributed-training-megatron-mfsdp-v2-mxfp8-te-thd-cp-nccl-mooncake-urma-phase179.md)
+- [7-Card 视觉评测报告 (Phase 179)](reports/ai-infra-phase179-benchmark-cards.html)
