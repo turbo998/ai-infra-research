@@ -6,9 +6,9 @@
 
 ## 📌 Executive Overview Summary（执行摘要与核心架构结论）
 
-> **核心研究基线（Phase 1 – Phase 179 全量合入 `main`，Priority 188 · 552 题 & 547 套实验基线）**
+> **核心研究基线（Phase 1 – Phase 180 全量合入 `main`，Priority 189 · 555 题 & 550 套实验基线）**
 > 本仓库围绕 **11 层 AI 算力与分布式系统工程栈** 展开基于一手固定版本源码（`implementation`）、架构规范（`specification`）与零依赖 Python 3.12 确定性仿真模型（`own-offline`）的深度技术研究，累计完成 **150+ 篇双语深度专题报告**，所有定量结论均通过自动化校验测试，**零未核验主观臆断**：
-> - **研究规模与可复现账本**：累计完成 **`552` 个核心工程研究问题**（`550 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`547` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`3,682` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`853` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`795` 项全绿单元测试** 以及 **`179` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[Phase 179 7-Card 评测报告](docs/reports/ai-infra-phase179-benchmark-cards.html)**）。
+> - **研究规模与可复现账本**：累计完成 **`555` 个核心工程研究问题**（`553 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`550` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`3,713` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`856` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`798` 项全绿单元测试** 以及 **`180` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[Phase 180 7-Card 评测报告](docs/reports/ai-infra-phase180-benchmark-cards.html)**）。
 > - **L01 GPU / SM100 Blackwell 算子与低精度数值**：剖析 `tcgen05`、512 列 `TMEM` 原位混叠（消除 `64 KiB` SMEM 溢出）、`FlashAttention-4`（`FFMA2` 多项式仿真突破 `MUFU.EX2` 瓶颈，在 B200 达 **`2,790.1 TFLOPS`**、SM103 B300 达 **`3,200.0 TFLOPS`**）、`FlashMLA V4.1`（`+32B` TMA 行填充消除 `LDS.32` 4 路冲突，`get_mla_metadata` 削减 **`89.88%`** 偏斜尾波）、`CUTLASS CLC` 动态窃取及 `NVFP4/MXFP8` 分块缩放。
 > - **L02 & L04 分层 KV 缓存与 Prefill-Decode 分离推理**：解构四级 KV 缓存层次（VRAM → Host Pinned DRAM → CXL 3.0 `Device-DAX` `2 MiB` 对齐 → GDS/3FS），结合 `Mooncake Transfer Engine`（ConnectX-8 `Data Direct` 零锁批处理、7 级 Auto-GID 重探测与 `W=4` 有界 Scatter 将有效带宽从 **`313.0 -> 357.85 Gbps`** 提升）、`NVIDIA Dynamo`（二级 `kvcr` 连接器与 `NIXL` UCX/Libfabric 显存类型探测）、`vLLM V1`（`HiSparse` 稀疏 MLA 与拒绝采样）及 `SGLang`（`HiRadixCache` 与 `EAGLE-3` 投机树）。
 > - **L03 & L09 超节点互连、`IBGDA` 直发 RDMA 与共封装光学（CPO/OCS）**：验证 `PyTorch CUDASymmetricMemory` + `NVLS multimem`（流量较 Unicast 1-Shot 降低 **`6.22x`**）、`NCCL Gin` 对称集合通信与 `PAT` 并行聚合二项式树（1,024 卡跳数从 `1,023 -> 7`）、`DeepEP V2.5` GPU 直发 RDMA（Warp 门铃聚合削减 **`10.67x`** MMIO 开销）、`UEC 1.0` 64B 包裁剪 + 逐包喷洒（32-to-1 Incast 下 P99 尾延迟降低 **`69.9%`**），以及 `1.6T CPO + 3D MEMS OCS` 十万卡光互连功耗与故障半径模型。
@@ -283,3 +283,11 @@ un.py --check
   - [`docs/components/inference-vllm-kv-dtype-moe-pad-sglang-dsv41-wave-pd-linker-phase179.md`](docs/components/inference-vllm-kv-dtype-moe-pad-sglang-dsv41-wave-pd-linker-phase179.md)（英文版：[`.en.md`](docs/components/inference-vllm-kv-dtype-moe-pad-sglang-dsv41-wave-pd-linker-phase179.en.md)）
   - [`docs/components/distributed-training-megatron-mfsdp-v2-mxfp8-te-thd-cp-nccl-mooncake-urma-phase179.md`](docs/components/distributed-training-megatron-mfsdp-v2-mxfp8-te-thd-cp-nccl-mooncake-urma-phase179.md)（英文版：[`.en.md`](docs/components/distributed-training-megatron-mfsdp-v2-mxfp8-te-thd-cp-nccl-mooncake-urma-phase179.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase179-benchmark-cards.html`](docs/reports/ai-infra-phase179-benchmark-cards.html)
+
+- **Phase 180 (`priority: 189`，2026-11-02 · 555 题与 550 实验基线 · 14 仓 31 项突破）**：
+  - ![Phase 180 Visual Summary](assets/svg/ai-infra-phase180-visual-summary.svg)
+  - [`docs/components/gpu-software-stack-flashinfer-mla-fp8-gdn-sm107a-mhc-fa-gb300-triton-tilelang-phase180.md`](docs/components/gpu-software-stack-flashinfer-mla-fp8-gdn-sm107a-mhc-fa-gb300-triton-tilelang-phase180.md)（英文版：[`.en.md`](docs/components/gpu-software-stack-flashinfer-mla-fp8-gdn-sm107a-mhc-fa-gb300-triton-tilelang-phase180.en.md)）
+  - [`docs/components/inference-vllm-grpc-readiness-sglang-dsv41-tp-trtllm-dep4-dynamo-sticky-phase180.md`](docs/components/inference-vllm-grpc-readiness-sglang-dsv41-tp-trtllm-dep4-dynamo-sticky-phase180.md)（英文版：[`.en.md`](docs/components/inference-vllm-grpc-readiness-sglang-dsv41-tp-trtllm-dep4-dynamo-sticky-phase180.en.md)）
+  - [`docs/components/distributed-training-megatron-offload-fsdp-inductor-lanes-mooncake-engram-lmcache-phase180.md`](docs/components/distributed-training-megatron-offload-fsdp-inductor-lanes-mooncake-engram-lmcache-phase180.md)（英文版：[`.en.md`](docs/components/distributed-training-megatron-offload-fsdp-inductor-lanes-mooncake-engram-lmcache-phase180.en.md)）
+  - 7-Card 报告：[`docs/reports/ai-infra-phase180-benchmark-cards.html`](docs/reports/ai-infra-phase180-benchmark-cards.html)
+  - 每日归档：[`docs/daily/2026-11-02.md`](docs/daily/2026-11-02.md)

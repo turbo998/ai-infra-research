@@ -1515,3 +1515,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理系统：vLLM 逐层 KV Dtype 动态解析与融合 MoE Padding 跳过、SGLang DeepSeek-V4.1 整波次对齐与 PD Linker 页面去重，以及 TRT-LLM GB300 Qwen3.5 AgentX](components/inference-vllm-kv-dtype-moe-pad-sglang-dsv41-wave-pd-linker-phase179.md)
 - [分布式训练与互连：Megatron-LM MFSDP v2 外层 DP 专属归约流重叠与 MXFP8 双平面反向解分片、TE THD CP 共享内存感知守卫、NCCL P2P KernelCh 双向剖析与 Mooncake 多 UB 上下文 URMA 保活](components/distributed-training-megatron-mfsdp-v2-mxfp8-te-thd-cp-nccl-mooncake-urma-phase179.md)
 - [7-Card 视觉评测报告 (Phase 179)](reports/ai-infra-phase179-benchmark-cards.html)
+
+### Phase 180 (`priority: 189`, 555 题 / 550 实验套件基线)
+- [GPU 软件栈：FlashInfer MLA FP8 Page-64 96KiB 驻留上限与设备端零梯度对数概率反向跳过 (1.943x)、Rubin SM107a 208-SM mHC 链打包、CuTe GB300 前向 CLC 调度、Triton 内核级 Cluster Barrier 守卫与 TileLang 昇腾 950 FlashMLA / sm_12x 99KiB 适配](components/gpu-software-stack-flashinfer-mla-fp8-gdn-sm107a-mhc-fa-gb300-triton-tilelang-phase180.md)
+- [推理系统：vLLM Plain Embedding 快速校验 (3.20x) 与 Rust gRPC 存活性/就绪性解耦、SGLang DeepSeek-V4.1 Indexer TP4 分片 (-75% 工作量)、TRT-LLM DEP4 内存守卫与 Dynamo 粘性最小负载路由 (1.31x)](components/inference-vllm-grpc-readiness-sglang-dsv41-tp-trtllm-dep4-dynamo-sticky-phase180.md)
+- [分布式训练与互连：Megatron-LM Warmup/Backward 细粒度部分激活卸载 (-37.5% HBM) 与预设 FSDP 遍历、PyTorch Inductor 活归约通道直传 Epilogue (1.22x)、ROCm HRR 快照互斥锁与 Mooncake EngramStore (1.38x) + DMA-BUF 4GiB 回绕检测](components/distributed-training-megatron-offload-fsdp-inductor-lanes-mooncake-engram-lmcache-phase180.md)
+- [7-Card 视觉评测报告 (Phase 180)](reports/ai-infra-phase180-benchmark-cards.html)
