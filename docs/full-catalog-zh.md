@@ -1521,3 +1521,9 @@ Evidence-driven AI infrastructure research: GPU, HBM, interconnects, distributed
 - [推理系统：vLLM Plain Embedding 快速校验 (3.20x) 与 Rust gRPC 存活性/就绪性解耦、SGLang DeepSeek-V4.1 Indexer TP4 分片 (-75% 工作量)、TRT-LLM DEP4 内存守卫与 Dynamo 粘性最小负载路由 (1.31x)](components/inference-vllm-grpc-readiness-sglang-dsv41-tp-trtllm-dep4-dynamo-sticky-phase180.md)
 - [分布式训练与互连：Megatron-LM Warmup/Backward 细粒度部分激活卸载 (-37.5% HBM) 与预设 FSDP 遍历、PyTorch Inductor 活归约通道直传 Epilogue (1.22x)、ROCm HRR 快照互斥锁与 Mooncake EngramStore (1.38x) + DMA-BUF 4GiB 回绕检测](components/distributed-training-megatron-offload-fsdp-inductor-lanes-mooncake-engram-lmcache-phase180.md)
 - [7-Card 视觉评测报告 (Phase 180)](reports/ai-infra-phase180-benchmark-cards.html)
+
+### Phase 181 (`priority: 190`, 558 题 / 553 实验套件基线)
+- [GPU 软件栈：FlashInfer 12 行 RMSNorm-SiLU-Gate 短序列前向 (1.312x)、WS2 四路由 MoE AllReduce (1.070x)、K1 绑定参数稠密投影 GEMM (1.684x)、R200 SM107a 双布局 mHC 重计算拆分 (1.033x)、CuTe GB300 热进程自动调优 (11.0x) 与 ROCm AITER gfx950 hd256 MXFP4 (3,652 TFLOP/s)](components/gpu-software-stack-flashinfer-12row-rmsnorm-quadroute-moe-allreduce-k1-bound-args-mhc-r200-fa4-autotune-triton-aiter-hd256-mxfp4-phase181.md)
+- [推理系统：vLLM DeepSeek V4/V4.1 打包视觉编码 (2.61x & 548ms TTFT) 与 NVFP4 权重缓存 IPC 修复、SGLang 单 Warp 每 Token Batcher MoE 路由 (4.045x)、TRT-LLM 8-Token QKV 分块 (2.67x) 与 GB300 主机缓存归零 (-86.24 GiB/rank) 及 Dynamo 解码终态立即转发 (1.306x P90)](components/inference-vllm-dsv4-packed-vision-weight-cache-sglang-warp-moe-router-trtllm-qkv-tiling-gb300-host-cache-dynamo-handoff-phase181.md)
+- [分布式训练与互连：Megatron-LM THD 变长序列打包 TE Attention CUDA Graph (288/288) 与 MInf 在线 RL 快照、TE 批量 MXFP8 GEMM、PyTorch Triton rocSHMEM 设备端集体通信、RCCL Zen CPUID Rome 恢复与 Mooncake/LMCache/NIXL 加固](components/distributed-training-megatron-thd-cudagraph-minf-snapshot-dsv4-flops-te-batched-mxfp8-pytorch-rocshmem-rccl-mooncake-nixl-phase181.md)
+- [7-Card 视觉评测报告 (Phase 181)](reports/ai-infra-phase181-benchmark-cards.html)

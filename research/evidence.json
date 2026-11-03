@@ -18280,7 +18280,102 @@
       "verifier": "python experiments/megatron_offload_fsdp_inductor_lanes_mooncake_engram_lmcache_phase180/run.py --check",
       "verified_at": "2026-11-02",
       "limitations": "Offline deterministic verification of pipeline offload queues, Inductor reduction lanes, HRR mutex ordering, and Linux DMA-BUF 32-bit block iterator wraparound."
+    },
+    {
+      "id": "ev-flashinfer-12row-rmsnorm-quadroute-moe-k1-bound-mhc-r200-fa4-autotune-aiter-hd256-p181",
+      "component": "gpu-software-stack",
+      "status": "own-offline",
+      "claim": "FlashInfer accelerates short-sequence fused RMSNorm-SiLU-Gate forward on Blackwell via 12-row-per-CTA tiling (1798b527fa18, MAX_ROWS=1776 on sm100 / 1824 on sm103, 1.312x B200 speedup), lowers MoE allreduce fusion latency for <= 142 decode tokens via WS2 quad-route routing (283300b79da4, 1.070x B300 speedup), binds K1 dense projection GEMM argument lists once at compile time (27b38c15c3a7, 1.684x GB300 2fwd+bwd speedup), splits Rubin R200 sm_107a dual-layout mHC fn recomputation into k_bwd_post_pre_grad (dc4bf3420d01, 1.033x mhc_lite_4 speedup), and adds a two-wave masked online softmax path for D in [1025, 2048] (936cd32a539a, 1.096x); FlashAttention CuTe cuts GB300 SM103a subprocess autotuning from 4.4s to 0.4s via pre-warmed worker pools (54b044c8cf89, 11.0x) and decouples MLA 2-CTA KV staging via share_kv_tiles (1dc8232fe209); Triton rejects AMD-only layouts in generic_linear conversion (a972119e92a2), bounds AMD scf.if pointer canonicalization in O(B) via visited sets (a94dac3739e8), and fixes gfx1250 TDM mbarrier arrival accounting (1fad2df0604c) while TileLang supports Ascend batched 3D ND2NZ copies (fa69f7fa817c); and ROCm AITER reaches 3,652 TFLOP/s (+18.5%, 1.185x) on MI350X gfx950 hd256 MXFP4 prefill via native CK ASM kernels (6a4fa17deb06).",
+      "source_ids": [
+        "src-flashinfer-1798b527fa18-p181",
+        "src-flashinfer-283300b79da4-p181",
+        "src-flashinfer-27b38c15c3a7-p181",
+        "src-flashinfer-dc4bf3420d01-p181",
+        "src-flashinfer-936cd32a539a-p181",
+        "src-flashattention-1dc8232fe209-p181",
+        "src-flashattention-54b044c8cf89-p181",
+        "src-triton-a972119e92a2-p181",
+        "src-triton-a94dac3739e8-p181",
+        "src-triton-1fad2df0604c-p181",
+        "src-tilelang-fa69f7fa817c-p181",
+        "src-aiter-6a4fa17deb06-p181"
+      ],
+      "artifacts": [
+        "docs/components/gpu-software-stack-flashinfer-12row-rmsnorm-quadroute-moe-allreduce-k1-bound-args-mhc-r200-fa4-autotune-triton-aiter-hd256-mxfp4-phase181.md",
+        "docs/components/gpu-software-stack-flashinfer-12row-rmsnorm-quadroute-moe-allreduce-k1-bound-args-mhc-r200-fa4-autotune-triton-aiter-hd256-mxfp4-phase181.en.md",
+        "docs/reports/ai-infra-phase181-benchmark-cards.html",
+        "assets/svg/ai-infra-phase181-visual-summary.svg",
+        "experiments/flashinfer_12row_rmsnorm_quadroute_moe_k1_bound_mhc_r200_fa4_autotune_aiter_hd256_phase181/run.py",
+        "experiments/flashinfer_12row_rmsnorm_quadroute_moe_k1_bound_mhc_r200_fa4_autotune_aiter_hd256_phase181/results.json",
+        "experiments/flashinfer_12row_rmsnorm_quadroute_moe_k1_bound_mhc_r200_fa4_autotune_aiter_hd256_phase181/README.md",
+        "tests/test_phase181_experiments.py"
+      ],
+      "verifier": "python experiments/flashinfer_12row_rmsnorm_quadroute_moe_k1_bound_mhc_r200_fa4_autotune_aiter_hd256_phase181/run.py --check",
+      "verified_at": "2026-11-03",
+      "limitations": "Offline deterministic verification of CTA row tiling, WS2 routing thresholds, bound CuTe DSL argument lists, and compiler IR invariants; hardware metrics grounded in primary upstream B200, GB300, R200, and MI350X commits."
+    },
+    {
+      "id": "ev-vllm-dsv4-packed-vision-sglang-warp-moe-trtllm-qkv-tiling-gb300-host-cache-dynamo-p181",
+      "component": "inference",
+      "status": "own-offline",
+      "claim": "vLLM packs multi-image vision passes into a single padding-free forward_packed call for DeepSeek V4/V4.1 (0eeae6a47333, 2.61x total vision speedup, 2x B200 c=16 median TTFT 914-959 ms -> 548 ms), eliminates NVFP4 weight-cache IPC double-scale corruption on reload (44965a10974e, 0 fallback warnings), and enforces LFM2 batch-invariance across 22 layers (9226d6e59cd1); SGLang replaces multi-pass Triton MoE routing with a one-warp-per-token Batcher odd-even merge sort + redux top-k CUDA kernel (4494d682373e, 4.045x on Qwen3.5 512E T=16384 and 3.031x on Kimi-K2 384E), skips hash layers before topk_config (1ef3335da114), supports NPU modelslim MLA FP8 KV cache (99fd01047d67), and prevents grammar poll timeouts from poisoning the schema cache (035670b68541); TensorRT-LLM speeds up fused QKV split + RoPE by 2.67x via 8-token CTA tiling (9e334fbaae50), eliminates 86.24 GiB/rank host-pinned KV cache allocation and 13-49s Linux 512 MiB huge-page NUMA compaction stalls on 4x GB300 Nemotron-Ultra-V3 (508f8dddefa8, 390.54 tok/s median, 0/24 runs < 367.24 tok/s), and attributes KV transfer timeouts to deadline owners (da980cce4754); and Dynamo forwards disaggregated decode terminal chunks immediately without waiting for prefill responses (2ec0b1112d00, 1.306x P90 user tok/s, 360 -> 470 tok/s).",
+      "source_ids": [
+        "src-vllm-0eeae6a47333-p181",
+        "src-vllm-44965a10974e-p181",
+        "src-vllm-9226d6e59cd1-p181",
+        "src-sglang-4494d682373e-p181",
+        "src-sglang-1ef3335da114-p181",
+        "src-sglang-99fd01047d67-p181",
+        "src-sglang-035670b68541-p181",
+        "src-trtllm-9e334fbaae50-p181",
+        "src-trtllm-508f8dddefa8-p181",
+        "src-trtllm-da980cce4754-p181",
+        "src-dynamo-2ec0b1112d00-p181"
+      ],
+      "artifacts": [
+        "docs/components/inference-vllm-dsv4-packed-vision-weight-cache-sglang-warp-moe-router-trtllm-qkv-tiling-gb300-host-cache-dynamo-handoff-phase181.md",
+        "docs/components/inference-vllm-dsv4-packed-vision-weight-cache-sglang-warp-moe-router-trtllm-qkv-tiling-gb300-host-cache-dynamo-handoff-phase181.en.md",
+        "docs/reports/ai-infra-phase181-benchmark-cards.html",
+        "assets/svg/ai-infra-phase181-visual-summary.svg",
+        "experiments/vllm_dsv4_packed_vision_sglang_warp_moe_trtllm_qkv_tiling_gb300_host_cache_dynamo_phase181/run.py",
+        "experiments/vllm_dsv4_packed_vision_sglang_warp_moe_trtllm_qkv_tiling_gb300_host_cache_dynamo_phase181/results.json",
+        "experiments/vllm_dsv4_packed_vision_sglang_warp_moe_trtllm_qkv_tiling_gb300_host_cache_dynamo_phase181/README.md",
+        "tests/test_phase181_experiments.py"
+      ],
+      "verifier": "python experiments/vllm_dsv4_packed_vision_sglang_warp_moe_trtllm_qkv_tiling_gb300_host_cache_dynamo_phase181/run.py --check",
+      "verified_at": "2026-11-03",
+      "limitations": "Offline deterministic verification of packed ViT schedules, warp Batcher routing, QKV CTA tiling, GB300 NUMA huge-page fragmentation, and disaggregated decode terminal handoff."
+    },
+    {
+      "id": "ev-megatron-thd-cudagraph-minf-snapshot-dsv4-flops-te-mxfp8-rocshmem-rccl-mooncake-nixl-p181",
+      "component": "distributed-training",
+      "status": "own-offline",
+      "claim": "Megatron-LM enables variable-length sequence-packed THD TE attention CUDA graphs under dp_balanced (631e146322af, 288/288 GB200 regression checks passed), snapshots live generated token counts and MoE routing loads in MInf online RL before reset_PromptTokens() (01fa4164c8b5, 0 lost RL tokens), and accounts DeepSeek-V4 hybrid MLA+DSA+GDN FLOPs alongside pipeline stream event recording; TransformerEngine adds strided batched BF16/MXFP8 GEMM (b021980343e3, 1.38x grouped quant speedup) with Capturable Adam; PyTorch exposes Triton-based rocSHMEM device-side all_to_all_team and broadcast_team collectives (fa6060d66f9d, 2 collectives); ROCm RCCL restores Zen 2/3/4 CPUID Rome detection and GDR PHB topology after NCCL 2.31 merge (b1a305f97a6a, 5 downstream consumers restored); and Mooncake (e5ef0e427a49, e8dda21b8fab), LMCache (719f1d643558), and NIXL (a91561a83f81) eliminate XPU IPC exporter exit leaks, cut string-key LRU conversions by 50.0%, and reject wrapping memory ranges.",
+      "source_ids": [
+        "src-megatronlm-631e146322af-p181",
+        "src-megatronlm-01fa4164c8b5-p181",
+        "src-te-b021980343e3-p181",
+        "src-pytorch-fa6060d66f9d-p181",
+        "src-rocmsystems-b1a305f97a6a-p181",
+        "src-mooncake-e5ef0e427a49-p181",
+        "src-mooncake-e8dda21b8fab-p181",
+        "src-lmcache-719f1d643558-p181",
+        "src-nixl-a91561a83f81-p181"
+      ],
+      "artifacts": [
+        "docs/components/distributed-training-megatron-thd-cudagraph-minf-snapshot-dsv4-flops-te-batched-mxfp8-pytorch-rocshmem-rccl-mooncake-nixl-phase181.md",
+        "docs/components/distributed-training-megatron-thd-cudagraph-minf-snapshot-dsv4-flops-te-batched-mxfp8-pytorch-rocshmem-rccl-mooncake-nixl-phase181.en.md",
+        "docs/reports/ai-infra-phase181-benchmark-cards.html",
+        "assets/svg/ai-infra-phase181-visual-summary.svg",
+        "experiments/megatron_thd_cudagraph_minf_snapshot_dsv4_flops_te_mxfp8_rocshmem_rccl_mooncake_nixl_phase181/run.py",
+        "experiments/megatron_thd_cudagraph_minf_snapshot_dsv4_flops_te_mxfp8_rocshmem_rccl_mooncake_nixl_phase181/results.json",
+        "experiments/megatron_thd_cudagraph_minf_snapshot_dsv4_flops_te_mxfp8_rocshmem_rccl_mooncake_nixl_phase181/README.md",
+        "tests/test_phase181_experiments.py"
+      ],
+      "verifier": "python experiments/megatron_thd_cudagraph_minf_snapshot_dsv4_flops_te_mxfp8_rocshmem_rccl_mooncake_nixl_phase181/run.py --check",
+      "verified_at": "2026-11-03",
+      "limitations": "Offline deterministic verification of THD CUDA Graph metadata copy-in, MInf RL snapshot ordering, hybrid DSv4 FLOPs formulas, rocSHMEM symmetric heap indexing, and Zen CPUID dispatch."
     }
   ],
-  "updated_at": "2026-11-02"
+  "updated_at": "2026-11-03T23:35:00+08:00"
 }
