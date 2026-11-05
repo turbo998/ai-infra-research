@@ -307,3 +307,8 @@ un.py --check
   - [`docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.en.md`](docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.en.md) (ZH: [`.md`](docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.md))
   - 7-Card Report: [`docs/reports/ai-infra-phase182-benchmark-cards.html`](docs/reports/ai-infra-phase182-benchmark-cards.html)
   - Daily Archive: [`docs/daily/2026-11-04.md`](docs/daily/2026-11-04.md)
+
+- **Cloud-to-Edge Special Study (2026-11-05 · Azure AMD MI300X Large MoE `BF16` vs `MXFP4` Deployment Validation & AIPC Edge Decision Model `Kev-0.8B/4B` Counterfactual SFT / `Q8_0` GGUF)**:
+  - Bilingual Monographs: [`docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.en.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.en.md) (ZH: [`.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.md))
+  - 7-Card 4:5 Benchmark Decks: [`docs/reports/mi300x-large-moe-bf16-mxfp4-cards.html`](docs/reports/mi300x-large-moe-bf16-mxfp4-cards.html) · [`docs/reports/aipc-kev-sft-q8-gguf-cards.html`](docs/reports/aipc-kev-sft-q8-gguf-cards.html)
+  - Deterministic Verification Suite: [`experiments/mi300x_large_moe_aipc_kev_sft/run.py`](experiments/mi300x_large_moe_aipc_kev_sft/run.py) (Summary JSON: [`results.json`](experiments/mi300x_large_moe_aipc_kev_sft/results.json))

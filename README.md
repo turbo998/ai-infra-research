@@ -307,3 +307,8 @@ un.py --check
   - [`docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.md`](docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.md)（英文版：[`.en.md`](docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase182-benchmark-cards.html`](docs/reports/ai-infra-phase182-benchmark-cards.html)
   - 每日归档：[`docs/daily/2026-11-04.md`](docs/daily/2026-11-04.md)
+
+- **云边协同专题（2026-11-05 · Azure AMD MI300X 超大 MoE `BF16` vs `MXFP4` 部署验证 & AIPC 端侧决策模型 `Kev-0.8B/4B` 反事实 SFT / `Q8_0` GGUF 量化）**：
+  - 双语工程白皮书：[`docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.md)（英文版：[`.en.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.en.md)）
+  - 7-Card 4:5 视觉评测报告：[`docs/reports/mi300x-large-moe-bf16-mxfp4-cards.html`](docs/reports/mi300x-large-moe-bf16-mxfp4-cards.html) · [`docs/reports/aipc-kev-sft-q8-gguf-cards.html`](docs/reports/aipc-kev-sft-q8-gguf-cards.html)
+  - 确定性校验实验：[`experiments/mi300x_large_moe_aipc_kev_sft/run.py`](experiments/mi300x_large_moe_aipc_kev_sft/run.py)（结果：[`results.json`](experiments/mi300x_large_moe_aipc_kev_sft/results.json)）
