@@ -6,9 +6,9 @@
 
 ## 📌 Executive Overview Summary（执行摘要与核心架构结论）
 
-> **核心研究基线（Phase 1 – Phase 182 全量合入 `main`，Priority 191 · 561 题 & 556 套实验基线）**
+> **核心研究基线（Phase 1 – Phase 183 全量合入 `main`，Priority 192 · 564 题 & 560 套实验基线）**
 > 本仓库围绕 **11 层 AI 算力与分布式系统工程栈** 展开基于一手固定版本源码（`implementation`）、架构规范（`specification`）与零依赖 Python 3.12 确定性仿真模型（`own-offline`）的深度技术研究，累计完成 **150+ 篇双语深度专题报告**，所有定量结论均通过自动化校验测试，**零未核验主观臆断**：
-> - **研究规模与可复现账本**：累计完成 **`561` 个核心工程研究问题**（`559 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`556` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`3,777` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`862` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`804` 项全绿单元测试** 以及 **`182` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[Phase 182 7-Card 评测报告](docs/reports/ai-infra-phase182-benchmark-cards.html)**）。
+> - **研究规模与可复现账本**：累计完成 **`564` 个核心工程研究问题**（`562 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`560` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`3,809` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`865` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`809` 项全绿单元测试** 以及 **`183` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[Phase 183 7-Card 评测报告](docs/reports/ai-infra-phase183-benchmark-cards.html)**）。
 > - **L01 GPU / SM100 Blackwell 算子与低精度数值**：剖析 `tcgen05`、512 列 `TMEM` 原位混叠（消除 `64 KiB` SMEM 溢出）、`FlashAttention-4`（`FFMA2` 多项式仿真突破 `MUFU.EX2` 瓶颈，在 B200 达 **`2,790.1 TFLOPS`**、SM103 B300 达 **`3,200.0 TFLOPS`**）、`FlashMLA V4.1`（`+32B` TMA 行填充消除 `LDS.32` 4 路冲突，`get_mla_metadata` 削减 **`89.88%`** 偏斜尾波）、`CUTLASS CLC` 动态窃取及 `NVFP4/MXFP8` 分块缩放。
 > - **L02 & L04 分层 KV 缓存与 Prefill-Decode 分离推理**：解构四级 KV 缓存层次（VRAM → Host Pinned DRAM → CXL 3.0 `Device-DAX` `2 MiB` 对齐 → GDS/3FS），结合 `Mooncake Transfer Engine`（ConnectX-8 `Data Direct` 零锁批处理、7 级 Auto-GID 重探测与 `W=4` 有界 Scatter 将有效带宽从 **`313.0 -> 357.85 Gbps`** 提升）、`NVIDIA Dynamo`（二级 `kvcr` 连接器与 `NIXL` UCX/Libfabric 显存类型探测）、`vLLM V1`（`HiSparse` 稀疏 MLA 与拒绝采样）及 `SGLang`（`HiRadixCache` 与 `EAGLE-3` 投机树）。
 > - **L03 & L09 超节点互连、`IBGDA` 直发 RDMA 与共封装光学（CPO/OCS）**：验证 `PyTorch CUDASymmetricMemory` + `NVLS multimem`（流量较 Unicast 1-Shot 降低 **`6.22x`**）、`NCCL Gin` 对称集合通信与 `PAT` 并行聚合二项式树（1,024 卡跳数从 `1,023 -> 7`）、`DeepEP V2.5` GPU 直发 RDMA（Warp 门铃聚合削减 **`10.67x`** MMIO 开销）、`UEC 1.0` 64B 包裁剪 + 逐包喷洒（32-to-1 Incast 下 P99 尾延迟降低 **`69.9%`**），以及 `1.6T CPO + 3D MEMS OCS` 十万卡光互连功耗与故障半径模型。
@@ -308,6 +308,14 @@ un.py --check
   - [`docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.md`](docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.md)（英文版：[`.en.md`](docs/components/distributed-training-megatron-moe-rl-parity-te-compiled-router-inductor-broadcast-rccl-gfx1250-dda-mooncake-hip-ipc-phase182.en.md)）
   - 7-Card 报告：[`docs/reports/ai-infra-phase182-benchmark-cards.html`](docs/reports/ai-infra-phase182-benchmark-cards.html)
   - 每日归档：[`docs/daily/2026-11-04.md`](docs/daily/2026-11-04.md)
+
+- **Phase 183 (`priority: 192`，2026-11-05 · 564 题与 560 实验基线 · 16 仓 32 项突破）**：
+  - ![Phase 183 Visual Summary](assets/svg/ai-infra-phase183-visual-summary.svg)
+  - [`docs/components/gpu-software-stack-flashinfer-kda-dbuf-vsa-sm120-fp8-bn256-fa4-mla-2cta-pad-triton-fp6-aiter-dsv4-route-phase183.md`](docs/components/gpu-software-stack-flashinfer-kda-dbuf-vsa-sm120-fp8-bn256-fa4-mla-2cta-pad-triton-fp6-aiter-dsv4-route-phase183.md)（英文版：[`.en.md`](docs/components/gpu-software-stack-flashinfer-kda-dbuf-vsa-sm120-fp8-bn256-fa4-mla-2cta-pad-triton-fp6-aiter-dsv4-route-phase183.en.md)）
+  - [`docs/components/inference-trtllm-helix-cp-conv1d-64b-vllm-moe-restorer-eplb-sglang-qwen3-qknorm-dflash-dynamo-router-phase183.md`](docs/components/inference-trtllm-helix-cp-conv1d-64b-vllm-moe-restorer-eplb-sglang-qwen3-qknorm-dflash-dynamo-router-phase183.md)（英文版：[`.en.md`](docs/components/inference-trtllm-helix-cp-conv1d-64b-vllm-moe-restorer-eplb-sglang-qwen3-qknorm-dflash-dynamo-router-phase183.en.md)）
+  - [`docs/components/distributed-training-megatron-batch-inv-router-dcp-v2-te-nvfp4-4over6-pytorch-philox-rccl-tdm-mooncake-uring-nixl-phase183.md`](docs/components/distributed-training-megatron-batch-inv-router-dcp-v2-te-nvfp4-4over6-pytorch-philox-rccl-tdm-mooncake-uring-nixl-phase183.md)（英文版：[`.en.md`](docs/components/distributed-training-megatron-batch-inv-router-dcp-v2-te-nvfp4-4over6-pytorch-philox-rccl-tdm-mooncake-uring-nixl-phase183.en.md)）
+  - 7-Card 报告：[`docs/reports/ai-infra-phase183-benchmark-cards.html`](docs/reports/ai-infra-phase183-benchmark-cards.html)
+  - 每日归档：[`docs/daily/2026-11-05.md`](docs/daily/2026-11-05.md)
 
 - **云边协同专题（2026-11-05 · Azure AMD MI300X 超大 MoE `BF16` vs `MXFP4` 部署验证 & AIPC 端侧决策模型 `Kev-0.8B/4B` 反事实 SFT / `Q8_0` GGUF 量化）**：
   - 双语工程白皮书：[`docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.md)（英文版：[`.en.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.en.md)）
