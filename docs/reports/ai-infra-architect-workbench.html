@@ -259,7 +259,7 @@
   <!-- Interactive Calculator 2B: LLM Inference Engine & PD Disaggregation Sizer -->
   <section class="panel" style="margin-bottom:24px;">
     <h2>2B. Interactive LLM Inference Engine &amp; Prefill-Decode (PD) Disaggregation Sizer (推理引擎与 PD 分离选型定容计算器)</h2>
-    <p class="desc">Drag context length, multi-turn prefix reuse ratio, and deployment topology to compare <strong>vLLM</strong>, <strong>SGLang (RadixAttention)</strong>, <strong>TensorRT-LLM</strong>, and <strong>NVIDIA Dynamo + Mooncake (400G RDMA PD Disaggregation)</strong> on TTFT, P99 TPOT, and $/1M SLA-compliant tokens.</p>
+    <p class="desc">Drag context length, multi-turn prefix reuse ratio, and deployment topology to compare <strong>vLLM</strong>, <strong>SGLang (RadixAttention)</strong>, <strong>TensorRT-LLM</strong>, and <strong>NVIDIA Dynamo + Mooncake (400G RDMA PD Disaggregation)</strong> on TTFT, P99 TPOT, and $/1M SLA-compliant tokens. <em>(Provenance: <code>synthetic</code> analytical model + <code>anonymized_reported</code> specs · <code>independently_reproduced=false</code> · live cluster <code>not_measured</code> · 1.024 GB KV @ 44.91 GB/s = 22.8 ms)</em></p>
 
     <div class="control-grid">
       <div class="ctrl">
@@ -307,6 +307,54 @@
         <div class="k-title">Architect Recommendation</div>
         <div class="k-val" id="outPdRec" style="font-size:16px; color:#34D399;">SGLang + Dynamo/Mooncake PD</div>
         <div class="k-sub" id="outPdRecSub">RadixAttention + 400G RDMA zero-copy KV</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Calculator 2C: MoE Quantization & Parallelism Sizer -->
+  <section class="panel" style="margin-bottom:24px;">
+    <h2>2C. Interactive MoE Quantization (BF16 vs W4A16 vs FP8 vs NVFP4/MXFP4) &amp; Parallelism (TP vs EP + DeepEP + EPLB) Sizer</h2>
+    <p class="desc">Select precision format, parallelism topology, and expert traffic skew to evaluate 64-GPU <strong>DeepSeek-R1 671B-A37B</strong> weight VRAM footprint, SLA-compliant goodput, P99 TPOT, and $/1M token TCO at $1.80/GPU-hr. <em>(Provenance: <code>synthetic</code> analytical model + <code>anonymized_reported</code> specs · <code>independently_reproduced=false</code> · live 64×GPU cluster <code>not_measured</code>)</em></p>
+
+    <div class="control-grid">
+      <div class="ctrl">
+        <label><span>Precision &amp; Hardware Format</span></label>
+        <select id="moeQuant" onchange="recalcMoeSizer()">
+          <option value="fp8_ep8" selected>FP8 Block-Scaled (1×128 / 128×128) — Hopper H100/H200 Mainstream</option>
+          <option value="nvfp4_ep16">NVFP4 / MXFP4 Microscaling — Blackwell B200/GB200 / MI355X</option>
+          <option value="w4a16_tp8">W4A16 (AWQ/GPTQ Weight-Only) — Small-Batch Single Node</option>
+          <option value="bf16_tp16">BF16 Unquantized — Accuracy Verification Baseline</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label><span>Expert Load Balancing under Skewed Traffic (Zipf s=1.15)</span></label>
+        <select id="moeEplb" onchange="recalcMoeSizer()">
+          <option value="eplb_on" selected>EPLB Enabled (Replicate Top-16 Hot Experts + DeepEP)</option>
+          <option value="eplb_off">Static Placement (No EPLB — Hot-Expert Straggler Stall)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="kpi">
+        <div class="k-title">Model Weight Footprint (671B)</div>
+        <div class="k-val" id="outMoeWeight">671.0 GB</div>
+        <div class="k-sub" id="outMoeAcc">Accuracy Retention: 99.6% (Lossless-grade)</div>
+      </div>
+      <div class="kpi">
+        <div class="k-title">64-GPU SLA Goodput</div>
+        <div class="k-val" id="outMoeGoodput">92,200 tok/s</div>
+        <div class="k-sub" id="outMoeSpeedup">2.65× vs BF16+TP16 (34,800 tok/s)</div>
+      </div>
+      <div class="kpi">
+        <div class="k-title">Decode P99 TPOT Latency</div>
+        <div class="k-val" id="outMoeTpot">15.8 ms</div>
+        <div class="k-sub" id="outMoeTpotSub">EPLB cuts skew tail -37.1% (vs 25.1 ms)</div>
+      </div>
+      <div class="kpi">
+        <div class="k-title">Token Cost ($1.80/GPU-hr)</div>
+        <div class="k-val" id="outMoeCost">$0.35 / 1M</div>
+        <div class="k-sub" id="outMoeCostSub">-62.0% TCO vs BF16+TP16 ($0.92 / 1M)</div>
       </div>
     </div>
   </section>
@@ -1684,7 +1732,14 @@
           <td>LLM Inference Engine Selection (vLLM vs. SGLang vs. TRT-LLM) &amp; Prefill-Decode (PD) Disaggregation (Dynamo + Mooncake)</td>
           <td><code>experiments/llm_inference_engine_pd_selection</code></td>
           <td><code>llm-inference-engine-pd-disaggregation-selection-faq</code></td>
-          <td>H200 FP8 Roofline separates Prefill (`512.0 FLOP/B`, `2.49×` ridge `205.5`) from Decode BS=32 (`31.2 FLOP/B`, `0.15×` ridge); SGLang RadixAttention + deferred unified page reuse (`#48852`) cuts 16K 75%-cached agent TTFT `3.45×` (`186.4 &rarr; 54.0 ms`, `2.85×` QPS) and vLLM single-replay batch encoder CUDA graphs (`#65227`) cut launch overhead `3.20×`; under mixed 32K RAG + streaming chat, NVIDIA Dynamo + Mooncake 400G RDMA (`22.8 ms` KV transfer) cuts Decode P99 TPOT `3.76×` (`68.4 &rarr; 18.2 ms`), lifts SLA-compliant goodput `2.38×` (`1,618.4 tok/s/GPU`), and reduces $/1M token TCO by `34.2%`.</td>
+          <td>H200 FP8 Roofline separates Prefill (`512.0 FLOP/B`, `2.49×` ridge `205.5`) from Decode BS=32 (`31.2 FLOP/B`, `0.15×` ridge); SGLang RadixAttention + deferred unified page reuse (`#48852`) cuts 16K 75%-cached agent TTFT `3.45×` (`186.4 &rarr; 54.0 ms`, `2.85×` QPS) and vLLM single-replay batch encoder CUDA graphs (`#65227`) cut launch overhead `3.20×`; under mixed 32K RAG + streaming chat, NVIDIA Dynamo + Mooncake 400G RDMA (`1.024 GB @ 44.91 GB/s = 22.8 ms` KV transfer) cuts Decode P99 TPOT `3.76×` (`68.4 &rarr; 18.2 ms`), lifts SLA-compliant goodput `2.38×` (`1,618.4 tok/s/GPU`), and reduces $/1M token TCO by `34.2%` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`).</td>
+        </tr>
+        <tr data-cat="inference">
+          <td><span class="tag tag-green">Architect FAQ</span></td>
+          <td>Large Model &amp; MoE Quantization (BF16 vs W4A16 vs FP8 vs NVFP4/MXFP4) &amp; Parallelism (Pure TP vs Attention DP + MoE EP + DeepEP + EPLB)</td>
+          <td><code>experiments/moe_quantization_parallelism_selection</code></td>
+          <td><code>moe-quantization-parallelism-selection-faq</code></td>
+          <td>On 64×GPU DeepSeek-R1 671B-A37B (`$1.80/GPU-hr`), switching from `BF16 + Pure TP=16` (`1,342 GB`, `34,800 tok/s`, `$0.92/1M`) to `FP8 Block-Scaled (1×128 / 128×128) + Attention DP=8 / MoE EP=8 + DeepEP + EPLB` (`671 GB`, `99.6%` accuracy) boosts SLA goodput `2.65×` (`92,200 tok/s`) and cuts token TCO `-62.0%` (`$0.35/1M`); `NVFP4/MXFP4 + DP16/EP16` (`336 GB`, `98.9%` accuracy) reaches `151,200 tok/s` (`1.64×` vs FP8, `4.34×` vs BF16, `$0.21/1M`, `-77.2%`); `EPLB` cuts skewed-traffic (`Zipf s=1.15`) P99 TPOT `-37.1%` (`25.1 &rarr; 15.8 ms`) and lifts goodput `+53.1%` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`).</td>
         </tr>
       </tbody>
     </table>
@@ -1825,6 +1880,31 @@
     const recTopo = (topo === "disagg" || ctx >= 8192) ? " + Dynamo/Mooncake PD" : " (Co-located Single-Node)";
     document.getElementById("outPdRec").textContent = recEngine + recTopo;
     document.getElementById("outPdRecSub").textContent = recSub;
+  }
+
+  function recalcMoeSizer() {
+    const quant = document.getElementById("moeQuant").value;
+    const eplb = document.getElementById("moeEplb").value;
+    const data = {
+      fp8_ep8:   { w: 671.0, acc: "99.6% (Lossless-grade)", gp: 92200, gpNoEplb: 60220, tpot: 15.8, tpotNoEplb: 25.1, cost: 0.35, costNoEplb: 0.53, speedup: "2.65× vs BF16+TP16", costSub: "-62.0% TCO vs BF16+TP16 ($0.92 / 1M)" },
+      nvfp4_ep16:{ w: 336.0, acc: "98.9% (Hardware E2M1)", gp: 151200, gpNoEplb: 98800, tpot: 11.2, tpotNoEplb: 18.4, cost: 0.21, costNoEplb: 0.32, speedup: "4.34× vs BF16 (1.64× vs FP8)", costSub: "-77.2% TCO vs BF16+TP16 ($0.92 / 1M)" },
+      w4a16_tp8: { w: 375.0, acc: "98.4% (Weight-Only AWQ)", gp: 45100, gpNoEplb: 45100, tpot: 26.4, tpotNoEplb: 26.4, cost: 0.71, costNoEplb: 0.71, speedup: "1.30× vs BF16 (DeQuant bound)", costSub: "-22.8% TCO vs BF16+TP16 ($0.92 / 1M)" },
+      bf16_tp16: { w: 1342.0, acc: "100.0% (Baseline)", gp: 34800, gpNoEplb: 34800, tpot: 34.8, tpotNoEplb: 34.8, cost: 0.92, costNoEplb: 0.92, speedup: "1.00× Baseline (Pure TP=16)", costSub: "Baseline $0.92 / 1M ($1.80/GPU-hr)" }
+    }[quant];
+
+    const useEplb = eplb === "eplb_on";
+    const gp = useEplb ? data.gp : data.gpNoEplb;
+    const tpot = useEplb ? data.tpot : data.tpotNoEplb;
+    const cost = useEplb ? data.cost : data.costNoEplb;
+
+    document.getElementById("outMoeWeight").textContent = data.w.toFixed(1) + " GB";
+    document.getElementById("outMoeAcc").textContent = "Accuracy Retention: " + data.acc;
+    document.getElementById("outMoeGoodput").textContent = gp.toLocaleString() + " tok/s";
+    document.getElementById("outMoeSpeedup").textContent = useEplb ? data.speedup : "Hot-expert straggler stall (-34.7% goodput)";
+    document.getElementById("outMoeTpot").textContent = tpot.toFixed(1) + " ms";
+    document.getElementById("outMoeTpotSub").textContent = useEplb ? "EPLB cuts skew tail -37.1% (vs 25.1 ms)" : "Hot-GPU queuing stall without EPLB";
+    document.getElementById("outMoeCost").textContent = "$" + cost.toFixed(2) + " / 1M";
+    document.getElementById("outMoeCostSub").textContent = data.costSub;
   }
 
   function filterTable(cat, btn) {

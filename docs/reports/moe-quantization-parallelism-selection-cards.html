@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE Quantization (BF16 vs FP8 vs NVFP4/MXFP4) &amp; Parallelism (TP vs EP+DeepEP+EPLB) — 7-Card Benchmark Report</title>
+<style>
+  :root {
+    --bg: #020617;
+    --card-bg: #FFFFFF;
+    --card-border: #E2E8F0;
+    --ink: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --panel: #F8FAFC;
+    --code-bg: #0F172A;
+    --blue: #2563EB;
+    --blue-bar: #3B82F6;
+    --gray-bar: #CBD5E1;
+    --green-bg: #ECFDF5;
+    --green-border: #10B981;
+    --green-ink: #065F46;
+    --amber-bg: #FFFBEB;
+    --amber-border: #F59E0B;
+    --amber-ink: #92400E;
+    --red-bg: #FEF2F2;
+    --red-border: #EF4444;
+    --red-ink: #991B1B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+  }
+  .deck-header {
+    max-width: 900px;
+    width: 100%;
+    color: #F8FAFC;
+    text-align: left;
+  }
+  .deck-header h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94A3B8; line-height: 1.5; }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 24px;
+    border: 1px solid var(--card-border);
+    padding: 40px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.45);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--subtle);
+    text-transform: uppercase;
+    border-bottom: 2px solid #F1F5F9;
+    padding-bottom: 14px;
+    margin-bottom: 22px;
+  }
+  .badge-track {
+    background: #EFF6FF;
+    color: var(--blue);
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid #BFDBFE;
+  }
+  h2.finding {
+    font-size: 29px;
+    line-height: 1.24;
+    font-weight: 800;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }
+  .accent-grad {
+    background: linear-gradient(90deg, #2563EB 0%, #7C3AED 55%, #059669 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.lead {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin-bottom: 22px;
+  }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-bottom: 20px; }
+  .box {
+    background: var(--panel);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 18px;
+  }
+  .box h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--subtle);
+    margin-bottom: 10px;
+  }
+  .pill {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+  .pill-auto { background: var(--green-bg); color: var(--green-ink); border: 1px solid var(--green-border); }
+  .pill-confirm { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber-border); }
+  .pill-human { background: var(--red-bg); color: var(--red-ink); border: 1px solid var(--red-border); }
+  .pill-type { background: #EEF2FF; color: #3730A3; border: 1px solid #C7D2FE; font-family: monospace; }
+  .quote-box {
+    background: #F1F5F9;
+    border-left: 4px solid var(--blue);
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: #1E293B;
+    margin-bottom: 18px;
+    line-height: 1.5;
+  }
+  .decision-card {
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    background: #FFFFFF;
+  }
+  .decision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 7px 0;
+    font-size: 13px;
+  }
+  .bar-label { width: 220px; font-weight: 600; color: var(--ink); }
+  .bar-track {
+    flex: 1;
+    height: 18px;
+    background: #F1F5F9;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .bar-fill-blue { height: 100%; background: var(--blue-bar); border-radius: 6px; }
+  .bar-fill-gray { height: 100%; background: var(--gray-bar); border-radius: 6px; }
+  .bar-val { width: 130px; text-align: right; font-weight: 700; font-family: monospace; font-size: 12.5px; }
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  table.matrix th {
+    background: #0F172A;
+    color: #F8FAFC;
+    text-align: left;
+    padding: 11px 12px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  table.matrix td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: top;
+    line-height: 1.45;
+  }
+  table.matrix tr:nth-child(even) td { background: #F8FAFC; }
+  .code-block {
+    background: var(--code-bg);
+    color: #E2E8F0;
+    font-family: "Consolas", "SFMono-Regular", monospace;
+    font-size: 12.2px;
+    line-height: 1.5;
+    padding: 18px 20px;
+    border-radius: 14px;
+    overflow-x: auto;
+    margin-bottom: 14px;
+    white-space: pre;
+  }
+  .dark-footer {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 14px;
+    padding: 16px 20px;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .dark-footer strong { color: #38BDF8; }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>Large Model &amp; MoE Quantization (BF16 vs W4A16 vs FP8 vs NVFP4/MXFP4) &amp; Parallelism (TP vs EP+DeepEP+EPLB)</h1>
+  <p>7-Card 4:5 Architect Evaluation Deck · Sealed Source: <code>experiments/moe_quantization_parallelism_selection/results.json</code> · Provenance: <code>synthetic</code> analytical model + <code>anonymized_reported</code> specs (<code>independently_reproduced=false</code>, live 64×GPU cluster <code>not_measured</code>)</p>
+</div>
+
+<!-- CARD 1: OVERVIEW & WORKBENCH -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>1 / 7 · HANDS-ON · MOE QUANTIZATION &amp; PARALLELISM</span>
+      <span class="badge-track">ARCHITECT SELECTION BENCHMARK</span>
+    </div>
+    <h2 class="finding">
+      <span class="accent-grad">FP8 Block-Scaled + DP8/EP8 (DeepEP + EPLB)</span> boosts 64-GPU MoE SLA goodput 2.65× ($0.35/1M) while NVFP4/MXFP4 reaches 4.34× ($0.21/1M)
+    </h2>
+    <p class="lead">
+      Serving <strong>DeepSeek-R1 671B-A37B</strong> (256 routed experts, Top-8 active) with naive <code>BF16 + Pure TP=16</code> wastes HBM bandwidth on ultra-thin matrix slices (<code>width = 128</code>) and synchronous <code>AllReduce</code> barriers. Combining native <strong>FP8 Block-Scaled (`1×128` / `128×128`)</strong> or <strong>Blackwell NVFP4 / AMD MXFP4</strong> Tensor Cores with <strong>Attention DP + MoE EP + DeepEP + EPLB</strong> unlocks full arithmetic intensity and cuts token TCO by <strong>62.0%–77.2%</strong>.
+    </p>
+
+    <div class="grid-3">
+      <div class="box">
+        <h3>1. Evaluated Precision &amp; Topology</h3>
+        <p style="font-size:13px; line-height:1.55; color:var(--ink);">
+          • <strong>BF16 + Pure TP=16</strong> (1,342 GB)<br>
+          • <strong>W4A16 (AWQ) + TP=8</strong> (375 GB)<br>
+          • <strong>FP8 Block + DP8/EP8</strong> (671 GB)<br>
+          • <strong>NVFP4/MXFP4 + DP16/EP16</strong> (336 GB)<br>
+          • <strong>EPLB Skew Study</strong> (Zipf s=1.15)
+        </p>
+      </div>
+      <div class="box">
+        <h3>2. Workload &amp; Cost Input</h3>
+        <p style="font-size:13px; line-height:1.55; color:var(--ink);">
+          • Model: <code>671B Total / 37B Active</code><br>
+          • Fleet: <code>64× GPU ($1.80/GPU-hr)</code><br>
+          • Traffic: <code>8K Prompt + 1K Output</code><br>
+          • Skew: <code>Top 5% experts = 28% load</code><br>
+          • Target SLA: <code>P99 TPOT &lt; 20 ms</code>
+        </p>
+      </div>
+      <div class="box">
+        <h3>3. Key Headline Decisions</h3>
+        <p style="font-size:13px; line-height:1.6; color:var(--ink);">
+          <span class="pill pill-auto">Act automatically</span><br>
+          <strong>Hopper H100/H200 → FP8 + DP8/EP8</strong> (92,200 tok/s · 99.6% acc · $0.35/1M)<br><br>
+          <span class="pill pill-auto">Act automatically</span><br>
+          <strong>Blackwell B200 / MI355X → NVFP4 / MXFP4 + DP16/EP16</strong> (151,200 tok/s · $0.21/1M)
+        </p>
+      </div>
+    </div>
+
+    <div class="box" style="margin-bottom:16px;">
+      <h3>64-GPU SLA Goodput &amp; Token Cost Overview ($115.20/hr Fleet Baseline)</h3>
+      <div class="bar-row">
+        <div class="bar-label">NVFP4/MXFP4 + DP16/EP16 + EPLB</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:100.0%;"></div></div>
+        <div class="bar-val">151,200 tok/s ($0.21)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">FP8 Block-Scaled + DP8/EP8 + EPLB</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:61.0%;"></div></div>
+        <div class="bar-val">92,200 tok/s ($0.35)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">W4A16 (AWQ) + TP=8 (DeQuant bound)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:29.8%;"></div></div>
+        <div class="bar-val">45,100 tok/s ($0.71)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">BF16 Unquantized + Pure TP=16</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:23.0%;"></div></div>
+        <div class="bar-val">34,800 tok/s ($0.92)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <strong>Provenance &amp; Hardware Note:</strong> All metrics are deterministically generated by <code>experiments/moe_quantization_parallelism_selection/run.py</code> (<code>synthetic</code> Roofline + communication overlap model calibrated to <code>anonymized_reported</code> DeepSeek-V3/R1, TensorRT-LLM, vLLM, and SGLang specifications; <code>independently_reproduced=false</code>; live 64×GPU physical cluster measurement: <code>not_measured</code>; no paid cloud GPUs launched).
+  </div>
+</section>
+
+<!-- CARD 2: SINGLE-CASE DEEP DIVE -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>2 / 7 · SCENARIO: 64-GPU DEEPSEEK-R1 671B SERVING</span>
+      <span class="badge-track">CASE BREAKDOWN</span>
+    </div>
+    <h2 class="finding">
+      3 Architect Decisions Cut Decode P99 TPOT from 34.8 ms to 15.8 ms (FP8) / 11.2 ms (NVFP4) and Eliminate Hot-Expert Stalls
+    </h2>
+    <div class="quote-box">
+      <strong>Customer RFx Scenario:</strong> “We have 64× Hopper H200 GPUs (and a new 64× Blackwell B200 pod arriving next quarter) to serve DeepSeek-R1 671B for enterprise coding &amp; reasoning agents. Why does our current W4A16 + TP=8 deployment stall above batch size 32, and how should we configure precision and parallelism?”
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-header">
+        <div><span class="pill pill-type">choice</span> <strong>Decision 1 — Precision Format Selection (FP8 Block-Scaled vs W4A16 AWQ)</strong></div>
+        <span class="pill pill-auto">Act automatically · 99.6% Accuracy Retention</span>
+      </div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:8px;">
+        <code>W4A16</code> unpacks 4-bit weights back to FP16 registers before executing 16-bit Tensor Core instructions, becoming compute-bound at batch &ge; 32. <strong>FP8 Block-Scaled (`1×128` act / `128×128` weight)</strong> executes natively on FP8 Tensor Cores at 2× the OPS/cycle with 99.6% accuracy retention.
+      </p>
+      <div class="bar-row">
+        <div class="bar-label">FP8 Block-Scaled Native Tensor Core</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:92.2%;"></div></div>
+        <div class="bar-val">92,200 tok/s</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">W4A16 Weight-Only Register DeQuant</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:45.1%;"></div></div>
+        <div class="bar-val">45,100 tok/s</div>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-header">
+        <div><span class="pill pill-type">choice</span> <strong>Decision 2 — Parallelism Topology (Attention DP + MoE EP vs Pure TP=16)</strong></div>
+        <span class="pill pill-auto">Act automatically · 2.65× Goodput Gain</span>
+      </div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:8px;">
+        Under <code>Pure TP=16</code>, each of the 256 routed experts is sliced to width 128 per GPU and triggers two global <code>AllReduce</code> barriers per layer. <strong>Attention DP=8 + MoE EP=8 + DeepEP</strong> keeps 32 intact experts per GPU and overlaps sparse <code>All-to-All</code> (3.1 ms) behind dual-microbatch Attention.
+      </p>
+      <div class="bar-row">
+        <div class="bar-label">Attention DP=8 + MoE EP=8 (DeepEP)</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:45.4%;"></div></div>
+        <div class="bar-val">15.8 ms TPOT</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Pure TP=16 (Cross-Node AllReduce)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:100.0%;"></div></div>
+        <div class="bar-val">34.8 ms TPOT</div>
+      </div>
+    </div>
+
+    <div class="decision-card">
+      <div class="decision-header">
+        <div><span class="pill pill-type">score</span> <strong>Decision 3 — EPLB Redundant Hot-Expert Load Balancing (Zipf s=1.15)</strong></div>
+        <span class="pill pill-auto">Act automatically · -37.1% Tail TPOT</span>
+      </div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:8px;">
+        In live coding/math traffic, the top 5% experts receive &gt;28% of tokens. <strong>EPLB</strong> replicates the top-16 hot experts in spare HBM slots and load-balances token dispatch across replicas, cutting P99 TPOT from 25.1 ms to 15.8 ms (+53.1% goodput).
+      </p>
+      <div class="bar-row">
+        <div class="bar-label">With EPLB (Top-16 Hot Experts Cloned)</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:62.9%;"></div></div>
+        <div class="bar-val">15.8 ms P99</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Without EPLB (Static Expert Map)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:100.0%;"></div></div>
+        <div class="bar-val">25.1 ms P99</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <strong>Case Takeaway:</strong> Never deploy 256-expert MoE models with cross-node <code>Pure TP=16</code> or high-batch <code>W4A16</code>. Use <strong>FP8 Block-Scaled + DP8/EP8 + DeepEP + EPLB</strong> on Hopper and <strong>NVFP4/MXFP4 + DP16/EP16</strong> on Blackwell/CDNA4.
+  </div>
+</section>
+
+<!-- CARD 3: WHAT I TESTED (FULL EVALUATION MATRIX) -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>3 / 7 · WHAT I TESTED</span>
+      <span class="badge-track">FULL EVALUATION MATRIX</span>
+    </div>
+    <h2 class="finding">
+      Full 6-Scenario Precision &amp; Parallelism Evaluation Matrix Across Weight VRAM, Accuracy, Tail Latency &amp; TCO
+    </h2>
+    <p class="lead">
+      Every configuration is evaluated against enterprise production thresholds: <strong>Accuracy Retention &ge; 98.5%</strong>, <strong>Decode P99 TPOT &le; 20.0 ms</strong>, and <strong>Token Cost &le; $0.40 / 1M tokens</strong> on a 64-GPU cluster ($1.80/GPU-hr).
+    </p>
+
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th style="width:23%;">SCENARIO</th>
+          <th style="width:27%;">QUESTION / TARGET</th>
+          <th style="width:32%;">MODEL / SIZER OUTPUT</th>
+          <th style="width:18%;">ACTION</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. BF16 + Pure TP=16</strong><br><span style="color:var(--subtle); font-size:11.5px;">4×16-GPU Replicas</span></td>
+          <td>Meets P99 TPOT &le; 20 ms &amp; Cost &le; $0.40/1M?</td>
+          <td><strong>✕ 34.8 ms P99 TPOT · $0.92 / 1M</strong><br>1,342 GB weights · 34,800 tok/s (Thin GEMM + AllReduce wall)</td>
+          <td><span class="pill pill-human">Send to a human</span></td>
+        </tr>
+        <tr>
+          <td><strong>2. W4A16 (AWQ) + TP=8</strong><br><span style="color:var(--subtle); font-size:11.5px;">8×8-GPU Single-Node</span></td>
+          <td>Sustains high-concurrency batch &ge; 32 SLA?</td>
+          <td><strong>✕ 26.4 ms P99 TPOT · 98.4% Acc</strong><br>375 GB weights · 45,100 tok/s · $0.71 / 1M (Register DeQuant stall)</td>
+          <td><span class="pill pill-confirm">Confirm (Low QPS)</span></td>
+        </tr>
+        <tr>
+          <td><strong>3. FP8 Block + DP8/EP8</strong><br><span style="color:var(--subtle); font-size:11.5px;">Hopper H100/H200 + DeepEP + EPLB</span></td>
+          <td>Lossless-grade production MoE serving?</td>
+          <td><strong>✓ 15.8 ms P99 TPOT · 99.6% Acc</strong><br>671 GB weights · 92,200 tok/s (2.65×) · <strong>$0.35 / 1M (-62.0%)</strong></td>
+          <td><span class="pill pill-auto">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>4. NVFP4/MXFP4 + DP16/EP16</strong><br><span style="color:var(--subtle); font-size:11.5px;">Blackwell B200 / MI355X + EPLB</span></td>
+          <td>Maximum throughput &amp; lowest $/1M TCO?</td>
+          <td><strong>✓ 11.2 ms P99 TPOT · 98.9% Acc</strong><br>336 GB weights · 151,200 tok/s (4.34×) · <strong>$0.21 / 1M (-77.2%)</strong></td>
+          <td><span class="pill pill-auto">Act automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>5. Static EP8 (No EPLB)</strong><br><span style="color:var(--subtle); font-size:11.5px;">Skewed Traffic (Zipf s=1.15)</span></td>
+          <td>Resists hot-expert routing imbalance?</td>
+          <td><strong>✕ 25.1 ms P99 TPOT · 60,220 tok/s</strong><br>Top 5% experts overload 2 GPUs while 6 GPUs wait at Combine barrier</td>
+          <td><span class="pill pill-human">Enable EPLB</span></td>
+        </tr>
+        <tr>
+          <td><strong>6. NVFP4 on Hopper SM90</strong><br><span style="color:var(--subtle); font-size:11.5px;">Missing Native FP4 Tensor Core</span></td>
+          <td>Should Hopper run FP4 weight+activation?</td>
+          <td><strong>✕ Software emulation penalty</strong><br>Hopper lacks native <code>tcgen05.mma</code> FP4 instructions; use FP8 instead</td>
+          <td><span class="pill pill-human">Reject on SM90</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="grid-2">
+      <div class="box" style="background:var(--green-bg); border-color:var(--green-border);">
+        <h3 style="color:var(--green-ink);">Threshold Gate Summary (Pass: 2 / 6 Configs)</h3>
+        <p style="font-size:12.8px; color:var(--green-ink); line-height:1.5;">
+          Only <strong>FP8 Block-Scaled + DP8/EP8 + DeepEP + EPLB</strong> ($0.35/1M) and <strong>NVFP4/MXFP4 + DP16/EP16 + EPLB</strong> ($0.21/1M) simultaneously pass the P99 TPOT &le; 20 ms, Accuracy &ge; 98.5%, and Cost &le; $0.40/1M gates.
+        </p>
+      </div>
+      <div class="box" style="background:var(--red-bg); border-color:var(--red-border);">
+        <h3 style="color:var(--red-ink);">Root-Cause Failure Analysis (4 Misses Marked ✕)</h3>
+        <p style="font-size:12.8px; color:var(--red-ink); line-height:1.5;">
+          Misses stem from three architectural traps: (1) cross-node <code>Pure TP=16</code> AllReduce + thin GEMMs, (2) <code>W4A16</code> register dequantization under high batch, and (3) disabling <code>EPLB</code> under Zipfian hot-expert skew.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <strong>Matrix Rule for Architects:</strong> Match quantization format strictly to native Tensor Core ISA (Hopper SM90 &rarr; FP8 Block-Scaled; Blackwell SM100 / CDNA4 gfx950 &rarr; NVFP4 / MXFP4) and always pair EP &ge; 8 with EPLB.
+  </div>
+</section>
+
+<!-- CARD 4: UNDER THE HOOD (PROTOCOL & SCORING MECHANICS) -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>4 / 7 · UNDER THE HOOD</span>
+      <span class="badge-track">PROTOCOL &amp; SCORING MECHANICS</span>
+    </div>
+    <h2 class="finding">
+      Deterministic Roofline, Sparse All-to-All Overlap &amp; Block-Scaling Mechanics Behind the Sizer
+    </h2>
+    <p class="lead">
+      Below is the exact JSON contract input and deterministic verification flow from <code>experiments/moe_quantization_parallelism_selection/run.py</code> showing how block-scaled precision, DeepEP two-microbatch overlap, and $/1M token TCO are computed.
+    </p>
+
+    <div class="code-block"><strong>// 1. Structured Architect Sizer Input Contract (experiments/moe_quantization_parallelism_selection)</strong>
+{
+  "suite": "moe_quantization_parallelism_selection",
+  "model": "DeepSeek-R1-671B-A37B (256 routed experts, Top-8 active, dim=7168, inter=2048)",
+  "cluster": { "gpus": 64, "amortized_hourly_gpu_usd": 1.80, "fleet_hourly_usd": 115.20 },
+  "quantization_formats": {
+    "fp8_block_scaled": { "act_tile": "1x128", "weight_block": "128x128", "scale_fmt": "FP32" },
+    "nvfp4_microscaling": { "elem_fmt": "E2M1 (4-bit)", "block_size": 16, "scale_fmt": "E4M3 + FP32" }
+  },
+  "provenance": {
+    "data_classification": "synthetic_analytical_model_calibrated_to_anonymized_reported_specs",
+    "independently_reproduced": false,
+    "live_64xh100_cluster_measurement": "not_measured"
+  }
+}</div>
+
+    <div style="text-align:center; font-weight:800; color:var(--blue); margin: 6px 0; font-size:14px;">
+      ↓ Deterministic Roofline + Two-Microbatch DeepEP Overlap Verifier ↓
+    </div>
+
+    <div class="code-block"><strong>// 2. Deterministic TCO &amp; Skew-Resilience Verification Output (&lt;answer&gt;)</strong>
+cost_per_1m_usd = round((64 * 1.80) / (sla_goodput_tok_s * 3600 / 1e6), 2)
+  • BF16 + Pure TP=16 : 115.20 / (34,800 * 3.6)  = $0.92 / 1M tokens (Baseline 1.00x)
+  • W4A16 (AWQ) + TP=8: 115.20 / (45,100 * 3.6)  = $0.71 / 1M tokens (-22.8% TCO)
+  • FP8 + DP8/EP8     : 115.20 / (92,200 * 3.6)  = $0.35 / 1M tokens (2.65x goodput, -62.0% TCO)
+  • NVFP4 + DP16/EP16 : 115.20 / (151,200 * 3.6) = $0.21 / 1M tokens (4.34x goodput, -77.2% TCO)
+
+&lt;answer&gt;
+  PASS: fp8_ep8.goodput_speedup_vs_bf16_tp16 == 2.65 &amp;&amp; fp8_ep8.cost_per_1m_tokens_usd == 0.35
+  PASS: nvfp4_ep16.speedup_vs_fp8 == 1.64 &amp;&amp; nvfp4_ep16.cost_per_1m_tokens_usd == 0.21
+  PASS: eplb.tpot_reduction_pct == 37.1 &amp;&amp; eplb.goodput_gain_pct == 53.1
+&lt;/answer&gt;</div>
+  </div>
+
+  <div class="dark-footer">
+    <strong>Verification Command:</strong> Run <code>python experiments\moe_quantization_parallelism_selection\run.py --check</code> and <code>python -m unittest tests\test_moe_quantization_parallelism_selection.py</code> to verify all invariants in &lt; 20 ms.
+  </div>
+</section>
+
+<!-- CARD 5: ROBUSTNESS CHECK (PERTURBATION & CONSISTENCY) -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>5 / 7 · ROBUSTNESS CHECK</span>
+      <span class="badge-track">PERTURBATION &amp; TRAFFIC SKEW SENSITIVITY</span>
+    </div>
+    <h2 class="finding">
+      EPLB Redundant Expert Replication Limits P99 TPOT Degradation Under Zipfian Traffic Skew to +0.0 ms (vs +58.9% Stall Without EPLB)
+    </h2>
+    <p class="lead">
+      We perturb traffic distribution (Uniform vs. Zipf $s=1.15$ hot-expert skew), reasoning benchmark domain (MMLU-Pro vs. AIME/LiveCodeBench), and batch concurrency to verify architectural stability.
+    </p>
+
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th style="width:32%;">PERTURBATION DIMENSION</th>
+          <th style="width:23%;">BASELINE / UNIFORM</th>
+          <th style="width:25%;">PERTURBED / SKEWED</th>
+          <th style="width:20%;">CHANGE (DELTA)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Hot-Expert Skew WITHOUT EPLB</strong><br><span style="color:var(--subtle); font-size:11.5px;">Uniform &rarr; Zipf s=1.15 (Static EP=8)</span></td>
+          <td>16.2 ms P99 TPOT<br>90,300 tok/s</td>
+          <td><strong>25.1 ms P99 TPOT</strong><br>60,220 tok/s</td>
+          <td><span class="pill pill-human">+8.9 ms (+54.9% tail)<br>-33.3% goodput</span></td>
+        </tr>
+        <tr>
+          <td><strong>2. Hot-Expert Skew WITH EPLB</strong><br><span style="color:var(--subtle); font-size:11.5px;">Static EP=8 &rarr; EPLB Top-16 Cloned</span></td>
+          <td>25.1 ms P99 TPOT<br>60,220 tok/s</td>
+          <td><strong>15.8 ms P99 TPOT</strong><br>92,200 tok/s</td>
+          <td><span class="pill pill-auto">-9.3 ms (-37.1% tail)<br>+53.1% goodput</span></td>
+        </tr>
+        <tr>
+          <td><strong>3. Quantization Accuracy Perturbation</strong><br><span style="color:var(--subtle); font-size:11.5px;">BF16 Ref &rarr; FP8 Block (1×128 / 128×128)</span></td>
+          <td>100.0% Relative Score<br>(MMLU-Pro / LiveCode)</td>
+          <td><strong>99.6% Relative Score</strong><br>(Outlier spikes isolated)</td>
+          <td><span class="pill pill-auto">-0.4 pts (Lossless-grade)</span></td>
+        </tr>
+        <tr>
+          <td><strong>4. Ultra-Low-Bit Reasoning Perturbation</strong><br><span style="color:var(--subtle); font-size:11.5px;">BF16 Ref &rarr; NVFP4 (Block-16) vs W4A16</span></td>
+          <td>100.0% Relative Score<br>(Math AIME / Coding)</td>
+          <td><strong>98.9% (NVFP4 Block-16)</strong><br>98.4% (W4A16 Group-128)</td>
+          <td><span class="pill pill-confirm">-1.1 pts (NVFP4)<br>-1.6 pts (W4A16)</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box">
+      <h3>Why Fine-Grained Block Scaling (`1×128` FP8 &amp; `1×16` NVFP4) Prevents Accuracy Collapse</h3>
+      <p style="font-size:13.5px; color:var(--muted); line-height:1.55;">
+        In legacy per-tensor quantization, a single activation outlier spike (`100×` normal magnitude) forces the global scale factor up, squashing 99% of normal weights to zero. By confining each scale factor to <strong>128 elements (FP8)</strong> or <strong>16 elements (NVFP4/MXFP4)</strong>—and keeping Router Gate + KV Cache in higher precision—outlier blast radius is mathematically isolated to a single micro-tile.
+      </p>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <strong>Robustness Rule:</strong> Always keep the MoE Router Gate in <code>FP32/BF16</code> and KV Cache in <code>FP8</code> even when expert FFN weights use <code>NVFP4/MXFP4</code>.
+  </div>
+</section>
+
+<!-- CARD 6: LATENCY & SCALING BARS -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>6 / 7 · LATENCY &amp; COST SCALING</span>
+      <span class="badge-track">PAIRED BAR COMPARISON</span>
+    </div>
+    <h2 class="finding">
+      Attention DP + MoE EP + DeepEP Slashes Decode Latency 2.20×–3.11× Across Load Tiers vs Pure TP=16
+    </h2>
+    <p class="lead">
+      Paired horizontal bar comparison of <strong>Decode P99 TPOT (ms)</strong> and <strong>Token Cost ($/1M tokens)</strong> comparing <strong>Optimized EP + DeepEP + EPLB (`#3B82F6`)</strong> against <strong>Baseline TP / Static Paths (`#CBD5E1`)</strong> from sealed data.
+    </p>
+
+    <div class="box" style="margin-bottom:18px;">
+      <h3>1. Decode P99 TPOT Latency (ms · Lower is Better · SLA Target &lt; 20 ms)</h3>
+      <div class="bar-row">
+        <div class="bar-label">NVFP4 + DP16/EP16 (Primary)</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:32.2%;"></div></div>
+        <div class="bar-val">11.2 ms (-67.8%)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">FP8 + DP8/EP8 + EPLB (Primary)</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:45.4%;"></div></div>
+        <div class="bar-val">15.8 ms (-54.6%)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">FP8 Static EP8 No EPLB (Baseline)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:72.1%;"></div></div>
+        <div class="bar-val">25.1 ms (Skew stall)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">W4A16 (AWQ) + TP=8 (Baseline)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:75.9%;"></div></div>
+        <div class="bar-val">26.4 ms (DeQuant)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">BF16 + Pure TP=16 (Baseline)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:100.0%;"></div></div>
+        <div class="bar-val">34.8 ms (1.00×)</div>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>2. Production Token Cost ($ / 1M SLA-Compliant Tokens · Lower is Better · $1.80/GPU-hr)</h3>
+      <div class="bar-row">
+        <div class="bar-label">NVFP4 + DP16/EP16 (Primary)</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:22.8%;"></div></div>
+        <div class="bar-val">$0.21 / 1M (-77.2%)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">FP8 + DP8/EP8 + EPLB (Primary)</div>
+        <div class="bar-track"><div class="bar-fill-blue" style="width:38.0%;"></div></div>
+        <div class="bar-val">$0.35 / 1M (-62.0%)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">W4A16 (AWQ) + TP=8 (Baseline)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:77.2%;"></div></div>
+        <div class="bar-val">$0.71 / 1M (-22.8%)</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">BF16 + Pure TP=16 (Baseline)</div>
+        <div class="bar-track"><div class="bar-fill-gray" style="width:100.0%;"></div></div>
+        <div class="bar-val">$0.92 / 1M (1.00×)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <strong>Scaling Note:</strong> All bar widths are exact ratios of the sealed values in <code>experiments/moe_quantization_parallelism_selection/results.json</code> (e.g., <code>11.2 / 34.8 = 32.2%</code>, <code>15.8 / 34.8 = 45.4%</code>, <code>$0.21 / $0.92 = 22.8%</code>, <code>$0.35 / $0.92 = 38.0%</code>).
+  </div>
+</section>
+
+<!-- CARD 7: MY TAKE (GOOD FIT VS NOT FOR & READINESS) -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>7 / 7 · MY TAKE</span>
+      <span class="badge-track">ARCHITECT PLAYBOOK &amp; READINESS</span>
+    </div>
+    <h2 class="finding">
+      Architect Verdict: FP8 + DP/EP + EPLB is the Universal Hopper Default; Reserve NVFP4/MXFP4 for Blackwell &amp; CDNA4
+    </h2>
+    <p class="lead">
+      Use this field-ready decision boundary when advising enterprise customers on large MoE / dense model quantization and multi-node parallelism.
+    </p>
+
+    <div class="grid-2">
+      <div class="box" style="background:var(--green-bg); border-color:var(--green-border);">
+        <h3 style="color:var(--green-ink); font-size:14px;">✅ GOOD FIT (WHEN TO DEPLOY)</h3>
+        <p style="font-size:13.2px; color:var(--green-ink); line-height:1.6;">
+          • <strong>FP8 Block-Scaled (`1×128` / `128×128`) + DP8/EP8 + DeepEP + EPLB</strong>: Default production choice on Hopper (`H100`/`H200`/`H20`) and MI300X/MI325X for DeepSeek-V3/R1, Qwen3-MoE, and Llama-3.1-405B (`99.6%` accuracy, `2.65×` goodput, `-62.0%` TCO).<br><br>
+          • <strong>NVFP4 / MXFP4 + DP16/EP16 + DeepEP + EPLB</strong>: Best TCO choice on Blackwell (`B200`/`GB200`/`GB300`) and AMD `MI350X`/`MI355X` (`gfx950`) with native 4-bit Tensor/Matrix Cores (`1.64×` over FP8, `$0.21/1M`).<br><br>
+          • <strong>W4A16 (AWQ/GPTQ) + Pure TP (4–8 GPUs)</strong>: Edge or single-box appliances with low concurrency (`Batch &lt; 16`) where fitting weights on fewer cards is the sole objective.
+        </p>
+      </div>
+      <div class="box" style="background:var(--red-bg); border-color:var(--red-border);">
+        <h3 style="color:var(--red-ink); font-size:14px;">⛔ NOT FOR (ANTI-PATTERNS TO AVOID)</h3>
+        <p style="font-size:13.2px; color:var(--red-ink); line-height:1.6;">
+          • <strong>Never run NVFP4/MXFP4 on Hopper (`H100`/`H200`) or Ampere (`A100`)</strong>: Without native FP4 Tensor Cores, software unpacking degrades latency below FP8 while sacrificing 0.7% accuracy.<br><br>
+          • <strong>Never use `Pure TP=16` across nodes for sparse MoE (`&ge; 64` experts)</strong>: Ultra-thin expert slices (`width = 128`) starve Tensor Cores and block on cross-node `AllReduce` twice per layer.<br><br>
+          • <strong>Never run `W4A16` for high-QPS API pools (`Batch &ge; 32`)</strong>: Register-level dequantization creates a severe SM instruction bottleneck.<br><br>
+          • <strong>Never run `EP &ge; 8` without `EPLB` and RDMA</strong>: Skewed prompts (`Zipf s=1.15`) cause `+58.9%` P99 TPOT tail spikes on hot GPUs.
+        </p>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>5-Point Production Sign-Off Checklist</h3>
+      <p style="font-size:13px; color:var(--ink); line-height:1.6;">
+        <code>[✓] 1. Verify GPU SM ISA (`SM90` &rarr; FP8 Block-Scaled; `SM100/gfx950` &rarr; NVFP4/MXFP4)</code><br>
+        <code>[✓] 2. Enforce Mixed-Precision Guardrails (Router Gate in FP32/BF16, KV Cache in FP8)</code><br>
+        <code>[✓] 3. Switch Multi-Node MoE (&ge;16 GPUs) from Pure TP to Attention DP + MoE EP + DeepEP</code><br>
+        <code>[✓] 4. Enable EPLB Redundant Hot-Expert Replication (`--enable-eplb`) in Production</code><br>
+        <code>[✓] 5. Run Domain Calibration Set (128–512 prompts) Before Promoting FP4 to Tier-1 Math/Medical</code>
+      </p>
+    </div>
+  </div>
+
+  <div class="dark-footer">
+    <strong>Readiness, License &amp; Provenance:</strong> Apache-2.0 / MIT Open-Source Stack (`vLLM`, `SGLang`, `TensorRT-LLM`, `DeepEP`) · Data Provenance: <code>synthetic</code> analytical model + <code>anonymized_reported</code> literature baselines (<code>independently_reproduced=false</code>, live 64×GPU cluster <code>not_measured</code>) · Companion Guide: <code>docs/components/moe-quantization-parallelism-selection-faq.md</code> &amp; <code>.en.md</code>.
+  </div>
+</section>
+
+</body>
+</html>

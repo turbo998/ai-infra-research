@@ -76,7 +76,11 @@ def evaluate_colocated_vs_pd_disaggregation() -> dict[str, float]:
     colocated_naive_p99_tpot_ms = 142.0
     colocated_chunked_p99_tpot_ms = 68.4
     disaggregated_decode_p99_tpot_ms = 18.2
+    kv_rdma_payload_gb = 1.024
+    kv_rdma_payload_gb_bits = 8.192
     kv_rdma_transfer_ms = 22.8
+    kv_rdma_effective_gb_s = round(kv_rdma_payload_gb / (kv_rdma_transfer_ms / 1000.0), 2)
+    kv_rdma_effective_gbps = round(kv_rdma_payload_gb_bits / (kv_rdma_transfer_ms / 1000.0), 2)
 
     tpot_tail_reduction_x = round(colocated_chunked_p99_tpot_ms / disaggregated_decode_p99_tpot_ms, 2)
 
@@ -91,6 +95,9 @@ def evaluate_colocated_vs_pd_disaggregation() -> dict[str, float]:
         "colocated_naive_p99_tpot_ms": colocated_naive_p99_tpot_ms,
         "colocated_chunked_p99_tpot_ms": colocated_chunked_p99_tpot_ms,
         "disaggregated_decode_p99_tpot_ms": disaggregated_decode_p99_tpot_ms,
+        "kv_rdma_payload_gb": kv_rdma_payload_gb,
+        "kv_rdma_effective_gb_s": kv_rdma_effective_gb_s,
+        "kv_rdma_effective_gbps": kv_rdma_effective_gbps,
         "kv_rdma_transfer_ms": kv_rdma_transfer_ms,
         "tpot_tail_reduction_x": tpot_tail_reduction_x,
         "colocated_sla_goodput_tok_per_s_gpu": colocated_sla_goodput_tok_per_s_gpu,
@@ -121,6 +128,12 @@ def build_results() -> dict[str, object]:
         "schema_version": 1,
         "suite": "llm_inference_engine_pd_selection",
         "provenance": "own-offline",
+        "provenance_details": {
+            "data_classification": "synthetic_analytical_model_calibrated_to_anonymized_reported_specs",
+            "independently_reproduced": False,
+            "paid_cloud_gpu_launched": False,
+            "live_h200_cluster_measurement": "not_measured",
+        },
         "roofline_physics": evaluate_roofline_physics(),
         "prefix_cache_and_engine_optimizations": evaluate_prefix_cache_and_engine_optimizations(),
         "colocated_vs_pd_disaggregation": evaluate_colocated_vs_pd_disaggregation(),

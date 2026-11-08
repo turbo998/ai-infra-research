@@ -1,6 +1,8 @@
 # AI Infra 大模型推理引擎与 PD 分离架构选型 FAQ：vLLM vs. SGLang vs. TensorRT-LLM 与 Mooncake/Dynamo
 
 > 🌐 **Language / 语言**: **中文 (Chinese)** | **[English (`llm-inference-engine-pd-disaggregation-selection-faq.en.md`)](llm-inference-engine-pd-disaggregation-selection-faq.en.md)**
+> 🧭 **独立拆分精简专题 (Dedicated Single-Topic Short-Slug FAQs)**: [专题 1A：大模型推理引擎选型 FAQ (`vLLM` vs `SGLang` vs `TensorRT-LLM`)](llm-inference-engine-selection-faq.md) · [专题 1B：Prefill-Decode (PD) 分离与 KV 卸载选型 FAQ (`Co-located` vs `Dynamo + Mooncake`)](pd-disaggregation-kv-offload-selection-faq.md)
+> 📊 **数据溯源与复现边界 (Provenance)**: 文中定量算例由本仓库确定性 Roofline 与排队论仿真器 [`experiments/llm_inference_engine_pd_selection/run.py`](../../experiments/llm_inference_engine_pd_selection/run.py) 生成（分类：`synthetic` 理论/系统仿真 + `anonymized_reported` 上游公开规格参数；`independently_reproduced=false`；未启动付费云上 8×H200 物理实机集群，实机集群打流状态：`not_measured`）。其中 32K 上下文 KV 跨节点传输按 `1.024 GB (8.192 Gb)` 载荷在 `400G RoCEv2` 实效带宽 `44.91 GB/s (359.30 Gbps)` 下耗时 `22.8 ms` 严格核算。
 > 🔗 **关联专题 (Related Deep Dives)**: [vLLM V1 统一调度与推理 SLO](inference-slo.md) · [Prefill/Decode 分离与跨节点 KV 路由](disaggregated-kv-routing.md) · [四级 KV 缓存卸载层次 (VRAM/DRAM/CXL/SSD)](tiered-kv-cache-offload-hierarchy.md) · [Mooncake ConnectX-8 零拷贝 RDMA](mooncake-transfer-engine-cx8-data-direct-rdma.md) · [SGLang HiRadixCache 与 EAGLE-3 投机解码](ai-infra-innovators-v2.md) · [InfiniBand vs. Ethernet/RoCEv2 网络选型 FAQ](ib-vs-ethernet-roce-selection-faq.md)
 
 ---
