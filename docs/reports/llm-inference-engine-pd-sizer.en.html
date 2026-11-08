@@ -765,5 +765,81 @@ function updateSpecSizer() {
   </div>
 
 <script>updateSpecSizer();</script>
+
+  <!-- ROUND 9: MULTI-TENANT GPU FRACTIONAL SHARING & HARDWARE ISOLATION SIZER -->
+  <div class="panel" id="gpu-sharing-sizer" style="margin-top: 24px; border-color: #10b981;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <h2 style="margin:0;color:#34d399;">🛡️ Round 9 Interactive Sizer: Multi-Tenant GPU Fractional Sharing &amp; Isolation (Time-Slicing vs. CUDA MPS vs. Hardware MIG vs. Green Contexts / Multi-LoRA)</h2>
+      <span style="font-size:12px;background:#0f172a;color:#34d399;padding:4px 10px;border-radius:999px;border:1px solid #334155;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:16px;">
+      Strictly bound to sealed evaluator <code>experiments/gpu_sharing_isolation_selection/results.json</code> (Baseline: <code>NVIDIA H100 80GB SXM</code>, <code>132 SMs</code>, <code>$2.50/GPU-hr × 730h = $1,825/mo/GPU</code>). Select workload topology and fleet scale to compare noisy-neighbor P99 latency, throughput, Xid 31 / OOM fault blast radius, and monthly TCO savings.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Multi-Tenant Workload Scenario:</label>
+        <select id="gpuShareScenario" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGpuShareSizer()">
+          <option value="micro7">Scenario A: 7 Microservices (Embedding/Reranker/3B-8B, ~9.5GB each)</option>
+          <option value="lora28">Scenario B: 28 Department 70B Fine-Tunes (70GB Base + 28×160MB LoRAs)</option>
+          <option value="pd_green">Scenario C: Single 70B Engine Colocated Prefill vs. Decode SM Contention</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Fleet Scale Multiplier: <span id="gpuShareScaleVal" style="color:#34d399;">1x (Baseline)</span></label>
+        <input type="range" id="gpuShareScale" min="1" max="10" step="1" value="1" style="width:100%;margin-top:8px;" oninput="updateGpuShareSizer()" />
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-top:4px;"><span>1x (7 Services / 28 LoRAs)</span><span>5x</span><span>10x Enterprise Fleet</span></div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU Sharing &amp; Isolation Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">H100 GPUs Needed</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Throughput / SM Util</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Noisy-Neighbor P99</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Fault Blast Radius</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Cost / Net Savings</th>
+          </tr>
+        </thead>
+        <tbody id="gpuShareTbody"></tbody>
+      </table>
+    </div>
+    <div id="gpuShareCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateGpuShareSizer() {
+  const scen = document.getElementById('gpuShareScenario').value;
+  const scale = parseInt(document.getElementById('gpuShareScale').value, 10) || 1;
+  document.getElementById('gpuShareScaleVal').textContent = scale + 'x (' + (scen === 'lora28' ? (28*scale)+' × 70B LoRAs' : (7*scale)+' Microservices') + ')';
+  const tbody = document.getElementById('gpuShareTbody');
+  const rows = [
+    { name: 'Baseline: Dedicated Full GPU per Tenant', gpus: 7*scale, tput: (1680*scale)+' req/s (15.0% SM)', p99: '24.0 ms (+0.0%)', blast: '0.0% (Physical GPUs)', cost: '$'+(12775*scale).toLocaleString()+' / saves $0', ok: false },
+    { name: 'Tier 1: OS / K8s Time-Slicing', gpus: 1*scale, tput: (1180*scale)+' req/s (52.0% SM)', p99: '82.0 ms (+241.7% ✕)', blast: '100.0% (1 Pod OOM kills all ✕)', cost: '$'+(1825*scale).toLocaleString()+' / SLA violated', ok: false },
+    { name: 'Tier 2: CUDA MPS Spatial Sharing', gpus: 1*scale, tput: (1840*scale)+' req/s (78.0% SM)', p99: '34.5 ms (+43.8%)', blast: '100.0% (Xid 31 kills all clients ✕)', cost: '$'+(1825*scale).toLocaleString()+' / saves $'+(10950*scale).toLocaleString(), ok: scen === 'micro7' },
+    { name: 'Tier 3: NVIDIA Hardware MIG (7×1g.10gb Silicon)', gpus: 1*scale, tput: (1620*scale)+' req/s (68.5% SM)', p99: '25.0 ms (+4.2% ✅)', blast: '0.0% (Silicon isolated ✅)', cost: '$'+(1825*scale).toLocaleString()+' / saves $'+(10950*scale).toLocaleString()+' (-85.7%)', ok: scen === 'micro7' },
+    { name: 'Tier 4A: CUDA 12.4+ Green Contexts (108+24 SMs)', gpus: 1*scale, tput: (2010*scale)+' req/s (86.5% SM)', p99: '24.8 ms (PD 68.4ms -> 24.8ms, 2.76x ✅)', blast: 'Single managed engine (Zero-copy HBM)', cost: '$'+(1825*scale).toLocaleString()+' / saves $'+(10950*scale).toLocaleString(), ok: scen === 'pd_green' },
+    { name: 'Tier 4B: SGLang/vLLM Multi-LoRA (28×70B Shared)', gpus: 2*scale, tput: (28*scale)+' Rank-16 Adapters', p99: '26.8 ms TPOT (✅)', blast: 'Single managed engine (28->2 GPUs, 14.0x)', cost: '$'+(3650*scale).toLocaleString()+' / saves $'+(47450*scale).toLocaleString()+' (-92.9%)', ok: scen === 'lora28' }
+  ];
+  tbody.innerHTML = rows.map(r => `<tr style="border-bottom:1px solid #334155;${r.ok?'background:rgba(16,185,129,0.12);':''}">
+    <td style="padding:10px;font-weight:700;color:${r.ok?'#34d399':'#f8fafc'};">${r.name}</td>
+    <td style="padding:10px;"><code>${r.gpus} GPUs</code></td>
+    <td style="padding:10px;"><code>${r.tput}</code></td>
+    <td style="padding:10px;"><code>${r.p99}</code></td>
+    <td style="padding:10px;"><code>${r.blast}</code></td>
+    <td style="padding:10px;"><strong style="color:${r.ok?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+  </tr>`).join('');
+  const callout = document.getElementById('gpuShareCallout');
+  if (scen === 'micro7') {
+    callout.innerHTML = `<strong>Architect Recommendation (Cross-Tenant Microservices)</strong>: Select <strong>Tier 3 Hardware MIG (7×1g.10gb)</strong> for <code>0.0%</code> cross-tenant fault blast radius and <code>25.0 ms (+4.2%)</code> P99, saving <code>$${(10950*scale).toLocaleString()}/month (-85.7%)</code>; use Tier 2 CUDA MPS (<code>1,840 req/s</code>) only when all co-located pods belong to one trusted team.`;
+  } else if (scen === 'lora28') {
+    callout.innerHTML = `<strong>Architect Recommendation (28+ Department 70B Fine-Tunes)</strong>: Consolidate ${28*scale} department fine-tunes onto ${2*scale} H100 GPUs via <strong>Tier 4B SGLang/vLLM Multi-LoRA (Punica/S-LoRA)</strong>, saving <code>$${(47450*scale).toLocaleString()}/month (-92.9%, 14.0x GPU reduction)</code>!`;
+  } else {
+    callout.innerHTML = `<strong>Architect Recommendation (Intra-Engine Prefill/Decode SM Isolation)</strong>: Use <strong>Tier 4A CUDA 12.4+ Green Contexts (<code>cudaGreenCtxCreate</code>)</strong> to split <code>108 SMs (Prefill) + 24 SMs (Decode)</code> inside unified HBM, cutting colocated Decode P99 from <code>68.4 ms -> 24.8 ms (2.76x)</code>!`;
+  }
+}
+updateGpuShareSizer();
+</script>
 </body>
 </html>

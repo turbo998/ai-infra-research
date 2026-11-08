@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;" />
+  <title>Multi-Tenant GPU Fractional Sharing &amp; Hardware Isolation — 7-Card 4:5 Benchmark Report</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --blue: #2563eb;
+      --emerald: #059669;
+      --amber: #d97706;
+      --red: #dc2626;
+      --dark: #0f172a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b1120;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+      padding: 32px 16px;
+    }
+    .deck-header {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      color: #f8fafc;
+    }
+    .deck-header h1 { font-size: 24px; margin-bottom: 8px; }
+    .deck-header p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
+    .deck {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      align-items: center;
+    }
+    .card {
+      width: 900px;
+      min-height: 1125px;
+      background: var(--card-bg);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 14px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-green { background: #d1fae5; color: #047857; }
+    .badge-amber { background: #fef3c7; color: #b45309; }
+    .badge-red { background: #fee2e2; color: #b91c1c; }
+    h2.headline {
+      font-size: 27px;
+      line-height: 1.28;
+      font-weight: 800;
+      color: var(--ink);
+      margin: 18px 0 12px;
+    }
+    .accent {
+      background: linear-gradient(90deg, #059669, #2563eb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.sub {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+      margin-bottom: 18px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 14px 0;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 18px;
+      margin: 14px 0;
+    }
+    .panel {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    .panel h3 {
+      font-size: 14px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+    .kv-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      padding: 7px 0;
+      border-bottom: 1px dashed #e2e8f0;
+    }
+    .kv-row:last-child { border-bottom: none; }
+    table.matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin: 12px 0;
+    }
+    table.matrix th, table.matrix td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+    }
+    table.matrix th {
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .code-box {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 14px;
+      padding: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.55;
+      overflow-x: auto;
+    }
+    .bar-row { margin: 12px 0; }
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13.5px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .bar-track {
+      width: 100%;
+      height: 18px;
+      background: #e2e8f0;
+      border-radius: 9px;
+      overflow: hidden;
+    }
+    .bar-fill-blue { height: 100%; background: #3b82f6; border-radius: 9px; }
+    .bar-fill-green { height: 100%; background: #10b981; border-radius: 9px; }
+    .bar-fill-amber { height: 100%; background: #f59e0b; border-radius: 9px; }
+    .bar-fill-slate { height: 100%; background: #94a3b8; border-radius: 9px; }
+    .callout-dark {
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 14px;
+      padding: 18px 20px;
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <div class="deck-header">
+    <h1>Multi-Tenant GPU Fractional Sharing &amp; Hardware Isolation Selection (7-Card 4:5 Deck)</h1>
+    <p>Companion to <code>docs/components/gpu-sharing-multi-tenant-isolation-selection-faq.md</code> &amp; <code>.en.md</code> · Sealed data: <code>experiments/gpu_sharing_isolation_selection/results.json</code></p>
+  </div>
+
+  <div class="deck">
+    <!-- CARD 1 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>1 / 7 · HANDS-ON · GPU SHARING &amp; MULTI-TENANT ISOLATION</span>
+          <span class="badge badge-green">SYNTHETIC + ANONYMIZED_REPORTED</span>
+        </div>
+        <h2 class="headline">Hardware MIG Cuts 7-Tenant GPU Spend by <span class="accent">85.7% ($10,950/mo)</span> with <span class="accent">0.0% Fault Blast Radius</span>; Multi-LoRA Shrinks 28×70B Fleet <span class="accent">14.0x</span></h2>
+        <p class="sub">Evaluating 4 GPU fractional sharing tiers on NVIDIA H100 SXM 80GB (<code>132 SMs</code>, <code>$1,825/mo</code>): K8s Time-Slicing vs. CUDA MPS vs. Hardware MIG vs. CUDA 12.4+ Green Contexts &amp; Multi-LoRA Serving.</p>
+
+        <div class="grid-3">
+          <div class="panel">
+            <h3>1. Sharing Tiers &amp; Gates</h3>
+            <div class="kv-row"><span>Tier 1 Time-Slice</span><strong>Dev / Notebook</strong></div>
+            <div class="kv-row"><span>Tier 2 CUDA MPS</span><strong>Trusted Co-Op</strong></div>
+            <div class="kv-row"><span>Tier 3 HW MIG</span><strong>Multi-Tenant Prod</strong></div>
+            <div class="kv-row"><span>Tier 4 GreenCtx</span><strong>108+24 SM Split</strong></div>
+            <div class="kv-row"><span>Tier 4 Multi-LoRA</span><strong>28 Adapters / 2 GPUs</strong></div>
+          </div>
+          <div class="panel">
+            <h3>2. Workload Parameters</h3>
+            <div class="kv-row"><span>Hardware SKU</span><strong>H100 80GB SXM</strong></div>
+            <div class="kv-row"><span>GPU Rental</span><strong>$2.50/h ($1,825/mo)</strong></div>
+            <div class="kv-row"><span>Scenario A</span><strong>7 × 9.5GB Services</strong></div>
+            <div class="kv-row"><span>Isolated P99</span><strong>24.0 ms (15% SM)</strong></div>
+            <div class="kv-row"><span>Scenario B</span><strong>28 × 70B Rank-16</strong></div>
+          </div>
+          <div class="panel">
+            <h3>3. Headline Verdicts</h3>
+            <div class="kv-row"><span>MIG P99 Jitter</span><strong>25.0 ms (+4.2%)</strong></div>
+            <div class="kv-row"><span>MIG Blast Radius</span><strong>0.0% (Silicon)</strong></div>
+            <div class="kv-row"><span>MPS Peak Tput</span><strong>1,840 req/s (78% SM)</strong></div>
+            <div class="kv-row"><span>MPS Blast Radius</span><strong>100.0% (Xid 31)</strong></div>
+            <div class="kv-row"><span>Multi-LoRA Save</span><strong>$47,450 / month</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Provenance &amp; Guardrails:</strong> Hardware specs (H100 132 SMs, 7 MIG slices, MPS shared fatal fault domain per NVIDIA MPS Docs §2.3.1, CUDA 12.4+ <code>cudaGreenCtxCreate</code>) are <code>anonymized_reported</code> (<code>independently_reproduced=false</code>). Latency, throughput, and TCO numbers are from sealed deterministic model <code>experiments/gpu_sharing_isolation_selection/results.json</code> (<code>synthetic</code>, <code>gpu_cluster_hardware_measured="not_measured"</code>, local CPU validator <code>measured</code>).
+      </div>
+    </section>
+
+    <!-- CARD 2 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>2 / 7 · SCENARIO: 7 MICROSERVICES + NOISY NEIGHBOR &amp; XID FAULT</span>
+          <span class="badge badge-blue">CASE DEEP DIVE</span>
+        </div>
+        <h2 class="headline">Why CUDA MPS Hits <span class="accent">1,840 req/s</span> Yet Crashes <span class="accent">100% of Co-Tenants</span> on Xid 31, While Hardware MIG Holds <span class="accent">25.0 ms P99</span> at <span class="accent">0.0%</span> Blast Radius</h2>
+        <p class="sub">Input Scenario: 7 inference microservices (Embedding, Reranker, OCR, Guardrail, 3B–8B FP8, ~9.5 GB VRAM each) consolidated onto 1 × H100 80GB when Tenant A bursts traffic and triggers an illegal address fault.</p>
+
+        <div class="panel" style="margin-bottom:14px;">
+          <h3>Decision 1 · Tier 3 NVIDIA Hardware MIG (`7 × 1g.10gb` Silicon Slices) — <span class="badge badge-green">Act automatically (Multi-Tenant Prod)</span></h3>
+          <div class="kv-row"><span>Noisy-Neighbor P99 / Throughput</span><strong>25.0 ms (+4.2% vs 24.0 ms dedicated) · 1,620.0 req/s (68.5% SM util)</strong></div>
+          <div class="kv-row"><span>Cross-Tenant Fault Blast Radius</span><strong>0.0% (Dedicated HBM controllers, L2 crossbar &amp; independent MMU page tables)</strong></div>
+          <div class="kv-row"><span>Monthly TCO Consolidation</span><strong>$12,775.00 (7 GPUs) → $1,825.00 (1 GPU), saving $10,950.00/mo (-85.7%)</strong></div>
+        </div>
+
+        <div class="panel" style="margin-bottom:14px;">
+          <h3>Decision 2 · Tier 2 CUDA MPS (`Multi-Process Service`) — <span class="badge badge-amber">Confirm (Trusted Single-Team Only)</span></h3>
+          <div class="kv-row"><span>Noisy-Neighbor P99 / Throughput</span><strong>34.5 ms (+43.8% L2 thrashing jitter) · 1,840.0 req/s (78.0% SM util, 1.56x vs T1)</strong></div>
+          <div class="kv-row"><span>Official NVIDIA Fault Boundary</span><strong>100.0% Blast Radius — 1 client Xid 31 fault fatally terminates all 7 MPS clients</strong></div>
+        </div>
+
+        <div class="panel">
+          <h3>Decision 3 · Tier 4 CUDA 12.4+ Green Contexts (`108+24 SMs`) &amp; Multi-LoRA — <span class="badge badge-green">Act automatically (70B LLM)</span></h3>
+          <div class="kv-row"><span>Green Contexts Colocated Decode P99</span><strong>68.4 ms → 24.8 ms (2.76x reduction via intra-process 24-SM Decode reservation)</strong></div>
+          <div class="kv-row"><span>28-Department 70B Multi-LoRA Consolidation</span><strong>28 GPUs ($51,100/mo) → 2 GPUs ($3,650/mo, 14.0x reduction, saves $47,450/mo)</strong></div>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Key Takeaway:</strong> Never conflate SM thread limiting (<code>CUDA_MPS_ACTIVE_THREAD_PERCENTAGE</code>) with hardware memory/fault isolation. Only Hardware MIG isolates MMU page tables and HBM channels across processes.
+      </div>
+    </section>
+
+    <!-- CARD 3 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>3 / 7 · WHAT I TESTED</span>
+          <span class="badge badge-blue">FULL EVALUATION MATRIX</span>
+        </div>
+        <h2 class="headline">Across 5 Deployment Topologies, Only <span class="accent">Hardware MIG</span> Guarantees 0% Cross-Tenant Crash While <span class="accent">Green Contexts + Multi-LoRA</span> Solve 70B Sharing</h2>
+
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>SCENARIO / TIER</th>
+              <th>THROUGHPUT &amp; SM UTIL</th>
+              <th>P99 LATENCY &amp; BLAST RADIUS</th>
+              <th>ARCHITECT ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Baseline: Dedicated Full GPU</strong><br/>7 × H100 80GB (1 per service)</td>
+              <td>1,680.0 req/s<br/>15.0% Avg SM Util</td>
+              <td>P99: <strong>24.0 ms</strong> (0.0% jitter)<br/>Blast Radius: <strong>0.0%</strong> · $12,775/mo</td>
+              <td>✕ Over-provisioned (85% idle GPU waste)</td>
+            </tr>
+            <tr>
+              <td><strong>Tier 1: OS / K8s Time-Slicing</strong><br/>7 Pods round-robin on 1 × H100</td>
+              <td>1,180.0 req/s<br/>52.0% Avg SM Util (~220us switch)</td>
+              <td>P99: <strong>82.0 ms (+241.7% ✕)</strong><br/>Blast Radius: <strong>100.0% (OOM kills all ✕)</strong></td>
+              <td>✕ Dev/Test &amp; Notebooks only; ban in prod SLA</td>
+            </tr>
+            <tr>
+              <td><strong>Tier 2: CUDA MPS Spatial</strong><br/>7 Processes sharing 1 CUDA ctx</td>
+              <td><strong>1,840.0 req/s (1.56x)</strong><br/><strong>78.0% Avg SM Util</strong></td>
+              <td>P99: <strong>34.5 ms (+43.8% jitter)</strong><br/>Blast Radius: <strong>100.0% (Xid 31 kills all ✕)</strong></td>
+              <td>Confirm: Trusted single-team microservices only</td>
+            </tr>
+            <tr>
+              <td><strong>Tier 3: NVIDIA Hardware MIG</strong><br/>7 × <code>1g.10gb</code> silicon partitions</td>
+              <td>1,620.0 req/s (-12.0% vs MPS)<br/>68.5% Avg SM Util</td>
+              <td>P99: <strong>25.0 ms (+4.2% jitter)</strong><br/>Blast Radius: <strong>0.0% (Silicon isolated)</strong></td>
+              <td>✅ Act automatically for multi-tenant prod (-85.7% TCO)</td>
+            </tr>
+            <tr>
+              <td><strong>Tier 4A: CUDA Green Contexts</strong><br/>108 SMs Prefill + 24 SMs Decode</td>
+              <td><strong>2,010.0 req/s</strong><br/><strong>86.5% Avg SM Util</strong></td>
+              <td>Decode P99: <strong>68.4 → 24.8 ms (2.76x)</strong><br/>Unified zero-copy HBM within 1 engine</td>
+              <td>✅ Act automatically for colocated PD SM isolation</td>
+            </tr>
+            <tr>
+              <td><strong>Tier 4B: 28×70B Multi-LoRA</strong><br/>Shared 70GB base + 4.48GB pool</td>
+              <td>28 Rank-16 Adapters<br/>Punica / S-LoRA SGMV kernel</td>
+              <td>P99 TPOT: <strong>26.8 ms</strong><br/><strong>28 GPUs → 2 GPUs (14.0x reduction)</strong></td>
+              <td>✅ Act automatically for multi-department fine-tunes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Threshold Gating Rule</h3>
+          <p style="font-size:13px;color:var(--muted);line-height:1.5;">Require <strong>Tier 3 Hardware MIG</strong> whenever <code>tenant_trust == untrusted</code> or <code>blast_radius_sla == 0%</code>. Use <strong>Tier 2 MPS</strong> only when all co-located processes belong to one deployment unit.</p>
+        </div>
+        <div class="panel">
+          <h3>Failure Analysis (✕ Markers)</h3>
+          <p style="font-size:13px;color:var(--muted);line-height:1.5;">Time-Slicing fails online P99 SLAs (`82.0 ms`, `3.42x` degradation). MPS fails multi-tenant fault isolation (`100%` process termination on a single client's illegal memory access).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CARD 4 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>4 / 7 · UNDER THE HOOD</span>
+          <span class="badge badge-blue">PROTOCOL &amp; SILICON MECHANICS</span>
+        </div>
+        <h2 class="headline">From Silicon MIG Partitioning to CUDA 12.4+ <span class="accent">cudaGreenCtxCreate</span> Dynamic SM Splits &amp; Deterministic Verification</h2>
+
+        <div class="code-box" style="margin-bottom:16px;">
+<pre>// 1. CUDA 12.4+ Driver API: Intra-Process SM Partitioning via Green Contexts
+CUdevResource initial_sm_res, prefill_sm_res, decode_sm_res;
+cuDeviceGetDevResource(device, &amp;initial_sm_res, CU_DEV_RESOURCE_TYPE_SM); // 132 SMs on H100
+
+// Split 108 SMs for compute-heavy Prefill and reserve 24 SMs for latency-critical Decode
+unsigned int nb_groups = 1;
+cuDevSmResourceSplitByCount(&amp;prefill_sm_res, &amp;nb_groups, &amp;initial_sm_res, &amp;decode_sm_res, 0, 108);
+
+CUgreenCtx prefill_gctx, decode_gctx;
+cuGreenCtxCreate(&amp;prefill_gctx, prefill_desc, device, CU_GREEN_CTX_DEFAULT_STREAM);
+cuGreenCtxCreate(&amp;decode_gctx,  decode_desc,  device, CU_GREEN_CTX_DEFAULT_STREAM);
+// Both Green Contexts share the exact same 70GB weights &amp; Paged KV Cache in HBM3!
+// Result: Colocated Decode P99 drops from 68.4 ms -> 24.8 ms (2.76x reduction).</pre>
+        </div>
+
+        <div style="text-align:center;font-weight:800;color:var(--blue);margin:6px 0;">↓ Deterministic Evaluator &amp; Unit Test Verifier (experiments/gpu_sharing_isolation_selection/run.py) ↓</div>
+
+        <div class="code-box">
+<pre>$ python experiments/gpu_sharing_isolation_selection/run.py --check
+OK: experiments/gpu_sharing_isolation_selection/results.json matches deterministic model.
+
+$ python -m unittest tests/test_gpu_sharing_isolation_selection.py -v
+test_deterministic_check_passes ... ok
+test_provenance_and_isolation_invariants ... ok
+  - Assert Tier 1 &amp; Tier 2 fault_blast_radius_pct == 100.0% vs Tier 3 MIG == 0.0%
+  - Assert P99 ordering: MIG (25.0 ms) &lt; MPS (34.5 ms) &lt; Time-Slicing (82.0 ms)
+  - Assert 7-to-1 GPU consolidation saves $10,950.00/mo (-85.7%)
+  - Assert 28-tenant 70B Multi-LoRA shrinks 28 GPUs -&gt; 2 GPUs (14.0x, saves $47,450.00/mo)</pre>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Architectural Insight:</strong> Hardware MIG partitions physical memory controllers (requiring GPU reset and separate address spaces), whereas CUDA Green Contexts partition SMs dynamically inside a single virtual address space.
+      </div>
+    </section>
+
+    <!-- CARD 5 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>5 / 7 · ROBUSTNESS CHECK</span>
+          <span class="badge badge-amber">NOISY NEIGHBOR &amp; FAULT PERTURBATION</span>
+        </div>
+        <h2 class="headline">Under Noisy-Neighbor Traffic Spikes, Hardware MIG Limits P99 Drift to <span class="accent">+1.0 ms (+4.2%)</span> vs. <span class="accent">+58.0 ms (+241.7%)</span> on Time-Slicing</h2>
+        <p class="sub">Perturbation test comparing steady-state isolated baseline (`24.0 ms` P99) against co-tenant memory-bandwidth saturation and fatal Xid 31 fault injection across all 4 sharing tiers.</p>
+
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>SHARING ARCHITECTURE</th>
+              <th>ISOLATED BASELINE</th>
+              <th>PERTURBED (NOISY NEIGHBOR / XID)</th>
+              <th>CHANGE / BLAST RADIUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Tier 1: K8s Time-Slicing</strong><br/>(P99 Latency under 7-pod burst)</td>
+              <td>24.0 ms</td>
+              <td><strong>82.0 ms</strong> (Preemptive switch queue)</td>
+              <td><strong>+58.0 ms (+241.7% ✕)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 2: CUDA MPS Spatial</strong><br/>(P99 Latency under L2 thrashing)</td>
+              <td>24.0 ms</td>
+              <td><strong>34.5 ms</strong> (Shared L2 / HBM controller)</td>
+              <td><strong>+10.5 ms (+43.8%)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 2: CUDA MPS Spatial</strong><br/>(Surviving pods after 1 pod Xid 31)</td>
+              <td>7 / 7 Pods Alive (100%)</td>
+              <td><strong>0 / 7 Pods Alive (All terminated)</strong></td>
+              <td><strong>-100.0% Survival (100% Blast ✕)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 3: NVIDIA Hardware MIG</strong><br/>(P99 Latency under Tenant A spike)</td>
+              <td>24.0 ms</td>
+              <td><strong>25.0 ms</strong> (Dedicated HBM/L2 pipe)</td>
+              <td><strong>+1.0 ms (+4.2% ✅)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 3: NVIDIA Hardware MIG</strong><br/>(Healthy slices after Slice #1 Xid)</td>
+              <td>6 / 6 Co-Tenants Alive</td>
+              <td><strong>6 / 6 Co-Tenants Alive (100%)</strong></td>
+              <td><strong>0.0% Blast Radius (✅)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 4A: CUDA Green Contexts</strong><br/>(Decode P99 during 8K Prefill wave)</td>
+              <td>68.4 ms (Unpartitioned)</td>
+              <td><strong>24.8 ms</strong> (24 Dedicated Decode SMs)</td>
+              <td><strong>-43.6 ms (2.76x faster ✅)</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Robustness Verdict:</strong> Hardware MIG is the only multi-process GPU sharing mechanism that survives both bandwidth-saturating noisy neighbors (`+4.2%` P99 drift) and fatal GPU MMU page faults (`0.0%` cross-slice blast radius).
+      </div>
+    </section>
+
+    <!-- CARD 6 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>6 / 7 · LATENCY &amp; TCO SCALING</span>
+          <span class="badge badge-blue">PAIRED COMPARISON BARS</span>
+        </div>
+        <h2 class="headline">Consolidating 7 Services Saves <span class="accent">$10,950/mo per H100 (-85.7%)</span>; Multi-LoRA Cuts 28×70B Monthly Cost from <span class="accent">$51,100 to $3,650</span></h2>
+        <p class="sub">Horizontal paired comparison of Noisy-Neighbor P99 Latency (ms) and Monthly GPU Fleet Cost (USD at $2.50/GPU-hr, 730 hr/mo) from sealed <code>results.json</code>.</p>
+
+        <div class="panel">
+          <h3>Part A · Noisy-Neighbor P99 Tail Latency (ms — Lower is Better)</h3>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 1: OS / K8s Time-Slicing (Context-Switch Queue)</span><span>82.0 ms (3.42x worse)</span></div>
+            <div class="bar-track"><div class="bar-fill-slate" style="width:100%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 2: CUDA MPS Spatial Sharing (Shared L2 Cache)</span><span>34.5 ms (+43.8%)</span></div>
+            <div class="bar-track"><div class="bar-fill-amber" style="width:42.1%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 3: NVIDIA Hardware MIG (7 × 1g.10gb Silicon Isolation)</span><span>25.0 ms (+4.2%)</span></div>
+            <div class="bar-track"><div class="bar-fill-green" style="width:30.5%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 4A: CUDA 12.4+ Green Contexts (108+24 SMs)</span><span>24.8 ms (+3.3%)</span></div>
+            <div class="bar-track"><div class="bar-fill-blue" style="width:30.2%;"></div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Part B · Monthly GPU Fleet TCO (USD / Month at $1,825/H100 — Lower is Better)</h3>
+          <div class="bar-row">
+            <div class="bar-label"><span>28 Department 70B Fine-Tunes: Dedicated Full GPUs (28 × H100)</span><span>$51,100.00 / mo</span></div>
+            <div class="bar-track"><div class="bar-fill-slate" style="width:100%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>28 Department 70B Fine-Tunes: Tier 4B Multi-LoRA Pool (2 × H100)</span><span>$3,650.00 / mo (-92.9% · saves $47,450/mo)</span></div>
+            <div class="bar-track"><div class="bar-fill-blue" style="width:7.1%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>7 Microservices: Dedicated Full GPUs (7 × H100)</span><span>$12,775.00 / mo</span></div>
+            <div class="bar-track"><div class="bar-fill-slate" style="width:25.0%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>7 Microservices: Tier 3 Hardware MIG Consolidated (1 × H100)</span><span>$1,825.00 / mo (-85.7% · saves $10,950/mo)</span></div>
+            <div class="bar-track"><div class="bar-fill-green" style="width:3.6%;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Scaling Note:</strong> All bar widths are proportional to exact sealed metrics in <code>experiments/gpu_sharing_isolation_selection/results.json</code> (<code>82.0 ms = 100%</code> in Part A; <code>$51,100.00 = 100%</code> in Part B).
+      </div>
+    </section>
+
+    <!-- CARD 7 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>7 / 7 · MY TAKE</span>
+          <span class="badge badge-green">ARCHITECT PLAYBOOK &amp; READINESS</span>
+        </div>
+        <h2 class="headline">Use <span class="accent">Hardware MIG</span> for Cross-Tenant Microservices, <span class="accent">MPS</span> for Trusted Co-Op, and <span class="accent">Green Contexts + Multi-LoRA</span> for 70B+ LLMs</h2>
+
+        <div class="grid-2">
+          <div class="panel" style="border-color:#10b981;background:#ecfdf5;">
+            <h3 style="color:#047857;">✅ Good Fit (When to Adopt)</h3>
+            <ul style="font-size:13.5px;line-height:1.65;color:#064e3b;padding-left:18px;">
+              <li><strong>Tier 3 Hardware MIG (<code>7×1g.10gb</code> / mixed)</strong>: Cross-department K8s platforms hosting Embedding, Reranker, OCR, or 3B–8B models needing <code>0.0%</code> fault blast radius and <code>25.0 ms</code> deterministic P99.</li>
+              <li><strong>Tier 2 CUDA MPS</strong>: Co-locating mutually trusted containers owned by a single pipeline to maximize SM utilization (<code>78.0%</code>, <code>1,840 req/s</code>).</li>
+              <li><strong>Tier 4A CUDA 12.4+ Green Contexts</strong>: Preventing Prefill GEMMs from starving Decode streams inside one unified-HBM LLM engine (<code>68.4 → 24.8 ms</code>).</li>
+              <li><strong>Tier 4B Multi-LoRA (Punica / S-LoRA)</strong>: Serving 10–50+ fine-tuned department adapters on one shared 70B base model (<code>14.0x</code> fewer GPUs).</li>
+            </ul>
+          </div>
+          <div class="panel" style="border-color:#f87171;background:#fef2f2;">
+            <h3 style="color:#b91c1c;">⛔ Not For (Anti-Patterns to Avoid)</h3>
+            <ul style="font-size:13.5px;line-height:1.65;color:#7f1d1d;padding-left:18px;">
+              <li><strong>Never use K8s Time-Slicing for production SLA serving</strong>: Context-switch queueing inflates P99 by <code>+241.7%</code> (<code>82.0 ms</code>) and a single pod's OOM crashes all co-tenants.</li>
+              <li><strong>Never expose CUDA MPS to untrusted multi-tenant code</strong>: A single client's illegal memory access (Xid 31) terminates <code>100.0%</code> of co-located MPS clients.</li>
+              <li><strong>Never split a multi-GPU <code>TP &ge; 2</code> model across standard MIG slices</strong>: Standard MIG disables cross-slice NVLink P2P collectives.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Readiness, Provenance &amp; License:</strong><br/>
+        • <strong>Repository &amp; Evaluator:</strong> <code>turbo998/ai-infra-research</code> · <code>python experiments/gpu_sharing_isolation_selection/run.py --check</code> (PASS).<br/>
+        • <strong>Data Classification:</strong> <code>synthetic</code> queuing/partition model calibrated to <code>anonymized_reported</code> official NVIDIA MIG, MPS, and CUDA 12.4+ Green Contexts documentation (<code>independently_reproduced=false</code>, live multi-tenant GPU fault injection <code>not_measured</code>, local CPU test suite <code>measured</code>).
+      </div>
+    </section>
+  </div>
+</body>
+</html>
