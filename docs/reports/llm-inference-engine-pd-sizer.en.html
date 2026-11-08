@@ -1030,5 +1030,99 @@ function updateRlhfSizer() {
 }
 updateRlhfSizer();
 </script>
+
+  <!-- Round 12: AI Cluster Optical & Copper Interconnect Selection Sizer -->
+  <div id="optical-interconnect-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#064e3b;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 12 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🔦 AI Cluster Optical &amp; Copper Interconnect Selection Sizer (In-Rack DAC/AEC Copper vs. DSP Pluggables vs. 800G LPO vs. Cold-Plate CPO + 3D MEMS OCS)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/ai_cluster_optical_interconnect_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_datacenter_fabric_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-cluster-optical-interconnect-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/ai-cluster-optical-interconnect-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./ai-cluster-optical-interconnect-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster GPU Scale (800G 2-Tier Clos = 4 Endpoints/GPU): <span id="optGpuVal" style="color:#6ee7b7;">2,048 GPUs (8,192 Endpoints)</span></label>
+        <input id="optGpuSlider" type="range" min="512" max="8192" step="512" value="2048" style="width:100%;margin-top:8px;" oninput="updateOpticalSizer()" />
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-top:4px;"><span>512 GPUs (2,048 Ends)</span><span>2,048 GPUs (8,192 Ends)</span><span>8,192 GPUs (32,768 Ends)</span></div>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Leaf-to-Spine Physical Span &amp; SLA Regime:</label>
+        <select id="optReachSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateOpticalSizer()">
+          <option value="pod50m" selected>Compact Single-Hall Liquid Pod (&le; 30m–50m · LPO &amp; CPO+OCS Eligible)</option>
+          <option value="hall200m">Multi-Hall Long Span (50m–500m · Exceeds 50m LPO Reach Limit)</option>
+          <option value="mega16t">1.6T / Zero-Flap Megacluster SLA (Requires 12x Flap Cut &amp; Dynamic OCS)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Optical &amp; Copper Interconnect Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Interconnect Power (kW)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Spine Module One-Way PHY</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Hardware CapEx</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">3-Yr Link Flaps / Downtime</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Total 3-Year Fabric TCO</th>
+          </tr>
+        </thead>
+        <tbody id="optSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="optDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateOpticalSizer() {
+  const gpus = parseInt(document.getElementById('optGpuSlider').value, 10) || 2048;
+  const reach = document.getElementById('optReachSelect').value || 'pod50m';
+  const scale = gpus / 2048.0;
+  const endpoints = gpus * 4;
+  document.getElementById('optGpuVal').textContent = `${gpus.toLocaleString()} GPUs (${endpoints.toLocaleString()} Endpoints)`;
+
+  const baseTiers = [
+    { id: 't1', name: '⛔ Tier 1: All-Optical Retimed DSP Pluggables (All 800G DSP)', kw: 131.07, phy: '115.0 ns', capex: 8601600.00, pwrCost: 396119.75, flaps: 442.4, flapCost: 453017.60, tco: 9450737.35 },
+    { id: 't2', name: '🟦 Tier 2: In-Rack DAC/AEC Copper + Spine DSP Pluggables', kw: 75.78, phy: '115.0 ns (60ns avg)', capex: 5038080.00, pwrCost: 229022.32, flaps: 239.6, flapCost: 245350.40, tco: 5512452.72 },
+    { id: 't3', name: '🟩 Tier 3: In-Rack DAC/AEC Copper + Spine 800G LPO Linear Optics', kw: 40.96, phy: '8.0 ns (14.4x lower)', capex: 3686400.00, pwrCost: 123789.31, flaps: 110.6, flapCost: 113254.40, tco: 3923443.71 },
+    { id: 't4', name: '🟪 Tier 4: Cold-Plate Silicon Photonics CPO + ELS + 3D MEMS OCS', kw: 20.89, phy: '4.5 ns CPO + 0ns OCS', capex: 4218880.00, pwrCost: 63133.76, flaps: 36.9, flapCost: 37785.60, tco: 4319799.36 }
+  ];
+
+  const bestId = (reach === 'pod50m' && gpus <= 2048) ? 't3' : (reach === 'hall200m' && gpus <= 2048 ? 't2' : 't4');
+  const tbody = document.getElementById('optSizerTbody');
+  tbody.innerHTML = baseTiers.map(t => {
+    const isBest = t.id === bestId;
+    const lpoBlocked = (t.id === 't3' && reach === 'hall200m');
+    const kw = (t.kw * scale).toFixed(2);
+    const capex = t.capex * scale;
+    const flaps = (t.flaps * scale).toFixed(1);
+    const flapCost = t.flapCost * scale;
+    const tco = t.tco * scale;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.14);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':(lpoBlocked?'#94a3b8':'#f8fafc')};">${isBest?'🏆 ':''}${t.name}${lpoBlocked?' (✕ Exceeds 50m Limit)':''}</td>
+      <td style="padding:10px;"><code>${kw} kW</code></td>
+      <td style="padding:10px;"><code>${t.phy}</code></td>
+      <td style="padding:10px;"><code>$${capex.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</code></td>
+      <td style="padding:10px;"><code>${flaps} flaps ($${flapCost.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})})</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">$${tco.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const t1Tco = 9450737.35 * scale;
+  const t3Tco = 3923443.71 * scale;
+  const t4Tco = 4319799.36 * scale;
+  document.getElementById('optDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>Architect Recommendation (${gpus.toLocaleString()} GPUs · Compact &le;50m Liquid Pod)</strong>: Mandate <code>800G DAC/AEC Copper</code> for 100% of in-rack server-leaf links and select <strong>Tier 3 Linear Pluggable Optics (800G LPO)</strong> on the Spine tier to cut Spine module PHY latency from <code>115.0 ns -> 8.0 ns (14.4x)</code> and achieve the lowest 3-year TCO of <code>$${t3Tco.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</code> (saving <code>$${(t1Tco - t3Tco).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} / -58.5%</code> vs. All-DSP)!`
+    : `<strong>Architect Recommendation (${gpus.toLocaleString()} GPUs · Megacluster / Zero-Flap SLA)</strong>: Deploy <strong>Tier 4 Liquid Cold-Plate CPO (MRM + Hot-Swap ELS) + 3D MEMS OCS Spine Bypass</strong> to eliminate all Spine transceivers and O-E-O conversions, cutting interconnect power by <code>84.1% (${(20.89*scale).toFixed(2)} kW)</code>, reducing 3-year link flaps by <code>11.99x (${(442.4*scale).toFixed(1)} -> ${(36.9*scale).toFixed(1)} flaps)</code>, and saving <code>$${(t1Tco - t4Tco).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} (-54.3%)</code>!`;
+}
+updateOpticalSizer();
+</script>
 </body>
 </html>
