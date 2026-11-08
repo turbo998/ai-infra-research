@@ -1223,5 +1223,93 @@ function updateVlmSizer() {
 }
 updateVlmSizer();
 </script>
+
+  <!-- Round 14: Agentic Code Sandbox & Serverless GPU Cold-Start Selection Sizer -->
+  <div id="agentic-sandbox-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 14 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ Agentic Code Sandbox &amp; Serverless GPU Instant Cold-Start Selection Sizer (K8s Cold Pull vs. Lazy OCI vs. Firecracker Snapshot vs. CRIU + cuda-checkpoint)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/agentic_sandbox_gpu_coldstart_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/agentic-sandbox-gpu-coldstart-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/agentic-sandbox-gpu-coldstart-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./agentic-sandbox-gpu-coldstart-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster Burst Spawn Rate (Sandboxes/sec):</label>
+        <select id="sbxBurstSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSandboxSizer()">
+          <option value="50">50 sandboxes/s (Interactive Steady State)</option>
+          <option value="200">200 sandboxes/s (Batch CI / Eval)</option>
+          <option value="500" selected>500 sandboxes/s (Design Target · 100k calls/day)</option>
+          <option value="1000">1,000 sandboxes/s (Extreme Burst Storm)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Primary Workload &amp; Security Regime:</label>
+        <select id="sbxTypeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSandboxSizer()">
+          <option value="gpu" selected>Serverless GPU Burst Inference (14GB Model Wake-Up + Warm-Pool Elimination)</option>
+          <option value="cpu">Coding Agent Untrusted Code / Browser Tool Sandbox (Strict KVM Isolation)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Sandbox &amp; Serverless Architecture Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">P50 Cold Start (Speedup)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Burst P99 Latency</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Warm Pool / GPU Util</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Isolation &amp; Host Density</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly / Cost per 1k</th>
+          </tr>
+        </thead>
+        <tbody id="sbxSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="sbxDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateSandboxSizer() {
+  const burst = parseInt(document.getElementById('sbxBurstSelect').value, 10) || 500;
+  const wtype = document.getElementById('sbxTypeSelect').value || 'gpu';
+  const p99Map = {
+    50:   { t1: 28400.0, t2: 5800.0,  t3: 145.0, t4: 435.0 },
+    200:  { t1: 31600.0, t2: 6500.0,  t3: 175.0, t4: 460.0 },
+    500:  { t1: 34800.0, t2: 7400.0,  t3: 210.0, t4: 485.0 },
+    1000: { t1: 48200.0, t2: 11200.0, t3: 295.0, t4: 620.0 }
+  };
+  const p = p99Map[burst] || p99Map[500];
+  const rows = [
+    { id: 't1', name: '⛔ Tier 1: Standard K8s Pod + Cold OCI Pull + Disk Load', p50: '25,500.0 ms (1.00x)', p99: `${p.t1.toFixed(1)} ms ✕`, util: '58.0% Warm · 31.0% Util', iso: 'Shared Host Kernel · 8/host', cost: '$186,880/mo · $62.29/1k' },
+    { id: 't2', name: '🟨 Tier 2: Lazy OCI (SOCI/eStargz) + Safetensors mmap', p50: '5,200.0 ms (4.90x)', p99: `${p.t2.toFixed(1)} ms ✕`, util: '28.0% Warm · 54.5% Util', iso: 'Shared / gVisor · 16/host', cost: '$106,420/mo · $35.47/1k (-43.1%)' },
+    { id: 't3', name: '🟩 Tier 3: Firecracker MicroVM Snapshot + UFFD', p50: '125.0 ms (204.0x)', p99: `${p.t3.toFixed(1)} ms ✅`, util: '6.0% Warm · 78.0% Util', iso: 'KVM Guest Kernel · 80/host', cost: '$48,900/mo · $16.30/1k (-73.8%)' },
+    { id: 't4', name: '🟪 Tier 4: CRIU + cuda-checkpoint + RDMA Weight Stream', p50: '420.0 ms (60.71x)', p99: `${p.t4.toFixed(1)} ms ${p.t4<=500?'✅':'⚠️'}`, util: '4.0% Warm · 86.5% Util', iso: 'Kata/MIG + CRIU · 32/host', cost: '$42,340/mo · $14.11/1k (-77.3%)' }
+  ];
+  const bestId = wtype === 'cpu' ? 't3' : 't4';
+  document.getElementById('sbxSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.15);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.p50}</code></td>
+      <td style="padding:10px;"><code>${r.p99}</code></td>
+      <td style="padding:10px;"><code>${r.util}</code></td>
+      <td style="padding:10px;"><code>${r.iso}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('sbxDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>Architect Recommendation (${burst} RPS · Untrusted Coding Agent Sandbox Mode)</strong>: Mandate <strong>Tier 3 (Firecracker / Cloud-Hypervisor MicroVM + UFFD Lazy Memory Snapshot)</strong> for hardware KVM Guest Kernel isolation, slashing P50 cold start from <code>25,500 ms -> 125.0 ms (204.0x speedup, Burst P99 ${p.t3.toFixed(1)} ms)</code> and cutting monthly compute cost to <code>$48,900.00 (-73.8%)</code>!`
+    : `<strong>Architect Recommendation (${burst} RPS · Serverless GPU 14GB Model Wake-Up Mode)</strong>: Deploy <strong>Tier 4 (CRIU + NVIDIA cuda-checkpoint + 45 GB/s RDMA/DRAM Weight Streaming)</strong> to restore CUDA context in 75ms + stream weights in 310ms, cutting P50 cold start to <code>420.0 ms (60.71x speedup, Burst P99 ${p.t4.toFixed(1)} ms)</code>, shrinking the idle warm pool from <code>58.0% -> 4.0%</code>, and saving <code>$144,540.00/mo (-77.3%)</code>!`;
+}
+updateSandboxSizer();
+</script>
 </body>
 </html>
