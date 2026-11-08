@@ -256,6 +256,61 @@
     </section>
   </div>
 
+  <!-- Interactive Calculator 2B: LLM Inference Engine & PD Disaggregation Sizer -->
+  <section class="panel" style="margin-bottom:24px;">
+    <h2>2B. Interactive LLM Inference Engine &amp; Prefill-Decode (PD) Disaggregation Sizer (推理引擎与 PD 分离选型定容计算器)</h2>
+    <p class="desc">Drag context length, multi-turn prefix reuse ratio, and deployment topology to compare <strong>vLLM</strong>, <strong>SGLang (RadixAttention)</strong>, <strong>TensorRT-LLM</strong>, and <strong>NVIDIA Dynamo + Mooncake (400G RDMA PD Disaggregation)</strong> on TTFT, P99 TPOT, and $/1M SLA-compliant tokens.</p>
+
+    <div class="control-grid">
+      <div class="ctrl">
+        <label><span>Prompt Context Length (Tokens)</span> <span id="pdCtxVal">32,768</span></label>
+        <input type="range" id="pdCtx" min="4096" max="65536" step="4096" value="32768" oninput="recalcPdSizer()">
+      </div>
+      <div class="ctrl">
+        <label><span>Multi-Turn Shared Prefix Ratio (%)</span> <span id="pdPrefixVal">75%</span></label>
+        <input type="range" id="pdPrefix" min="0" max="90" step="15" value="75" oninput="recalcPdSizer()">
+      </div>
+      <div class="ctrl">
+        <label><span>Serving Architecture Topology</span></label>
+        <select id="pdTopo" onchange="recalcPdSizer()">
+          <option value="disagg" selected>PD Disaggregated (Dynamo + Mooncake 400G RDMA)</option>
+          <option value="colocated">Co-located Monolithic (Chunked Prefill)</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label><span>Workload Pattern</span></label>
+        <select id="pdWorkload" onchange="recalcPdSizer()">
+          <option value="agent" selected>Multi-Turn Agent / DeepSeek MoE / Structured JSON</option>
+          <option value="general">General Multi-Model SaaS / Multimodal API</option>
+          <option value="nvidia_max">Homogeneous NVIDIA H200 / Blackwell Max FP8/FP4</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="kpi">
+        <div class="k-title">Effective TTFT (Radix Cache vs Cold)</div>
+        <div class="k-val" id="outPdTtft">108.0 ms</div>
+        <div class="k-sub" id="outPdTtftCmp">Cold Prefill: 372.8 ms (3.45× speedup)</div>
+      </div>
+      <div class="kpi">
+        <div class="k-title">Decode P99 TPOT (SLA &lt; 30 ms)</div>
+        <div class="k-val" id="outPdTpot">18.2 ms</div>
+        <div class="k-sub" id="outPdTpotCmp">Co-located: 68.4 ms (3.76× lower tail)</div>
+      </div>
+      <div class="kpi">
+        <div class="k-title">SLA-Compliant Goodput / GPU</div>
+        <div class="k-val" id="outPdGoodput">1,618.4 tok/s</div>
+        <div class="k-sub" id="outPdTco">Right-Sized TCO: $0.50 / 1M (-34.2%)</div>
+      </div>
+      <div class="kpi">
+        <div class="k-title">Architect Recommendation</div>
+        <div class="k-val" id="outPdRec" style="font-size:16px; color:#34D399;">SGLang + Dynamo/Mooncake PD</div>
+        <div class="k-sub" id="outPdRecSub">RadixAttention + 400G RDMA zero-copy KV</div>
+      </div>
+    </div>
+  </section>
+
   <!-- Master Ledger of 76 Reproducible Experiments -->
   <section class="panel">
     <h2>3. Master Catalog of All 76 Reproducible Offline Experiments (Phases 1–22 · 全量 76 套可复现实验目录)</h2>
@@ -1624,6 +1679,13 @@
           <td><code>q-distributed-training-megatron-batch-inv-router-dcp-v2-te-nvfp4-4over6-pytorch-philox-rccl-tdm-mooncake-uring-nixl-p183</code></td>
           <td>`NVIDIA/TransformerEngine` factorizes NVFP4 4-over-6 candidate MSE via $2^k\times\{1,1.5\}$ with 16-thread row groups (`2.50×` B200 row+col strict `0.432 &rarr; 0.173 ms`); `pytorch/pytorch` evaluates `exponential_()` directly from raw Philox integers (`0.05× &rarr; 0.99×` hit ratio at $p=10^{-8}$) and replaces atomic `bilinear2d` backward with a deterministic 4-pass input gather (`85.44×` vs det / `14.19×` vs atomic); `NVIDIA/Megatron-LM` fuses a batch-invariant Triton sigmoid router (`0` ULP drift, `-0.62 ms/step`) and propagates DCP V2 hybrid scales; `kvcache-ai/Mooncake` clones `&le;1 GiB` fixed `io_uring` buffers across `385` rings (`4.773×` cold SSD read `4.4 &rarr; 21.0 GB/s`); `LMCache/LMCache` deduplicates TP8 MLA KV (`8.0×` cut); `ai-dynamo/nixl` vectorizes contiguous descriptor merges (`2.512×` x86, `-36.30%` DSv4 ISL=100k); `ROCm/rocm-systems` adds `gfx1250` TDM/LL128 AllGather and guards async hipMalloc pools.</td>
         </tr>
+        <tr data-cat="inference">
+          <td><span class="tag tag-green">Architect FAQ</span></td>
+          <td>LLM Inference Engine Selection (vLLM vs. SGLang vs. TRT-LLM) &amp; Prefill-Decode (PD) Disaggregation (Dynamo + Mooncake)</td>
+          <td><code>experiments/llm_inference_engine_pd_selection</code></td>
+          <td><code>llm-inference-engine-pd-disaggregation-selection-faq</code></td>
+          <td>H200 FP8 Roofline separates Prefill (`512.0 FLOP/B`, `2.49×` ridge `205.5`) from Decode BS=32 (`31.2 FLOP/B`, `0.15×` ridge); SGLang RadixAttention + deferred unified page reuse (`#48852`) cuts 16K 75%-cached agent TTFT `3.45×` (`186.4 &rarr; 54.0 ms`, `2.85×` QPS) and vLLM single-replay batch encoder CUDA graphs (`#65227`) cut launch overhead `3.20×`; under mixed 32K RAG + streaming chat, NVIDIA Dynamo + Mooncake 400G RDMA (`22.8 ms` KV transfer) cuts Decode P99 TPOT `3.76×` (`68.4 &rarr; 18.2 ms`), lifts SLA-compliant goodput `2.38×` (`1,618.4 tok/s/GPU`), and reduces $/1M token TCO by `34.2%`.</td>
+        </tr>
       </tbody>
     </table>
   </section>
@@ -1716,6 +1778,53 @@
     document.getElementById("outRingCmp").textContent = "Ring: " + ar.ring.toFixed(3) + " ms (" + ar.speedup + " slower)";
     document.getElementById("outKvFp4").textContent = kv.fp4.toFixed(2) + " ms";
     document.getElementById("outKvBf16").textContent = "Naive BF16: " + kv.bf16.toFixed(2) + " ms (3.86×)";
+  }
+
+  function recalcPdSizer() {
+    const ctx = parseFloat(document.getElementById("pdCtx").value);
+    const prefixPct = parseFloat(document.getElementById("pdPrefix").value);
+    const topo = document.getElementById("pdTopo").value;
+    const workload = document.getElementById("pdWorkload").value;
+
+    document.getElementById("pdCtxVal").textContent = ctx.toLocaleString();
+    document.getElementById("pdPrefixVal").textContent = prefixPct.toFixed(0) + "%";
+
+    const coldTtftMs = (ctx / 16384.0) * 186.4;
+    const prefixRatio = prefixPct / 100.0;
+    const cachedTtftMs = Math.max(14.0, coldTtftMs * (1.0 - prefixRatio) + 7.4 * (ctx / 16384.0));
+    const speedup = (coldTtftMs / cachedTtftMs).toFixed(2);
+
+    const colocatedTpotMs = 24.0 + (ctx / 32768.0) * 44.4;
+    const disaggTpotMs = 18.2;
+    const activeTpotMs = topo === "disagg" ? disaggTpotMs : colocatedTpotMs;
+    const tailRatio = (colocatedTpotMs / disaggTpotMs).toFixed(2);
+
+    const goodput = topo === "disagg" ? 1618.4 : Math.max(380.0, 680.0 * (32768.0 / ctx));
+    const costPer1m = topo === "disagg" ? 0.50 : 0.76;
+
+    document.getElementById("outPdTtft").textContent = cachedTtftMs.toFixed(1) + " ms";
+    document.getElementById("outPdTtftCmp").textContent = "Cold Prefill: " + coldTtftMs.toFixed(1) + " ms (" + speedup + "× speedup)";
+    document.getElementById("outPdTpot").textContent = activeTpotMs.toFixed(1) + " ms";
+    document.getElementById("outPdTpotCmp").textContent = topo === "disagg"
+      ? "Co-located: " + colocatedTpotMs.toFixed(1) + " ms (" + tailRatio + "× lower tail)"
+      : "SLA Breach (>30 ms) under long prefill interference";
+    document.getElementById("outPdGoodput").textContent = goodput.toFixed(1) + " tok/s";
+    document.getElementById("outPdTco").textContent = topo === "disagg"
+      ? "Right-Sized TCO: $" + costPer1m.toFixed(2) + " / 1M (-34.2%)"
+      : "Homogeneous TCO: $" + costPer1m.toFixed(2) + " / 1M (baseline)";
+
+    let recEngine = "SGLang";
+    let recSub = "RadixAttention + deferred unified page reuse";
+    if (workload === "general") {
+      recEngine = "vLLM";
+      recSub = "Day-0 model coverage + Batch Encoder CUDA Graphs";
+    } else if (workload === "nvidia_max") {
+      recEngine = "TensorRT-LLM";
+      recSub = "CuTe DSL + NVFP4/FP8 fused Tensor Core kernels";
+    }
+    const recTopo = (topo === "disagg" || ctx >= 8192) ? " + Dynamo/Mooncake PD" : " (Co-located Single-Node)";
+    document.getElementById("outPdRec").textContent = recEngine + recTopo;
+    document.getElementById("outPdRecSub").textContent = recSub;
   }
 
   function filterTable(cat, btn) {

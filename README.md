@@ -6,9 +6,9 @@
 
 ## 📌 Executive Overview Summary（执行摘要与核心架构结论）
 
-> **核心研究基线（Phase 1 – Phase 183 全量合入 `main`，Priority 192 · 564 题 & 560 套实验基线）**
-> 本仓库围绕 **11 层 AI 算力与分布式系统工程栈** 展开基于一手固定版本源码（`implementation`）、架构规范（`specification`）与零依赖 Python 3.12 确定性仿真模型（`own-offline`）的深度技术研究，累计完成 **150+ 篇双语深度专题报告**，所有定量结论均通过自动化校验测试，**零未核验主观臆断**：
-> - **研究规模与可复现账本**：累计完成 **`564` 个核心工程研究问题**（`562 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`560` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`3,809` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`865` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`809` 项全绿单元测试** 以及 **`183` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[Phase 183 7-Card 评测报告](docs/reports/ai-infra-phase183-benchmark-cards.html)**）。
+> **核心研究基线（Phase 1 – Phase 184 全量合入 `main`，Priority 193 · 565 题 & 561 套实验基线）**
+> 本仓库围绕 **11 层 AI 算力与分布式系统工程栈** 展开基于一手固定版本源码（`implementation`）、架构规范（`specification`）与零依赖 Python 3.12 确定性仿真模型（`own-offline`）的深度技术研究，累计完成 **150+ 篇双语深度专题报告与架构师选型 FAQ 指南**，所有定量结论均通过自动化校验测试，**零未核验主观臆断**：
+> - **研究规模与可复现账本**：累计完成 **`565` 个核心工程研究问题**（`563 done` + `2 blocked` 外部闭源标准，公开可复现实验 100% 覆盖）、**`561` 套零依赖 Python 3.12 标准库实验**（全部通过 `--check`）、**`3,814` 条固定 Commit/Blob 第一手源码引用**（[`research/sources.json`](research/sources.json)）、**`866` 条分级证据主张**（[`research/evidence.json`](research/evidence.json)）、**`811` 项全绿单元测试** 以及 **`184` 份 7-Card 4:5 视觉评测报告**（`docs/reports/`，最新 **[LLM 推理引擎与 PD 分离选型 7-Card 评测报告](docs/reports/llm-inference-engine-pd-selection-cards.html)**）。
 > - **L01 GPU / SM100 Blackwell 算子与低精度数值**：剖析 `tcgen05`、512 列 `TMEM` 原位混叠（消除 `64 KiB` SMEM 溢出）、`FlashAttention-4`（`FFMA2` 多项式仿真突破 `MUFU.EX2` 瓶颈，在 B200 达 **`2,790.1 TFLOPS`**、SM103 B300 达 **`3,200.0 TFLOPS`**）、`FlashMLA V4.1`（`+32B` TMA 行填充消除 `LDS.32` 4 路冲突，`get_mla_metadata` 削减 **`89.88%`** 偏斜尾波）、`CUTLASS CLC` 动态窃取及 `NVFP4/MXFP8` 分块缩放。
 > - **L02 & L04 分层 KV 缓存与 Prefill-Decode 分离推理**：解构四级 KV 缓存层次（VRAM → Host Pinned DRAM → CXL 3.0 `Device-DAX` `2 MiB` 对齐 → GDS/3FS），结合 `Mooncake Transfer Engine`（ConnectX-8 `Data Direct` 零锁批处理、7 级 Auto-GID 重探测与 `W=4` 有界 Scatter 将有效带宽从 **`313.0 -> 357.85 Gbps`** 提升）、`NVIDIA Dynamo`（二级 `kvcr` 连接器与 `NIXL` UCX/Libfabric 显存类型探测）、`vLLM V1`（`HiSparse` 稀疏 MLA 与拒绝采样）及 `SGLang`（`HiRadixCache` 与 `EAGLE-3` 投机树）。
 > - **L03 & L09 超节点互连、`IBGDA` 直发 RDMA 与共封装光学（CPO/OCS）**：验证 `PyTorch CUDASymmetricMemory` + `NVLS multimem`（流量较 Unicast 1-Shot 降低 **`6.22x`**）、`NCCL Gin` 对称集合通信与 `PAT` 并行聚合二项式树（1,024 卡跳数从 `1,023 -> 7`）、`DeepEP V2.5` GPU 直发 RDMA（Warp 门铃聚合削减 **`10.67x`** MMIO 开销）、`UEC 1.0` 64B 包裁剪 + 逐包喷洒（32-to-1 Incast 下 P99 尾延迟降低 **`69.9%`**），以及 `1.6T CPO + 3D MEMS OCS` 十万卡光互连功耗与故障半径模型。
@@ -65,6 +65,7 @@
 
 | 专题研究报告（中文 / English） | 核心覆盖机制与源码锚点 | 配套确定性实验 (`experiments/`) |
 | :--- | :--- | :--- |
+| **[LLM 推理引擎选型（vLLM vs. SGLang vs. TensorRT-LLM）与 PD 分离架构 FAQ](docs/components/llm-inference-engine-pd-disaggregation-selection-faq.md)** · **[EN](docs/components/llm-inference-engine-pd-disaggregation-selection-faq.en.md)** | 三大开源推理引擎选型边界、Prefill（算力受限 `512.0 FLOP/B`）vs Decode（显存带宽受限 `31.2 FLOP/B`）屋脊线拆解、SGLang `RadixAttention`（`3.45x` TTFT）与 NVIDIA Dynamo + Mooncake 400G RDMA PD 分离（`3.76x` P99 TPOT 降低、`2.38x` Goodput、`-34.2%` TCO） | [`llm_inference_engine_pd_selection`](experiments/llm_inference_engine_pd_selection/README.md) |
 | **[四级 KV 缓存卸载层次（VRAM → Host DRAM → CXL → NVMe/3FS）](docs/components/tiered-kv-cache-offload-hierarchy.md)** | 多级缓存命中率帕累托边界、PCIe Gen5/CXL 3.0 带宽争用与异步换入掩盖窗口 | [`tiered_kv_cache_hierarchy`](experiments/tiered_kv_cache_hierarchy/README.md) · [`kv_cache_quant_kivi_nvfp4`](experiments/kv_cache_quant_kivi_nvfp4/README.md) |
 | **[LMCache Device-DAX/CXL L1 偏移对齐与 Mooncake OpLog 去重](docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.md)** · **[EN](docs/components/lmcache-dax-cxl-l1-offset-grpc-codec-mooncake-oplog-dedup.en.md)** | `/sys/dev/char` `2 MiB` 硬件对齐预检、多 Arena 不交叠分区与 APC 前缀去重（消除 `37.5%` 假命中率） | [`megatron_vit_rope_fp32_nccl_nvls_te_zerotensor_fa4_mooncake_lmcache_dynamo_nixl_phase120`](experiments/megatron_vit_rope_fp32_nccl_nvls_te_zerotensor_fa4_mooncake_lmcache_dynamo_nixl_phase120/run.py) |
 | **[Prefill/Decode 分离与分层 KV 缓存智能路由](docs/components/disaggregated-kv-routing.md)** | Mooncake / Dynamo KV 感知前缀路由、跨节点 RDMA Write 零拷贝传输与 TTFT/TPOT 联合 SLO 约束 | [`disaggregated_kv_routing`](experiments/disaggregated_kv_routing/README.md) · [`dynamo_kv_aware_router`](experiments/dynamo_kv_aware_router/README.md) |
@@ -321,3 +322,12 @@ un.py --check
   - 双语工程白皮书：[`docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.md)（英文版：[`.en.md`](docs/components/mi300x-large-moe-bf16-mxfp4-and-aipc-decision-sft.en.md)）
   - 7-Card 4:5 视觉评测报告：[`docs/reports/mi300x-large-moe-bf16-mxfp4-cards.html`](docs/reports/mi300x-large-moe-bf16-mxfp4-cards.html) · [`docs/reports/aipc-kev-sft-q8-gguf-cards.html`](docs/reports/aipc-kev-sft-q8-gguf-cards.html)
   - 确定性校验实验：[`experiments/mi300x_large_moe_aipc_kev_sft/run.py`](experiments/mi300x_large_moe_aipc_kev_sft/run.py)（结果：[`results.json`](experiments/mi300x_large_moe_aipc_kev_sft/results.json)）
+
+- **Phase 184 · 架构师选型 FAQ 专题（`priority: 193`，2026-11-08 · LLM 推理引擎选型 `vLLM` vs `SGLang` vs `TensorRT-LLM` 与 `Dynamo`+`Mooncake` PD 分离架构指南）**：
+  - ![LLM Inference Engine & PD Disaggregation Selection FAQ Visual Summary](assets/svg/llm-inference-engine-pd-selection-faq-summary.svg)
+  - 双语架构选型 FAQ 指南：[`docs/components/llm-inference-engine-pd-disaggregation-selection-faq.md`](docs/components/llm-inference-engine-pd-disaggregation-selection-faq.md)（英文版：[`.en.md`](docs/components/llm-inference-engine-pd-disaggregation-selection-faq.en.md)）
+  - 7-Card 4:5 视觉评测报告：[`docs/reports/llm-inference-engine-pd-selection-cards.html`](docs/reports/llm-inference-engine-pd-selection-cards.html)
+  - 交互式选型与定容工作台：[`docs/reports/ai-infra-architect-workbench.html`](docs/reports/ai-infra-architect-workbench.html)
+  - 确定性仿真算例：[`experiments/llm_inference_engine_pd_selection/run.py`](experiments/llm_inference_engine_pd_selection/run.py)（结果：[`results.json`](experiments/llm_inference_engine_pd_selection/results.json)）
+  - 每日归档：[`docs/daily/2026-11-08.md`](docs/daily/2026-11-08.md)
+
