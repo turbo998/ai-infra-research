@@ -1125,5 +1125,104 @@ function updateOpticalSizer() {
 }
 updateOpticalSizer();
 </script>
+
+  <!-- Round 13: Multimodal VLM & Long-Video Serving Selection Sizer -->
+  <div id="multimodal-vlm-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#a855f7;color:#3b0764;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 13 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">📽️ 多模态大模型与长视频推理架构选型计算器（单体混部 vs. EPD 三阶段分离 vs. SHA-256 视觉缓存 vs. 4x 时空 Token 压缩）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/multimodal_vlm_serving_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/multimodal-vlm-serving-selection-faq.md" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/multimodal-vlm-serving-selection-faq.en.md" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./multimodal-vlm-serving-selection-cards.html" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">视频帧数 / 原始视觉序列长度 (256 tok/帧):</label>
+        <select id="vlmFrameSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateVlmSizer()">
+          <option value="8">8 帧 / 单张高清大图 (2,048 原始视觉 Tokens)</option>
+          <option value="32">32 帧短视频 (8,192 原始视觉 Tokens)</option>
+          <option value="64" selected>64 帧标准视频 / 4K 多分块 (16,384 原始视觉 Tokens)</option>
+          <option value="128">128 帧长视频理解 (32,768 原始视觉 Tokens)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">业务场景精度与 SLA 模式:</label>
+        <select id="vlmModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateVlmSizer()">
+          <option value="video" selected>长视频理解 / 具身与桌面 GUI Agent (允许 4x 时空压缩 · 99.1% 精度)</option>
+          <option value="ocr">医疗影像 / 财务票据密集 OCR (强制 100.0% 像素级无损)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">多模态 VLM 推理架构档位 (16×H100 @ $40/hr)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">保留视觉 Token / KV 显存</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">端到端平均 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">P99 TPOT 尾延迟</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">集群稳态吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单千次成本 / 精度</th>
+          </tr>
+        </thead>
+        <tbody id="vlmSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="vlmDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #a855f7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateVlmSizer() {
+  const frames = parseInt(document.getElementById('vlmFrameSelect').value, 10) || 64;
+  const mode = document.getElementById('vlmModeSelect').value || 'video';
+  const frameTable = {
+    8:   { rawTok: 2048,  t1Ttft: 480.0,  t2Ttft: 290.0,  t3Ttft: 145.0,  t4Ttft: 88.0,  qpsScale: 3.2,  t4Speedup: 3.40 },
+    32:  { rawTok: 8192,  t1Ttft: 1190.0, t2Ttft: 780.0,  t3Ttft: 365.0,  t4Ttft: 152.0, qpsScale: 1.65, t4Speedup: 5.65 },
+    64:  { rawTok: 16384, t1Ttft: 2200.0, t2Ttft: 1490.0, t3Ttft: 680.0,  t4Ttft: 245.0, qpsScale: 1.00, t4Speedup: 7.69 },
+    128: { rawTok: 32768, t1Ttft: 4680.0, t2Ttft: 3120.0, t3Ttft: 1390.0, t4Ttft: 420.0, qpsScale: 0.48, t4Speedup: 10.25 }
+  };
+  const cfg = frameTable[frames] || frameTable[64];
+  const rawKv = (((cfg.rawTok + 512) * 320.0) / 1000000.0).toFixed(2);
+  const compTok = Math.round(cfg.rawTok / 4);
+  const compKv = (((compTok + 512) * 320.0) / 1000000.0).toFixed(2);
+
+  const t1Qps = (3.2 * cfg.qpsScale).toFixed(1);
+  const t2Qps = (6.8 * cfg.qpsScale).toFixed(1);
+  const t3Qps = (11.4 * cfg.qpsScale).toFixed(1);
+  const t4Qps = (parseFloat(t1Qps) * cfg.t4Speedup).toFixed(1);
+
+  const rows = [
+    { id: 't1', name: '⛔ Tier 1: 单体同进程混部 VLM (CPU FFmpeg + TP8 ViT)', kv: `${cfg.rawTok.toLocaleString()} · ${rawKv} GB`, ttft: `${cfg.t1Ttft.toFixed(1)} ms`, tpot: '385.0 ms (✕ 违约)', qps: `${t1Qps} req/s (1.00x)`, cost: `$${(40/(parseFloat(t1Qps)*3.6)).toFixed(2)} · 100.0%` },
+    { id: 't2', name: '🟦 Tier 2: GPU NVDEC 硬解 + EPD 三阶段分离 (2E+8P+6D)', kv: `${cfg.rawTok.toLocaleString()} · ${rawKv} GB`, ttft: `${cfg.t2Ttft.toFixed(1)} ms`, tpot: '34.0 ms (✅ 达标)', qps: `${t2Qps} req/s (2.13x)`, cost: `$${(40/(parseFloat(t2Qps)*3.6)).toFixed(2)} · 100.0%` },
+    { id: 't3', name: '🟩 Tier 3: EPD 分离 + SHA-256 分布式视觉 Embedding 缓存', kv: `${cfg.rawTok.toLocaleString()} · ${rawKv} GB`, ttft: `${cfg.t3Ttft.toFixed(1)} ms`, tpot: '31.5 ms (✅ 达标)', qps: `${t3Qps} req/s (3.56x)`, cost: `$${(40/(parseFloat(t3Qps)*3.6)).toFixed(2)} · 100.0%` },
+    { id: 't4', name: '🟪 Tier 4: EPD + 视觉缓存 + 4.0x 时空 Token 压缩 (ToMe/FastV)', kv: `${compTok.toLocaleString()} · ${compKv} GB`, ttft: `${cfg.t4Ttft.toFixed(1)} ms`, tpot: '22.8 ms (✅ 丝滑)', qps: `${t4Qps} req/s (${cfg.t4Speedup.toFixed(2)}x)`, cost: `$${(40/(parseFloat(t4Qps)*3.6)).toFixed(2)} · 99.1%` }
+  ];
+
+  const bestId = mode === 'ocr' ? 't3' : 't4';
+  document.getElementById('vlmSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(168,85,247,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#d8b4fe':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.kv}</code></td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><code>${r.tpot}</code></td>
+      <td style="padding:10px;"><code>${r.qps}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#c084fc':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('vlmDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>架构师选型建议 (${frames} 帧 / ${cfg.rawTok.toLocaleString()} 视觉 Tokens · 密集票据 OCR / 医疗无损模式)</strong>：首选 <strong>Tier 3 (GPU NVDEC + EPD 三阶段分离 + SHA-256 分布式视觉 Embedding 缓存)</strong>，在保持 <code>100.0%</code> 像素级无损精度的同时将 P99 TPOT 从 <code>385.0 ms</code> 压至 <code>31.5 ms</code>，多轮会话平均 TTFT 降至 <code>${cfg.t3Ttft.toFixed(1)} ms</code>，吞吐提升 <code>3.56x (${t3Qps} req/s)</code>！`
+    : `<strong>架构师选型建议 (${frames} 帧 / ${cfg.rawTok.toLocaleString()} 视觉 Tokens · 长视频理解 / 实时 Agent 模式)</strong>：首选 <strong>Tier 4 (EPD + 视觉缓存 + 4.0x ToMe/FastV 时空压缩)</strong>，将单请求 KV Cache 显存从 <code>${rawKv} GB</code> 骤降至 <code>${compKv} GB</code>，端到端 TTFT 从 <code>${cfg.t1Ttft.toFixed(1)} ms</code> 压至 <code>${cfg.t4Ttft.toFixed(1)} ms</code>，全集群吞吐提升 <code>${cfg.t4Speedup.toFixed(2)}x (${t4Qps} req/s)</code>，精度保持 <code>99.1%</code>！`;
+}
+updateVlmSizer();
+</script>
 </body>
 </html>

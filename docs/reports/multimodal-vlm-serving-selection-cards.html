@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>Multimodal VLM &amp; Long-Video Serving Selection — 7-Card 4:5 Benchmark Report</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card-bg: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --subtle: #64748b;
+      --border: #e2e8f0;
+      --accent: #2563eb;
+      --emerald: #059669;
+      --purple: #7c3aed;
+      --red: #dc2626;
+      --code-bg: #0f172a;
+      --code-ink: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 28px 16px 60px;
+    }
+    .deck-header {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      color: #f8fafc;
+    }
+    .deck-header h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+    .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+    .deck-nav {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+    }
+    .deck-nav a {
+      color: #38bdf8; background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3);
+      padding: 5px 12px; border-radius: 999px; text-decoration: none; font-size: 12.5px; font-weight: 600;
+    }
+    .cards-stack {
+      display: flex; flex-direction: column; align-items: center; gap: 32px;
+    }
+    .card {
+      width: 900px;
+      min-height: 1125px;
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 36px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+      border: 1px solid var(--border);
+    }
+    .card-top {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 18px;
+    }
+    .card-idx { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; }
+    .prov-pill {
+      font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+      background: #fef3c7; color: #92400e; border: 1px solid #fde68a;
+    }
+    .headline {
+      font-size: 25px; font-weight: 800; line-height: 1.26; color: var(--ink); margin-bottom: 10px;
+    }
+    .headline .grad {
+      background: linear-gradient(90deg, #059669, #2563eb, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .subhead { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
+    .panel {
+      background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+    }
+    .panel h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--subtle); margin-bottom: 8px; }
+    .kv-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 5px 0; border-bottom: 1px dashed #e2e8f0; }
+    .kv-row:last-child { border-bottom: none; }
+    .decision-card {
+      border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; background: #fff;
+    }
+    .decision-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .badge-type { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; background: #e0e7ff; color: #1e40af; text-transform: uppercase; }
+    .pill-act { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .pill-auto { background: #dcfce7; color: #166534; }
+    .pill-confirm { background: #fef3c7; color: #92400e; }
+    .pill-human { background: #fee2e2; color: #991b1b; }
+    .bar-track { width: 100%; height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin: 6px 0; }
+    .bar-fill { height: 100%; border-radius: 999px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 14px; }
+    th { background: #f1f5f9; color: var(--muted); text-align: left; padding: 9px 10px; font-weight: 700; border-bottom: 2px solid var(--border); }
+    td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .code-box {
+      background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 14px 16px;
+      font-family: "JetBrains Mono", Consolas, monospace; font-size: 11.8px; line-height: 1.48; overflow-x: auto;
+    }
+    .callout-dark {
+      background: #0f172a; color: #f8fafc; border-radius: 12px; padding: 14px 18px; font-size: 12.5px; line-height: 1.5;
+    }
+    .bar-pair { margin-bottom: 14px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 700; margin-bottom: 4px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+    .bar-rect-blue { height: 18px; background: #3b82f6; border-radius: 4px; }
+    .bar-rect-slate { height: 18px; background: #cbd5e1; border-radius: 4px; }
+    .bar-rect-emerald { height: 18px; background: #10b981; border-radius: 4px; }
+    .bar-rect-purple { height: 18px; background: #8b5cf6; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="deck-header">
+    <h1>📽️ Multimodal VLM &amp; Long-Video Serving Selection — 7-Card 4:5 Benchmark Deck</h1>
+    <p>Round 13 Architect Evaluation: Monolithic Co-Located VLM vs. GPU NVDEC + EPD 3-Stage Disaggregation vs. SHA-256 Vision Embedding Cache vs. 4.0x Spatio-Temporal Token Compression (ToMe / FastV) across 16 × H100 ($40.00/hr) serving a 72B VLM on 64-frame video (16,384 vision tokens).</p>
+    <div class="deck-nav">
+      <a href="../components/multimodal-vlm-serving-selection-faq.md">📘 中文六段式 FAQ</a>
+      <a href="../components/multimodal-vlm-serving-selection-faq.en.md">📘 English 6-Part FAQ</a>
+      <a href="./llm-inference-engine-pd-sizer.html#multimodal-vlm-sizer">🧭 Interactive VLM Sizer (ZH)</a>
+      <a href="./llm-inference-engine-pd-sizer.en.html#multimodal-vlm-sizer">🧭 Interactive VLM Sizer (EN)</a>
+    </div>
+  </div>
+
+  <div class="cards-stack">
+
+    <!-- CARD 1 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-idx">1 / 7 · HANDS-ON · MULTIMODAL VLM &amp; VIDEO SERVING</span>
+          <span class="prov-pill">synthetic + anonymized_reported · independently_reproduced=false</span>
+        </div>
+        <h2 class="headline">EPD 3-Stage Disaggregation + Vision Cache + <span class="grad">4x Spatio-Temporal Compression Cuts TTFT 8.98x (245 ms) &amp; Boosts Throughput 7.69x ($0.45/1k Req)</span></h2>
+        <p class="subhead">In 64-frame video / 4K multi-tile VLM serving (<code>16,384</code> vision tokens + <code>512</code> text tokens on <code>16 &times; H100</code> at <code>$40.00/hr</code>), monolithic co-location stalls active decode streams for <code>&gt;1.8s</code> (<code>P99 TPOT 385.0 ms</code>). Disaggregating Encode-Prefill-Decode (EPD), caching post-projector embeddings, and pruning redundant background patches <code>4.0x</code> slashes KV memory from <code>5.41 GB &rarr; 1.47 GB/req</code>.</p>
+
+        <div class="grid-3">
+          <div class="panel">
+            <h3>1. Scenarios &amp; Thresholds</h3>
+            <div class="kv-row"><span>Streaming SLA</span><strong>P99 TPOT &le; 50ms</strong></div>
+            <div class="kv-row"><span>Lossless OCR Mode</span><strong>Tier 3 (100.0% Acc)</strong></div>
+            <div class="kv-row"><span>Long-Video / Agent</span><strong>Tier 4 (4x Pruning)</strong></div>
+            <div class="kv-row"><span>Media Cache Hit</span><strong>75.0% (4-Turn QA)</strong></div>
+          </div>
+          <div class="panel">
+            <h3>2. Baseline Input Contract</h3>
+            <div class="kv-row"><span>Cluster Size</span><strong>16 &times; H100 ($40/hr)</strong></div>
+            <div class="kv-row"><span>Model</span><strong>72B VLM (ViT-4B+70B)</strong></div>
+            <div class="kv-row"><span>Raw Vision Tokens</span><strong>16,384 (64 Frames)</strong></div>
+            <div class="kv-row"><span>Raw KV Footprint</span><strong>5.41 GB / request</strong></div>
+          </div>
+          <div class="panel">
+            <h3>3. Sealed Top Decisions</h3>
+            <div class="kv-row"><span>Tier 1 Monolithic</span><strong style="color:var(--red);">3.2 req/s ($3.47/1k)</strong></div>
+            <div class="kv-row"><span>Tier 2 EPD (2E+8P+6D)</span><strong>6.8 req/s ($1.63/1k)</strong></div>
+            <div class="kv-row"><span>Tier 3 EPD+SHA256</span><strong style="color:var(--emerald);">11.4 req/s ($0.97/1k)</strong></div>
+            <div class="kv-row"><span>Tier 4 EPD+4x ToMe</span><strong style="color:var(--purple);">24.6 req/s ($0.45/1k)</strong></div>
+          </div>
+        </div>
+
+        <div class="decision-card">
+          <div class="decision-header">
+            <strong>Primary Finding: Why Monolithic TP=8 VLM Serving Collapses on Video Prompts</strong>
+            <span class="pill-act pill-auto">Act automatically</span>
+          </div>
+          <p style="font-size:12.5px;color:var(--muted);line-height:1.5;">
+            A <code>ViT-4B</code> vision encoder uses stateless bidirectional attention and runs optimally at <code>DP=1</code>. Forcing it onto the <code>70B</code> LLM's <code>TP=8</code> group wastes 8 GPUs on <code>640.0 ms</code> of ViT compute + <code>1,180.0 ms</code> of 16K prefill while freezing all concurrent streaming decode requests (<code>P99 TPOT = 385.0 ms</code>).
+          </p>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Provenance &amp; Hardware Boundary</strong>: Sealed analytical output from <code>experiments/multimodal_vlm_serving_selection/results.json</code> calibrated to SGLang / vLLM V1 Multimodal EPD, DistServe-VLM, FastV, and ToMe specifications (<code>anonymized_reported</code>, <code>independently_reproduced=false</code>). Physical 16&times;H100 cluster execution: <code>not_measured</code>; local CPU deterministic harness &amp; unit tests: <code>measured</code>.
+      </div>
+    </section>
+
+    <!-- CARD 2 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-idx">2 / 7 · SCENARIO: 64-FRAME VIDEO &amp; 4K MULTI-TURN VLM SERVING</span>
+          <span class="prov-pill">16,384 Raw Vision Tokens · 5.41 GB &rarr; 1.47 GB KV/req</span>
+        </div>
+        <h2 class="headline">3 Stacked Architecture Decisions: <span class="grad">34.0 ms EPD TPOT, 680 ms Lossless Cache TTFT &amp; 245 ms 4x Compressed TTFT</span></h2>
+        <p class="subhead">Evaluating a 16-GPU H100 cluster (<code>$40.00/hr</code>) serving 4-turn conversations over 64-frame 1080p video or 4K multi-tile documents (<code>16,384</code> vision tokens + <code>512</code> text tokens).</p>
+
+        <div class="decision-card">
+          <div class="decision-header">
+            <span><span class="badge-type">choice</span> <strong>Decision 1: Dense OCR / Medical Multi-Turn QA (100% Lossless) &rarr; Tier 3 EPD + SHA-256 Cache</strong></span>
+            <span class="pill-act pill-auto">Act automatically · 11.4 req/s</span>
+          </div>
+          <p style="font-size:12.5px;color:var(--muted);">Caches post-projector embeddings (<code>SHA-256</code>) in Host DRAM/NVMe. Skips <code>NVDEC + ViT-4B</code> on 75% multi-turn hits, cutting average TTFT from <code>2,200.0 ms &rarr; 680.0 ms (3.24x)</code> and cost from <code>$3.47 &rarr; $0.97 / 1k req (-72.0%)</code> with <code>100.0%</code> lossless fidelity.</p>
+          <div class="bar-track"><div class="bar-fill" style="width:46.3%;background:var(--emerald);"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--subtle);"><span>Throughput: 11.4 req/s (3.56x vs. Tier 1)</span><span>P99 TPOT: 31.5 ms (SLA Pass &le; 50ms)</span></div>
+        </div>
+
+        <div class="decision-card">
+          <div class="decision-header">
+            <span><span class="badge-type">choice</span> <strong>Decision 2: Long-Video QA &amp; Real-Time GUI Agents &rarr; Tier 4 EPD + Cache + 4x ToMe/FastV</strong></span>
+            <span class="pill-act pill-auto">Act automatically · 24.6 req/s</span>
+          </div>
+          <p style="font-size:12.5px;color:var(--muted);">Merges temporally redundant patches (<code>ToMe</code>) and prunes low-attention visual tokens at Layer 2 (<code>FastV</code>: <code>16,384 &rarr; 4,096</code> tokens), cutting KV Cache from <code>5.41 GB &rarr; 1.47 GB/req (3.68x)</code>, TTFT to <code>245.0 ms (8.98x)</code>, and cost to <code>$0.45 / 1k req (-87.0%)</code> at <code>99.1%</code> accuracy.</p>
+          <div class="bar-track"><div class="bar-fill" style="width:100.0%;background:var(--purple);"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--subtle);"><span>Throughput: 24.6 req/s (7.69x vs. Tier 1)</span><span>P99 TPOT: 22.8 ms (16.9x lower than Tier 1)</span></div>
+        </div>
+
+        <div class="decision-card">
+          <div class="decision-header">
+            <span><span class="badge-type">score</span> <strong>Decision 3: Reject Tier 1 Monolithic Co-Located VLM for Streaming Video</strong></span>
+            <span class="pill-act pill-human">Send to a human · 385.0 ms P99 TPOT</span>
+          </div>
+          <p style="font-size:12.5px;color:var(--muted);">CPU <code>FFmpeg</code> software decode (<code>380.0 ms</code>) + inline <code>TP=8 ViT</code> (<code>640.0 ms</code>) + 16K prefill (<code>1,180.0 ms</code>) stalls active decode batches for <code>&gt;1.8s</code>, violating streaming TPOT SLAs by <code>7.7x</code>.</p>
+          <div class="bar-track"><div class="bar-fill" style="width:13.0%;background:var(--red);"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--subtle);"><span>Throughput: 3.2 req/s (1.00x baseline)</span><span>Cost: $3.47 / 1k requests</span></div>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>KV Cache Arithmetic Verified</strong>: <code>16,896 tokens &times; 320 KB/token = 5.41 GB/req</code> (Tier 1–3) vs. <code>4,608 tokens &times; 320 KB/token = 1.47 GB/req</code> (Tier 4 = <code>3.68x</code> HBM KV savings).
+      </div>
+    </section>
+
+    <!-- CARD 3 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-idx">3 / 7 · WHAT I TESTED · FULL 4-TIER EVALUATION MATRIX</span>
+          <span class="prov-pill">Bound 1-to-1 to results.json</span>
+        </div>
+        <h2 class="headline">4-Tier Multimodal Matrix: <span class="grad">Tier 1 Fails Streaming SLA (✕ 385 ms TPOT); Tier 3 &amp; 4 Cut Cost by 72%–87%</span></h2>
+        <p class="subhead">Complete evaluation across all 4 multimodal serving architectures on 16 &times; H100 (<code>$40.00/hr</code>).</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>SCENARIO / TIER</th>
+              <th>MEDIA DECODE &amp; VIT TOPOLOGY</th>
+              <th>MODEL ANSWER (TTFT / TPOT / KV / QPS)</th>
+              <th>ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Tier 1: Monolithic Co-Located VLM</strong><br/><span style="color:var(--subtle);font-size:11px;">CPU FFmpeg + TP8 ViT + LLM</span></td>
+              <td><code>380.0 ms</code> CPU decode + <code>640.0 ms</code> inline TP8 ViT + <code>1,180.0 ms</code> prefill</td>
+              <td><strong>✕ 385.0 ms P99 TPOT (SLA Fail)</strong><br/><code>2,200.0 ms</code> TTFT · <code>5.41 GB</code> KV<br/><code>3.2 req/s</code> · <strong>$3.47 / 1k req</strong></td>
+              <td><span class="pill-act pill-human">✕ Reject</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 2: GPU NVDEC + EPD 3-Stage</strong><br/><span style="color:var(--subtle);font-size:11px;">2E (DP1 ViT) + 8P + 6D Pools</span></td>
+              <td><code>45.0 ms</code> GPU NVDEC/DALI + <code>265.0 ms</code> DP1 ViT + RDMA push</td>
+              <td><strong>34.0 ms P99 TPOT (11.3x cut)</strong><br/><code>1,490.0 ms</code> TTFT · <code>5.41 GB</code> KV<br/><code>6.8 req/s (2.13x)</code> · <strong>$1.63 / 1k req</strong></td>
+              <td><span class="pill-act pill-confirm">Confirm (1-Turn)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 3: EPD + Vision Embedding Cache</strong><br/><span style="color:var(--subtle);font-size:11px;">SHA-256 Post-Projector Cache (75% Hit)</span></td>
+              <td>75% multi-turn hit skips NVDEC+ViT (<code>11.3 ms + 66.3 ms</code> avg)</td>
+              <td><strong>680.0 ms TTFT (3.24x faster)</strong><br/><code>31.5 ms</code> P99 TPOT · <code>100.0%</code> Acc<br/><code>11.4 req/s (3.56x)</code> · <strong>$0.97 / 1k req (-72%)</strong></td>
+              <td><span class="pill-act pill-auto">✅ Lossless OCR</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 4: EPD + Cache + 4x Compression</strong><br/><span style="color:var(--subtle);font-size:11px;">ToMe + FastV (16,384 &rarr; 4,096 tok)</span></td>
+              <td>4.0x spatio-temporal pruning (<code>1.5x</code> dense OCR guardrail bypass)</td>
+              <td><strong>245.0 ms TTFT (8.98x faster)</strong><br/><code>22.8 ms</code> TPOT · <code>1.47 GB</code> KV · <code>99.1%</code> Acc<br/><code>24.6 req/s (7.69x)</code> · <strong>$0.45 / 1k req (-87%)</strong></td>
+              <td><span class="pill-act pill-auto">✅ Video / Agent</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Threshold Gating Analysis</h3>
+            <p style="font-size:12px;color:var(--muted);line-height:1.45;">
+              Disaggregating Stage E (`2 GPUs` DP=1) from Stage P (`8 GPUs`) and Stage D (`6 GPUs`) is mandatory to pass the `P99 TPOT <= 50 ms` streaming threshold (`385.0 ms -> 34.0 ms`).
+            </p>
+          </div>
+          <div class="panel">
+            <h3>Failure Mode Analysis (✕ Marker)</h3>
+            <p style="font-size:12px;color:var(--muted);line-height:1.45;">
+              <strong>Tier 1 (✕)</strong> fails under multi-frame video because a single 16K-token request monopolizes the 8-GPU TP group for `1,820 ms` (`640ms ViT + 1,180ms Prefill`) and consumes `5.41 GB` of KV Cache.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Cost Formula Check</strong>: At <code>$40.00/hr</code> cluster cost, <code>Tier 1 = $40 / (3.2 &times; 3.6) = $3.47/1k req</code>; <code>Tier 3 = $40 / (11.4 &times; 3.6) = $0.97/1k req</code>; <code>Tier 4 = $40 / (24.6 &times; 3.6) = $0.45/1k req</code>.
+      </div>
+    </section>
+
+    <!-- CARD 4 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-idx">4 / 7 · UNDER THE HOOD · EPD + SHA-256 CACHE + TOME/FASTV PROTOCOL</span>
+          <span class="prov-pill">Zero Fabricated Coordinates</span>
+        </div>
+        <h2 class="headline">Under the Hood: <span class="grad">Content-Addressed Vision Embedding Cache &amp; Two-Stage Spatio-Temporal Pruning</span></h2>
+        <p class="subhead">How Stage E caches post-projector embeddings and compresses `268.4 MB -> 67.1 MB` before LLM Prefill.</p>
+
+        <div class="code-box" style="margin-bottom:14px;">
+<pre>{
+  "experiment_id": "multimodal_vlm_serving_selection",
+  "cluster": { "gpus": 16, "sku": "NVIDIA H100 80GB SXM", "hourly_usd": 40.00 },
+  "workload": {
+    "model": "72B VLM (ViT-4B Encoder + MLP Projector + 70B GQA-8 LLM)",
+    "video_frames": 64, "raw_vision_tokens": 16384, "text_tokens": 512,
+    "multi_turn_media_cache_hit_rate": 0.75,
+    "raw_kv_gb_per_req": 5.41, "compressed_4x_kv_gb_per_req": 1.47
+  }
+}</pre>
+        </div>
+
+        <div style="text-align:center;font-weight:800;color:var(--accent);margin:6px 0;">&darr; Deterministic EPD + Vision Cache + Spatio-Temporal Pruning Verifier (<code>run.py --check</code>) &darr;</div>
+
+        <div class="code-box">
+<pre># 1. Stage E Content-Addressed Post-Projector Embedding Cache Key:
+cache_key = sha256(raw_media_bytes + vit_weights_sha + resolution_grid_profile)
+# Hit (75% of multi-turn QA): bypasses GPU NVDEC (45ms) + ViT-4B (265ms) completely!
+
+# 2. Two-Stage Orthogonal Spatio-Temporal Token Compression (Tier 4):
+#    (a) Post-ViT Temporal Cosine Merging (ToMe, cos_sim &gt; 0.92): 16,384 -&gt; 8,192 tokens
+#    (b) LLM Layer-2 Cross-Attention Pruning (FastV top-50%):     8,192  -&gt; 4,096 tokens
+#    (c) Adaptive OCR Guardrail: high edge-density tables automatically fallback to 1.5x
+
+# &lt;answer&gt; Verified Output:
+# Tier 1 Monolithic: TTFT = 2200.0 ms | P99 TPOT = 385.0 ms | QPS =  3.2 | $3.47/1k req
+# Tier 2 EPD Only:   TTFT = 1490.0 ms | P99 TPOT =  34.0 ms | QPS =  6.8 | $1.63/1k req
+# Tier 3 EPD+Cache:  TTFT =  680.0 ms | P99 TPOT =  31.5 ms | QPS = 11.4 | $0.97/1k req
+# Tier 4 EPD+4xComp: TTFT =  245.0 ms | P99 TPOT =  22.8 ms | QPS = 24.6 | $0.45/1k req</pre>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Reproducible CLI Verification</strong>: Run <code>python experiments/multimodal_vlm_serving_selection/run.py --check</code> and <code>python -m unittest tests/test_multimodal_vlm_serving_selection.py</code>.
+      </div>
+    </section>
+
+    <!-- CARD 5 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-idx">5 / 7 · ROBUSTNESS CHECK · VIDEO FRAME LENGTH SCALING SENSITIVITY</span>
+          <span class="prov-pill">8 Frames (2K) to 128 Frames (32K Tokens)</span>
+        </div>
+        <h2 class="headline">Robustness Across Video Lengths: <span class="grad">Tier 4 Speedup Scales from 3.40x (8 Frames) to 10.25x (128 Frames)</span></h2>
+        <p class="subhead">Sensitivity analysis from [`experiments/multimodal_vlm_serving_selection/results.json`](../../experiments/multimodal_vlm_serving_selection/results.json) across `2,048` to `32,768` raw visual tokens per request.</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>VIDEO FRAMES / RAW TOKENS</th>
+              <th>ORIGINAL (TIER 1 MONOLITHIC TTFT)</th>
+              <th>PERTURBED (TIER 3 CACHE / TIER 4 4X COMP TTFT)</th>
+              <th>THROUGHPUT SPEEDUP (TIER 4 VS. TIER 1)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>8 Frames / Single 4K Tile</strong><br/>(<code>2,048</code> raw vision tokens)</td>
+              <td><code>480.0 ms</code> TTFT<br/>(<code>290.0 ms</code> Tier 2 EPD)</td>
+              <td>Tier 3 Cache: <code>145.0 ms</code><br/><strong>Tier 4 (4x Comp): <code>88.0 ms</code></strong></td>
+              <td><strong style="color:var(--emerald);">3.40x Throughput</strong><br/>(<code>-81.7%</code> TTFT reduction)</td>
+            </tr>
+            <tr>
+              <td><strong>32-Frame Short Video</strong><br/>(<code>8,192</code> raw vision tokens)</td>
+              <td><code>1,190.0 ms</code> TTFT<br/>(<code>780.0 ms</code> Tier 2 EPD)</td>
+              <td>Tier 3 Cache: <code>365.0 ms</code><br/><strong>Tier 4 (4x Comp): <code>152.0 ms</code></strong></td>
+              <td><strong style="color:var(--emerald);">5.65x Throughput</strong><br/>(<code>-87.2%</code> TTFT reduction)</td>
+            </tr>
+            <tr>
+              <td><strong>64-Frame Standard Video (Base)</strong><br/>(<code>16,384</code> raw vision tokens)</td>
+              <td><code>2,200.0 ms</code> TTFT<br/>(<code>1,490.0 ms</code> Tier 2 EPD)</td>
+              <td>Tier 3 Cache: <code>680.0 ms</code><br/><strong>Tier 4 (4x Comp): <code>245.0 ms</code></strong></td>
+              <td><strong style="color:var(--purple);">7.69x Throughput</strong><br/>(<code>-88.9%</code> TTFT reduction)</td>
+            </tr>
+            <tr>
+              <td><strong>128-Frame Long Video</strong><br/>(<code>32,768</code> raw vision tokens)</td>
+              <td><code>4,680.0 ms</code> TTFT<br/>(<code>3,120.0 ms</code> Tier 2 EPD)</td>
+              <td>Tier 3 Cache: <code>1,390.0 ms</code><br/><strong>Tier 4 (4x Comp): <code>420.0 ms</code></strong></td>
+              <td><strong style="color:var(--purple);">10.25x Throughput</strong><br/>(<code>-91.0%</code> TTFT reduction)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="decision-card">
+          <div class="decision-header">
+            <strong>Key Takeaway: Why Long-Video QA Cannot Survive Without Token Compression</strong>
+            <span class="pill-act pill-auto">Sub-500ms TTFT at 128 Frames</span>
+          </div>
+          <p style="font-size:12.5px;color:var(--muted);line-height:1.5;">
+            At <code>128 frames (32,768 visual tokens)</code>, a single uncompressed request consumes <code>10.65 GB</code> of KV Cache and takes <code>4.68 seconds</code> for first token in Tier 1. Tier 4 (`EPD + SHA-256 Cache + 4x ToMe/FastV`) keeps TTFT at <code>420.0 ms</code> and delivers a <strong>10.25x cluster throughput gain</strong>.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Adaptive OCR Safety</strong>: When edge-density detection triggers the `1.5x` dense OCR mode on financial tables, Tier 3/4 still retains full `SHA-256` embedding cache acceleration (`680.0 ms` lossless TTFT).
+      </div>
+    </section>
+
+    <!-- CARD 6 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-idx">6 / 7 · LATENCY &amp; THROUGHPUT SCALING · PAIRED COMPARISON</span>
+          <span class="prov-pill">TTFT (ms) &amp; Cluster Throughput (req/s)</span>
+        </div>
+        <h2 class="headline">Latency &amp; Throughput Scaling: <span class="grad">2,200 ms &rarr; 245 ms TTFT (-88.9%) &amp; 3.2 &rarr; 24.6 req/s (7.69x)</span></h2>
+        <p class="subhead">Horizontal paired bar chart comparing End-to-End Average TTFT, P99 Streaming TPOT, and 16&times;H100 Cluster Throughput across all 4 tiers.</p>
+
+        <div class="bar-pair">
+          <div class="bar-label"><span>Tier 1: Monolithic Co-Located VLM (CPU FFmpeg + TP8 ViT)</span><span style="color:var(--red);">2,200.0 ms TTFT · 385.0 ms TPOT · 3.2 req/s</span></div>
+          <div class="bar-row"><div class="bar-rect-slate" style="width:100%;"></div><span style="font-size:11.5px;font-weight:700;">2,200.0 ms TTFT (Baseline)</span></div>
+          <div class="bar-row"><div class="bar-rect-blue" style="width:13.0%;"></div><span style="font-size:11.5px;color:var(--muted);">3.2 req/s ($3.47 / 1k req)</span></div>
+        </div>
+
+        <div class="bar-pair">
+          <div class="bar-label"><span>Tier 2: GPU NVDEC + EPD 3-Stage Disaggregation (2E + 8P + 6D)</span><span>1,490.0 ms TTFT · 34.0 ms TPOT · 6.8 req/s</span></div>
+          <div class="bar-row"><div class="bar-rect-slate" style="width:67.7%;"></div><span style="font-size:11.5px;font-weight:700;">1,490.0 ms TTFT (-32.3%)</span></div>
+          <div class="bar-row"><div class="bar-rect-blue" style="width:27.6%;"></div><span style="font-size:11.5px;color:var(--muted);">6.8 req/s (2.13x · $1.63 / 1k req)</span></div>
+        </div>
+
+        <div class="bar-pair">
+          <div class="bar-label"><span>Tier 3: EPD Disaggregation + SHA-256 Vision Embedding Cache (75% Hit)</span><span style="color:var(--emerald);">680.0 ms TTFT · 31.5 ms TPOT · 11.4 req/s</span></div>
+          <div class="bar-row"><div class="bar-rect-emerald" style="width:30.9%;"></div><span style="font-size:11.5px;font-weight:700;color:var(--emerald);">680.0 ms TTFT (3.24x faster · 100% Lossless)</span></div>
+          <div class="bar-row"><div class="bar-rect-blue" style="width:46.3%;"></div><span style="font-size:11.5px;color:var(--muted);">11.4 req/s (3.56x · $0.97 / 1k req)</span></div>
+        </div>
+
+        <div class="bar-pair">
+          <div class="bar-label"><span>Tier 4: EPD + Vision Cache + 4.0x Spatio-Temporal Compression (ToMe / FastV)</span><span style="color:var(--purple);">245.0 ms TTFT · 22.8 ms TPOT · 24.6 req/s</span></div>
+          <div class="bar-row"><div class="bar-rect-purple" style="width:11.1%;"></div><span style="font-size:11.5px;font-weight:700;color:var(--purple);">245.0 ms TTFT (8.98x faster · 1.47 GB KV/req)</span></div>
+          <div class="bar-row"><div class="bar-rect-blue" style="width:100.0%;"></div><span style="font-size:11.5px;font-weight:700;color:var(--accent);">24.6 req/s (7.69x · $0.45 / 1k req)</span></div>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Latency Breakdown Note</strong>: In Tier 4, average decode + ViT time drops to <code>11.3 ms + 53.7 ms</code> (at 75% cache hit) and 4x-compressed LLM prefill takes <code>180.0 ms</code>, totaling <code>245.0 ms</code> average TTFT.
+      </div>
+    </section>
+
+    <!-- CARD 7 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-idx">7 / 7 · MY TAKE · GOOD FIT VS. NOT FOR &amp; PRODUCTION READINESS</span>
+          <span class="prov-pill">Architect Playbook &amp; Checklist</span>
+        </div>
+        <h2 class="headline">Architect Verdict: <span class="grad">Tier 3 (EPD + Vision Cache) for Lossless OCR; Tier 4 (+ 4x ToMe/FastV) for Video &amp; Agents</span></h2>
+        <p class="subhead">Practical deployment guidance for AI Solution Architects designing multimodal VLM and video serving clusters.</p>
+
+        <div class="grid-2">
+          <div class="panel" style="border-color:#86efac;background:#f0fdf4;">
+            <h3 style="color:#166534;">✅ Good Fit (When to Adopt Tier 3 &amp; Tier 4)</h3>
+            <ul style="font-size:12.5px;color:#14532d;line-height:1.55;padding-left:16px;">
+              <li><strong>Multi-Turn Document &amp; Medical VLM (Tier 3)</strong>: Delivers <code>100.0%</code> lossless accuracy with <code>3.24x</code> lower TTFT (<code>680.0 ms</code>) and <code>3.56x</code> throughput via <code>SHA-256</code> post-projector embedding caching.</li>
+              <li><strong>Long-Video QA &amp; Embodied/GUI Agents (Tier 4)</strong>: <code>4.0x</code> spatio-temporal token compression cuts KV memory <code>3.68x (1.47 GB)</code>, reaches <code>245.0 ms</code> TTFT and <code>24.6 req/s (7.69x)</code> at <code>$0.45/1k req</code>.</li>
+              <li><strong>Strict Streaming TPOT SLA (&le; 50 ms)</strong>: EPD 3-stage pool isolation keeps P99 TPOT at <code>22.8–34.0 ms</code> regardless of incoming 64-frame video bursts.</li>
+            </ul>
+          </div>
+          <div class="panel" style="border-color:#fca5a5;background:#fef2f2;">
+            <h3 style="color:#991b1b;">⛔ Not For (Anti-Patterns &amp; Guardrails)</h3>
+            <ul style="font-size:12.5px;color:#7f1d1d;line-height:1.55;padding-left:16px;">
+              <li><strong>Never Use Tier 1 Monolithic Co-Location for Video/4K</strong>: Inline <code>TP=8 ViT</code> + 16K prefill stalls active decode streams to <code>385.0 ms P99 TPOT</code>.</li>
+              <li><strong>Do Not Apply Aggressive 4x Token Pruning Blindly to Dense Financial Tables</strong>: Configure an edge-density guardrail to automatically dial compression back to <code>1.0x–1.5x</code> on dense small-font OCR inputs.</li>
+              <li><strong>Do Not Decode Video on Host CPUs</strong>: Replace Python <code>FFmpeg/PIL</code> loops with GPU <code>NVDEC + NVIDIA DALI</code> zero-copy pipelines (<code>380ms &rarr; 45ms</code>).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="decision-card">
+          <div class="decision-header">
+            <strong>Production Verification Checklist</strong>
+            <span class="pill-act pill-auto">5-Point Presales Gate</span>
+          </div>
+          <p style="font-size:12px;color:var(--muted);line-height:1.5;">
+            1. Offload media decode to GPU <code>NVDEC/DALI</code> &amp; isolate <code>ViT</code> in a <code>DP=1/2</code> Stage E pool &middot; 2. Enable content-addressed <code>SHA-256</code> post-projector embedding cache &middot; 3. Enable <code>4x ToMe + FastV</code> for video/GUI agents with automatic OCR fallback &middot; 4. Right-size <code>2E : 8P : 6D</code> GPU pool ratios &middot; 5. Verify with <code>python experiments/multimodal_vlm_serving_selection/run.py --check</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout-dark">
+        <strong>Readiness, License &amp; Provenance</strong>: Repository: <code>turbo998/ai-infra-research</code> (MIT License). Data provenance: <code>synthetic</code> analytical model calibrated to <code>anonymized_reported</code> SGLang/vLLM Multimodal EPD, DistServe-VLM, FastV &amp; ToMe literature (<code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>, <code>local_cpu_harness_measurement=measured</code>). Self-contained CSP-compliant HTML deck.
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>
