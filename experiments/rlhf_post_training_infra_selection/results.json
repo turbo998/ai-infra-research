@@ -1,0 +1,94 @@
+{
+  "metadata": {
+    "experiment_id": "rlhf_post_training_infra_selection",
+    "title": "RLHF / GRPO Post-Training Rollout & Weight-Sync Selection (Naive FSDP vs. Static Disaggregated vs. HybridEngine Co-Located vs. Async Partial-Rollout)",
+    "provenance_type": "synthetic",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "local_cpu_harness_measurement": "measured",
+    "calibration_sources": [
+      "HybridFlow / verl (EuroSys 2025): 3D HybridEngine zero-copy weight resharding between FSDP/Megatron and vLLM/SGLang",
+      "OpenRLHF: Ray-based disaggregated Actor/Rollout/Reference/Reward scheduling over NCCL/RDMA",
+      "Kimi k1.5 / AReaL / StreamRL: Partial Rollout prefix reuse and bounded-staleness asynchronous GRPO/PPO for long-CoT reasoning"
+    ],
+    "workload_baseline": {
+      "policy_model": "Llama-3 / Qwen-2.5 70B (BF16 Training / FP8 Rollout)",
+      "algorithm": "GRPO (Group Relative Policy Optimization, G=8)",
+      "cluster_gpus": 64,
+      "gpu_sku": "NVIDIA H100 80GB SXM",
+      "cluster_hourly_rate_usd": 160.0,
+      "prompts_per_step": 512,
+      "group_size_g": 8,
+      "trajectories_per_step": 4096,
+      "mean_response_tokens": 4096,
+      "p99_tail_response_tokens": 24576,
+      "total_generated_tokens_per_step": 16777216,
+      "benchmark_steps": 1000
+    }
+  },
+  "tiers": {
+    "tier1_naive_fsdp_colocated_rollout": {
+      "label": "Tier 1: Naive FSDP/ZeRO-3 Training-Sharded Rollout (No Inference Engine Resharding)",
+      "rollout_phase_sec": 548.0,
+      "weight_sync_reshard_sec": 0.0,
+      "actor_ref_train_sec": 64.0,
+      "total_step_time_sec": 612.0,
+      "throughput_tokens_per_sec": 27413.8,
+      "speedup_vs_tier1": 1.0,
+      "rollout_straggler_idle_bubble_pct": 62.0,
+      "effective_cluster_mfu_pct": 11.5,
+      "hours_per_1000_steps": 170.0,
+      "cost_per_1000_steps_usd": 27200.0
+    },
+    "tier2_static_disaggregated_ray_pools": {
+      "label": "Tier 2: Statically Disaggregated Actor (32 GPUs) + vLLM Rollout (32 GPUs) Pools (OpenRLHF Style)",
+      "rollout_phase_sec": 196.0,
+      "weight_sync_reshard_sec": 18.5,
+      "actor_ref_train_sec": 72.0,
+      "total_step_time_sec": 286.5,
+      "throughput_tokens_per_sec": 58559.2,
+      "speedup_vs_tier1": 2.14,
+      "rollout_straggler_idle_bubble_pct": 48.0,
+      "effective_cluster_mfu_pct": 24.6,
+      "hours_per_1000_steps": 79.58,
+      "cost_per_1000_steps_usd": 12732.8
+    },
+    "tier3_hybrid_engine_colocated_resharding": {
+      "label": "Tier 3: HybridEngine Co-Located Zero-Copy 3D Weight Resharding (verl / HybridFlow, Synchronous)",
+      "rollout_phase_sec": 92.0,
+      "weight_sync_reshard_sec": 3.2,
+      "actor_ref_train_sec": 63.0,
+      "total_step_time_sec": 158.2,
+      "throughput_tokens_per_sec": 106050.7,
+      "speedup_vs_tier1": 3.87,
+      "speedup_vs_tier2": 1.81,
+      "rollout_straggler_idle_bubble_pct": 52.0,
+      "effective_cluster_mfu_pct": 44.5,
+      "hours_per_1000_steps": 43.94,
+      "cost_per_1000_steps_usd": 7030.4
+    },
+    "tier4_async_partial_rollout_streaming": {
+      "label": "Tier 4: Async Streaming + Partial Rollout Prefix Reuse (AReaL / StreamRL / Kimi k1.5 Style)",
+      "rollout_phase_sec": 31.0,
+      "weight_sync_reshard_sec": 2.4,
+      "actor_ref_train_sec": 63.0,
+      "total_step_time_sec": 96.4,
+      "throughput_tokens_per_sec": 174037.5,
+      "speedup_vs_tier1": 6.35,
+      "speedup_vs_tier3": 1.64,
+      "rollout_straggler_idle_bubble_pct": 8.5,
+      "effective_cluster_mfu_pct": 73.0,
+      "hours_per_1000_steps": 26.78,
+      "cost_per_1000_steps_usd": 4284.8,
+      "savings_per_1000_steps_vs_tier1_usd": 22915.2,
+      "savings_per_1000_steps_vs_tier3_usd": 2745.6
+    }
+  },
+  "staleness_and_length_sensitivity": {
+    "short_cot_2k_sync_hybrid_vs_async_speedup": 1.12,
+    "long_cot_24k_sync_hybrid_vs_async_speedup": 1.64,
+    "ultra_long_agent_64k_sync_hybrid_vs_async_speedup": 2.38,
+    "max_safe_policy_staleness_steps_with_is_clipping": 2,
+    "unclipped_stale_step_5_reward_collapse_risk": "HIGH (KL divergence spike without truncated importance sampling)"
+  }
+}

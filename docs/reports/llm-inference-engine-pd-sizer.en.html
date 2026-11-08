@@ -924,5 +924,111 @@ function updateCoolSizer() {
 }
 updateCoolSizer();
 </script>
+
+  <!-- Round 11: RLHF / GRPO Post-Training Rollout & Weight-Sync Sizer -->
+  <div id="rlhf-post-training-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#8b5cf6;color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 11 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚀 LLM RLHF / GRPO Rollout Straggler Bubble &amp; 3D Weight Resharding Sizer (verl HybridEngine vs. Async Partial Rollout)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/rlhf_post_training_infra_selection/results.json</code> · <code>provenance: synthetic (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/rlhf-post-training-infra-selection-faq.en.md" style="color:#c4b5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/rlhf-post-training-infra-selection-faq.md" style="color:#c4b5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./rlhf-post-training-infra-selection-cards.html" style="color:#c4b5fd;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster H100 80GB Count: <span id="rlhfGpuVal" style="color:#c4b5fd;">64 GPUs ($160/hr)</span></label>
+        <input id="rlhfGpuSlider" type="range" min="32" max="256" step="32" value="64" style="width:100%;margin-top:8px;" oninput="updateRlhfSizer()" />
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">P99 CoT Tail Length Regime:</label>
+        <select id="rlhfTailSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRlhfSizer()">
+          <option value="short">Short Chat RLHF (P99 = 2K tok · Sync HybridEngine Sufficient)</option>
+          <option value="long24k" selected>Reasoning GRPO (P99 = 24K tok · Sealed Baseline 1.64x Async Gain)</option>
+          <option value="agent64k">Ultra-Long Multi-Turn Agentic RL (P99 = 64K tok · 2.38x Async Gain)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Target GRPO Training Steps: <span id="rlhfStepsVal" style="color:#c4b5fd;">1,000 Steps</span></label>
+        <input id="rlhfStepsSlider" type="range" min="500" max="5000" step="500" value="1000" style="width:100%;margin-top:8px;" oninput="updateRlhfSizer()" />
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Post-Training Architecture Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Rollout + Sync + Train</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Step Time / Throughput</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Straggler Bubble / MFU</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Total Wall-Clock</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Total Compute Cost</th>
+          </tr>
+        </thead>
+        <tbody id="rlhfSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="rlhfDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #a855f7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateRlhfSizer() {
+  const gpus = parseInt(document.getElementById('rlhfGpuSlider').value, 10) || 64;
+  const tailMode = document.getElementById('rlhfTailSelect').value || 'long24k';
+  const steps = parseInt(document.getElementById('rlhfStepsSlider').value, 10) || 1000;
+  const hourly = gpus * 2.50;
+  document.getElementById('rlhfGpuVal').textContent = `${gpus} GPUs ($${hourly.toFixed(0)}/hr)`;
+  document.getElementById('rlhfStepsVal').textContent = `${steps.toLocaleString()} Steps`;
+
+  let t3Roll = 92.0, t4Roll = 31.0, t3Bub = 52.0, t4Bub = 8.5, t3Mfu = 44.5, t4Mfu = 73.0;
+  if (tailMode === 'short') {
+    t3Roll = 42.0; t4Roll = 30.8; t3Bub = 14.0; t4Bub = 6.0; t3Mfu = 64.0; t4Mfu = 71.5;
+  } else if (tailMode === 'agent64k') {
+    t3Roll = 164.0; t4Roll = 31.5; t3Bub = 72.5; t4Bub = 9.5; t3Mfu = 31.0; t4Mfu = 73.8;
+  }
+
+  const tokensPerStep = 16777216 * (gpus / 64.0);
+  const rows = [
+    { name: '⛔ Tier 1: Naive FSDP/ZeRO-3 Direct Generate', roll: 548.0, sync: 0.0, train: 64.0, bub: 62.0, mfu: 11.5, best: false },
+    { name: 'Tier 2: Statically Disaggregated Ray Pools (OpenRLHF Split)', roll: 196.0, sync: 18.5, train: 72.0, bub: 48.0, mfu: 24.6, best: false },
+    { name: tailMode === 'short' ? '🏆 Tier 3: HybridEngine Co-Located 3D Resharding (verl Sync)' : 'Tier 3: HybridEngine Co-Located 3D Resharding (verl Sync)', roll: t3Roll, sync: 3.2, train: 63.0, bub: t3Bub, mfu: t3Mfu, best: tailMode === 'short' },
+    { name: tailMode !== 'short' ? '🚀 Tier 4: Async Streaming + Partial Rollout Prefix Reuse (AReaL/k1.5)' : 'Tier 4: Async Streaming + Partial Rollout Prefix Reuse', roll: t4Roll, sync: 2.4, train: 63.0, bub: t4Bub, mfu: t4Mfu, best: tailMode !== 'short' }
+  ];
+
+  const tbody = document.getElementById('rlhfSizerTbody');
+  tbody.innerHTML = rows.map(r => {
+    const stepSec = r.roll + r.sync + r.train;
+    const tokSec = tokensPerStep / stepSec;
+    const hrs = (stepSec * steps) / 3600.0;
+    const cost = hrs * hourly;
+    return `<tr style="border-bottom:1px solid #334155;${r.best?'background:rgba(168,85,247,0.14);':''}">
+      <td style="padding:10px;font-weight:700;color:${r.best?'#d8b4fe':'#f8fafc'};">${r.name}</td>
+      <td style="padding:10px;"><code>${r.roll.toFixed(1)}s + ${r.sync.toFixed(1)}s + ${r.train.toFixed(1)}s</code></td>
+      <td style="padding:10px;"><code>${stepSec.toFixed(1)} s (${tokSec.toFixed(1)} tok/s)</code></td>
+      <td style="padding:10px;"><code>Bubble ${r.bub.toFixed(1)}% · MFU ${r.mfu.toFixed(1)}%</code></td>
+      <td style="padding:10px;"><code>${hrs.toFixed(2)} hrs</code></td>
+      <td style="padding:10px;"><strong style="color:${r.best?'#34d399':'#cbd5e1'};">$${cost.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const t1Cost = ((612.0 * steps) / 3600.0) * hourly;
+  const t3Step = t3Roll + 3.2 + 63.0;
+  const t4Step = t4Roll + 2.4 + 63.0;
+  const t3Cost = ((t3Step * steps) / 3600.0) * hourly;
+  const t4Cost = ((t4Step * steps) / 3600.0) * hourly;
+  const speedupVsT3 = (t3Step / t4Step).toFixed(2);
+
+  document.getElementById('rlhfDecisionCallout').innerHTML = tailMode === 'short'
+    ? `<strong>Architect Recommendation (Short CoT P99=2K · ${gpus} GPUs)</strong>: Standardize on <strong>Tier 3 Synchronous HybridEngine (verl)</strong> with <code>cuMemUnmap</code> Sleep Mode + 3.2s zero-copy 3D resharding for 100% strict on-policy convergence without off-policy staleness complexity.`
+    : `<strong>Architect Recommendation (Long-CoT / Agentic RL · ${gpus} GPUs · ${steps.toLocaleString()} steps)</strong>: Choose <strong>Tier 4 Async Streaming + Partial Rollout KV Continuation (max staleness &tau;&le;2 + Dual-Clip IS)</strong> to cut the straggler bubble from <code>${t3Bub.toFixed(1)}% -> ${t4Bub.toFixed(1)}%</code>, achieving a <code>${speedupVsT3}x</code> speedup over synchronous HybridEngine (<code>${t4Step.toFixed(1)}s</code> vs. <code>${t3Step.toFixed(1)}s</code>) and saving <code>$${(t1Cost - t4Cost).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</code> vs. Tier 1 (<code>$${(t3Cost - t4Cost).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</code> saved vs. Tier 3)!`;
+}
+updateRlhfSizer();
+</script>
 </body>
 </html>
