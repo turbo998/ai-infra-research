@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "suite": "long_context_attention_parallelism_selection",
+  "provenance": {
+    "classification": "synthetic_roofline_and_anonymized_reported_specs",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured (no 32-GPU H100/H200 cluster was provisioned during this run)",
+    "local_cpu_harness_measurement": "measured (deterministic Roofline model and unit tests executed locally on CPU)",
+    "notes": [
+      "Model baseline: 70B-class Transformer (80 layers, hidden=8192, H_q=64, H_kv=8, head_dim=128) on H100/H200 SXM (900 GB/s NVLink intra-node, 400 Gbps RDMA inter-node, $2.50/GPU*h).",
+      "All TTFT, KV memory, and cost metrics are deterministic synthetic outputs from this script and must not be cited as live multi-node GPU benchmark measurements."
+    ]
+  },
+  "baseline_model_profile": {
+    "layers": 80,
+    "query_heads": 64,
+    "kv_heads": 8,
+    "head_dim": 128,
+    "gpu_hourly_cost_usd": 2.5,
+    "nvlink_bw_gbps": 900.0,
+    "rdma_bw_gbps": 45.0
+  },
+  "scenarios": [
+    {
+      "id": "single_node_tp8_fa3_baseline",
+      "name": "Single-Node TP=8 + FlashAttention-3 (WGMMA + TMA Ping-Pong)",
+      "gpu_count": 8,
+      "max_sp_degree_limit": "Limited to 1 node (TP=8); quadratic O(L^2) compute & KV memory wall at >=256K",
+      "ttft_32k_sec": 0.42,
+      "ttft_128k_sec": 4.8,
+      "ttft_256k_sec": 18.4,
+      "ttft_1m_sec": 248.0,
+      "speedup_128k_x": 1.0,
+      "speedup_1m_x": 1.0,
+      "kv_mem_per_gpu_128k_gb": 5.25,
+      "kv_mem_per_gpu_1m_gb": 42.0,
+      "comm_overhead_pct_128k": 14.2,
+      "ruler_128k_retention_pct": 100.0,
+      "cost_per_1m_ctx_req_usd": 1.38,
+      "recommended_action": "Confirm",
+      "confidence": 0.85
+    },
+    {
+      "id": "deepspeed_ulysses_sp8_nvlink",
+      "name": "DeepSpeed-Ulysses SP=8 (Intra-Node NVLink All-to-All on Attention Heads)",
+      "gpu_count": 8,
+      "max_sp_degree_limit": "Hard capped by GQA KV heads (N <= H_kv = 8 without KV replication)",
+      "ttft_32k_sec": 0.28,
+      "ttft_128k_sec": 1.42,
+      "ttft_256k_sec": 5.1,
+      "ttft_1m_sec": 68.5,
+      "speedup_128k_x": 3.38,
+      "speedup_1m_x": 3.62,
+      "kv_mem_per_gpu_128k_gb": 5.25,
+      "kv_mem_per_gpu_1m_gb": 42.0,
+      "comm_overhead_pct_128k": 6.8,
+      "ruler_128k_retention_pct": 100.0,
+      "cost_per_1m_ctx_req_usd": 0.38,
+      "recommended_action": "Act automatically",
+      "confidence": 0.91
+    },
+    {
+      "id": "hybrid_usp_ulysses8_ring4_cp32",
+      "name": "2D Unified Sequence Parallelism (USP: Ulysses-8 Intra-Node x Striped Ring-4 Inter-Node)",
+      "gpu_count": 32,
+      "max_sp_degree_limit": "Breaks H_kv=8 wall via 2D (Ulysses on NVLink x Causal Striped Ring over 400G RDMA)",
+      "ttft_32k_sec": 0.19,
+      "ttft_128k_sec": 0.78,
+      "ttft_256k_sec": 2.45,
+      "ttft_1m_sec": 14.6,
+      "speedup_128k_x": 6.15,
+      "speedup_1m_x": 16.99,
+      "kv_mem_per_gpu_128k_gb": 1.31,
+      "kv_mem_per_gpu_1m_gb": 10.5,
+      "comm_overhead_pct_128k": 9.4,
+      "ruler_128k_retention_pct": 100.0,
+      "cost_per_1m_ctx_req_usd": 0.32,
+      "recommended_action": "Act automatically",
+      "confidence": 0.95
+    },
+    {
+      "id": "sparse_linear_hybrid_mla_nsa_cp16",
+      "name": "Sparse / Linear-Hybrid Attention (MLA + Native Sparse Attention / 3:1 GDN + CP=16)",
+      "gpu_count": 16,
+      "max_sp_degree_limit": "Sub-quadratic O(L * k) compute + 75% KV compression; scales to 1M+ on 16 GPUs",
+      "ttft_32k_sec": 0.14,
+      "ttft_128k_sec": 0.34,
+      "ttft_256k_sec": 0.72,
+      "ttft_1m_sec": 3.2,
+      "speedup_128k_x": 14.12,
+      "speedup_1m_x": 77.5,
+      "kv_mem_per_gpu_128k_gb": 0.66,
+      "kv_mem_per_gpu_1m_gb": 5.25,
+      "comm_overhead_pct_128k": 5.1,
+      "ruler_128k_retention_pct": 99.4,
+      "cost_per_1m_ctx_req_usd": 0.04,
+      "recommended_action": "Act automatically",
+      "confidence": 0.94
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "GQA KV-Head Ceiling (Scaling Ulysses from SP=8 to SP=32 when H_kv=8)",
+      "original_metric": "SP=8 (1 KV head/GPU, 6.8% All-to-All overhead)",
+      "perturbed_metric": "SP=32 requires 4x KV head replication (+300% KV comm & memory)",
+      "delta_points": "Must switch to 2D USP (Ulysses-8 x Striped Ring-4) above N = H_kv"
+    },
+    {
+      "check": "Causal Triangle Load Imbalance (Standard Ring vs Striped Ring Attention)",
+      "original_metric": "Standard Ring Attention (Rank 0 idle 50% of causal mask steps)",
+      "perturbed_metric": "Striped / Zig-Zag Ring Attention (round-robin token striping across ranks)",
+      "delta_points": "+38.5% compute utilization & -29.2% 1M TTFT"
+    },
+    {
+      "check": "Exact Retrieval vs Sparse Hybrid on 128K RULER / Needle-in-a-Haystack",
+      "original_metric": "Full Attention USP CP=32 (100.0% retention, 14.60s @ 1M)",
+      "perturbed_metric": "MLA + NSA / 3:1 GDN Hybrid CP=16 (99.4% retention, 3.20s @ 1M)",
+      "delta_points": "-0.6 pts RULER retention for 4.56x faster 1M TTFT & -87.5% cost"
+    }
+  ]
+}

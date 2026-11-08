@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+<title>超长上下文 (128K～1M Token) 注意力机制与序列并行选型 · 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #f1f5f9;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --border: #e2e8f0;
+    --blue: #2563eb;
+    --green: #059669;
+    --amber: #d97706;
+    --red: #dc2626;
+    --dark: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 16px 60px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .top-bar { max-width: 900px; margin: 0 auto 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .top-bar a { color: var(--blue); text-decoration: none; font-weight: 600; font-size: 14px; }
+  .deck { display: flex; flex-direction: column; align-items: center; gap: 32px; }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 44px 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.08);
+  }
+  .card-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+  h1, h2 { margin: 18px 0 12px; line-height: 1.25; font-size: 29px; font-weight: 800; color: var(--ink); }
+  .accent { background: linear-gradient(90deg, #2563eb, #9333ea, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .sub { font-size: 15px; color: var(--muted); line-height: 1.6; margin-bottom: 20px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 16px 0; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin: 16px 0; }
+  .box { border: 1px solid var(--border); border-radius: 14px; padding: 18px; background: #f8fafc; }
+  .box h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .pill-auto { background: #d1fae5; color: #065f46; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 12px 0; }
+  th, td { border-bottom: 1px solid var(--border); padding: 11px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--muted); }
+  .code-dark { background: var(--dark); color: #e2e8f0; border-radius: 14px; padding: 18px 20px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px; line-height: 1.55; overflow-x: auto; }
+  .bar-row { margin: 14px 0; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 700; margin-bottom: 6px; }
+  .bar-track { height: 22px; background: #e2e8f0; border-radius: 6px; overflow: hidden; display: flex; }
+  .bar-fill-primary { background: #3b82f6; height: 100%; }
+  .bar-fill-alt { background: #10b981; height: 100%; }
+  .bar-fill-base { background: #cbd5e1; height: 100%; }
+  .callout-dark { background: var(--dark); color: #f8fafc; border-radius: 14px; padding: 18px 22px; font-size: 13.5px; line-height: 1.6; }
+  .card-footer { border-top: 1px solid var(--border); padding-top: 12px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <div><strong>AI Infra 架构师评测报告 (7-Card 4:5)</strong> · Round 7 超长上下文 (128K～1M Token) 注意力与序列并行选型</div>
+  <div>
+    <a href="../components/long-context-attention-parallelism-selection-faq.md">中文 FAQ</a> ·
+    <a href="../components/long-context-attention-parallelism-selection-faq.en.md">English FAQ</a> ·
+    <a href="llm-inference-engine-pd-sizer.html#long-context-sizer">交互式计算器</a>
+  </div>
+</div>
+
+<div class="deck">
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-header"><span>1 / 7 · HANDS-ON · LONG-CONTEXT ATTENTION &amp; SEQUENCE PARALLELISM</span><span>PROVENANCE: SYNTHETIC + ANONYMIZED_REPORTED</span></div>
+      <h1>2D 混合序列并行 <span class="accent">USP 将 1M TTFT 提速 16.99x (14.60s, 100% 无损)</span>；原生稀疏线性混合 <span class="accent">MLA+NSA / 3:1 GDN 提速 77.50x (3.20s, $0.04/req)</span></h1>
+      <p class="sub">基于 <code>70B GQA (80L, H_q=64, H_kv=8, d=128)</code> 封存算例，量化对比单机 <code>TP=8 + FA3</code>、<code>DeepSpeed-Ulysses SP=8</code>、<code>2D USP (Ulysses-8 × Striped Ring-4)</code> 与 <code>MLA + NSA / 3:1 GDN (CP=16)</code> 的首字延迟、KV 显存与单次成本。</p>
+      <div class="grid-3">
+        <div class="box">
+          <h3>1. 四档场景与门控阈值</h3>
+          <p style="font-size:13px;color:var(--muted);">• <code>Act automatically</code> (&ge;0.80)<br/>• <code>Confirm</code> (0.55–0.79)<br/>• 覆盖 32K / 128K / 256K / 1M 上下文长度与 GQA KV 头数天花板。</p>
+        </div>
+        <div class="box">
+          <h3>2. 封存模型输入基线</h3>
+          <p style="font-size:13px;color:var(--muted);">• 模型：<code>70B (80L, H_q=64, H_kv=8)</code><br/>• 机内互连：<code>900 GB/s NVLink</code><br/>• 机间网络：<code>400 Gbps RDMA</code><br/>• 算力单价：<code>$2.50 / GPU·h</code></p>
+        </div>
+        <div class="box">
+          <h3>3. 核心选型收益概览</h3>
+          <p style="font-size:13px;color:var(--muted);">• <strong>Tier 2 (Ulysses-8)</strong>: 128K <code>1.42s</code> (<code>3.38x</code>)<br/>• <strong>Tier 3 (2D USP 32卡)</strong>: 1M <code>14.60s</code> (<code>16.99x</code>)<br/>• <strong>Tier 4 (MLA+NSA 16卡)</strong>: 1M <code>3.20s</code> (<code>77.50x</code>, <code>$0.04/req</code>)</p>
+        </div>
+      </div>
+    </div>
+    <div class="callout-dark">
+      <strong>数据溯源与真实性声明 (Provenance &amp; Verification)</strong>：所有指标严格来自封存评估文件 <code>experiments/long_context_attention_parallelism_selection/results.json</code>，类别为 <code>synthetic</code> (确定性 Roofline 模型) + <code>anonymized_reported</code> (公开硬件/内核参数)，<code>independently_reproduced = false</code>；物理 32 卡 H100/H200 实机测量状态为 <code>not_measured</code>，本地 CPU 确定性评估器与单测状态为 <code>measured (PASS)</code>。
+    </div>
+    <div class="card-footer"><span>turbo998/ai-infra-research · Round 7 Long-Context FAQ</span><span>Card 1 of 7</span></div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-header"><span>2 / 7 · SCENARIO: 128K–1M REPO AGENT &amp; LEGAL AUDIT</span><span>SINGLE-CASE DEEP DIVE</span></div>
+      <h2>单次 1M Token 全仓库推理：全量注意力 2D USP 需 14.60s ($0.32)，稀疏/线性混合仅需 3.20s ($0.04)</h2>
+      <div class="box" style="margin-bottom:14px;">
+        <strong>架构师选型输入场景</strong>：“企业部署 70B 级长上下文底座模型，需同时支撑 ① <code>128K</code> 交互式代码仓库 Agent（要求 TTFT &lt; 1 秒）与 ② <code>1M (1,048,576) Token</code> 多文档跨卷宗合规推理，如何规划序列并行与注意力架构？”
+      </div>
+      <div class="box" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>Decision 1 (`choice`): 100% 精确全注意力跨机扩展选 `hybrid_usp_ulysses8_ring4_cp32`</strong>
+          <span class="pill pill-auto">Act automatically · Conf 0.95</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:6px 0;">机内 8 卡走 Ulysses All-to-All（契合 H_kv=8 零复制），机间 4 节点走 Striped Ring Attention，128K TTFT = <code>0.78 s (6.15x)</code>，1M TTFT = <code>14.60 s (16.99x)</code>，RULER 保持率 <code>100.0%</code>。</p>
+        <div class="bar-track"><div class="bar-fill-primary" style="width:95.0%;"></div></div>
+      </div>
+      <div class="box" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>Decision 2 (`choice`): 高并发在线生产选 `sparse_linear_hybrid_mla_nsa_cp16`</strong>
+          <span class="pill pill-auto">Act automatically · Conf 0.94</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:6px 0;">MLA 压缩 75%+ KV 显存 + NSA 动态块稀疏 / 3:1 GDN 线性混合，16 卡实现 128K TTFT = <code>0.34 s (14.12x)</code>，1M TTFT = <code>3.20 s (77.50x)</code>，单次 1M 成本降至 <code>$0.04 (-97.1%)</code>，RULER 保持率 <code>99.4%</code>。</p>
+        <div class="bar-track"><div class="bar-fill-alt" style="width:94.0%;"></div></div>
+      </div>
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>Decision 3 (`score`): 单节点 32K–128K 选 `deepspeed_ulysses_sp8_nvlink`</strong>
+          <span class="pill pill-auto">Act automatically · Conf 0.91</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:6px 0;">在单台 8 卡 NVLink 节点内，Ulysses SP=8 通信占比仅 <code>6.8%</code>，将 128K TTFT 从 <code>4.80 s</code> 压至 <code>1.42 s (3.38x)</code>。</p>
+        <div class="bar-track"><div class="bar-fill-primary" style="width:91.0%;"></div></div>
+      </div>
+    </div>
+    <div class="card-footer"><span>Source: experiments/long_context_attention_parallelism_selection/results.json</span><span>Card 2 of 7</span></div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-header"><span>3 / 7 · WHAT I TESTED</span><span>FULL EVALUATION MATRIX</span></div>
+      <h2>四档长上下文架构全矩阵：从 248.00 秒单机阻塞到 3.20 秒亚线性响应</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>SCENARIO (架构方案)</th>
+            <th>QUESTION / TASK (上下文负载)</th>
+            <th>MODEL ANSWER (TTFT / KV 显存 / 成本)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Single-Node TP=8 + FA3</strong><br/><code>single_node_tp8_fa3_baseline</code></td>
+            <td>8 卡单节点处理 32K ～ 1M 上下文</td>
+            <td><strong>✕ 1M 严重超时 (`248.00 s`, `1.00x`)</strong><br/>32K: <code>0.42s</code> | 128K: <code>4.80s</code><br/>单卡 1M KV: <code>42.00 GB</code> | 成本: <code>$1.38/req</code></td>
+            <td><span class="pill pill-confirm">Confirm (0.85) Only &le;32K</span></td>
+          </tr>
+          <tr>
+            <td><strong>2. DeepSpeed-Ulysses SP=8</strong><br/><code>deepspeed_ulysses_sp8_nvlink</code></td>
+            <td>单机 8 卡 900GB/s NVLink 头转置</td>
+            <td><strong>128K TTFT `1.42 s` (`3.38x`)</strong><br/>32K: <code>0.28s</code> | 1M: <code>68.50s (3.62x)</code><br/>通信占比 <code>6.8%</code> | 成本: <code>$0.38/req</code><br/><strong>✕ 受限于 N &le; H_kv = 8</strong></td>
+            <td><span class="pill pill-auto">Act automatically (32K–128K)</span></td>
+          </tr>
+          <tr>
+            <td><strong>3. 2D Hybrid USP (32 GPUs)</strong><br/><code>hybrid_usp_ulysses8_ring4_cp32</code></td>
+            <td>机内 Ulysses-8 × 机间 Striped Ring-4</td>
+            <td><strong>128K `0.78 s` (`6.15x`) · 1M `14.60 s` (`16.99x`)</strong><br/>单卡 1M KV: <code>10.50 GB (-75.0%)</code><br/>RULER <code>100.0%</code> | 成本: <code>$0.32/req</code></td>
+            <td><span class="pill pill-auto">Act automatically (Exact 1M)</span></td>
+          </tr>
+          <tr>
+            <td><strong>4. MLA+NSA / 3:1 GDN (16 GPUs)</strong><br/><code>sparse_linear_hybrid_mla_nsa_cp16</code></td>
+            <td>O(L·k) 块稀疏 / 3:1 线性混合 + CP=16</td>
+            <td><strong>128K `0.34 s` (`14.12x`) · 1M `3.20 s` (`77.50x`)</strong><br/>单卡 1M KV: <code>5.25 GB (-87.5%)</code><br/>RULER <code>99.4%</code> | 成本: <code>$0.04/req (-97.1%)</code></td>
+            <td><span class="pill pill-auto">Act automatically (Prod 1M+)</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="grid-2">
+        <div class="box">
+          <h3>门控边界 1：为什么纯 Ulysses 卡在 8 卡？</h3>
+          <p style="font-size:13px;color:var(--muted);">70B 模型普遍采用 GQA (<code>H_kv=8</code>)。Ulysses 按头切分，当并行度 <code>N &gt; 8</code> 时必须复制 KV 头，导致跨机通信暴涨 <code>+300%</code>，必须引入第二维 Ring Attention。</p>
+        </div>
+        <div class="box">
+          <h3>门控边界 2：精确无损 vs. 原生稀疏混合</h3>
+          <p style="font-size:13px;color:var(--muted);">存量稠密模型或法律零容忍审计选 <strong>Tier 3 (2D USP, 100.0% RULER)</strong>；新建高并发 128K–1M 服务选 <strong>Tier 4 (MLA+NSA / 3:1 GDN, 99.4% RULER, 成本省 97.1%)</strong>。</p>
+        </div>
+      </div>
+    </div>
+    <div class="card-footer"><span>All 4 scenarios verified against results.json</span><span>Card 3 of 7</span></div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-header"><span>4 / 7 · UNDER THE HOOD</span><span>PROTOCOL &amp; SCORING MECHANICS</span></div>
+      <h2>底层机制与确定性验算：2D USP 正交通信拓扑与 Roofline 校验流</h2>
+      <div class="code-dark" style="margin-bottom:16px;">
+<pre style="margin:0;">// 1. 封存模型参数与 2D Unified Sequence Parallelism (USP) 拓扑契约
+{
+  "suite": "long_context_attention_parallelism_selection",
+  "baseline_model_profile": {
+    "layers": 80, "query_heads": 64, "kv_heads": 8, "head_dim": 128,
+    "nvlink_bw_gbps": 900.0, "rdma_bw_gbps": 45.0, "gpu_hourly_cost_usd": 2.50
+  },
+  "usp_2d_mapping": {
+    "intra_node_dim": "Ulysses SP=8 over 900 GB/s NVLink (N_ulysses == H_kv == 8, zero KV replication)",
+    "inter_node_dim": "Striped Ring-4 over 400G RDMA (P2P async send/recv overlapped with FA3 WGMMA)"
+  }
+}</pre>
+      </div>
+      <div style="text-align:center;font-weight:800;color:var(--blue);margin:6px 0;">↓ 确定性 Roofline 评估器与 <code>--check</code> 门禁输出 (&lt;answer&gt;)</div>
+      <div class="code-dark">
+<pre style="margin:0;">$ python experiments/long_context_attention_parallelism_selection/run.py --check
+OK: experiments/long_context_attention_parallelism_selection/results.json matches deterministic model.
+
+# 核心输出摘要 (&lt;answer&gt;)：
+# - single_node_tp8_fa3_baseline:      128K=4.80s (1.00x)  | 1M=248.00s (1.00x) | KV@1M=42.00GB | $1.38/req
+# - deepspeed_ulysses_sp8_nvlink:      128K=1.42s (3.38x)  | 1M=68.50s  (3.62x) | KV@1M=42.00GB | $0.38/req
+# - hybrid_usp_ulysses8_ring4_cp32:    128K=0.78s (6.15x)  | 1M=14.60s (16.99x) | KV@1M=10.50GB | $0.32/req
+# - sparse_linear_hybrid_mla_nsa_cp16: 128K=0.34s (14.12x) | 1M=3.20s  (77.50x) | KV@1M=5.25GB  | $0.04/req</pre>
+      </div>
+    </div>
+    <div class="card-footer"><span>Verifier: experiments/long_context_attention_parallelism_selection/run.py</span><span>Card 4 of 7</span></div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-header"><span>5 / 7 · ROBUSTNESS CHECK</span><span>PERTURBATION &amp; CONSISTENCY</span></div>
+      <h2>三大架构边界扰动测试：GQA KV 头天花板、因果下三角空泡与稀疏检索精度</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>QUESTION / PERTURBATION</th>
+            <th>ORIGINAL (基线配置)</th>
+            <th>PERTURBED (扰动/优化后)</th>
+            <th>CHANGE (PTS / IMPACT)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. GQA KV 头数天花板</strong><br/>当 <code>H_kv=8</code> 时将纯 Ulysses 从 <code>SP=8</code> 强扩至 <code>SP=32</code></td>
+            <td><code>SP=8</code>（每卡 1 个 KV 头，机内 NVLink All-to-All 占比 <code>6.8%</code>）</td>
+            <td>纯 Ulysses <code>SP=32</code> 被迫对每个 KV 头做 <code>4x</code> 跨机复制</td>
+            <td><strong>+300% KV 通信与显存膨胀</strong>；<code>N &gt; H_kv</code> 必须切为 <strong>2D USP</strong></td>
+          </tr>
+          <tr>
+            <td><strong>2. 因果掩码下三角倾斜</strong><br/>普通连续 Ring Attention vs. Striped / Zig-Zag Ring</td>
+            <td>普通连续分块 Ring（<code>Rank 0</code> 在 <code>50%</code> 的因果步数中空转等待）</td>
+            <td><strong>Striped / Zig-Zag 交错分块</strong>（各 Rank 每步有效计算量严格均等）</td>
+            <td><strong>+38.5% 算力利用率</strong> &amp; <strong>-29.2% 1M TTFT</strong></td>
+          </tr>
+          <tr>
+            <td><strong>3. 128K RULER 大海捞针精度</strong><br/>全量注意力 2D USP vs. 原生稀疏线性混合</td>
+            <td>Full Attention <code>2D USP CP=32</code>（<code>100.0%</code> 保持率，1M <code>14.60 s</code>，<code>$0.32/req</code>）</td>
+            <td><code>MLA + NSA / 3:1 GDN CP=16</code>（<code>99.4%</code> 保持率，1M <code>3.20 s</code>，<code>$0.04/req</code>）</td>
+            <td><strong>-0.6 pts RULER 保持率</strong> 换取 <strong>4.56x 提速 &amp; -87.5% 成本</strong></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="box">
+        <h3>架构师关键启示</h3>
+        <p style="font-size:13.5px;color:var(--muted);margin:0;">序列并行绝不是“挑一种算法从 8 卡硬扩到 64 卡”：机内必须用 <strong>Ulysses (&le; H_kv)</strong> 吃透 NVLink 高带宽，机间必须用 <strong>Striped Ring</strong> 消除因果三角气泡并隐藏 400G RDMA 延迟。</p>
+      </div>
+    </div>
+    <div class="card-footer"><span>Perturbation checks bound to results.json</span><span>Card 5 of 7</span></div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-header"><span>6 / 7 · LATENCY</span><span>CONTEXT SCALING &amp; TTFT BARS</span></div>
+      <h2>128K 与 1M Token 首字延迟 (TTFT) 扩展曲线：从 248.00 秒降至 3.20 秒</h2>
+      <p class="sub">蓝色条代表 <strong>Tier 3: 2D USP (100% 精确全注意力, 32 GPUs)</strong>，绿色条代表 <strong>Tier 4: MLA+NSA / 3:1 GDN (16 GPUs)</strong>，灰色条代表 <strong>Tier 1: 单机 TP=8 + FA3 基线 (8 GPUs)</strong>。</p>
+
+      <div class="bar-row">
+        <div class="bar-label"><span>128K Token Prefill TTFT — Tier 4 MLA+NSA (0.34 s, 14.12x) vs. Tier 3 2D USP (0.78 s, 6.15x) vs. Tier 1 Baseline (4.80 s)</span><span>0.34s / 0.78s vs 4.80s</span></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-alt" style="width:7.08%;"></div></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:16.25%;"></div></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+      </div>
+
+      <div class="bar-row">
+        <div class="bar-label"><span>256K Token Prefill TTFT — Tier 4 MLA+NSA (0.72 s, 25.56x) vs. Tier 3 2D USP (2.45 s, 7.51x) vs. Tier 1 Baseline (18.40 s)</span><span>0.72s / 2.45s vs 18.40s</span></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-alt" style="width:3.91%;"></div></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:13.32%;"></div></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+      </div>
+
+      <div class="bar-row">
+        <div class="bar-label"><span>1M Token Prefill TTFT — Tier 4 MLA+NSA (3.20 s, 77.50x) vs. Tier 3 2D USP (14.60 s, 16.99x) vs. Tier 1 Baseline (248.00 s)</span><span>3.20s / 14.60s vs 248.00s</span></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-alt" style="width:1.29%;"></div></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:5.89%;"></div></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+      </div>
+
+      <div class="bar-row">
+        <div class="bar-label"><span>单卡 1M KV 显存占用 — Tier 4 MLA+NSA (5.25 GB) vs. Tier 3 2D USP (10.50 GB) vs. Tier 1 Baseline (42.00 GB)</span><span>5.25GB / 10.50GB vs 42.00GB</span></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-alt" style="width:12.50%;"></div></div>
+        <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:25.00%;"></div></div>
+        <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+      </div>
+    </div>
+    <div class="card-footer"><span>Exact ratios computed from sealed results.json</span><span>Card 6 of 7</span></div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-header"><span>7 / 7 · MY TAKE</span><span>GOOD FIT VS NOT FOR &amp; READINESS</span></div>
+      <h2>架构师选型裁决：何时用 2D USP 全注意力，何时上 MLA+NSA / 3:1 线性混合？</h2>
+      <div class="grid-2">
+        <div class="box" style="border-color:#10b981;background:#ecfdf5;">
+          <h3 style="color:#065f46;">✅ Good Fit (强烈推荐适用场景)</h3>
+          <ul style="font-size:13.5px;color:#064e3b;line-height:1.65;padding-left:18px;margin:0;">
+            <li><strong>32K–128K 单机低延迟长文本</strong>：直接启用 <strong>Tier 2 (`DeepSpeed-Ulysses SP=8`)</strong>，吃满机内 NVLink，<code>1.42s</code> 首字响应。</li>
+            <li><strong>128K–1M 存量稠密模型或零容忍法律/金融审计</strong>：采用 <strong>Tier 3 (`2D USP = Ulysses-8 × Striped Ring-4`)</strong>，保持 <code>100.0%</code> 数学无损精度，1M TTFT 降至 <code>14.60s (16.99x)</code>。</li>
+            <li><strong>128K–1M+ 高并发在线 Agent / 全仓库编码</strong>：优选原生支持 <strong>Tier 4 (`MLA + NSA` 或 `3:1 GDN`)</strong> 的底座模型 + <code>CP=16</code>，1M TTFT 仅 <code>3.20s (77.50x)</code>，成本直降 <code>97.1% ($0.04/req)</code>。</li>
+          </ul>
+        </div>
+        <div class="box" style="border-color:#ef4444;background:#fef2f2;">
+          <h3 style="color:#991b1b;">⛔ Not For (严禁误用场景)</h3>
+          <ul style="font-size:13.5px;color:#7f1d1d;line-height:1.65;padding-left:18px;margin:0;">
+            <li><strong>严禁将纯 Ulysses 度数设大过 GQA KV 头数 (<code>N &gt; H_kv</code>)</strong>：否则触发跨机 KV 头复制与 All-to-All 拥塞。</li>
+            <li><strong>严禁在自回归长文本中使用未条带化的普通 Ring Attention</strong>：Causal Mask 下三角会让前排 GPU 空转 <code>50%</code> 步数，必须开启 <strong>Striped / Zig-Zag</strong>。</li>
+            <li><strong>严禁在未经稀疏训练的稠密权重上强开高比例稀疏丢弃</strong>：会严重破坏长距离召回率，存量稠密权重应走 <code>2D USP</code>。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="callout-dark">
+      <strong>生产就绪度与开源生态 (Readiness &amp; License)</strong>：<br/>
+      • <strong>2D USP (`Ulysses × Striped Ring`)</strong>：已在 <code>yunchang</code>、<code>Megatron-Core Context Parallelism (a2a+p2p)</code>、<code>vLLM / SGLang CP</code> 中成熟开源（Apache-2.0）。<br/>
+      • <strong>MLA + NSA / 3:1 GDN</strong>：已在 <code>FlashMLA</code>、<code>FlashInfer</code>、<code>vLLM / SGLang</code> 新一代混合注意力内核中生产就绪。<br/>
+      • <strong>Provenance</strong>：<code>synthetic</code> + <code>anonymized_reported</code> (<code>independently_reproduced=false</code>, physical cluster: <code>not_measured</code>, local CPU verifier: <code>measured PASS</code>)。
+    </div>
+    <div class="card-footer"><span>turbo998/ai-infra-research · CSP Self-Contained 7-Card Deck</span><span>Card 7 of 7</span></div>
+  </section>
+</div>
+</body>
+</html>

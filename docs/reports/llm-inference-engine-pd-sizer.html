@@ -572,6 +572,100 @@ updateFaultSizer();
     <div id="faultDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #34d399;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
   </div>
 
-<script>updateFaultSizer();</script>
+<script>updateFaultSizer();
+const LC_CTX_LABELS = ['32K', '128K', '256K', '1M'];
+const LC_DATA = [
+  { id: 'single_node_tp8_fa3_baseline', name: '1. Single-Node TP=8 + FlashAttention-3 (WGMMA + TMA)', gpus: 8, ttft: [0.42, 4.80, 18.40, 248.00], kv: [1.31, 5.25, 10.50, 42.00], ruler: '100.0%', baseCost1M: 1.38 },
+  { id: 'deepspeed_ulysses_sp8_nvlink', name: '2. DeepSpeed-Ulysses SP=8 (Intra-Node NVLink, N <= H_kv=8)', gpus: 8, ttft: [0.28, 1.42, 5.10, 68.50], kv: [1.31, 5.25, 10.50, 42.00], ruler: '100.0%', baseCost1M: 0.38 },
+  { id: 'hybrid_usp_ulysses8_ring4_cp32', name: '3. 2D Unified Sequence Parallelism (USP: Ulysses-8 x Striped Ring-4)', gpus: 32, ttft: [0.19, 0.78, 2.45, 14.60], kv: [0.33, 1.31, 2.63, 10.50], ruler: '100.0%', baseCost1M: 0.32 },
+  { id: 'sparse_linear_hybrid_mla_nsa_cp16', name: '4. Sparse / Linear-Hybrid (MLA + NSA / 3:1 GDN + CP=16)', gpus: 16, ttft: [0.14, 0.34, 0.72, 3.20], kv: [0.16, 0.66, 1.31, 5.25], ruler: '99.4%', baseCost1M: 0.04 }
+];
+
+function updateLongContextSizer() {
+  const ctxEl = document.getElementById('lcCtxSlider');
+  if (!ctxEl) return;
+  const idx = parseInt(ctxEl.value, 10);
+  const costRate = parseFloat(document.getElementById('lcCostSlider').value);
+  const costRatio = costRate / 2.50;
+
+  document.getElementById('lcCtxVal').textContent = LC_CTX_LABELS[idx];
+  document.getElementById('lcCostVal').textContent = costRate.toFixed(2);
+
+  const tbody = document.getElementById('lcSizerTbody');
+  tbody.innerHTML = '';
+  const baseTtft = LC_DATA[0].ttft[idx];
+
+  LC_DATA.forEach((row, rIdx) => {
+    const t = row.ttft[idx];
+    const sp = (baseTtft / t).toFixed(2) + 'x';
+    const kv = row.kv[idx].toFixed(2) + ' GB';
+    const adjCost = (row.baseCost1M * costRatio).toFixed(2);
+
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #334155';
+    if (rIdx >= 2) tr.style.background = 'rgba(192, 132, 252, 0.08)';
+    tr.innerHTML = `
+      <td style="padding:10px;font-weight:700;color:${rIdx===3?'#34d399':(rIdx===2?'#c084fc':(rIdx===1?'#38bdf8':'#f8fafc'))};">${row.name}</td>
+      <td style="padding:10px;"><code>${row.gpus} GPUs</code></td>
+      <td style="padding:10px;"><code>${t.toFixed(2)} s (${sp})</code></td>
+      <td style="padding:10px;"><code>${kv}</code></td>
+      <td style="padding:10px;"><code>${row.ruler}</code></td>
+      <td style="padding:10px;"><code>$${adjCost} / req</code></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const callout = document.getElementById('lcDecisionCallout');
+  if (idx === 0) {
+    callout.innerHTML = `<strong>架构师选型建议 (32K Tokens)</strong>：单机 <code>TP=8 + FlashAttention-3 (0.42s)</code> 或单机 <code>Ulysses SP=8 (0.28s)</code> 即可满足亚秒级首字响应，无需跨机序列并行。`;
+  } else if (idx === 1) {
+    callout.innerHTML = `<strong>架构师选型建议 (128K Tokens)</strong>：单机 8 卡选 <strong>Tier 2 (DeepSpeed-Ulysses SP=8, 1.42s, 3.38x)</strong>；跨机突破 H_kv=8 限制选 <strong>Tier 3 (2D USP, 0.78s, 6.15x)</strong> 或 <strong>Tier 4 (MLA+NSA / 3:1 GDN, 0.34s, 14.12x)</strong>。`;
+  } else {
+    callout.innerHTML = `<strong>架构师选型建议 (${LC_CTX_LABELS[idx]} Tokens)</strong>：单机基线已严重阻塞 (${baseTtft.toFixed(2)}s)！存量稠密全注意力模型或 100% 法律合规审计选 <strong>Tier 3 (2D USP 32卡，1M TTFT 14.60s，16.99x)</strong>；高并发在线生产首选 <strong>Tier 4 (MLA+NSA / 3:1 GDN 16卡，1M TTFT 仅 3.20s，77.50x，成本省 97.1%)</strong>！`;
+  }
+}
+
+updateLongContextSizer();
+</script>
+
+  <!-- ROUND 7: ULTRA-LONG CONTEXT ATTENTION & SEQUENCE PARALLELISM SIZER -->
+  <div class="panel" id="long-context-sizer" style="margin-top: 24px; border-color: #c084fc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <h2 style="margin:0;color:#c084fc;">📐 Round 7 交互工作台：超长上下文 (32K～1M Token) 注意力机制与序列并行定容计算器 (FA3 vs. Ulysses vs. 2D USP vs. MLA+NSA/GDN)</h2>
+      <span style="font-size:12px;background:#0f172a;color:#c084fc;padding:4px 10px;border-radius:999px;border:1px solid #334155;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:16px;">
+      数据严格绑定封存算例 <code>experiments/long_context_attention_parallelism_selection/results.json</code>（基准：<code>70B GQA, 80L, H_q=64, H_kv=8, d=128</code>，<code>$2.50/GPU·h</code>）。选择目标上下文长度与单卡算力单价，直观对比四档长上下文架构的 TTFT 首字延迟、单卡 KV 显存、128K RULER 保持率与单次请求算力成本。
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">目标上下文长度 (Context Length): <span id="lcCtxVal" style="color:#c084fc;">128K</span> Tokens</label>
+        <input type="range" id="lcCtxSlider" min="0" max="3" step="1" value="1" style="width:100%;margin-top:8px;" oninput="updateLongContextSizer()" />
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-top:4px;"><span>32K</span><span>128K</span><span>256K</span><span>1M</span></div>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">单卡小时成本 (GPU Hourly USD): $<span id="lcCostVal" style="color:#c084fc;">2.50</span>/GPU·h</label>
+        <input type="range" id="lcCostSlider" min="1.5" max="4.5" step="0.25" value="2.5" style="width:100%;margin-top:8px;" oninput="updateLongContextSizer()" />
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">长上下文注意力与序列并行架构</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU 卡数</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">首字延迟 TTFT (加速比)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单卡 KV 显存</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">128K RULER 保持率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单次 1M 请求成本</th>
+          </tr>
+        </thead>
+        <tbody id="lcSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="lcDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #c084fc;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>updateLongContextSizer();</script>
 </body>
 </html>
