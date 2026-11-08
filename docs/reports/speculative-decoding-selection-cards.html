@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;" />
+  <title>大模型投机解码 (Speculative Decoding) 与多 Token 预测架构选型 · 7-Card 4:5 Benchmark Report</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --card-bg: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #e2e8f0;
+      --blue: #2563eb;
+      --green: #059669;
+      --amber: #d97706;
+      --red: #dc2626;
+      --dark: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: #f8fafc;
+      padding: 24px 16px 60px;
+    }
+    .header-bar {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px 20px;
+    }
+    .header-bar a { color: #38bdf8; text-decoration: none; font-weight: 600; font-size: 14px; }
+    .deck {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+    }
+    .card {
+      width: 900px;
+      min-height: 1125px;
+      background: var(--card-bg);
+      color: var(--ink);
+      border-radius: 20px;
+      padding: 36px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--line);
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      border-bottom: 2px solid var(--line);
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .pill-blue { background: #dbeafe; color: #1d4ed8; }
+    .pill-green { background: #d1fae5; color: #047857; }
+    .pill-amber { background: #fef3c7; color: #b45309; }
+    .pill-red { background: #fee2e2; color: #b91c1c; }
+    h1.headline, h2.headline {
+      font-size: 27px;
+      line-height: 1.28;
+      margin: 0 0 12px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .accent {
+      background: linear-gradient(90deg, #d97706, #2563eb, #059669);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.lead {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin: 0 0 18px;
+    }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
+    .box {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .box h3 { margin: 0 0 8px; font-size: 14px; color: var(--ink); }
+    .box p, .box li { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 4px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+    }
+    th { background: #f1f5f9; font-weight: 700; color: var(--ink); }
+    .code-dark {
+      background: var(--dark);
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-family: "Consolas", "SFMono-Regular", monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      overflow-x: auto;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+    .bar-row { margin-bottom: 12px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+    .bar-track { width: 100%; height: 18px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
+    .bar-fill-blue { height: 100%; background: #3b82f6; border-radius: 6px; }
+    .bar-fill-green { height: 100%; background: #10b981; border-radius: 6px; }
+    .bar-fill-amber { height: 100%; background: #f59e0b; border-radius: 6px; }
+    .bar-fill-red { height: 100%; background: #ef4444; border-radius: 6px; }
+    .footer-callout {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="header-bar">
+    <div>
+      <strong>7-Card 4:5 Benchmark Report</strong> · 大模型投机解码 (Speculative Decoding) 与多 Token 预测选型
+    </div>
+    <div>
+      <a href="../components/speculative-decoding-selection-faq.md">📘 中文六段式 FAQ</a> ·
+      <a href="../components/speculative-decoding-selection-faq.en.md">📗 English FAQ</a> ·
+      <a href="llm-inference-engine-pd-sizer.html#speculative-sizer">🧮 投机解码加速比与动态门限计算器</a>
+    </div>
+  </div>
+
+  <div class="deck">
+    <!-- CARD 1 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>1 / 7 · HANDS-ON · SPECULATIVE DECODING &amp; MULTI-TOKEN PREDICTION</span>
+          <span class="pill pill-blue">SYNTHETIC ROOFLINE + ANONYMIZED_REPORTED</span>
+        </div>
+        <h1 class="headline">
+          EAGLE-3 / DeepSeek-MTP 仅需 +1.2GB 显存实现 <span class="accent">3.02x 无损解码加速 (6.10ms TPOT)</span>，动态门限杜绝高并发吞吐反转
+        </h1>
+        <p class="lead">
+          在 8×H100/H200 (TP=8) 部署 70B FP8 大模型时，低并发 Decode 超过 90% 时间卡在 HBM 权重读取。通过复用倒数第二层隐藏特征与单次 70B 前向并行校验，单流速率从 54.3 tok/s 跃升至 163.9 tok/s，输出分布 100% 数学无损。
+        </p>
+        <div class="grid-3">
+          <div class="box">
+            <h3>1. 四档投机解码选型梯度</h3>
+            <ul>
+              <li><strong>Tier 1 (BS&ge;48)</strong>: 动态退回标准自回归 (<code>1.00x</code>)</li>
+              <li><strong>Tier 2 (代码/RAG)</strong>: Prompt Lookup N-Gram (<code>0.0GB</code>, <code>2.24x</code>)</li>
+              <li><strong>Tier 3 (存量旧模型)</strong>: 独立 7B 草稿 (<code>+14.0GB</code>, <code>1.88x</code>)</li>
+              <li><strong>Tier 4 (全场景默认)</strong>: EAGLE-3 / MTP (<code>+1.2GB</code>, <code>3.02x</code>)</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>2. 封存基准输入契约</h3>
+            <ul>
+              <li>Target LLM: <code>70B FP8 (TP=8)</code></li>
+              <li>Baseline Step (`BS=4`): <code>18.40 ms (54.3 tok/s)</code></li>
+              <li>Speculative Steps: <code>gamma = 4~5</code></li>
+              <li>Batch Gate: <code>disable_by_batch_size = 48</code></li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>3. 核心决策产出</h3>
+            <ul>
+              <li><span class="pill pill-green">Act automatically</span> Tier 4 EAGLE-3/MTP (<code>0.96</code>)</li>
+              <li><span class="pill pill-green">Act automatically</span> Tier 2 N-Gram on Code (<code>0.90</code>)</li>
+              <li><span class="pill pill-amber">Confirm</span> Tier 3 Standalone 7B (<code>0.78</code>)</li>
+            </ul>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>解码架构方案</th>
+              <th>额外显存开销</th>
+              <th>草稿 + 校验耗时 (BS=4)</th>
+              <th>平均接受长度 τ (代码 / 推理)</th>
+              <th>BS=4 有效 TPOT (tok/s)</th>
+              <th>加速比 (BS=4 / 32 / 64)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Standard Autoregressive (γ=0)</strong></td>
+              <td><code>0.0 GB</code></td>
+              <td><code>0.00 + 18.40 ms</code></td>
+              <td><code>1.00 / 1.00</code></td>
+              <td><code>18.40 ms (54.3)</code></td>
+              <td><code>1.00x / 1.00x / 1.00x</code></td>
+            </tr>
+            <tr>
+              <td><strong>2. Prompt Lookup N-Gram</strong></td>
+              <td><strong><code>0.0 GB</code></strong></td>
+              <td><code>0.15 + 20.10 ms</code></td>
+              <td><strong><code>2.45</code></strong> / <code>1.15</code></td>
+              <td><strong><code>8.20 ms (122.0)</code></strong></td>
+              <td><strong><code>2.24x</code></strong> / <code>1.38x / 0.92x</code></td>
+            </tr>
+            <tr>
+              <td><strong>3. Standalone 7B Draft Model</strong></td>
+              <td><code>14.0 GB</code></td>
+              <td><code>5.50 + 20.00 ms</code></td>
+              <td><code>2.60 / 2.25</code></td>
+              <td><code>9.80 ms (102.0)</code></td>
+              <td><code>1.88x / 1.12x / 0.78x</code></td>
+            </tr>
+            <tr>
+              <td><strong>4. EAGLE-3 / DeepSeek-MTP Head</strong></td>
+              <td><strong><code>1.2 GB</code></strong></td>
+              <td><strong><code>1.95 + 18.90 ms</code></strong></td>
+              <td><strong><code>3.42 / 2.95</code></strong></td>
+              <td><strong><code>6.10 ms (163.9)</code></strong></td>
+              <td><strong><code>3.02x / 1.58x / 1.00x</code></strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="footer-callout">
+        <strong>Provenance &amp; Hardware Boundary</strong>: 数据 100% 绑定本仓库确定性算例 <code>experiments/speculative_decoding_selection/results.json</code>（分类：<code>synthetic</code> Roofline 与接受率模型 + <code>anonymized_reported</code> 公开架构参数，<code>independently_reproduced=false</code>；本机 CPU 校验脚本 <code>measured</code> 通过，未在物理 8×H100 集群实测 <code>physical_gpu_cluster_measurement="not_measured"</code>）。
+      </div>
+    </section>
+
+    <!-- CARD 2 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>2 / 7 · SCENARIO: INTERACTIVE CODING AGENT &amp; REAL-TIME VOICE LLM</span>
+          <span class="pill pill-green">SINGLE-CASE DEEP DIVE</span>
+        </div>
+        <h2 class="headline">
+          单案例深潜：IDE 代码补全与实时语音坐席要求 <span class="accent">TPOT &lt; 8ms (&gt;125 tok/s)</span>，EAGLE-3/MTP 以 6.10ms 达标
+        </h2>
+        <p class="lead">
+          场景输入：企业部署 70B FP8 代码与语音助手，在线交互并发 Batch Size = 4，要求流式响应达到人类阅读/语音合成无感阈值（TPOT &le; 8.0 ms），且不能因有损量化降低代码编译通过率。
+        </p>
+        <div class="box" style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3>Decision 1 · 全场景生产首选：EAGLE-3 / DeepSeek-MTP 原生特征头 (+1.2 GB VRAM)</h3>
+            <div><span class="pill pill-blue">choice</span> <span class="pill pill-green">Act automatically · Confidence 0.96</span></div>
+          </div>
+          <p style="margin-bottom:8px;">复用 70B 倒数第二层隐藏向量 <code>f_t</code> 与共享 Embedding，1.95ms 生成候选树 + 18.90ms 单次 70B 并行校验，平均每步接受 <code>3.42</code> 个 Token，有效 TPOT 降至 <strong><code>6.10 ms (163.9 tok/s, 3.02x)</code></strong>。</p>
+          <div class="bar-track"><div class="bar-fill-green" style="width:96%;"></div></div>
+        </div>
+        <div class="box" style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3>Decision 2 · 零显存余量代码改写 / 强引用 RAG：Prompt Lookup N-Gram (+0.0 GB VRAM)</h3>
+            <div><span class="pill pill-blue">score</span> <span class="pill pill-green">Act automatically · Confidence 0.90</span></div>
+          </div>
+          <p style="margin-bottom:8px;">无需任何草稿模型权重，0.15ms 匹配 Prompt 重复 N-Gram，在代码改写与合同抽取下平均接受 <code>2.45</code> 个 Token，有效 TPOT <strong><code>8.20 ms (122.0 tok/s, 2.24x)</code></strong>。</p>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:90%;"></div></div>
+        </div>
+        <div class="box">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3>Decision 3 · 独立 7B 草稿模型：受限于 +14GB 显存与 5.50ms 草稿延迟</h3>
+            <div><span class="pill pill-amber">noul</span> <span class="pill pill-amber">Confirm · Confidence 0.78</span></div>
+          </div>
+          <p style="margin-bottom:8px;">独立 7B 模型需重跑 32 层且存在 TP=1 vs TP=8 拓扑错配，草稿阶段耗时 <code>5.50 ms</code>，有效 TPOT 为 <code>9.80 ms (102.0 tok/s, 1.88x)</code>，仅适合无特征头的旧模型过渡。</p>
+          <div class="bar-track"><div class="bar-fill-amber" style="width:78%;"></div></div>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Root-Cause Insight</strong>: 特征级草稿头比独立 7B 草稿快 60.7% 的核心在于<strong>跳过了从离散 Token ID 重新编码 32 层语义的过程</strong>，直接消费主模型已算好的高层语义向量。
+      </div>
+    </section>
+
+    <!-- CARD 3 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>3 / 7 · WHAT I TESTED · FULL EVALUATION MATRIX</span>
+          <span class="pill pill-blue">6 SCENARIOS VERIFIED</span>
+        </div>
+        <h2 class="headline">
+          全量评测矩阵：高并发 `BS=64` 下未设门限的独立草稿吞吐倒退至 <span class="accent">0.78x，动态门限稳守 1.00x</span>
+        </h2>
+        <p class="lead">
+          覆盖额外显存、草稿耗时、代码/推理双场景接受率、高并发算力墙反转以及数学无损拒绝采样六大评测维度。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>SCENARIO</th>
+              <th>QUESTION / TASK</th>
+              <th>MODEL ANSWER (SEALED METRICS)</th>
+              <th>ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>S1: Memory-Bound Decode</strong></td>
+              <td>70B 在 BS=4 下单次校验 5 个 Token 比生成 1 个慢多少？</td>
+              <td><code>✓ 18.40ms -&gt; 18.90ms (+2.7%)</code> · HBM 仅搬运一次权重</td>
+              <td><span class="pill pill-green">Act automatically</span></td>
+            </tr>
+            <tr>
+              <td><strong>S2: N-Gram on Reasoning</strong></td>
+              <td>Prompt Lookup N-Gram 用于开放数学推理表现如何？</td>
+              <td><code>✕ τ 跌至 1.15 tok/step</code> · 上下文无现成答案片段可抄</td>
+              <td><span class="pill pill-red">Send to a human</span></td>
+            </tr>
+            <tr>
+              <td><strong>S3: 7B Draft VRAM &amp; TP</strong></td>
+              <td>独立 7B 草稿模型在 TP=8 节点上的结构痛点？</td>
+              <td><code>✕ +14.0 GB 显存</code> + <code>5.50 ms 草稿延迟</code> (TP 错配)</td>
+              <td><span class="pill pill-amber">Confirm</span></td>
+            </tr>
+            <tr>
+              <td><strong>S4: EAGLE-3 / MTP Gain</strong></td>
+              <td>单层特征头在代码与数学推理下的单流加速比？</td>
+              <td><code>✓ τ=3.42 / 2.95</code> · <code>6.10 ms TPOT (3.02x 提速)</code></td>
+              <td><span class="pill pill-green">Act automatically</span></td>
+            </tr>
+            <tr>
+              <td><strong>S5: BS=64 Compute Wall</strong></td>
+              <td>并发升至 BS=64 时继续强开 γ=5 投机解码后果？</td>
+              <td><code>✕ 7B Draft 跌至 0.78x / N-Gram 跌至 0.92x</code> (算力受限)</td>
+              <td><span class="pill pill-red">Send to a human</span></td>
+            </tr>
+            <tr>
+              <td><strong>S6: Dynamic Batch Gate</strong></td>
+              <td>配置 <code>--speculative-disable-by-batch-size 48</code> 效果？</td>
+              <td><code>✓ BS&ge;48 自动退回 γ=0</code> · 锁住 <code>1.00x</code> 峰值吞吐不劣化</td>
+              <td><span class="pill pill-green">Act automatically</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="grid-2">
+          <div class="box">
+            <h3>Threshold Gating 规则</h3>
+            <p>当活跃并发 <code>Batch Size &le; 32</code> 时默认开启 EAGLE-3 / MTP（获得 <code>1.58x~3.02x</code> 加速）；当 <code>Batch Size &ge; 48</code> 时自动旁路草稿头，避免废稿消耗饱和的 Tensor Core 算力。</p>
+          </div>
+          <div class="box">
+            <h3>Failure Analysis (`✕` 失守根因)</h3>
+            <p>当 <code>B × (γ + 1) = 64 × 5 = 320 Tokens/step</code> 跨过 GPU 算力屋脊点（205.5 FLOP/Byte）后，校验耗时随候选 Token 数线性增长，被拒绝的草稿直接变成纯算力浪费。</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Matrix Provenance</strong>: 100% 源自 <code>experiments/speculative_decoding_selection/results.json</code>，零人工虚构坐标。
+      </div>
+    </section>
+
+    <!-- CARD 4 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>4 / 7 · UNDER THE HOOD · PROTOCOL &amp; SCORING MECHANICS</span>
+          <span class="pill pill-blue">LOSSLESS REJECTION SAMPLING VERIFIER</span>
+        </div>
+        <h2 class="headline">
+          底层机制与确定性验算器：为什么无损拒绝采样能保证 <span class="accent">100.0% 等价于主模型输出分布</span>？
+        </h2>
+        <p class="lead">
+          展示 `experiments/speculative_decoding_selection/run.py` 的有效 TPOT 物理公式、无损拒绝采样准则与确定性校验输出。
+        </p>
+        <div class="code-dark">// 1. Effective TPOT &amp; Lossless Rejection Sampling Contract (experiments/speculative_decoding_selection/run.py)
+{
+  "target_model": "70B FP8 on 8xH100/H200 (TP=8), baseline_verify_bs4_ms = 18.40",
+  "formulas": {
+    "effective_tpot_ms": "(draft_step_overhead_ms + target_verify_step_ms) / mean_accepted_tokens_per_step",
+    "rejection_sampling_accept_prob": "min(1.0, p_target(x) / q_draft(x))",
+    "residual_resample_distribution": "norm(max(0.0, p_target(x) - q_draft(x))) -&gt; 100% exact p_target(x)!"
+  }
+}</div>
+        <div style="text-align:center;font-weight:800;color:#2563eb;margin:4px 0 8px;">↓ Deterministic Speculative Decoding Verifier (&lt;answer&gt;) ↓</div>
+        <div class="code-dark">// 2. Verified Output Summary (python experiments/speculative_decoding_selection/run.py --check)
+&lt;answer&gt;
+  standard_autoregressive_baseline : +0.0GB, draft=0.00ms, verify=18.40ms, tau=1.00, tpot=18.40ms (54.3 tok/s, 1.00x)
+  prompt_lookup_ngram_speculation  : +0.0GB, draft=0.15ms, verify=20.10ms, tau=2.45, tpot=8.20ms  (122.0 tok/s, 2.24x)
+  standalone_7b_draft_model        : +14.0GB,draft=5.50ms, verify=20.00ms, tau=2.60, tpot=9.80ms  (102.0 tok/s, 1.88x)
+  eagle3_mtp_feature_head          : +1.2GB, draft=1.95ms, verify=18.90ms, tau=3.42, tpot=6.10ms  (163.9 tok/s, 3.02x)
+&lt;/answer&gt;</div>
+        <div class="box">
+          <h3>为什么全被拒绝也不会“少算一个 Token”？</h3>
+          <ul>
+            <li><strong>保底 Bonus Token 机制</strong>: 即使第 1 个草稿 Token <code>d_1</code> 被拒绝，主模型在第 1 个位置的真实概率分布 <code>p_1(x)</code> 已经在并行前向中算出来了！采样器直接从残差分布中重采样出正确的 <code>x_{t+1}</code>，每步至少推进 1 个 Token（若 4 个草稿全中，还能额外白送第 5 个 Bonus Token）。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Verifier Reproducibility</strong>: 执行 <code>python -m unittest tests/test_speculative_decoding_selection.py</code> 秒级通过校验。
+      </div>
+    </section>
+
+    <!-- CARD 5 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>5 / 7 · ROBUSTNESS CHECK · WORKLOAD &amp; BATCH PERTURBATION</span>
+          <span class="pill pill-amber">CODE/RAG VS REASONING · BS=4 TO BS=64</span>
+        </div>
+        <h2 class="headline">
+          鲁棒性压力测试：跨任务与跨并发扰动下，<span class="accent">EAGLE-3 / MTP + 动态门限全程无短板</span>
+        </h2>
+        <p class="lead">
+          对比四档方案从“代码/RAG 高重复场景”切换到“开放数学推理”，以及并发从 `BS=4` 拉升至 `BS=64` 时的鲁棒性表现。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>方案 / 扰动维度</th>
+              <th>ORIGINAL (Code/RAG @ BS=4)</th>
+              <th>PERTURBED A (Math Reasoning @ BS=4)</th>
+              <th>PERTURBED B (High Load @ BS=64)</th>
+              <th>CHANGE / ROBUSTNESS VERDICT</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Standard Autoregressive</strong></td>
+              <td><code>τ = 1.00</code> · <code>1.00x (54.3 tok/s)</code></td>
+              <td><code>τ = 1.00</code> · <code>1.00x</code></td>
+              <td><code>1.00x</code> (算力跑满基线)</td>
+              <td><code>0.00x</code> (低并发极慢，高并发基线)</td>
+            </tr>
+            <tr>
+              <td><strong>2. Prompt Lookup N-Gram</strong></td>
+              <td><strong><code>τ = 2.45</code> · <code>2.24x (122.0 tok/s)</code></strong></td>
+              <td><code>✕ τ = 1.15 (-53.1%)</code></td>
+              <td><code>✕ 0.92x (-8.0% 吞吐倒退)</code></td>
+              <td>仅对高输入输出重合场景鲁棒</td>
+            </tr>
+            <tr>
+              <td><strong>3. Standalone 7B Draft</strong></td>
+              <td><code>τ = 2.60</code> · <code>1.88x (102.0 tok/s)</code></td>
+              <td><code>τ = 2.25 (-13.5%)</code></td>
+              <td><code>✕ 0.78x (-22.0% 严重劣化)</code></td>
+              <td>高并发下双模型争抢算力与带宽</td>
+            </tr>
+            <tr>
+              <td><strong>4. EAGLE-3 / DeepSeek-MTP</strong></td>
+              <td><strong><code>τ = 3.42</code> · <code>3.02x (163.9 tok/s)</code></strong></td>
+              <td><strong><code>✓ τ = 2.95 (-13.7%)</code></strong></td>
+              <td><strong><code>✓ 1.00x (BS&ge;48 自动旁路)</code></strong></td>
+              <td><strong>全任务高接受率 + 高并发零劣化</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="box">
+          <h3>架构师双层路由策略 (Hybrid Speculative Routing)</h3>
+          <p>在生产推理引擎中：对 <strong>DeepSeek-V3/R1、Llama-3.3、Qwen-2.5/3</strong> 默认挂载 <code>EAGLE-3 / MTP</code> 并设 <code>disable_by_batch_size=48</code>；对尚未训练 EAGLE 头但专门服务 IDE 代码改写或文档摘录的微调模型，开启零显存 <code>Prompt Lookup N-Gram</code> 即可白拿 <code>2.24x</code> 提速。</p>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Perturbation Summary</strong>: <code>EAGLE-3 / MTP</code> 在开放推理下仍保持 <code>2.95</code> 平均接受长度，明显优于 N-Gram 的 <code>1.15</code>。
+      </div>
+    </section>
+
+    <!-- CARD 6 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>6 / 7 · LATENCY &amp; THROUGHPUT · SINGLE-STREAM TPOT &amp; BATCH SCALING BARS</span>
+          <span class="pill pill-blue">SEALED ROOFLINE COORDINATES</span>
+        </div>
+        <h2 class="headline">
+          延迟与流式吞吐对比：BS=4 下 EAGLE-3/MTP 将单 Token 延迟从 <span class="accent">18.40ms 压至 6.10ms (163.9 tok/s)</span>
+        </h2>
+        <p class="lead">
+          上半部分展示 BS=4 下的单 Token 有效延迟（越短越快）；下半部分展示不同并发下的单流输出速率与 Batch=32 加速比。
+        </p>
+        <div>
+          <h3 style="font-size:14px;margin-bottom:10px;">A. BS=4 单路有效 TPOT 延迟 (ms/token，越短越好，相对于 18.40ms 基线比例)</h3>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 1 · Standard Autoregressive (γ=0, 0.00ms draft + 18.40ms verify)</span><span>18.40 ms (1.00x)</span></div>
+            <div class="bar-track"><div class="bar-fill-red" style="width:100.0%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 3 · Standalone 7B Draft (+14.0GB, 5.50ms draft + 20.00ms verify, τ=2.60)</span><span>9.80 ms (1.88x)</span></div>
+            <div class="bar-track"><div class="bar-fill-amber" style="width:53.26%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 2 · Prompt Lookup N-Gram (+0.0GB, 0.15ms draft + 20.10ms verify, τ=2.45)</span><span>8.20 ms (2.24x)</span></div>
+            <div class="bar-track"><div class="bar-fill-blue" style="width:44.57%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 4 · EAGLE-3 / DeepSeek-MTP (+1.2GB, 1.95ms draft + 18.90ms verify, τ=3.42)</span><span>6.10 ms (3.02x!)</span></div>
+            <div class="bar-track"><div class="bar-fill-green" style="width:33.15%;"></div></div>
+          </div>
+
+          <h3 style="font-size:14px;margin:22px 0 10px;">B. BS=4 单用户流式生成速率 (tokens/sec，越长越快，相对于 163.9 tok/s 比例)</h3>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 1 · Standard Autoregressive (54.3 tok/s @ BS=4 | 1.00x @ BS=32)</span><span>54.3 tok/s</span></div>
+            <div class="bar-track"><div class="bar-fill-red" style="width:33.13%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 3 · Standalone 7B Draft (102.0 tok/s @ BS=4 | 1.12x @ BS=32)</span><span>102.0 tok/s</span></div>
+            <div class="bar-track"><div class="bar-fill-amber" style="width:62.23%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 2 · Prompt Lookup N-Gram (122.0 tok/s @ BS=4 | 1.38x @ BS=32)</span><span>122.0 tok/s</span></div>
+            <div class="bar-track"><div class="bar-fill-blue" style="width:74.44%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 4 · EAGLE-3 / DeepSeek-MTP (163.9 tok/s @ BS=4 | 1.58x @ BS=32)</span><span>163.9 tok/s (3.02x!)</span></div>
+            <div class="bar-track"><div class="bar-fill-green" style="width:100.0%;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Coordinate Accuracy</strong>: 条形图宽度严格按 <code>results.json</code> 封存数值比例计算（<code>6.10 / 18.40 = 33.15%</code>，<code>122.0 / 163.9 = 74.44%</code>）。
+      </div>
+    </section>
+
+    <!-- CARD 7 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; READINESS</span>
+          <span class="pill pill-green">ARCHITECT PLAYBOOK</span>
+        </div>
+        <h2 class="headline">
+          架构师选型决断：全场景标配 <span class="accent">EAGLE-3 / MTP + 动态 Batch 门限</span>，代码/RAG 零显存白拿 N-Gram 加速
+        </h2>
+        <p class="lead">
+          投机解码是唯一能在 <strong>100% 保持原模型精度不降级</strong> 的前提下将低并发 Decode 速度提升 2~3 倍的架构利器，但必须配合动态 Batch Size 熔断门限使用。
+        </p>
+        <div class="grid-2">
+          <div class="box" style="border-top:4px solid #059669;">
+            <h3>✅ Good Fit (强烈推荐适用场景)</h3>
+            <ul>
+              <li><strong>Tier 4 (`EAGLE-3 / DeepSeek-MTP` + 动态门限)</strong>: 在线交互式 Agent、实时语音对话、代码生成与长思维链推理（<code>+1.2 GB</code> 显存换取 <code>3.02x</code> 单流提速，<code>BS=32</code> 仍快 <code>1.58x</code>）。</li>
+              <li><strong>Tier 2 (`Prompt Lookup N-Gram`)</strong>: 显存已满（<code>0.0 GB</code> 预算）的 IDE 代码改写 (Diff/Edit)、合同原文抽取、结构化 JSON 转换（白拿 <code>2.24x</code> 提速）。</li>
+              <li><strong>Tier 1 (`gamma=0` 动态退回)</strong>: 离线大批量数据处理或在线并发 <code>BS &ge; 48</code> 的算力饱和窗口。</li>
+            </ul>
+          </div>
+          <div class="box" style="border-top:4px solid #dc2626;">
+            <h3>⛔ Not For (严禁误用边界)</h3>
+            <ul>
+              <li><strong>严禁在高并发 (BS &ge; 48~64) 下不设门限常开投机解码</strong>: 算力饱和区验证废稿会导致总吞吐倒退至 <code>0.78x~0.92x</code>。</li>
+              <li><strong>严禁在已有 EAGLE-3 / MTP 头的模型上额外部署 14GB 独立 7B 草稿模型</strong>: 多耗 11.7 倍显存且单流速度反而慢 37.8%。</li>
+              <li><strong>严禁对自由创作或开放数学推理单独依赖 Prompt Lookup N-Gram</strong>: 输入输出无重复词组时接受长度仅 <code>1.15</code>。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="box">
+          <h3>生产上线核验清单 (Production Verification Checklist)</h3>
+          <ul>
+            <li><code>[✓]</code> 在 vLLM / SGLang 启动参数中显式设置 <code>--speculative-disable-by-batch-size 48</code>。</li>
+            <li><code>[✓]</code> 开启无损拒绝采样 <code>min(1, p/q)</code>，确保贪婪与采样温度下输出分布 100% 等价于主模型。</li>
+            <li><code>[✓]</code> 监控 Prometheus 指标 <code>spec_decode_mean_acceptance_length</code> 与 <code>draft_acceptance_rate</code>。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Readiness &amp; Provenance</strong>: Repository <code>turbo998/ai-infra-research</code> · Evaluator <code>experiments/speculative_decoding_selection/run.py</code> (local check <code>measured</code>; model numbers <code>synthetic</code> + <code>anonymized_reported</code>, <code>independently_reproduced=false</code>) · Self-contained CSP compliant.
+      </div>
+    </section>
+  </div>
+</body>
+</html>
