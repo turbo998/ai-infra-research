@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training Checkpoint Architecture &amp; Long-Context KV Cache Tiered Offload — 7-Card Benchmark Report</title>
+<style>
+  :root {
+    --bg: #020617;
+    --card-bg: #FFFFFF;
+    --card-border: #E2E8F0;
+    --ink: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --panel: #F8FAFC;
+    --code-bg: #0F172A;
+    --blue: #2563EB;
+    --blue-bar: #3B82F6;
+    --gray-bar: #CBD5E1;
+    --green-bg: #ECFDF5;
+    --green-border: #10B981;
+    --green-ink: #065F46;
+    --amber-bg: #FFFBEB;
+    --amber-border: #F59E0B;
+    --amber-ink: #92400E;
+    --red-bg: #FEF2F2;
+    --red-border: #EF4444;
+    --red-ink: #991B1B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+  }
+  .deck-header {
+    max-width: 900px;
+    width: 100%;
+    color: #F8FAFC;
+    text-align: left;
+  }
+  .deck-header h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94A3B8; line-height: 1.5; }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 24px;
+    border: 1px solid var(--card-border);
+    padding: 40px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.45);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--subtle);
+    text-transform: uppercase;
+    border-bottom: 2px solid #F1F5F9;
+    padding-bottom: 14px;
+    margin-bottom: 22px;
+  }
+  .badge-track {
+    background: #EFF6FF;
+    color: var(--blue);
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid #BFDBFE;
+  }
+  h2.finding {
+    font-size: 28px;
+    line-height: 1.24;
+    font-weight: 800;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }
+  .accent-grad {
+    background: linear-gradient(90deg, #2563EB 0%, #7C3AED 55%, #059669 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.lead {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin-bottom: 22px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .panel h3 {
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--subtle);
+    margin-bottom: 10px;
+    letter-spacing: 0.04em;
+  }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .pill {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #E2E8F0;
+    color: var(--ink);
+  }
+  .pill.green { background: var(--green-bg); color: var(--green-ink); border: 1px solid var(--green-border); }
+  .pill.amber { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber-border); }
+  .pill.red { background: var(--red-bg); color: var(--red-ink); border: 1px solid var(--red-border); }
+  .pill.blue { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+  .decision-card {
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    background: #FFFFFF;
+  }
+  .decision-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .bar-track {
+    width: 100%;
+    height: 12px;
+    background: #E2E8F0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .bar-fill { height: 100%; background: var(--blue-bar); border-radius: 999px; }
+  .bar-fill.green { background: #10B981; }
+  .bar-fill.amber { background: #F59E0B; }
+  .bar-fill.red { background: #EF4444; }
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  table.matrix th {
+    background: #0F172A;
+    color: #F8FAFC;
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  table.matrix td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: top;
+    line-height: 1.45;
+  }
+  pre.code-box {
+    background: var(--code-bg);
+    color: #E2E8F0;
+    padding: 16px 18px;
+    border-radius: 12px;
+    font-family: "Consolas", "SFMono-Regular", monospace;
+    font-size: 12.2px;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin-bottom: 14px;
+  }
+  .bar-compare-row { margin-bottom: 16px; }
+  .bar-compare-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .paired-bars { display: flex; flex-direction: column; gap: 6px; }
+  .bar-line { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; }
+  .bar-rect { height: 18px; border-radius: 6px; }
+  .callout-dark {
+    background: #0F172A;
+    color: #F8FAFC;
+    border-radius: 14px;
+    padding: 18px 20px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .callout-dark strong { color: #38BDF8; }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>Training Checkpoint Architecture &amp; Long-Context KV Cache Tiered Offload — 7-Card Visual Benchmark Deck</h1>
+  <p>Companion 4:5 Report for Single-Decision FAQs: <code>docs/components/training-checkpoint-architecture-selection-faq.md</code> (Round 3) &amp; <code>docs/components/kv-cache-tiered-offload-selection-faq.md</code> (Round 4) · 100% bound to <code>experiments/ai_storage_checkpoint_kv_offload/results.json</code></p>
+</div>
+
+<!-- CARD 1 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>1 / 7 · HANDS-ON · AI STORAGE &amp; MEMORY TIERING</span>
+      <span class="badge-track">CHECKPOINT &amp; KV OFFLOAD SELECTION</span>
+    </div>
+    <h2 class="finding">Two-Phase Async DCP Cuts 512-GPU Checkpoint Stalls <span class="accent-grad">72.0× (225s → 3.125s)</span> While Host/RDMA KV Tiering Speeds Up 64K TTFT <span class="accent-grad">12.6×–15.0×</span></h2>
+    <p class="lead">Decoupling GPU execution from network storage persistence is the highest-ROI infrastructure upgrade for both distributed training and long-context multi-turn LLM serving.</p>
+
+    <div class="grid-3">
+      <div class="panel">
+        <h3>1. Workload &amp; Gates</h3>
+        <p style="font-size:13px; color:var(--muted); line-height:1.5;">
+          • <strong>Round 3 Training</strong>: 512×H100 (64 nodes), 9,000 GB checkpoint every 1,800s.<br>
+          • <strong>Round 4 Serving</strong>: 64K (65,536 tok) multi-turn resume, 2.048 GB FP8 KV payload, 12.0 ms delta prefill.<br>
+          • <strong>Target Gate</strong>: &gt;99% training goodput; &lt;100 ms resume TTFT.
+        </p>
+      </div>
+      <div class="panel">
+        <h3>2. Physical Bottlenecks</h3>
+        <p style="font-size:13px; color:var(--muted); line-height:1.5;">
+          • <strong>Sync POSIX (40 GB/s)</strong>: Freezes all 512 GPUs for 225.0s per save (12.5% cluster waste).<br>
+          • <strong>HBM KV Eviction</strong>: Recomputing 64K tokens burns 780.0 ms TTFT ($0.96/1M tokens).<br>
+          • <strong>TCP NFS Trap (3.2 GB/s)</strong>: 652.0 ms TTFT (only 1.20× faster than recompute).
+        </p>
+      </div>
+      <div class="panel">
+        <h3>3. Top Architect Decisions</h3>
+        <div class="pill-row">
+          <span class="pill green">Training: 2-Phase Async DCP (3.125s)</span>
+          <span class="pill blue">Transport: GDS DMA (360 GB/s)</span>
+          <span class="pill green">Single-Node KV: Host DRAM (52.0ms)</span>
+          <span class="pill blue">Cluster KV: RDMA NVMe+GDS (62.0ms)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:18px;">
+      <h3>Quantitative Summary Bound to Sealed Ground Truth (experiments/ai_storage_checkpoint_kv_offload/results.json)</h3>
+      <table class="matrix" style="margin-bottom:0;">
+        <thead>
+          <tr>
+            <th>Decision Domain</th>
+            <th>Baseline Bottleneck</th>
+            <th>Recommended Production Architecture</th>
+            <th>Verified Gain &amp; Economic Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Round 3: 512-GPU Checkpoint (9,000 GB / 30 min)</strong></td>
+            <td>Sync POSIX Lustre (40.0 GB/s): <strong>225.0 s</strong> stall · <strong>87.50%</strong> goodput</td>
+            <td>Two-Phase Async DCP (Stage 1 Pinned DRAM 2,880 GB/s + Stage 2 50.0 s BG flush)</td>
+            <td><strong>3.125 s</strong> stall (<strong>72.0×</strong> faster) · <strong>99.83%</strong> goodput (<strong>+$181,813.25/mo</strong> saved)</td>
+          </tr>
+          <tr>
+            <td><strong>Round 4: 64K Multi-Turn KV Resume (2.048 GB FP8)</strong></td>
+            <td>HBM Evict + Full Recompute: <strong>780.0 ms</strong> TTFT · <strong>$0.96 / 1M</strong> tokens</td>
+            <td>L2 Host Pinned DRAM (51.2 GB/s) or L3 Shared RDMA NVMe+GDS Pool (40.96 GB/s)</td>
+            <td><strong>52.0 ms</strong> (<strong>15.0×</strong>) / <strong>62.0 ms</strong> (<strong>12.58×</strong>) TTFT · <strong>$0.44–$0.48 / 1M</strong> (<strong>-50% to -54.2%</strong>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <strong>Provenance &amp; Hardware Boundary</strong>: Deterministic roofline &amp; I/O queueing simulation (<code>synthetic</code>) calibrated to published PyTorch DCP, NVIDIA GDS, 3FS, Mooncake, and LMCache throughput specs (<code>anonymized_reported</code>, <code>independently_reproduced: false</code>). Local verification harness (<code>run.py --check</code>) is <code>measured</code>; live 512-GPU storage fabric and 8×H200 physical cluster execution are <code>not_measured</code> (no paid cloud GPUs launched).
+  </div>
+</section>
+
+<!-- CARD 2 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>2 / 7 · SCENARIO: 512-GPU CHECKPOINT &amp; 64K KV RESUME</span>
+      <span class="badge-track">SINGLE-CASE DEEP DIVE</span>
+    </div>
+    <h2 class="finding">3 Architecture Decisions Recover <span class="accent-grad">$181.8K/mo Training Compute</span> and Cut 64K Agent Resume Latency Under 65 ms</h2>
+    <div class="panel" style="margin-bottom:18px; background:#EFF6FF; border-color:#BFDBFE;">
+      <p style="font-size:13.5px; color:#1E3A8A; line-height:1.5;">
+        <strong>Architect Scenario Input</strong>: (1) A 512×H100 (64-node) pre-training cluster saves 9,000 GB of BF16 weights + FP32 Adam optimizer states every 30 minutes (1,800s) at $4.00/GPU-hr ($1,474,560/mo budget). (2) An 8×H200 64K-context coding agent cluster serves multi-turn sessions (2.048 GB FP8 KV cache per session) where user think-time evicts KV blocks from HBM.
+      </p>
+    </div>
+
+    <div class="decision-stack">
+      <div class="decision-card">
+        <div class="decision-head">
+          <div>
+            <span class="pill blue">choice · Round 3 Training Checkpoint</span>
+            <strong style="margin-left:8px; font-size:15px;">Select Two-Phase Asynchronous Checkpoint (PyTorch DCP AsyncStager)</strong>
+          </div>
+          <span class="pill green">Act automatically · 99.83% Goodput</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted);">Stage 1 copies 140.625 GB/node over PCIe Gen5 to Host Pinned DRAM at 45.0 GB/s/node (2,880.0 GB/s aggregate) in <strong>3.125 s</strong>; Stage 2 flushes to parallel storage in <strong>50.0 s</strong> in the background.</p>
+        <div class="bar-track"><div class="bar-fill green" style="width:99.83%;"></div></div>
+      </div>
+
+      <div class="decision-card">
+        <div class="decision-head">
+          <div>
+            <span class="pill blue">choice · Round 4 Single-Node KV Offload</span>
+            <strong style="margin-left:8px; font-size:15px;">Select Host Pinned DRAM Pool (PCIe Gen5 Zero-Copy DMA · 51.2 GB/s)</strong>
+          </div>
+          <span class="pill green">Act automatically · 52.0 ms TTFT (15.0×)</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted);">Reloads 2.048 GB FP8 KV cache in <strong>40.0 ms</strong> + <strong>12.0 ms</strong> delta prefill = <strong>52.0 ms</strong> total resume TTFT, cutting token cost by <strong>54.2%</strong> ($0.96 → $0.44 / 1M tokens) when sticky routing is enabled.</p>
+        <div class="bar-track"><div class="bar-fill" style="width:93.3%;"></div></div>
+      </div>
+
+      <div class="decision-card">
+        <div class="decision-head">
+          <div>
+            <span class="pill blue">score · Round 4 Multi-Node Disaggregated KV Pool</span>
+            <strong style="margin-left:8px; font-size:15px;">Select Shared RDMA NVMe + GDS Pool (Mooncake / LMCache + NIXL · 40.96 GB/s)</strong>
+          </div>
+          <span class="pill green">Act automatically · 62.0 ms TTFT (12.58×)</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted);">Any stateless decode/prefill node pulls 2.048 GB KV over 400GbE RDMA + GDS in <strong>50.0 ms</strong> + <strong>12.0 ms</strong> delta prefill = <strong>62.0 ms</strong> TTFT ($0.48 / 1M tokens, <strong>-50.0%</strong> cost). Rejects TCP POSIX NFS (652.0 ms).</p>
+        <div class="bar-track"><div class="bar-fill" style="width:88.0%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <strong>Architectural Boundary Note</strong>: GPUDirect Storage (GDS / <code>cuFile</code>) is an I/O transport acceleration path (DMA bypassing CPU Page Cache), <strong>not</strong> a standalone storage filesystem. It pairs with RDMA parallel filesystems (Lustre, WEKA, 3FS) for both synchronous GDS checkpoints (25.0s stall) and Tier-3 KV cache pools.
+  </div>
+</section>
+
+<!-- CARD 3 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>3 / 7 · WHAT I TESTED</span>
+      <span class="badge-track">FULL EVALUATION MATRIX</span>
+    </div>
+    <h2 class="finding">7 Evaluated Storage &amp; Memory Tiers Show Why <span class="accent-grad">Blocking POSIX I/O</span> Fails Both Training and Inference</h2>
+    <p class="lead">Every row below is directly verified by <code>experiments/ai_storage_checkpoint_kv_offload/run.py --check</code> against <code>results.json</code>.</p>
+
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Architecture / Tier</th>
+          <th>Model Quantitative Output</th>
+          <th>Architect Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>R3: 512-GPU Checkpoint</strong><br>(9,000 GB / 1,800s)</td>
+          <td><code>sync_posix_lustre</code><br>(40.0 GB/s shared POSIX)</td>
+          <td>✕ <strong>225.0 s</strong> GPU stall (1.0×) · <strong>87.50%</strong> goodput · 12.50% compute lost</td>
+          <td><span class="pill red">✕ Reject for ≥128 GPUs</span></td>
+        </tr>
+        <tr>
+          <td><strong>R3: 512-GPU Checkpoint</strong><br>(9,000 GB / 1,800s)</td>
+          <td><code>sync_gds_rdma_fs</code><br>(360.0 GB/s GDS + RDMA FS)</td>
+          <td><strong>25.0 s</strong> GPU stall (<strong>9.0×</strong> speedup) · <strong>98.61%</strong> goodput (+11.11 pts)</td>
+          <td><span class="pill amber">Confirm (RAM-Constrained)</span></td>
+        </tr>
+        <tr>
+          <td><strong>R3: 512-GPU Checkpoint</strong><br>(9,000 GB / 1,800s)</td>
+          <td><code>two_phase_async_dram_nvme</code><br>(2,880.0 GB/s Stage 1 DCP)</td>
+          <td><strong>3.125 s</strong> GPU stall (<strong>72.0×</strong>) · 50.0 s BG flush · <strong>99.83%</strong> goodput · <strong>+$181,813.25/mo</strong></td>
+          <td><span class="pill green">Act automatically (Default)</span></td>
+        </tr>
+        <tr>
+          <td><strong>R4: 64K KV Resume</strong><br>(2.048 GB FP8 KV)</td>
+          <td><code>hbm_evict_recompute</code><br>(Full 64K prefill recompute)</td>
+          <td>✕ <strong>780.0 ms</strong> Resume TTFT (1.0×) · <strong>$0.96 / 1M</strong> tokens</td>
+          <td><span class="pill red">✕ Reject for Multi-Turn</span></td>
+        </tr>
+        <tr>
+          <td><strong>R4: 64K KV Resume</strong><br>(2.048 GB FP8 KV)</td>
+          <td><code>cloud_posix_tcp_nofs</code><br>(3.2 GB/s TCP NFS + Page Cache)</td>
+          <td>✕ <strong>652.0 ms</strong> TTFT (640.0 ms load + 12.0 ms) · <strong>1.20×</strong> · <strong>$0.84 / 1M</strong> (-12.5%)</td>
+          <td><span class="pill red">✕ Reject (TCP/POSIX Trap)</span></td>
+        </tr>
+        <tr>
+          <td><strong>R4: 64K KV Resume</strong><br>(2.048 GB FP8 KV)</td>
+          <td><code>shared_rdma_nvme_gds</code><br>(40.96 GB/s RDMA NVMe + GDS)</td>
+          <td><strong>62.0 ms</strong> TTFT (50.0 ms load + 12.0 ms) · <strong>12.58×</strong> · <strong>$0.48 / 1M</strong> (<strong>-50.0%</strong>)</td>
+          <td><span class="pill green">Act automatically (Cluster)</span></td>
+        </tr>
+        <tr>
+          <td><strong>R4: 64K KV Resume</strong><br>(2.048 GB FP8 KV)</td>
+          <td><code>host_dram_pinned_pcie5</code><br>(51.2 GB/s PCIe Gen5 Pinned)</td>
+          <td><strong>52.0 ms</strong> TTFT (40.0 ms load + 12.0 ms) · <strong>15.0×</strong> · <strong>$0.44 / 1M</strong> (<strong>-54.2%</strong>)</td>
+          <td><span class="pill green">Act automatically (Sticky)</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="grid-2" style="margin-bottom:0;">
+      <div class="panel">
+        <h3>Threshold Gating Logic</h3>
+        <p style="font-size:12.8px; color:var(--muted); line-height:1.48;">
+          • <strong>Training Gate</strong>: Stage 2 background flush (50.0 s) must complete within &lt;20% of checkpoint interval (1,800 s) so consecutive checkpoints never queue-block.<br>
+          • <strong>Serving Gate</strong>: Offload reload bandwidth must exceed 25 GB/s so 2.048 GB KV transfers in &lt;85 ms.
+        </p>
+      </div>
+      <div class="panel">
+        <h3>Failure Mode Analysis (✕ Misses)</h3>
+        <p style="font-size:12.8px; color:var(--muted); line-height:1.48;">
+          • <strong>Why TCP POSIX NFS Fails KV Offload</strong>: At 3.2 GB/s and double kernel-buffer copies, pulling 2.048 GB takes 640.0 ms—saving only 128 ms vs full GPU recomputation while saturating host CPU cores.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <strong>Verification Command</strong>: <code>python experiments/ai_storage_checkpoint_kv_offload/run.py --check</code> &amp; <code>python -m unittest tests/test_ai_storage_checkpoint_kv_offload.py</code> (3/3 deterministic assertions passed).
+  </div>
+</section>
+
+<!-- CARD 4 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>4 / 7 · UNDER THE HOOD</span>
+      <span class="badge-track">PROTOCOL &amp; SCORING MECHANICS</span>
+    </div>
+    <h2 class="finding">First-Principles Governing Equations for <span class="accent-grad">Two-Phase Checkpoint Goodput</span> &amp; <span class="accent-grad">Tiered KV Resume TTFT</span></h2>
+    <p class="lead">Transparent deterministic formulas ensure every latency, stall duration, and dollar figure in the FAQs and H5 calculators is 100% auditable.</p>
+
+    <pre class="code-box">// 1. Input Contract (experiments/ai_storage_checkpoint_kv_offload/results.json)
+{
+  "checkpoint_scenario": {
+    "cluster_gpus": 512, "nodes": 64, "checkpoint_size_gb": 9000.0,
+    "checkpoint_interval_sec": 1800.0, "gpu_hourly_cost_usd": 4.0,
+    "per_node_shard_gb": 140.625, "stage1_per_node_bw_gbps": 45.0,
+    "stage2_persist_bw_gbps": 180.0
+  },
+  "kv_tiering_scenario": {
+    "context_tokens": 65536, "kv_cache_size_gb_fp8": 2.048,
+    "delta_prefill_ms": 12.0, "recompute_ttft_ms": 780.0
+  }
+}</pre>
+
+    <div style="text-align:center; font-weight:800; color:var(--blue); margin: 4px 0 8px;">↓ Deterministic Roofline &amp; Queueing Verifier Flow (&lt;answer&gt;) ↓</div>
+
+    <pre class="code-box">// 2. Deterministic Verifier Equations (experiments/ai_storage_checkpoint_kv_offload/run.py)
+# Round 3: Two-Phase Async Checkpoint Stall &amp; Monthly Recovered Compute
+per_node_shard_gb   = 9000.0 / 64                        # = 140.625 GB / node
+stage1_gpu_stall_s  = per_node_shard_gb / 45.0           # = 3.125 s (vs 225.0 s POSIX = 72.0x)
+stage2_bg_flush_s   = 9000.0 / 180.0                     # = 50.0 s (&lt;&lt; 1800.0 s interval)
+goodput_async_pct   = (1800.0 - 3.125) / 1800.0 * 100.0  # = 99.83% (vs 87.50% POSIX = +12.33 pts)
+monthly_budget_usd  = 512 * 4.0 * 720                    # = $1,474,560.00 / month
+recovered_usd_month = monthly_budget_usd * ((99.83 - 87.50) / 100.0) # = $181,813.25 / month
+
+# Round 4: Long-Context 64K KV Cache Tiered Reload TTFT
+reload_ms(bw_gbps)  = (2.048 / bw_gbps) * 1000.0         # Host DRAM (51.2 GB/s) -&gt; 40.0 ms
+                                                         # RDMA NVMe+GDS (40.96 GB/s) -&gt; 50.0 ms
+resume_ttft_ms      = reload_ms(bw_gbps) + 12.0          # Host DRAM: 52.0 ms (15.0x vs 780 ms)
+                                                         # RDMA NVMe+GDS: 62.0 ms (12.58x vs 780 ms)</pre>
+  </div>
+
+  <div class="callout-dark">
+    <strong>Zero Unbound Prose Rule</strong>: All numbers in <code>training-checkpoint-architecture-selection-faq.md</code> and <code>kv-cache-tiered-offload-selection-faq.md</code> are strictly bound to the equations above; no unverified narrative percentages exist.
+  </div>
+</section>
+
+<!-- CARD 5 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>5 / 7 · ROBUSTNESS CHECK</span>
+      <span class="badge-track">PERTURBATION &amp; SCALING SENSITIVITY</span>
+    </div>
+    <h2 class="finding">Architecture Ranking Holds Across <span class="accent-grad">Failure-Frequency Shifts</span>, Host RAM Limits, and Context Scaling</h2>
+    <p class="lead">Sensitivity checks across checkpoint intervals (15 min vs 30 min) and KV payload sizes (32K vs 64K vs 128K) confirm stable decision boundaries.</p>
+
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>Perturbation Dimension</th>
+          <th>Baseline Condition</th>
+          <th>Perturbed / Reversed Condition</th>
+          <th>Change &amp; Decision Stability</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Checkpoint Interval Halved</strong><br>(Higher MTBF failure rate)</td>
+          <td>Every 30 min (1,800 s):<br>Sync POSIX = 87.50% goodput<br>Async DCP = 99.83% goodput</td>
+          <td>Every 15 min (900 s):<br>Sync POSIX drops to <strong>75.00%</strong><br>Async DCP stays at <strong>99.65%</strong></td>
+          <td><strong>+24.65 pts</strong> advantage for Async DCP (Stage 2 50s still &lt;&lt; 900s). Ranking unchanged.</td>
+        </tr>
+        <tr>
+          <td><strong>2. Host Pinned DRAM Saturation</strong><br>(Insufficient free host RAM)</td>
+          <td>≥300 GB free Host RAM/node:<br>2-Phase Async DCP (<strong>3.125 s</strong> stall)</td>
+          <td>&lt;150 GB free Host RAM/node:<br>Fallback to Sync GDS + RDMA FS (<strong>25.0 s</strong> stall, <strong>98.61%</strong> goodput)</td>
+          <td><strong>+21.875 s</strong> stall vs Async DCP, but still <strong>9.0× faster</strong> than Sync POSIX (225.0 s).</td>
+        </tr>
+        <tr>
+          <td><strong>3. KV Precision Unquantized</strong><br>(BF16 KV instead of FP8 KV)</td>
+          <td>64K FP8 KV (<strong>2.048 GB</strong>):<br>Host DRAM = <strong>52.0 ms</strong> TTFT<br>RDMA GDS = <strong>62.0 ms</strong> TTFT</td>
+          <td>64K BF16 KV (<strong>4.096 GB</strong>):<br>Host DRAM = <strong>92.0 ms</strong> TTFT<br>RDMA GDS = <strong>112.0 ms</strong> TTFT</td>
+          <td><strong>+40 to +50 ms</strong> transfer time; still <strong>6.9×–8.5× faster</strong> than recompute. FP8 KV strongly advised.</td>
+        </tr>
+        <tr>
+          <td><strong>4. Stateless Load Balancing</strong><br>(No session stickiness)</td>
+          <td>Sticky routing (100% local hit):<br>Host Pinned DRAM (<strong>52.0 ms</strong>) wins</td>
+          <td>Round-robin across 8 nodes (12.5% local hit):<br>Shared RDMA NVMe+GDS (<strong>62.0 ms</strong>) wins</td>
+          <td>Local Host DRAM misses fall back to 780 ms recompute; <strong>Shared RDMA Pool</strong> wins by <strong>10.9×</strong>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout-dark">
+    <strong>Key Robustness Takeaway</strong>: Single-node Host Pinned DRAM (52.0 ms) is fastest only with session-affinity routing; as soon as requests route across multiple stateless instances or PD-disaggregated pools, <strong>Shared RDMA NVMe + GDS (62.0 ms)</strong> becomes mandatory.
+  </div>
+</section>
+
+<!-- CARD 6 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>6 / 7 · LATENCY &amp; STALL SCALING</span>
+      <span class="badge-track">PAIRED BAR COMPARISON</span>
+    </div>
+    <h2 class="finding">Visualizing the <span class="accent-grad">72.0× Checkpoint Stall Collapse</span> and <span class="accent-grad">15.0× KV Resume Speedup</span></h2>
+    <p class="lead">Blue bars (<code>#3B82F6</code>) show optimized non-blocking / DMA architectures against gray baseline bars (<code>#CBD5E1</code>), with exact proportions bound to <code>results.json</code>.</p>
+
+    <div class="panel" style="margin-bottom:18px;">
+      <h3>Part A — 512-GPU Checkpoint Blocking Stall Duration (Lower is Better · Baseline = 225.0 s)</h3>
+
+      <div class="bar-compare-row">
+        <div class="bar-compare-label">
+          <span>1. Synchronous POSIX Lustre (40.0 GB/s · Baseline)</span>
+          <span>225.0 s GPU Stall (87.50% Goodput)</span>
+        </div>
+        <div class="paired-bars">
+          <div class="bar-line">
+            <div class="bar-rect" style="width:100%; background:var(--gray-bar);"></div>
+            <span>225.0 s (1.0×)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bar-compare-row">
+        <div class="bar-compare-label">
+          <span>2. Synchronous GDS + RDMA Parallel FS (360.0 GB/s · Zero-Copy DMA)</span>
+          <span>25.0 s GPU Stall (98.61% Goodput · 9.0× Faster)</span>
+        </div>
+        <div class="paired-bars">
+          <div class="bar-line">
+            <div class="bar-rect" style="width:11.11%; background:var(--blue-bar);"></div>
+            <span>25.0 s (9.0× speedup)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bar-compare-row" style="margin-bottom:0;">
+        <div class="bar-compare-label">
+          <span>3. Two-Phase Async DCP (2,880.0 GB/s Stage 1 Pinned DRAM + 50.0 s BG Flush)</span>
+          <span style="color:#059669;">3.125 s GPU Stall (99.83% Goodput · 72.0× Faster)</span>
+        </div>
+        <div class="paired-bars">
+          <div class="bar-line">
+            <div class="bar-rect" style="width:1.39%; min-width:8px; background:#10B981;"></div>
+            <span style="color:#059669;">3.125 s (72.0× speedup · +$181,813.25/mo)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Part B — 64K Multi-Turn Session Resume TTFT (Lower is Better · Baseline = 780.0 ms)</h3>
+
+      <div class="bar-compare-row">
+        <div class="bar-compare-label">
+          <span>1. HBM Eviction + Full 64K Prefill Recompute (Baseline)</span>
+          <span>780.0 ms TTFT ($0.96 / 1M tokens)</span>
+        </div>
+        <div class="paired-bars">
+          <div class="bar-line">
+            <div class="bar-rect" style="width:100%; background:var(--gray-bar);"></div>
+            <span>780.0 ms (1.0×)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bar-compare-row">
+        <div class="bar-compare-label">
+          <span>2. Cloud POSIX TCP NFS Offload (3.2 GB/s · Kernel Page Cache Copy)</span>
+          <span style="color:#DC2626;">652.0 ms TTFT (640 ms load + 12 ms · 1.20× · $0.84 / 1M)</span>
+        </div>
+        <div class="paired-bars">
+          <div class="bar-line">
+            <div class="bar-rect" style="width:83.59%; background:#EF4444;"></div>
+            <span>652.0 ms (1.20× — TCP/POSIX Bottleneck)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bar-compare-row">
+        <div class="bar-compare-label">
+          <span>3. Shared RDMA NVMe + GDS Pool (40.96 GB/s · Mooncake / LMCache + NIXL)</span>
+          <span style="color:var(--blue);">62.0 ms TTFT (50 ms load + 12 ms · 12.58× · $0.48 / 1M)</span>
+        </div>
+        <div class="paired-bars">
+          <div class="bar-line">
+            <div class="bar-rect" style="width:7.95%; background:var(--blue-bar);"></div>
+            <span>62.0 ms (12.58× speedup · -50.0% cost)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bar-compare-row" style="margin-bottom:0;">
+        <div class="bar-compare-label">
+          <span>4. Local Host Pinned DRAM Pool (51.2 GB/s PCIe Gen5 Zero-Copy DMA)</span>
+          <span style="color:#059669;">52.0 ms TTFT (40 ms load + 12 ms · 15.0× · $0.44 / 1M)</span>
+        </div>
+        <div class="paired-bars">
+          <div class="bar-line">
+            <div class="bar-rect" style="width:6.67%; background:#10B981;"></div>
+            <span style="color:#059669;">52.0 ms (15.0× speedup · -54.2% cost)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <strong>Coordinate Integrity</strong>: Width percentages are exact ratios (<code>25.0/225.0 = 11.11%</code>, <code>3.125/225.0 = 1.39%</code>, <code>652.0/780.0 = 83.59%</code>, <code>62.0/780.0 = 7.95%</code>, <code>52.0/780.0 = 6.67%</code>).
+  </div>
+</section>
+
+<!-- CARD 7 -->
+<section class="card">
+  <div>
+    <div class="card-top">
+      <span>7 / 7 · MY TAKE</span>
+      <span class="badge-track">GOOD FIT VS NOT FOR &amp; READINESS</span>
+    </div>
+    <h2 class="finding">Architect Playbook: Separate <span class="accent-grad">Training Checkpoint Persistence</span> from <span class="accent-grad">Inference KV Memory Tiering</span></h2>
+    <p class="lead">Use this final card during customer architecture reviews to select the right storage and memory tier on the first try.</p>
+
+    <div class="grid-2">
+      <div class="panel" style="background:var(--green-bg); border-color:var(--green-border);">
+        <h3 style="color:var(--green-ink);">✅ Good Fit (When to Adopt)</h3>
+        <ul style="font-size:13.2px; color:var(--green-ink); line-height:1.6; padding-left:18px;">
+          <li><strong>Two-Phase Async DCP (Round 3)</strong>: Any ≥128-GPU training cluster with ≥2× shard size in free Host Pinned DRAM (e.g., ≥512 GB RAM/node for 140.625 GB shards). Cuts GPU stalls to <strong>3.125 s</strong> (<strong>99.83%</strong> goodput).</li>
+          <li><strong>Sync GDS + RDMA FS (Round 3)</strong>: Host-RAM-constrained training nodes attached to WEKA / Lustre / 3FS over RDMA with <code>nvidia-fs</code> enabled (<strong>25.0 s</strong> stall).</li>
+          <li><strong>Host Pinned DRAM KV Pool (Round 4)</strong>: Single-node or sticky-routed 32K–128K multi-turn Agent/Coding serving (<strong>52.0 ms</strong> resume TTFT, <strong>$0.44/1M</strong>).</li>
+          <li><strong>Shared RDMA NVMe + GDS KV Pool (Round 4)</strong>: Multi-node stateless serving or PD-disaggregated clusters sharing a 10–100 TB KV pool via Mooncake / LMCache + NIXL (<strong>62.0 ms</strong> TTFT, <strong>$0.48/1M</strong>).</li>
+        </ul>
+      </div>
+
+      <div class="panel" style="background:var(--red-bg); border-color:var(--red-border);">
+        <h3 style="color:var(--red-ink);">⛔ Not For (Anti-Patterns to Avoid)</h3>
+        <ul style="font-size:13.2px; color:var(--red-ink); line-height:1.6; padding-left:18px;">
+          <li><strong>Monolithic <code>torch.save()</code> on ≥128 GPUs</strong>: Gathering 9 TB to Rank 0 and writing synchronously over POSIX freezes the cluster for <strong>225.0 s</strong> and wastes <strong>$181.8K/mo</strong>.</li>
+          <li><strong>Treating GDS as a Filesystem</strong>: GDS (<code>cuFile</code>) is a DMA transport layer, not a storage backend—it cannot replace Lustre/WEKA/3FS or fix slow TCP NAS appliances.</li>
+          <li><strong>Mounting Cloud TCP/POSIX NFS for Real-Time KV Offload</strong>: At 3.2 GB/s, loading 2.048 GB KV takes <strong>640.0 ms</strong> (total TTFT <strong>652.0 ms</strong>), yielding only a 1.20× gain over recomputation.</li>
+          <li><strong>4 KB Unbatched KV Page Transfers</strong>: Small uncoalesced blocks destroy NVMe and RDMA throughput; always batch KV transfers into ≥2 MB blocks (64–256 tokens).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout-dark">
+    <strong>Production Readiness &amp; License Provenance</strong>: PyTorch Distributed Checkpoint (DCP, BSD-3-Clause), NVIDIA GPUDirect Storage / NIXL (Apache-2.0), Mooncake (Apache-2.0), LMCache (Apache-2.0), DeepSeek 3FS (MIT).<br>
+    <strong>Single-Decision FAQ Links</strong>: <code>docs/components/training-checkpoint-architecture-selection-faq.md</code> (Round 3) · <code>docs/components/kv-cache-tiered-offload-selection-faq.md</code> (Round 4) · Navigation stub: <code>docs/components/ai-storage-checkpoint-kv-offload-selection-faq.md</code>.
+  </div>
+</section>
+
+</body>
+</html>
