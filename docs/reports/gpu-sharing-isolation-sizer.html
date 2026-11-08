@@ -841,5 +841,88 @@ function updateGpuShareSizer() {
 }
 updateGpuShareSizer();
 </script>
+
+  <!-- ROUND 10: AI DATACENTER RACK DENSITY, POWER DELIVERY & COOLING SIZER -->
+  <div class="panel" id="cooling-power-sizer" style="margin-top: 24px; border-color: #06b6d4;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <h2 style="margin:0;color:#38bdf8;">❄️ Round 10 交互工作台：AI 智算中心高密机柜供电与液冷架构定容计算器 (Forced-Air vs. RDHx vs. 单相冷板 DLC vs. 浸没式液冷)</h2>
+      <span style="font-size:12px;background:#0f172a;color:#38bdf8;padding:4px 10px;border-radius:999px;border:1px solid #334155;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:16px;">
+      严格绑定封存算例 <code>experiments/ai_datacenter_cooling_power_selection/results.json</code>（基准：<code>1,152 GPUs = 16 × 72-GPU 超节点域</code>，基础硅片负荷 <code>1,984.0 kW</code>，3 年 <code>26,280 小时</code>）。拖动超节点域数量或调整工业电价，直观对比机柜占地、机房总功率、跨柜光模块 BOM 与三年综合基建 TCO。
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群规模 (72-GPU 超节点域数): <span id="coolDomainVal" style="color:#38bdf8;">16 域 (1,152 GPUs)</span></label>
+        <input type="range" id="coolDomainSlider" min="4" max="64" step="4" value="16" style="width:100%;margin-top:8px;" oninput="updateCoolSizer()" />
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-top:4px;"><span>4 域 (288 卡)</span><span>16 域 (1,152 卡基线)</span><span>64 域 (4,608 卡)</span></div>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">工业电价档位 (Electricity Tariff):</label>
+        <select id="coolRateSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateCoolSizer()">
+          <option value="0.08">$0.08 / kWh (绿电低电价园区)</option>
+          <option value="0.10" selected>$0.10 / kWh (标准基线电价)</option>
+          <option value="0.14">$0.14 / kWh (一线城市高电价机房)</option>
+        </select>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">机房散热与供电架构</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">所需机柜数 (密度)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">PUE / 总设施功率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">3 年总电费</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">跨柜光模块 + 液冷 CapEx</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">3 年综合基建 TCO</th>
+          </tr>
+        </thead>
+        <tbody id="coolSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="coolDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #38bdf8;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateCoolSizer() {
+  const domains = parseInt(document.getElementById('coolDomainSlider').value, 10) || 16;
+  const rate = parseFloat(document.getElementById('coolRateSelect').value) || 0.10;
+  const scale = domains / 16.0;
+  const gpus = domains * 72;
+  document.getElementById('coolDomainVal').textContent = `${domains} 域 (${gpus.toLocaleString()} GPUs)`;
+
+  const tiers = [
+    { name: 'Tier 1: 强制风冷 (冷热通道封闭)', racks: 4*domains, kwPerRack: 36.93, pue: 1.48, facKw: 3498.01*scale, optics: 4480000*scale, capex: 640000*scale, best: false },
+    { name: 'Tier 2: 背门热交换器 (RDHx 存量改造)', racks: 2*domains, kwPerRack: 69.95, pue: 1.28, facKw: 2864.95*scale, optics: 2240000*scale, capex: 1120000*scale, best: false },
+    { name: '🏆 Tier 3: 单相冷板液冷 (1-Phase DLC + CDU)', racks: 1*domains, kwPerRack: 128.34, pue: 1.12, facKw: 2299.85*scale, optics: 0, capex: 1680000*scale, best: true },
+    { name: 'Tier 4: 两相 / 全浸没式液冷 (Immersion)', racks: 1*domains, kwPerRack: 124.99, pue: 1.05, facKw: 2099.86*scale, optics: 0, capex: 3100000*scale, best: false }
+  ];
+
+  const hours = 26280;
+  const t1Total = (tiers[0].facKw * hours * rate) + tiers[0].optics + tiers[0].capex;
+  const t3Total = (tiers[2].facKw * hours * rate) + tiers[2].optics + tiers[2].capex;
+  const t3PowerSave = (tiers[0].facKw - tiers[2].facKw) * hours * rate;
+  const t3TotalSave = t1Total - t3Total;
+
+  const tbody = document.getElementById('coolSizerTbody');
+  tbody.innerHTML = tiers.map(t => {
+    const pwrCost = t.facKw * hours * rate;
+    const tot = pwrCost + t.optics + t.capex;
+    return `<tr style="border-bottom:1px solid #334155;${t.best?'background:rgba(6,182,212,0.12);':''}">
+      <td style="padding:10px;font-weight:700;color:${t.best?'#38bdf8':'#f8fafc'};">${t.name}</td>
+      <td style="padding:10px;"><code>${t.racks} 柜 (${t.kwPerRack.toFixed(2)} kW/柜)</code></td>
+      <td style="padding:10px;"><code>PUE ${t.pue.toFixed(2)} (${t.facKw.toFixed(1)} kW)</code></td>
+      <td style="padding:10px;"><code>$${Math.round(pwrCost).toLocaleString()}</code></td>
+      <td style="padding:10px;"><code>光 $${(t.optics/1e6).toFixed(2)}M + 液 $${(t.capex/1e6).toFixed(2)}M</code></td>
+      <td style="padding:10px;"><strong style="color:${t.best?'#34d399':'#cbd5e1'};">$${Math.round(tot).toLocaleString()}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('coolDecisionCallout').innerHTML =
+    `<strong>架构师选型建议 (${gpus.toLocaleString()} GPUs · 电价 $${rate.toFixed(2)}/kWh)</strong>：首选 <strong>Tier 3 单相冷板液冷 (1-Phase DLC + CDU + ORv3 54V DC 母排)</strong>，将机柜数从 <code>${4*domains} 柜</code> 压至 <code>${domains} 柜 (占地缩减 4.0x)</code>，解锁单柜 100% 无源铜缆 NVLink 背板（立省 <code>$${(4480000*scale).toLocaleString()}</code> 跨柜光模块）+ 3 年省电费 <code>$${Math.round(t3PowerSave).toLocaleString()}</code>，3 年综合基建 TCO 净省 <code>$${Math.round(t3TotalSave).toLocaleString()}</code>！`;
+}
+updateCoolSizer();
+</script>
 </body>
 </html>
