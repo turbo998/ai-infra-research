@@ -477,6 +477,101 @@ updateRoceSizer();
     <div id="roceDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #34d399;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
   </div>
 
-<script>updateRoceSizer();</script>
+<script>updateRoceSizer();
+const FAULT_DATA = [
+  { id: 'traditional_stop_the_world_restart', name: '1. Traditional Stop-the-World Restart (30m Timeout + Cold Pod + 30m Ckpt)', outage: 2520.0, rollback: 900.0, total: 3420.0, speedup: '1.00x' },
+  { id: 'fast_hang_detect_warm_spare_swap', name: '2. Flight Recorder (120s) + Warm-Spare Swap + GDS Reload', outage: 330.0, rollback: 900.0, total: 1230.0, speedup: '2.78x' },
+  { id: 'inplace_comm_shrink_elastic_async_ckpt', name: '3. In-Place ncclCommShrink / TorchElastic + 5m Two-Phase Async DCP', outage: 65.0, rollback: 150.0, total: 215.0, speedup: '15.91x' },
+  { id: 'torchft_in_memory_replica_peer_recovery', name: '4. TorchFT In-Memory Peer RDMA Streaming + Online Comm Re-init', outage: 28.0, rollback: 0.0, total: 28.0, speedup: '122.14x' }
+];
+
+function updateFaultSizer() {
+  const gpuEl = document.getElementById('faultGpuSlider');
+  if (!gpuEl) return;
+  const gpus = parseInt(gpuEl.value, 10);
+  const costPerGpu = parseFloat(document.getElementById('faultCostSlider').value);
+  const mtbfHours = (6.0 * (1024.0 / gpus));
+  const cycleSec = mtbfHours * 3600.0;
+  const monthlyBudget = gpus * costPerGpu * 730.0;
+
+  document.getElementById('faultGpuVal').textContent = gpus;
+  document.getElementById('faultMtbfVal').textContent = mtbfHours.toFixed(1);
+  document.getElementById('faultCostVal').textContent = costPerGpu.toFixed(2);
+
+  const tbody = document.getElementById('faultSizerTbody');
+  tbody.innerHTML = '';
+  let baseWaste = 0;
+
+  FAULT_DATA.forEach((row, idx) => {
+    const goodput = Math.max(0.0, ((cycleSec - row.total) / cycleSec) * 100.0);
+    const waste = monthlyBudget * (row.total / cycleSec);
+    if (idx === 0) baseWaste = waste;
+    const saved = Math.max(0.0, baseWaste - waste);
+
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #334155';
+    if (idx >= 2) tr.style.background = 'rgba(16, 185, 129, 0.08)';
+    tr.innerHTML = `
+      <td style="padding:10px;font-weight:700;color:${idx===3?'#34d399':(idx===2?'#38bdf8':'#f8fafc')};">${row.name}</td>
+      <td style="padding:10px;"><code>${row.outage.toFixed(1)}s</code></td>
+      <td style="padding:10px;"><code>${row.rollback.toFixed(1)}s</code></td>
+      <td style="padding:10px;"><code>${row.total.toFixed(1)}s (${(row.total/60.0).toFixed(2)}m · ${row.speedup})</code></td>
+      <td style="padding:10px;"><code>${goodput.toFixed(2)}%</code></td>
+      <td style="padding:10px;"><code>$${Math.round(waste).toLocaleString()}/mo</code> ${saved > 0 ? `<span style="color:#34d399;font-weight:700;">(Save $${Math.round(saved).toLocaleString()}/mo)</span>` : ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const savedT3 = Math.round(baseWaste - (monthlyBudget * (215.0 / cycleSec))).toLocaleString();
+  const savedT4 = Math.round(baseWaste - (monthlyBudget * (28.0 / cycleSec))).toLocaleString();
+  const callout = document.getElementById('faultDecisionCallout');
+  if (gpus <= 256) {
+    callout.innerHTML = `<strong>架构师选型建议 (${gpus} GPUs, MTBF ${mtbfHours.toFixed(1)}h)</strong>：配置 <code>Tier 2 (Flight Recorder 120s + 暖备节点替换)</code> 即可达 <code>98.58%</code> 有效算力率；若结合 <code>Tier 3 (ncclCommShrink + 5m 异步 DCP)</code> 可进一步升至 <code>99.75%</code>。`;
+  } else {
+    callout.innerHTML = `<strong>架构师选型建议 (${gpus} GPUs, MTBF ${mtbfHours.toFixed(1)}h)</strong>：传统全量重启有效算力率已跌至 <code>${(((cycleSec - 3420.0)/cycleSec)*100.0).toFixed(2)}%</code>！强烈推荐 <strong>Tier 3 (ncclCommShrink + 5m 异步 DCP，月省 $${savedT3})</strong> 或 <strong>Tier 4 (TorchFT 内存副本 RDMA 直传，0 秒回滚，月省 $${savedT4})</strong>！`;
+  }
+}
+
+updateFaultSizer();
+</script>
+
+  <!-- ROUND 6: GPU CLUSTER FAULT RECOVERY & MTBF GOODPUT SIZER -->
+  <div class="panel" id="fault-recovery-sizer" style="margin-top: 24px; border-color: #34d399;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <h2 style="margin:0;color:#34d399;">🛡️ Round 6 Interactive Sizer: 1,024-GPU Cluster Fault Tolerance &amp; NCCL Hang Recovery (Stop-the-World vs. Warm-Spare vs. ncclCommShrink vs. TorchFT)</h2>
+      <span style="font-size:12px;background:#0f172a;color:#34d399;padding:4px 10px;border-radius:999px;border:1px solid #334155;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:16px;">
+      Strictly bound to sealed evaluator <code>experiments/gpu_cluster_fault_recovery_selection/results.json</code> (Baseline: <code>1,024 × H100</code>, cluster <code>MTBF = 6.0 hours</code>, <code>$2.50/GPU·h</code>). Adjust cluster GPU scale or hourly rate to inspect MTBF, effective training Goodput (%), and monthly recovered GPU spend.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster GPU Count: <span id="faultGpuVal" style="color:#34d399;">1024</span> GPUs (MTBF: <span id="faultMtbfVal" style="color:#38bdf8;">6.0</span>h)</label>
+        <input type="range" id="faultGpuSlider" min="256" max="2048" step="256" value="1024" style="width:100%;margin-top:8px;" oninput="updateFaultSizer()" />
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">GPU Hourly Cost (USD): $<span id="faultCostVal" style="color:#34d399;">2.50</span>/GPU·h</label>
+        <input type="range" id="faultCostSlider" min="1.5" max="4.5" step="0.25" value="2.5" style="width:100%;margin-top:8px;" oninput="updateFaultSizer()" />
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Fault Tolerance &amp; Hang Recovery Architecture</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Recovery Outage</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Avg Rollback Loss</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Total Lost / Fault (Speedup)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Effective Goodput (%)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Waste (Net Savings)</th>
+          </tr>
+        </thead>
+        <tbody id="faultSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="faultDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #34d399;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>updateFaultSizer();</script>
 </body>
 </html>

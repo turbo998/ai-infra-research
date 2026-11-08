@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+  <title>千卡 AI 训练集群故障容错与 NCCL 假死自愈选型 · 7-Card 4:5 Benchmark Report</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card: #f8fafc;
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #e2e8f0;
+      --blue: #2563eb;
+      --green: #059669;
+      --amber: #d97706;
+      --red: #dc2626;
+      --dark: #0f172a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 28px 16px 60px;
+    }
+    .deck-header {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      color: #f8fafc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .deck-header h1 { font-size: 20px; font-weight: 800; }
+    .deck-header a { color: #38bdf8; text-decoration: none; font-size: 13px; font-weight: 600; }
+    .deck { display: flex; flex-direction: column; align-items: center; gap: 32px; }
+    .card {
+      width: 900px;
+      min-height: 1125px;
+      background: var(--card);
+      border-radius: 20px;
+      padding: 36px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+      border: 1px solid #cbd5e1;
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      border-bottom: 2px solid var(--line);
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .pill-blue { background: #dbeafe; color: #1d4ed8; }
+    .pill-green { background: #d1fae5; color: #047857; }
+    .pill-amber { background: #fef3c7; color: #b45309; }
+    .pill-red { background: #fee2e2; color: #b91c1c; }
+    h2.headline { font-size: 27px; line-height: 1.28; font-weight: 800; color: var(--ink); margin-bottom: 12px; }
+    .accent { background: linear-gradient(90deg, #059669, #2563eb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    p.lead { font-size: 14.5px; line-height: 1.6; color: var(--muted); margin-bottom: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 18px; }
+    .box { background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .box h3 { font-size: 13.5px; font-weight: 800; margin-bottom: 8px; color: var(--ink); }
+    .box p, .box li { font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+    .box ul { padding-left: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px; }
+    th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+    th { background: #f1f5f9; font-weight: 800; color: var(--ink); font-size: 11.5px; text-transform: uppercase; }
+    .code-dark { background: var(--dark); color: #e2e8f0; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.5; padding: 16px; border-radius: 12px; overflow-x: auto; margin-bottom: 14px; white-space: pre; }
+    .bar-row { margin-bottom: 14px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 700; margin-bottom: 5px; }
+    .bar-track { width: 100%; height: 22px; background: #e2e8f0; border-radius: 6px; overflow: hidden; margin-bottom: 4px; }
+    .bar-fill-blue { height: 100%; background: #3b82f6; border-radius: 6px; }
+    .bar-fill-green { height: 100%; background: #10b981; border-radius: 6px; }
+    .bar-fill-amber { height: 100%; background: #f59e0b; border-radius: 6px; }
+    .bar-fill-slate { height: 100%; background: #94a3b8; border-radius: 6px; }
+    .footer-callout { background: #0f172a; color: #f8fafc; border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.5; }
+    .footer-callout strong { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="deck-header">
+    <h1>7-Card 4:5 Benchmark Deck · 千卡 AI 训练集群故障容错与 NCCL 假死自愈选型 (Round 6)</h1>
+    <div>
+      <a href="../components/gpu-cluster-fault-recovery-selection-faq.md">📄 中文 FAQ</a> ·
+      <a href="../components/gpu-cluster-fault-recovery-selection-faq.en.md">📄 English FAQ</a> ·
+      <a href="llm-inference-engine-pd-sizer.html#fault-recovery-sizer">🧮 Interactive Sizer</a>
+    </div>
+  </div>
+
+  <div class="deck">
+    <!-- CARD 1 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>1 / 7 · HANDS-ON · CLUSTER FAULT TOLERANCE &amp; HANG RECOVERY</span>
+          <span class="pill pill-blue">SYNTHETIC AVAILABILITY MODEL + REPORTED PRIORS</span>
+        </div>
+        <h2 class="headline">
+          原地通信重构与内存副本直传将 1,024×H100 单次故障损失从 <span class="accent">3,420.0s (57.0m) 压至 28.0s (122.14x)，有效算力率从 84.17% 升至 99.87%</span>
+        </h2>
+        <p class="lead">
+          在 1,024×H100 (128 节点 × 8 卡，集群 MTBF = 6.0 小时 / 每天 4 次故障) 生产规模下，传统默认 30 分钟 NCCL 超时 + 全集群 Pod 冷销毁重启每月白白烧掉 $295,893.33 算力预算；`ncclCommShrink` 原地热重构与 `TorchFT` 跨副本 RDMA 显存恢复彻底消灭连坐重启与检查点回滚损耗。
+        </p>
+        <div class="grid-3">
+          <div class="box">
+            <h3>1. 四档受测容错架构</h3>
+            <ul>
+              <li><strong>Tier 1</strong>: Stop-the-World Restart (`3,420.0s`, `84.17%`)</li>
+              <li><strong>Tier 2</strong>: Flight Recorder + Warm-Spare (`1,230.0s`, `94.31%`)</li>
+              <li><strong>Tier 3</strong>: `ncclCommShrink` + 5m Async DCP (`215.0s`, `99.00%`)</li>
+              <li><strong>Tier 4</strong>: `TorchFT` Peer RDMA Stream (`28.0s`, `99.87%`)</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>2. 结构化评测集群契约</h3>
+            <ul>
+              <li><strong>集群规模</strong>: `1,024 × H100` (`128 Nodes × 8 GPUs`)</li>
+              <li><strong>算力成本</strong>: `$2.50/GPU·h` (`$1,868,800/月`)</li>
+              <li><strong>故障频率</strong>: `MTBF = 6.0 小时` (`21,600s` 周期)</li>
+              <li><strong>跨规模扫描</strong>: `256 / 512 / 1,024 / 2,048 GPUs`</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>3. 架构师决策阈值带</h3>
+            <ul>
+              <li><span class="pill pill-green">Act automatically</span> `&ge; 1,024 GPUs` 选 Tier 3 (`99.00%`) 或 Tier 4 (`99.87%`)</li>
+              <li><span class="pill pill-blue">Confirm</span> `128 ~ 256 GPUs` 选 Tier 2 暖备快检 (`98.58%`)</li>
+              <li><span class="pill pill-red">Send to a human</span> 严禁在 `&ge; 512` 卡保留默认 1,800s `NCCL_TIMEOUT`</li>
+            </ul>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>故障容错与假死恢复方案</th>
+              <th>停机恢复耗时</th>
+              <th>平均进度回滚损失</th>
+              <th>单次故障总损失 (加速比)</th>
+              <th>1024卡 Goodput (月省金额)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Traditional Stop-the-World Restart</strong></td>
+              <td><code>2,520.0 s (42.0m)</code></td>
+              <td><code>900.0 s (15.0m)</code></td>
+              <td><code>3,420.0 s (57.00m · 1.00x)</code></td>
+              <td><code>84.17%</code> (月浪费 $295,893)</td>
+            </tr>
+            <tr>
+              <td><strong>2. Flight Recorder (120s) + Warm-Spare Swap</strong></td>
+              <td><code>330.0 s (5.5m)</code></td>
+              <td><code>900.0 s (15.0m)</code></td>
+              <td><code>1,230.0 s (20.50m · 2.78x)</code></td>
+              <td><code>94.31%</code> (省 $189,476/月)</td>
+            </tr>
+            <tr>
+              <td><strong>3. In-Place ncclCommShrink + 5m Async DCP</strong></td>
+              <td><code>65.0 s (1.08m)</code></td>
+              <td><code>150.0 s (2.5m)</code></td>
+              <td><code>215.0 s (3.58m · 15.91x)</code></td>
+              <td><code>99.00%</code> (省 $277,292/月)</td>
+            </tr>
+            <tr>
+              <td><strong>4. TorchFT In-Memory Peer RDMA Recovery</strong></td>
+              <td><code>28.0 s (0.47m)</code></td>
+              <td><code>0.0 s (零回滚)</code></td>
+              <td><code>28.0 s (0.47m · 122.14x)</code></td>
+              <td><code>99.87%</code> (省 $293,471/月)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="footer-callout">
+        <strong>Provenance &amp; Guardrail</strong>: 封存算例位于 <code>experiments/gpu_cluster_fault_recovery_selection/results.json</code>，本地校验命令 <code>python experiments/gpu_cluster_fault_recovery_selection/run.py --check</code> 实测通过 (<code>measured</code>)，集群可用性模型为 <code>synthetic</code> + <code>anonymized_reported</code> (<code>independently_reproduced=false</code>)，未虚构物理千卡集群实测。
+      </div>
+    </section>
+
+    <!-- CARD 2 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>2 / 7 · SCENARIO: SILENT NIC/GPU HANG ON NODE #19 OF 128</span>
+          <span class="pill pill-green">SINGLE-CASE DEEP DIVE</span>
+        </div>
+        <h2 class="headline">
+          单案例深潜：第 19 号节点光模块静默闪断时，把全网停摆从 <span class="accent">57.0 分钟压缩至 28.0 秒</span>
+        </h2>
+        <p class="lead">
+          输入场景：128 台 8×H100 节点正在执行第 4,120 步 `AllReduce`，Node #19 的一张 400G 网卡光模块发生静默闪断（Linux 进程未退出，但 RDMA 队列挂死），其余 1,023 张 GPU 卡在集合通信入口。
+        </p>
+        <div class="box" style="margin-bottom:16px;">
+          <h3>案例输入契约 (Input Fault Contract)</h3>
+          <p><code>{"cluster": "1024xH100_128nodes", "fault_type": "silent_rdma_qp_hang_on_node_19", "cluster_mtbf_hours": 6.0, "cluster_hourly_usd": 2560.0}</code></p>
+        </div>
+        <div class="box" style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3>Decision 1 · 多副本组 / 千卡以上首选：TorchFT 内存副本 RDMA 流式自愈</h3>
+            <div><span class="pill pill-blue">choice</span> <span class="pill pill-green">Act automatically · 99.87% Goodput</span></div>
+          </div>
+          <p style="margin-bottom:8px;">15.0s 心跳超时锁定 Node #19 -> 5.0s 原地切入预热暖备机 -> 8.0s 经 400G RDMA 从兄弟 DP 副本组 HBM 拉取最新 Step 4,120 状态，0 秒回滚直奔 Step 4,121。</p>
+          <div class="bar-track"><div class="bar-fill-green" style="width:99.87%;"></div></div>
+        </div>
+        <div class="box" style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3>Decision 2 · 单一全局 3D 并行首选：In-Place ncclCommShrink + 5m 异步 DCP</h3>
+            <div><span class="pill pill-blue">score</span> <span class="pill pill-green">Act automatically · 99.00% Goodput</span></div>
+          </div>
+          <p style="margin-bottom:8px;">存活 127 节点进程不退出，45.0s Flight Recorder 定位 + 12.0s `ncclCommShrink` 重建通信域 + 8.0s 恢复最近 5m 异步检查点（平均仅回滚 150.0s）。</p>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:99.00%;"></div></div>
+        </div>
+        <div class="box">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3>Decision 3 · 不改训练代码的下限基线：Flight Recorder (120s) + 暖备节点替换</h3>
+            <div><span class="pill pill-amber">noul</span> <span class="pill pill-amber">Confirm · 94.31% Goodput</span></div>
+          </div>
+          <p style="margin-bottom:8px;">仅靠收敛超时至 120s 与暖备机替换即可把停机从 2,520s 压至 330s，但受限于 30 分钟传统检查点仍需承受 900.0s 平均进度回滚损失。</p>
+          <div class="bar-track"><div class="bar-fill-amber" style="width:94.31%;"></div></div>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Root-Cause Insight</strong>: 传统重启最大的两个黑洞是 <code>1,800s 默认假死空等</code> 和 <code>900s 检查点间隔回滚</code>；必须双管齐下才能把故障损耗压进 1% 以内。
+      </div>
+    </section>
+
+    <!-- CARD 3 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>3 / 7 · WHAT I TESTED · FULL EVALUATION MATRIX</span>
+          <span class="pill pill-blue">4 ARCHITECTURES × 6 METRICS</span>
+        </div>
+        <h2 class="headline">
+          全量评测矩阵：2,048 卡下传统全量重启算力率崩盘至 <span class="accent">68.33%，而 TorchFT 仍稳守 99.74%</span>
+        </h2>
+        <p class="lead">
+          涵盖假死检测、容器/通信组重构、状态恢复、历史步回滚、跨规模 Goodput 拐点与月度财务节省六大核心评测项。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>SCENARIO</th>
+              <th>QUESTION / TASK</th>
+              <th>MODEL ANSWER (SEALED METRICS)</th>
+              <th>ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>S1: Default NCCL Hang</strong></td>
+              <td>保留默认 1,800s `NCCL_TIMEOUT` 在 1024 卡下后果？</td>
+              <td><code>✕ 3,420.0s/fault</code> · Goodput 跌至 <code>84.17%</code></td>
+              <td><span class="pill pill-red">Send to a human</span></td>
+            </tr>
+            <tr>
+              <td><strong>S2: 2048-GPU Scaling</strong></td>
+              <td>扩容至 2048 卡 (MTBF=3.0h) 时传统重启表现？</td>
+              <td><code>✕ 68.33% Goodput</code> · 近 1/3 算力预算报废</td>
+              <td><span class="pill pill-red">Send to a human</span></td>
+            </tr>
+            <tr>
+              <td><strong>S3: Warm-Spare Swap</strong></td>
+              <td>120s Flight Recorder + 暖备节点替换能救回多少？</td>
+              <td><code>✓ 1,230.0s/fault (2.78x)</code> · 省 <code>$189,476/月</code></td>
+              <td><span class="pill pill-amber">Confirm</span></td>
+            </tr>
+            <tr>
+              <td><strong>S4: In-Place CommShrink</strong></td>
+              <td>`ncclCommShrink` 原地热重构 + 5m 异步 DCP 收益？</td>
+              <td><code>✓ 215.0s/fault (15.91x)</code> · Goodput <code>99.00%</code></td>
+              <td><span class="pill pill-green">Act automatically</span></td>
+            </tr>
+            <tr>
+              <td><strong>S5: TorchFT Peer RDMA</strong></td>
+              <td>跨副本 400G RDMA 显存直传能否消灭回滚损失？</td>
+              <td><code>✓ 28.0s/fault (122.14x)</code> · <code>0.0s</code> 零回滚 · <code>99.87%</code></td>
+              <td><span class="pill pill-green">Act automatically</span></td>
+            </tr>
+            <tr>
+              <td><strong>S6: Warm-Spare ROI</strong></td>
+              <td>常驻 2 台暖备节点 (1.56% 冗余) 的月度净收益？</td>
+              <td>硬件成本 ~$29k/月 vs. 挽回 <code>$277k~$293k/月</code> (&gt;9.5x ROI)</td>
+              <td><span class="pill pill-green">Act automatically</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="grid-2">
+          <div class="box">
+            <h3>Threshold Gating 规则</h3>
+            <p>当集群 <code>&le; 256 GPUs</code> 时，Tier 2 已达 <code>98.58%</code> Goodput；一旦跨入 <code>512 ~ 2,048 GPUs</code>，必须启用 Tier 3 原地通信重构或 Tier 4 内存副本直传，否则每月损失数十万美元。</p>
+          </div>
+          <div class="box">
+            <h3>Failure Analysis (`✕` 失守根因)</h3>
+            <p>两处 `✕` 均因为“集群故障率随节点数线性上升，而全员连坐重启将单点故障放大为全网 1,024~2,048 张卡的 57 分钟集体停摆”。</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Matrix Provenance</strong>: 所有数值 100% 源自 <code>experiments/gpu_cluster_fault_recovery_selection/results.json</code>，零人工编造坐标。
+      </div>
+    </section>
+
+    <!-- CARD 4 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>4 / 7 · UNDER THE HOOD · PROTOCOL &amp; SCORING MECHANICS</span>
+          <span class="pill pill-blue">DETERMINISTIC VERIFIER FLOW</span>
+        </div>
+        <h2 class="headline">
+          底层机制与确定性验算器：从 <span class="accent">Flight Recorder Op ID 环回定位</span> 到 `ncclCommShrink` 原地重构
+        </h2>
+        <p class="lead">
+          展示 `experiments/gpu_cluster_fault_recovery_selection/run.py` 的输入契约、可用性数学公式与确定性校验输出。
+        </p>
+        <div class="code-dark">// 1. Input Contract &amp; Goodput Formula (experiments/gpu_cluster_fault_recovery_selection/run.py)
+{
+  "cluster": {"gpus": 1024, "nodes": 128, "gpu_hourly_usd": 2.50, "mtbf_hours": 6.0},
+  "formulas": {
+    "recovery_outage_sec": "hang_detection_sec + orchestrator_reinit_sec + state_restore_sec",
+    "total_lost_sec_per_fault": "recovery_outage_sec + avg_rollback_loss_sec",
+    "effective_goodput_pct": "(mtbf_cycle_sec - total_lost_sec_per_fault) / mtbf_cycle_sec * 100"
+  }
+}</div>
+        <div style="text-align:center;font-weight:800;color:#2563eb;margin:4px 0 8px;">↓ Deterministic Availability &amp; TCO Verifier (&lt;answer&gt;) ↓</div>
+        <div class="code-dark">// 2. Verified Output Summary (python experiments/gpu_cluster_fault_recovery_selection/run.py --check)
+&lt;answer&gt;
+  traditional_stop_the_world_restart     : outage=2520.0s, rollback=900.0s, total=3420.0s, goodput=84.17%, waste=$295,893.33/mo
+  fast_hang_detect_warm_spare_swap       : outage=330.0s,  rollback=900.0s, total=1230.0s, goodput=94.31%, saved=$189,475.55/mo
+  inplace_comm_shrink_elastic_async_ckpt : outage=65.0s,   rollback=150.0s, total=215.0s,  goodput=99.00%, saved=$277,291.85/mo
+  torchft_in_memory_replica_peer_recovery: outage=28.0s,   rollback=0.0s,   total=28.0s,   goodput=99.87%, saved=$293,470.81/mo
+&lt;/answer&gt;</div>
+        <div class="box">
+          <h3>为什么 `ncclCommShrink` 比传统重启快两个数量级？</h3>
+          <ul>
+            <li><strong>免除容器与 CUDA Context 重建 (`480s -> 12s`)</strong>: 传统重启必须卸载驱动上下文、重拉容器镜像并重新编译 TorchInductor 图；原地重构保留存活 127 台节点的所有进程内存与显存页表。</li>
+            <li><strong>免除慢速全量读盘 (`240s -> 8s`)</strong>: 仅替补节点或通过本机锁页内存/兄弟节点 RDMA 恢复最新状态。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Verifier Reproducibility</strong>: 运行 <code>python -m unittest tests/test_gpu_cluster_fault_recovery_selection.py</code> 可在本地秒级完成校验。
+      </div>
+    </section>
+
+    <!-- CARD 5 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>5 / 7 · ROBUSTNESS CHECK · CLUSTER SCALE SENSITIVITY</span>
+          <span class="pill pill-amber">256 TO 2,048 GPUS PERTURBATION</span>
+        </div>
+        <h2 class="headline">
+          跨规模鲁棒性检验：当集群从 256 卡翻倍至 2,048 卡时，传统重启退化 <span class="accent">-27.71 pts，而 TorchFT 仅波动 -0.23 pts</span>
+        </h2>
+        <p class="lead">
+          考察集群规模从 256 卡（MTBF 24.0h）扩展到 2,048 卡（MTBF 3.0h，故障密度翻 8 倍）时，四档容错架构的有效算力率（Goodput %）退化幅度。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>ARCHITECTURE</th>
+              <th>256 GPUS (MTBF 24H)</th>
+              <th>2,048 GPUS (MTBF 3H)</th>
+              <th>CHANGE (PTS)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Traditional Stop-the-World Restart</strong></td>
+              <td><code>96.04%</code></td>
+              <td><code>68.33%</code></td>
+              <td><span class="pill pill-red">-27.71 pts (严重崩盘)</span></td>
+            </tr>
+            <tr>
+              <td><strong>2. Flight Recorder + Warm-Spare Swap</strong></td>
+              <td><code>98.58%</code></td>
+              <td><code>88.61%</code></td>
+              <td><span class="pill pill-amber">-9.97 pts (显著退化)</span></td>
+            </tr>
+            <tr>
+              <td><strong>3. In-Place ncclCommShrink + 5m Async DCP</strong></td>
+              <td><code>99.75%</code></td>
+              <td><code>98.01%</code></td>
+              <td><span class="pill pill-blue">-1.74 pts (高度稳健)</span></td>
+            </tr>
+            <tr>
+              <td><strong>4. TorchFT In-Memory Peer RDMA Recovery</strong></td>
+              <td><code>99.97%</code></td>
+              <td><code>99.74%</code></td>
+              <td><span class="pill pill-green">-0.23 pts (电信级高可用)</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="grid-2">
+          <div class="box">
+            <h3>为什么 256 卡看不出隐患，到 1,024 卡就爆发？</h3>
+            <p>在 256 卡集群上，每天仅发生约 1 次故障，即使每次停机 57 分钟，全天有效算力率仍有 <code>96.04%</code>，极易让团队产生“重启脚本够用”的错觉；一旦扩容到 1,024~2,048 卡，每天 4~8 次故障直接吞噬 16%~32% 的总算力。</p>
+          </div>
+          <div class="box">
+            <h3>5 分钟异步 DCP 如何助攻 Tier 3？</h3>
+            <p>结合 Round 3 的两阶段异步 DCP（每次存盘仅冻结 GPU `3.125s`），将存盘间隔从 30 分钟缩短到 5 分钟不会损伤正常训练吞吐，却直接把每次故障的平均回滚白跑时间从 `900.0s` 砍到 `150.0s`。</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Robustness Takeaway</strong>: 架构师在设计 <code>&ge; 512</code> 卡集群方案时，必须将“单次故障恢复总耗时 &le; 4 分钟”作为硬性验收指标写入技术标书。
+      </div>
+    </section>
+
+    <!-- CARD 6 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>6 / 7 · LATENCY &amp; GOODPUT SCALING BARS</span>
+          <span class="pill pill-blue">PAIRED HORIZONTAL BARS</span>
+        </div>
+        <h2 class="headline">
+          故障恢复时间与月度空转损耗对比：单次故障损失从 <span class="accent">3,420.0 秒压至 28.0 秒 (-99.2%)</span>
+        </h2>
+        <p class="lead">
+          直观对比四档方案的单次故障总损失时间（停机恢复 + 历史进度回滚，越短越好）以及 1,024×H100 集群月度浪费的 GPU 算力租金（越少越好）。
+        </p>
+
+        <div class="box" style="margin-bottom:18px;">
+          <h3>A. 单次故障总损失时间：停机恢复 + 平均进度回滚 (Seconds · 越短越好)</h3>
+          <div class="bar-row" style="margin-top:12px;">
+            <div class="bar-label"><span>Tier 1 · Stop-the-World Restart (2,520s Outage + 900s Rollback)</span><span>3,420.0 s (57.0 min)</span></div>
+            <div class="bar-track"><div class="bar-fill-slate" style="width:100%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 2 · Flight Recorder + Warm-Spare Swap (330s Outage + 900s Rollback)</span><span>1,230.0 s (20.5 min · 2.78x)</span></div>
+            <div class="bar-track"><div class="bar-fill-amber" style="width:36.0%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 3 · In-Place ncclCommShrink + 5m Async DCP (65s Outage + 150s Rollback)</span><span>215.0 s (3.58 min · 15.91x)</span></div>
+            <div class="bar-track"><div class="bar-fill-blue" style="width:6.3%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 4 · TorchFT Peer RDMA Recovery (28s Outage + 0s Rollback)</span><span>28.0 s (0.47 min · 122.14x)</span></div>
+            <div class="bar-track"><div class="bar-fill-green" style="width:1.5%;"></div></div>
+          </div>
+        </div>
+
+        <div class="box">
+          <h3>B. 1,024×H100 集群月度故障空转浪费金额 (USD / Month · 越低越好)</h3>
+          <div class="bar-row" style="margin-top:12px;">
+            <div class="bar-label"><span>Tier 1 · Stop-the-World Restart (84.17% Goodput)</span><span>$295,893.33 / mo</span></div>
+            <div class="bar-track"><div class="bar-fill-slate" style="width:100%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 2 · Flight Recorder + Warm-Spare Swap (94.31% Goodput)</span><span>$106,417.78 / mo (Save $189,476)</span></div>
+            <div class="bar-track"><div class="bar-fill-amber" style="width:36.0%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 3 · In-Place ncclCommShrink + 5m Async DCP (99.00% Goodput)</span><span>$18,601.48 / mo (Save $277,292)</span></div>
+            <div class="bar-track"><div class="bar-fill-blue" style="width:6.3%;"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><span>Tier 4 · TorchFT Peer RDMA Recovery (99.87% Goodput)</span><span>$2,422.52 / mo (Save $293,471)</span></div>
+            <div class="bar-track"><div class="bar-fill-green" style="width:1.5%;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Coordinate Accuracy</strong>: 条形图宽度严格对应 <code>results.json</code> 比例（`1230 / 3420 = 36.0%`，`215 / 3420 = 6.3%`）。
+      </div>
+    </section>
+
+    <!-- CARD 7 -->
+    <section class="card">
+      <div>
+        <div class="card-top">
+          <span>7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; READINESS</span>
+          <span class="pill pill-green">ARCHITECT PLAYBOOK</span>
+        </div>
+        <h2 class="headline">
+          架构师选型决断：512~1,024 卡必上 <span class="accent">`ncclCommShrink` + 5m 异步 DCP</span>，超千卡副本组上 `TorchFT`
+        </h2>
+        <p class="lead">
+          千卡集群的稳定性不是靠“祈祷硬件不坏”实现的，而是靠“坏一台节点时其余 127 台节点进程不死、28~215 秒内热替换自愈”的软件工程体系保障的。
+        </p>
+        <div class="grid-2">
+          <div class="box" style="border-top:4px solid #059669;">
+            <h3>✅ Good Fit (强烈推荐适用场景)</h3>
+            <ul>
+              <li><strong>Tier 4 (`TorchFT` / Replica-Group Peer RDMA)</strong>: <code>&ge; 1,024 GPUs</code>、采用 Hybrid-FSDP (HSDP) 或 DiLoCo 多副本组架构的长周期预训练集群（零回滚，Goodput <code>99.87%</code>）。</li>
+              <li><strong>Tier 3 (`ncclCommShrink` + 5m Async DCP)</strong>: <code>512 ~ 1,024 GPUs</code> 全局緊耦合 3D 并行 (TP+PP+CP+FSDP) 生产集群（Goodput <code>99.00%</code>，月省 <code>$277k</code>）。</li>
+              <li><strong>Tier 2 (Flight Recorder + 暖备节点替换)</strong>: <code>&le; 256 GPUs</code>、不允许改动训练框架源码的快速上线场景（Goodput <code>98.58%</code>）。</li>
+            </ul>
+          </div>
+          <div class="box" style="border-top:4px solid #dc2626;">
+            <h3>⛔ Not For (严禁误用边界)</h3>
+            <ul>
+              <li><strong>严禁在生产千卡集群保留默认 30 分钟 `NCCL_TIMEOUT`</strong>: 任何单点静默假死都会让上千张 GPU 陪绑空烧半小时。</li>
+              <li><strong>严禁在未开启 Flight Recorder 时排查集合通信挂起</strong>: 缺少 Op ID 环回日志会导致全网堆栈一致、无法自动定位坏节点。</li>
+              <li><strong>严禁在单副本无冗余拓扑强套 Tier 4 内存直传</strong>: 若全集群仅有一份模型分片且无兄弟副本组，仍需使用 Tier 3 配合 5m 异步 DCP 恢复。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="box">
+          <h3>生产上线核验清单 (Production Verification Checklist)</h3>
+          <ul>
+            <li><code>[✓]</code> 配置 <code>TORCH_NCCL_TRACE_BUFFER_SIZE=2000</code>、<code>TORCH_NCCL_DUMP_ON_TIMEOUT=1</code> 与 <code>NCCL_TIMEOUT=60~120</code>。</li>
+            <li><code>[✓]</code> 升级 <code>NCCL 2.27+</code> 并集成 <code>ncclCommShrink</code> / <code>TorchElastic</code> 进程内热重构闭环。</li>
+            <li><code>[✓]</code> 维护 <code>1~2%</code> 预加载镜像与 CUDA Context 的暖备节点池，联动 DCGM Xid 自动 Cordon 替换。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-callout">
+        <strong>Readiness &amp; Provenance</strong>: Repository <code>turbo998/ai-infra-research</code> · Evaluator <code>experiments/gpu_cluster_fault_recovery_selection/run.py</code> (local check <code>measured</code>; cluster numbers <code>synthetic</code> + <code>anonymized_reported</code>, <code>independently_reproduced=false</code>) · Self-contained CSP compliant.
+      </div>
+    </section>
+  </div>
+</body>
+</html>
