@@ -348,3 +348,5 @@ un.py --check
   - Deterministic Simulation Suite: [`experiments/ai_storage_checkpoint_kv_offload/run.py`](experiments/ai_storage_checkpoint_kv_offload/run.py) (Summary JSON: [`results.json`](experiments/ai_storage_checkpoint_kv_offload/results.json))
 
 
+
+- 🆕 **[AI Cluster Ethernet RoCEv2 Load Balancing & Congestion Control Selection FAQ: Static ECMP + PFC/DCQCN vs. Multi-QP Scaling vs. Switch Flowlet DLB vs. Per-Packet Spraying + NIC Hardware Out-of-Order RDMA (`docs/components/rocev2-load-balancing-congestion-selection-faq.en.md`)](docs/components/rocev2-load-balancing-congestion-selection-faq.en.md)** | **[中文版 (`rocev2-load-balancing-congestion-selection-faq.md`)](docs/components/rocev2-load-balancing-congestion-selection-faq.md)** · **[7-Card Benchmark Deck (`rocev2-load-balancing-congestion-selection-cards.html`)](docs/reports/rocev2-load-balancing-congestion-selection-cards.html)** · **[Visual Summary SVG](assets/svg/rocev2-load-balancing-congestion-selection-faq-summary.svg)** · **[Sealed Evaluator (`experiments/rocev2_load_balancing_selection/`)](experiments/rocev2_load_balancing_selection/results.json)**

@@ -348,3 +348,5 @@ un.py --check
   - 确定性仿真算例：[`experiments/ai_storage_checkpoint_kv_offload/run.py`](experiments/ai_storage_checkpoint_kv_offload/run.py)（结果：[`results.json`](experiments/ai_storage_checkpoint_kv_offload/results.json)）
 
 
+
+- 🆕 **[AI 集群以太网 RoCEv2 负载均衡与拥塞控制选型 FAQ：静态 ECMP + PFC/DCQCN vs. 多 QP 拆流 vs. 交换机 Flowlet DLB vs. 逐包喷洒 + 网卡硬件乱序重排 (`docs/components/rocev2-load-balancing-congestion-selection-faq.md`)](docs/components/rocev2-load-balancing-congestion-selection-faq.md)** | **[English Version (`rocev2-load-balancing-congestion-selection-faq.en.md`)](docs/components/rocev2-load-balancing-congestion-selection-faq.en.md)** · **[7-Card 视觉评测报告 (`rocev2-load-balancing-congestion-selection-cards.html`)](docs/reports/rocev2-load-balancing-congestion-selection-cards.html)** · **[一图流总结 SVG](assets/svg/rocev2-load-balancing-congestion-selection-faq-summary.svg)** · **[封存算例 (`experiments/rocev2_load_balancing_selection/`)](experiments/rocev2_load_balancing_selection/results.json)**

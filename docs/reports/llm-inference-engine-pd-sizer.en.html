@@ -120,7 +120,107 @@ body:has([data-professional-header]){height:auto!important;overflow-x:clip!impor
 
 .in-arena-frame .professional-context-bar,.in-arena-frame [data-knowledge-atlas]{display:none!important}
 .knowledge-graph-wide{display:block}.knowledge-graph-compact{display:none}@media(max-width:600px){.knowledge-graph-wide{display:none}.knowledge-graph-compact{display:block}}
-</style><script src="../../assets/editorial/search-index.js" defer></script><script src="../../assets/editorial/search.js" defer></script></head>
+</style><script src="../../assets/editorial/search-index.js" defer>
+const ROCE_DATA = [
+  { id: 'static_ecmp_pfc_dcqcn', name: '1. Static 5-Tuple ECMP + PFC/DCQCN', util: 47.0, noisyUtil: 29.15, moeP99: 42.5, pfc: 1420, stepMs: 1480.0, waste256: 1472201, saved256: 0, speedup: '1.00x' },
+  { id: 'multi_qp_ecmp_dcqcn', name: '2. Multi-QP (8 QPs/Rank) + Early ECN', util: 67.0, noisyUtil: 49.58, moeP99: 28.4, pfc: 410, stepMs: 1185.0, waste256: 872415, saved256: 599786, speedup: '1.43x' },
+  { id: 'flowlet_dlb_dcqcn', name: '3. Switch Flowlet DLB (Tomahawk 5)', util: 83.0, noisyUtil: 71.38, moeP99: 19.6, pfc: 95, stepMs: 1042.0, waste256: 436208, saved256: 1035993, speedup: '1.77x' },
+  { id: 'adaptive_packet_spray_nic_ooo', name: '4. Per-Packet Spray + NIC OoO RDMA (Spectrum-X / UEC)', util: 95.5, noisyUtil: 91.0, moeP99: 11.4, pfc: 12, stepMs: 965.0, waste256: 163578, saved256: 1308623, speedup: '2.03x' }
+];
+
+function updateRoceSizer() {
+  const gpuEl = document.getElementById('roceGpuSlider');
+  if (!gpuEl) return;
+  const gpus = parseInt(gpuEl.value, 10);
+  const nicGbps = parseFloat(document.getElementById('roceNicSelect').value);
+  const mode = document.getElementById('roceTenantSelect').value;
+  document.getElementById('roceGpuVal').textContent = gpus;
+
+  const scaleFactor = gpus / 256.0;
+  const tbody = document.getElementById('roceSizerTbody');
+  tbody.innerHTML = '';
+
+  ROCE_DATA.forEach((row, idx) => {
+    const u = mode === 'noisy' ? row.noisyUtil : row.util;
+    const bw = (nicGbps * (u / 100.0)).toFixed(1);
+    const p99 = (row.moeP99 * (400.0 / nicGbps) * (mode === 'noisy' && idx === 0 ? 1.35 : 1.0)).toFixed(1);
+    const waste = Math.round(row.waste256 * scaleFactor);
+    const saved = Math.round(row.saved256 * scaleFactor);
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #334155';
+    if (idx === 3) tr.style.background = 'rgba(16, 185, 129, 0.10)';
+    tr.innerHTML = `
+      <td style="padding:10px;font-weight:700;color:${idx===3?'#34d399':'#f8fafc'};">${row.name}</td>
+      <td style="padding:10px;"><code>${bw} Gbps (${u.toFixed(1)}% · ${row.speedup})</code></td>
+      <td style="padding:10px;"><code>${p99} ms</code></td>
+      <td style="padding:10px;"><code>${row.pfc} pauses/s</code></td>
+      <td style="padding:10px;"><code>${row.stepMs.toFixed(1)} ms</code></td>
+      <td style="padding:10px;"><code>$${waste.toLocaleString()}/yr</code> ${saved > 0 ? `<span style="color:#34d399;font-weight:700;">(Save $${saved.toLocaleString()}/yr)</span>` : ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const callout = document.getElementById('roceDecisionCallout');
+  if (gpus <= 64 && mode === 'isolated') {
+    callout.innerHTML = '<strong>架构师选型建议 (<=64 GPUs 单任务)</strong>：设置 <code>NCCL_IB_QPS_PER_CONNECTION=8</code> 配合交换机 ECN 水线前移即可低成本获得 <code>67.0%</code> 有效带宽；若已配 Tomahawk 5 交换机建议开启 Flowlet DLB (<code>83.0%</code>)。';
+  } else {
+    const savedTotal = Math.round(1308623 * scaleFactor).toLocaleString();
+    callout.innerHTML = `<strong>架构师选型建议 (${gpus} GPUs / ${mode==='noisy'?'多租户共享 Spine':'跨 Pod 规模'})</strong>：强烈推荐 <strong>Tier 4 逐包自适应喷洒 + 网卡硬件乱序重排 (Spectrum-X / UEC)</strong>，达到 <code>95.5%</code> 线速利用率（隔离度 <code>95.3%</code>），MoE All-to-All P99 压至 <code>11.4 ms</code>，相比静态 ECMP 每年挽回 <strong>$${savedTotal}</strong> 闲置 GPU 算力成本！`;
+  }
+}
+
+updateRoceSizer();
+</script><script src="../../assets/editorial/search.js" defer>
+const ROCE_DATA = [
+  { id: 'static_ecmp_pfc_dcqcn', name: '1. Static 5-Tuple ECMP + PFC/DCQCN', util: 47.0, noisyUtil: 29.15, moeP99: 42.5, pfc: 1420, stepMs: 1480.0, waste256: 1472201, saved256: 0, speedup: '1.00x' },
+  { id: 'multi_qp_ecmp_dcqcn', name: '2. Multi-QP (8 QPs/Rank) + Early ECN', util: 67.0, noisyUtil: 49.58, moeP99: 28.4, pfc: 410, stepMs: 1185.0, waste256: 872415, saved256: 599786, speedup: '1.43x' },
+  { id: 'flowlet_dlb_dcqcn', name: '3. Switch Flowlet DLB (Tomahawk 5)', util: 83.0, noisyUtil: 71.38, moeP99: 19.6, pfc: 95, stepMs: 1042.0, waste256: 436208, saved256: 1035993, speedup: '1.77x' },
+  { id: 'adaptive_packet_spray_nic_ooo', name: '4. Per-Packet Spray + NIC OoO RDMA (Spectrum-X / UEC)', util: 95.5, noisyUtil: 91.0, moeP99: 11.4, pfc: 12, stepMs: 965.0, waste256: 163578, saved256: 1308623, speedup: '2.03x' }
+];
+
+function updateRoceSizer() {
+  const gpuEl = document.getElementById('roceGpuSlider');
+  if (!gpuEl) return;
+  const gpus = parseInt(gpuEl.value, 10);
+  const nicGbps = parseFloat(document.getElementById('roceNicSelect').value);
+  const mode = document.getElementById('roceTenantSelect').value;
+  document.getElementById('roceGpuVal').textContent = gpus;
+
+  const scaleFactor = gpus / 256.0;
+  const tbody = document.getElementById('roceSizerTbody');
+  tbody.innerHTML = '';
+
+  ROCE_DATA.forEach((row, idx) => {
+    const u = mode === 'noisy' ? row.noisyUtil : row.util;
+    const bw = (nicGbps * (u / 100.0)).toFixed(1);
+    const p99 = (row.moeP99 * (400.0 / nicGbps) * (mode === 'noisy' && idx === 0 ? 1.35 : 1.0)).toFixed(1);
+    const waste = Math.round(row.waste256 * scaleFactor);
+    const saved = Math.round(row.saved256 * scaleFactor);
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #334155';
+    if (idx === 3) tr.style.background = 'rgba(16, 185, 129, 0.10)';
+    tr.innerHTML = `
+      <td style="padding:10px;font-weight:700;color:${idx===3?'#34d399':'#f8fafc'};">${row.name}</td>
+      <td style="padding:10px;"><code>${bw} Gbps (${u.toFixed(1)}% · ${row.speedup})</code></td>
+      <td style="padding:10px;"><code>${p99} ms</code></td>
+      <td style="padding:10px;"><code>${row.pfc} pauses/s</code></td>
+      <td style="padding:10px;"><code>${row.stepMs.toFixed(1)} ms</code></td>
+      <td style="padding:10px;"><code>$${waste.toLocaleString()}/yr</code> ${saved > 0 ? `<span style="color:#34d399;font-weight:700;">(Save $${saved.toLocaleString()}/yr)</span>` : ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const callout = document.getElementById('roceDecisionCallout');
+  if (gpus <= 64 && mode === 'isolated') {
+    callout.innerHTML = '<strong>架构师选型建议 (<=64 GPUs 单任务)</strong>：设置 <code>NCCL_IB_QPS_PER_CONNECTION=8</code> 配合交换机 ECN 水线前移即可低成本获得 <code>67.0%</code> 有效带宽；若已配 Tomahawk 5 交换机建议开启 Flowlet DLB (<code>83.0%</code>)。';
+  } else {
+    const savedTotal = Math.round(1308623 * scaleFactor).toLocaleString();
+    callout.innerHTML = `<strong>架构师选型建议 (${gpus} GPUs / ${mode==='noisy'?'多租户共享 Spine':'跨 Pod 规模'})</strong>：强烈推荐 <strong>Tier 4 逐包自适应喷洒 + 网卡硬件乱序重排 (Spectrum-X / UEC)</strong>，达到 <code>95.5%</code> 线速利用率（隔离度 <code>95.3%</code>），MoE All-to-All P99 压至 <code>11.4 ms</code>，相比静态 ECMP 每年挽回 <strong>$${savedTotal}</strong> 闲置 GPU 算力成本！`;
+  }
+}
+
+updateRoceSizer();
+</script></head>
 <body><nav class="kee-dedicated-nav" data-professional-header><a class="professional-identity reading-brand kee-dedicated-identity identity" href="../../index.html">Qi Chen · @turbo998</a><div class="professional-primary" role="navigation" aria-label="Primary sections"><a href="../../studio/index.html" data-section="hub" data-nav-en-href="../../studio/index.html" data-nav-zh-href="../../studio/zh-index.html" data-nav-en-label="Frontier Transformation Engineering Hub" data-nav-zh-label="Frontier Transformation Engineering Hub">Frontier Transformation Engineering Hub</a><a href="../../benchmarks.html" data-section="benchmarks" data-nav-en-href="../../benchmarks.html" data-nav-zh-href="../../zh-benchmarks.html" data-nav-en-label="Benchmark &amp; Eval Foundry" data-nav-zh-label="基准评测中心" aria-current="page">Benchmark &amp; Eval Foundry</a><a href="../../github-radar.html" data-section="radar" data-nav-en-href="../../github-radar.html" data-nav-zh-href="../../zh-github-radar.html" data-nav-en-label="GitHub AI Signal Radar" data-nav-zh-label="GitHub AI 信号雷达">GitHub AI Signal Radar</a><a href="../../openrouter.html" data-section="routing" data-nav-en-href="../../openrouter.html" data-nav-zh-href="../../zh-openrouter.html" data-nav-en-label="Model Routing &amp; Telemetry" data-nav-zh-label="OpenRouter 模型遥测">Model Routing &amp; Telemetry</a><a href="../../about.html" data-section="profile" data-nav-en-href="../../about.html" data-nav-zh-href="../../zh-about.html" data-nav-en-label="Principal Architect Profile" data-nav-zh-label="首席架构师履历">Principal Architect Profile</a></div><form class="site-search" role="search" action="../../studio/archive.html" method="get" data-search-root="../../index.html" data-search-language="en"><label class="search-label" for="site-search-input">Search architecture, benchmarks, demos...</label><input id="site-search-input" name="q" type="search" placeholder="Search architecture, benchmarks, demos..." autocomplete="off" spellcheck="false" aria-keyshortcuts="/ Control+k Meta+k"><kbd aria-hidden="true">/</kbd><button type="submit" aria-label="Search all content">⌕</button><div class="search-results" id="site-search-results" hidden></div><span class="search-status" role="status" aria-live="polite"></span></form><div class="reading-controls professional-controls" aria-label="Site language and appearance"><a href="llm-inference-engine-pd-sizer.en.html" hreflang="en" lang="en" aria-current="page">EN</a><a href="llm-inference-engine-pd-sizer.html" data-reading-language hreflang="zh-CN" lang="zh-CN">中文</a><details class="professional-mobile"><summary aria-label="Open navigation">☰</summary><div class="professional-primary" role="navigation" aria-label="Mobile navigation"><a href="../../studio/index.html" data-section="hub" data-nav-en-href="../../studio/index.html" data-nav-zh-href="../../studio/zh-index.html" data-nav-en-label="Frontier Transformation Engineering Hub" data-nav-zh-label="Frontier Transformation Engineering Hub">Frontier Transformation Engineering Hub</a><a href="../../benchmarks.html" data-section="benchmarks" data-nav-en-href="../../benchmarks.html" data-nav-zh-href="../../zh-benchmarks.html" data-nav-en-label="Benchmark &amp; Eval Foundry" data-nav-zh-label="基准评测中心" aria-current="page">Benchmark &amp; Eval Foundry</a><a href="../../github-radar.html" data-section="radar" data-nav-en-href="../../github-radar.html" data-nav-zh-href="../../zh-github-radar.html" data-nav-en-label="GitHub AI Signal Radar" data-nav-zh-label="GitHub AI 信号雷达">GitHub AI Signal Radar</a><a href="../../openrouter.html" data-section="routing" data-nav-en-href="../../openrouter.html" data-nav-zh-href="../../zh-openrouter.html" data-nav-en-label="Model Routing &amp; Telemetry" data-nav-zh-label="OpenRouter 模型遥测">Model Routing &amp; Telemetry</a><a href="../../about.html" data-section="profile" data-nav-en-href="../../about.html" data-nav-zh-href="../../zh-about.html" data-nav-en-label="Principal Architect Profile" data-nav-zh-label="首席架构师履历">Principal Architect Profile</a></div></details><a data-reading-theme="light" href="?theme=light" aria-label="Light theme">☀</a><a data-reading-theme="dark" href="?theme=dark" aria-label="Dark theme">◐</a></div><div class="professional-context" aria-label="Back to context"><a href="../../studio/index.html">← Engineering Hub</a> · <a href="../../studio/infra.html">Parent topic</a></div></nav><div class="professional-context-bar"><a href="../../studio/index.html">← Engineering Hub</a> · <a class="reading-context" href="../../studio/infra.html">Parent topic</a></div><!-- site-remediation-knowledge:start --><figure class="knowledge-figure" data-knowledge-atlas="infra" style="margin:20px auto;max-width:1120px;padding:0 20px;box-sizing:border-box"><style>.knowledge-graph-wide{display:block}.knowledge-graph-compact{display:none}@media(max-width:600px){.knowledge-graph-wide{display:none}.knowledge-graph-compact{display:block}}</style><svg xmlns="http://www.w3.org/2000/svg" lang="en" class="knowledge-graph-compact" role="img" aria-labelledby="knowledge-eb629e1b31b2-compact-title knowledge-eb629e1b31b2-compact-desc" viewBox="0 0 360 1051" width="360" style="width:100%;height:auto;max-width:560px;margin:0 auto;font-family:system-ui,sans-serif"><title id="knowledge-eb629e1b31b2-compact-title">LLM Inference Engine Selection (vLLM vs SGLang vs TensorRT-LLM) &amp; PD Disaggregation (NVIDIA Dynamo + Mooncake) — Architect FAQ &amp; Interactive Sizer</title><desc id="knowledge-eb629e1b31b2-compact-desc">Workload &amp; six-layer decisions: Phase 179: requirements, boundaries and trade-offs → maps to runtime choices → Azure runtime spectrum: Hosted agents · Functions · ACA · AKS · E2B → depends on compute fabric → Compute, memory &amp; interconnect: Tong–Yun–Ge supernodes · GPU / network / state → constrains inference design → Inference &amp; cost boundaries: DeepInfer: prefill / decode / cache; revenue is not profit → requires resilience evidence → Heartbeat &amp; recovery evidence: E2B / Nomad: failure detection, retries and source caveats</desc><rect width="360" height="1051" rx="16" fill="#081525" stroke="#284566"/><rect x="16" y="14" width="224" height="22" rx="11" fill="#112844" stroke="#2d5a88"/><text x="28" y="29" fill="#56ddcd" font-size="11.5" font-weight="700"><tspan x="28" dy="0">DATA FLOW &amp; ARCHITECTURE</tspan></text><text x="20" y="58" fill="#eef5ff" font-size="18" font-weight="700"><tspan x="20" dy="0">LLM Inference Engine</tspan><tspan x="20" dy="25.2">Selection (vLLM vs SGLang vs</tspan><tspan x="20" dy="25.2">TensorRT-LLM) &amp; PD</tspan><tspan x="20" dy="25.2">Disaggregation (NVIDIA Dynamo</tspan><tspan x="20" dy="25.2">+ Mooncake) — Architect FAQ</tspan><tspan x="20" dy="25.2">&amp; Interactive Sizer</tspan></text><text x="20" y="206" fill="#a9b8ce" font-size="12.5" font-weight="400"><tspan x="20" dy="0">Conceptual data flow · arrows show stage handoffs</tspan></text><g data-concept="1"><rect x="16" y="228" width="328" height="136" rx="12" fill="#0e2036" stroke="#38597d"/><rect x="16" y="228" width="328" height="4" rx="2" fill="#38bdf8"/><text x="30" y="251" fill="#38bdf8" font-size="11.5" font-weight="700"><tspan x="30" dy="0">01 · INGRESS</tspan></text><text x="30" y="274" fill="#f0f6ff" font-size="16.5" font-weight="700"><tspan x="30" dy="0">Workload &amp; six-layer</tspan><tspan x="30" dy="23.099999999999998">decisions</tspan></text><text x="30" y="324" fill="#c4d5e8" font-size="13" font-weight="400"><tspan x="30" dy="0">Phase 179: requirements, boundaries</tspan><tspan x="30" dy="18.2">and trade-offs</tspan></text></g><g data-relationship="maps to runtime choices"><path d="M34 366 V404" fill="none" stroke="#56ddcd" stroke-width="2.2"/><path d="M29 398 L34 405 L39 398" fill="none" stroke="#56ddcd" stroke-width="2.2"/><text x="50" y="388" fill="#8eeadf" font-size="12.5" font-weight="600"><tspan x="50" dy="0">01→02 maps to runtime choices</tspan></text></g><g data-concept="2"><rect x="16" y="410" width="328" height="113" rx="12" fill="#122842" stroke="#38597d"/><rect x="16" y="410" width="328" height="4" rx="2" fill="#34d399"/><text x="30" y="433" fill="#34d399" font-size="11.5" font-weight="700"><tspan x="30" dy="0">02 · GROUNDING</tspan></text><text x="30" y="456" fill="#f0f6ff" font-size="16.5" font-weight="700"><tspan x="30" dy="0">Azure runtime spectrum</tspan></text><text x="30" y="483" fill="#c4d5e8" font-size="13" font-weight="400"><tspan x="30" dy="0">Hosted agents · Functions · ACA ·</tspan><tspan x="30" dy="18.2">AKS · E2B</tspan></text></g><g data-relationship="depends on compute fabric"><path d="M34 525 V563" fill="none" stroke="#56ddcd" stroke-width="2.2"/><path d="M29 557 L34 564 L39 557" fill="none" stroke="#56ddcd" stroke-width="2.2"/><text x="50" y="547" fill="#8eeadf" font-size="12.5" font-weight="600"><tspan x="50" dy="0">02→03 depends on compute fabric</tspan></text></g><g data-concept="3"><rect x="16" y="569" width="328" height="136" rx="12" fill="#0e2036" stroke="#38597d"/><rect x="16" y="569" width="328" height="4" rx="2" fill="#a78bfa"/><text x="30" y="592" fill="#a78bfa" font-size="11.5" font-weight="700"><tspan x="30" dy="0">03 · POLICY GATE</tspan></text><text x="30" y="615" fill="#f0f6ff" font-size="16.5" font-weight="700"><tspan x="30" dy="0">Compute, memory &amp;</tspan><tspan x="30" dy="23.099999999999998">interconnect</tspan></text><text x="30" y="665" fill="#c4d5e8" font-size="13" font-weight="400"><tspan x="30" dy="0">Tong–Yun–Ge supernodes · GPU /</tspan><tspan x="30" dy="18.2">network / state</tspan></text></g><g data-relationship="constrains inference design"><path d="M34 707 V745" fill="none" stroke="#56ddcd" stroke-width="2.2"/><path d="M29 739 L34 746 L39 739" fill="none" stroke="#56ddcd" stroke-width="2.2"/><text x="50" y="729" fill="#8eeadf" font-size="12.5" font-weight="600"><tspan x="50" dy="0">03→04 constrains inference design</tspan></text></g><g data-concept="4"><rect x="16" y="751" width="328" height="113" rx="12" fill="#122842" stroke="#38597d"/><rect x="16" y="751" width="328" height="4" rx="2" fill="#f59e0b"/><text x="30" y="774" fill="#f59e0b" font-size="11.5" font-weight="700"><tspan x="30" dy="0">04 · EXECUTION</tspan></text><text x="30" y="797" fill="#f0f6ff" font-size="16.5" font-weight="700"><tspan x="30" dy="0">Inference &amp; cost boundaries</tspan></text><text x="30" y="824" fill="#c4d5e8" font-size="13" font-weight="400"><tspan x="30" dy="0">DeepInfer: prefill / decode / cache;</tspan><tspan x="30" dy="18.2">revenue is not profit</tspan></text></g><g data-relationship="requires resilience evidence"><path d="M34 866 V914" fill="none" stroke="#56ddcd" stroke-width="2.2"/><path d="M29 908 L34 915 L39 908" fill="none" stroke="#56ddcd" stroke-width="2.2"/><text x="50" y="888" fill="#8eeadf" font-size="12.5" font-weight="600"><tspan x="50" dy="0">04→05 requires resilience</tspan><tspan x="50" dy="17.5">evidence</tspan></text></g><g data-concept="5"><rect x="16" y="920" width="328" height="113" rx="12" fill="#0e2036" stroke="#38597d"/><rect x="16" y="920" width="328" height="4" rx="2" fill="#56ddcd"/><text x="30" y="943" fill="#56ddcd" font-size="11.5" font-weight="700"><tspan x="30" dy="0">05 · AUDIT &amp; EVAL</tspan></text><text x="30" y="966" fill="#f0f6ff" font-size="16.5" font-weight="700"><tspan x="30" dy="0">Heartbeat &amp; recovery evidence</tspan></text><text x="30" y="993" fill="#c4d5e8" font-size="13" font-weight="400"><tspan x="30" dy="0">E2B / Nomad: failure detection,</tspan><tspan x="30" dy="18.2">retries and source caveats</tspan></text></g></svg><svg xmlns="http://www.w3.org/2000/svg" lang="en" class="knowledge-graph-wide" role="img" aria-labelledby="knowledge-eb629e1b31b2-title knowledge-eb629e1b31b2-desc" viewBox="0 0 1080 487" width="1080" style="width:100%;height:auto;max-width:1080px;margin:0 auto;font-family:system-ui,sans-serif"><title id="knowledge-eb629e1b31b2-title">LLM Inference Engine Selection (vLLM vs SGLang vs TensorRT-LLM) &amp; PD Disaggregation (NVIDIA Dynamo + Mooncake) — Architect FAQ &amp; Interactive Sizer</title><desc id="knowledge-eb629e1b31b2-desc">Workload &amp; six-layer decisions: Phase 179: requirements, boundaries and trade-offs → maps to runtime choices → Azure runtime spectrum: Hosted agents · Functions · ACA · AKS · E2B → depends on compute fabric → Compute, memory &amp; interconnect: Tong–Yun–Ge supernodes · GPU / network / state → constrains inference design → Inference &amp; cost boundaries: DeepInfer: prefill / decode / cache; revenue is not profit → requires resilience evidence → Heartbeat &amp; recovery evidence: E2B / Nomad: failure detection, retries and source caveats</desc><rect width="1080" height="487" rx="16" fill="#081525" stroke="#284566"/><rect x="24" y="16" width="292" height="24" rx="12" fill="#102742" stroke="#2d5a88"/><text x="38" y="32" fill="#56ddcd" font-size="11.5" font-weight="700"><tspan x="38" dy="0">DATA FLOW &amp; KEY TAKEAWAYS ARCHITECTURE</tspan></text><rect x="646" y="16" width="196" height="24" rx="12" fill="#0d2238" stroke="#254b6e"/><text x="660" y="32" fill="#7ce8d8" font-size="11.5" font-weight="600"><tspan x="660" dy="0">──▶ Stage Data &amp; Context Flow</tspan></text><rect x="852" y="16" width="204" height="24" rx="12" fill="#15203c" stroke="#3b4278"/><text x="866" y="32" fill="#c4b5fd" font-size="11.5" font-weight="600"><tspan x="866" dy="0">◆ Policy Gate &amp; Key Notes</tspan></text><text x="24" y="62" fill="#f2f7ff" font-size="18" font-weight="700"><tspan x="24" dy="0">LLM Inference Engine Selection (vLLM vs SGLang vs TensorRT-LLM) &amp; PD</tspan><tspan x="24" dy="25.2">Disaggregation (NVIDIA Dynamo + Mooncake) — Architect FAQ &amp;</tspan><tspan x="24" dy="25.2">Interactive Sizer</tspan></text><g data-concept="1"><rect x="24" y="131" width="187" height="186" rx="12" fill="#0d1e34" stroke="#335277" stroke-width="1.2"/><rect x="24" y="131" width="187" height="5" rx="2.5" fill="#38bdf8"/><rect x="34" y="144" width="167" height="22" rx="6" fill="#081424" stroke="#223b59"/><text x="40" y="159" fill="#38bdf8" font-size="11.5" font-weight="700"><tspan x="40" dy="0">01 · INGRESS</tspan></text><text x="36" y="185" fill="#f4f8ff" font-size="13.5" font-weight="700"><tspan x="36" dy="0">Workload &amp; six-layer</tspan><tspan x="36" dy="18.9">decisions</tspan></text><path d="M36 219 H199" stroke="#233b57" stroke-width="1"/><text x="36" y="237" fill="#c5d6e8" font-size="12" font-weight="400"><tspan x="36" dy="0">Phase 179: requirements,</tspan><tspan x="36" dy="16.799999999999997">boundaries and trade-offs</tspan></text></g><g data-relationship="maps to runtime choices"><path d="M213 224 H231" fill="none" stroke="#56ddcd" stroke-width="2.4"/><path d="M225 219 L232 224 L225 229" fill="none" stroke="#56ddcd" stroke-width="2.4"/><rect x="24" y="325" width="187" height="44" rx="8" fill="#0b2239" stroke="#2b5b6c"/><text x="34" y="344" fill="#7ce8d8" font-size="11.5" font-weight="600"><tspan x="34" dy="0">01→02 maps to runtime</tspan><tspan x="34" dy="16.099999999999998">choices</tspan></text></g><g data-concept="2"><rect x="235" y="131" width="187" height="186" rx="12" fill="#112640" stroke="#335277" stroke-width="1.2"/><rect x="235" y="131" width="187" height="5" rx="2.5" fill="#34d399"/><rect x="245" y="144" width="167" height="22" rx="6" fill="#081424" stroke="#223b59"/><text x="251" y="159" fill="#34d399" font-size="11.5" font-weight="700"><tspan x="251" dy="0">02 · GROUNDING</tspan></text><text x="247" y="185" fill="#f4f8ff" font-size="13.5" font-weight="700"><tspan x="247" dy="0">Azure runtime</tspan><tspan x="247" dy="18.9">spectrum</tspan></text><path d="M247 219 H410" stroke="#233b57" stroke-width="1"/><text x="247" y="237" fill="#c5d6e8" font-size="12" font-weight="400"><tspan x="247" dy="0">Hosted agents · Functions</tspan><tspan x="247" dy="16.799999999999997">· ACA · AKS · E2B</tspan></text></g><g data-relationship="depends on compute fabric"><path d="M424 224 H442" fill="none" stroke="#56ddcd" stroke-width="2.4"/><path d="M436 219 L443 224 L436 229" fill="none" stroke="#56ddcd" stroke-width="2.4"/><rect x="235" y="325" width="187" height="44" rx="8" fill="#0b2239" stroke="#2b5b6c"/><text x="245" y="344" fill="#7ce8d8" font-size="11.5" font-weight="600"><tspan x="245" dy="0">02→03 depends on compute</tspan><tspan x="245" dy="16.099999999999998">fabric</tspan></text></g><g data-concept="3"><rect x="446" y="131" width="187" height="186" rx="12" fill="#0d1e34" stroke="#335277" stroke-width="1.2"/><rect x="446" y="131" width="187" height="5" rx="2.5" fill="#a78bfa"/><rect x="456" y="144" width="167" height="22" rx="6" fill="#081424" stroke="#223b59"/><text x="462" y="159" fill="#a78bfa" font-size="11.5" font-weight="700"><tspan x="462" dy="0">03 · POLICY GATE</tspan></text><text x="458" y="185" fill="#f4f8ff" font-size="13.5" font-weight="700"><tspan x="458" dy="0">Compute, memory &amp;</tspan><tspan x="458" dy="18.9">interconnect</tspan></text><path d="M458 219 H621" stroke="#233b57" stroke-width="1"/><text x="458" y="237" fill="#c5d6e8" font-size="12" font-weight="400"><tspan x="458" dy="0">Tong–Yun–Ge supernodes</tspan><tspan x="458" dy="16.799999999999997">· GPU / network / state</tspan></text></g><g data-relationship="constrains inference design"><path d="M635 224 H653" fill="none" stroke="#56ddcd" stroke-width="2.4"/><path d="M647 219 L654 224 L647 229" fill="none" stroke="#56ddcd" stroke-width="2.4"/><rect x="446" y="325" width="187" height="44" rx="8" fill="#0b2239" stroke="#2b5b6c"/><text x="456" y="344" fill="#7ce8d8" font-size="11.5" font-weight="600"><tspan x="456" dy="0">03→04 constrains</tspan><tspan x="456" dy="16.099999999999998">inference design</tspan></text></g><g data-concept="4"><rect x="657" y="131" width="187" height="186" rx="12" fill="#112640" stroke="#335277" stroke-width="1.2"/><rect x="657" y="131" width="187" height="5" rx="2.5" fill="#f59e0b"/><rect x="667" y="144" width="167" height="22" rx="6" fill="#081424" stroke="#223b59"/><text x="673" y="159" fill="#f59e0b" font-size="11.5" font-weight="700"><tspan x="673" dy="0">04 · EXECUTION</tspan></text><text x="669" y="185" fill="#f4f8ff" font-size="13.5" font-weight="700"><tspan x="669" dy="0">Inference &amp; cost</tspan><tspan x="669" dy="18.9">boundaries</tspan></text><path d="M669 219 H832" stroke="#233b57" stroke-width="1"/><text x="669" y="237" fill="#c5d6e8" font-size="12" font-weight="400"><tspan x="669" dy="0">DeepInfer: prefill /</tspan><tspan x="669" dy="16.799999999999997">decode / cache; revenue</tspan><tspan x="669" dy="16.799999999999997">is not profit</tspan></text></g><g data-relationship="requires resilience evidence"><path d="M846 224 H864" fill="none" stroke="#56ddcd" stroke-width="2.4"/><path d="M858 219 L865 224 L858 229" fill="none" stroke="#56ddcd" stroke-width="2.4"/><rect x="657" y="325" width="187" height="44" rx="8" fill="#0b2239" stroke="#2b5b6c"/><text x="667" y="344" fill="#7ce8d8" font-size="11.5" font-weight="600"><tspan x="667" dy="0">04→05 requires</tspan><tspan x="667" dy="16.099999999999998">resilience evidence</tspan></text></g><g data-concept="5"><rect x="868" y="131" width="187" height="186" rx="12" fill="#0d1e34" stroke="#335277" stroke-width="1.2"/><rect x="868" y="131" width="187" height="5" rx="2.5" fill="#56ddcd"/><rect x="878" y="144" width="167" height="22" rx="6" fill="#081424" stroke="#223b59"/><text x="884" y="159" fill="#56ddcd" font-size="11.5" font-weight="700"><tspan x="884" dy="0">05 · AUDIT &amp; EVAL</tspan></text><text x="880" y="185" fill="#f4f8ff" font-size="13.5" font-weight="700"><tspan x="880" dy="0">Heartbeat &amp; recovery</tspan><tspan x="880" dy="18.9">evidence</tspan></text><path d="M880 219 H1043" stroke="#233b57" stroke-width="1"/><text x="880" y="237" fill="#c5d6e8" font-size="12" font-weight="400"><tspan x="880" dy="0">E2B / Nomad: failure</tspan><tspan x="880" dy="16.799999999999997">detection, retries and</tspan><tspan x="880" dy="16.799999999999997">source caveats</tspan></text></g><rect x="868" y="325" width="187" height="44" rx="8" fill="#0e2538" stroke="#2e5470"/><text x="878" y="344" fill="#93c5fd" font-size="11.5" font-weight="600"><tspan x="878" dy="0">05 Sink · Verified</tspan><tspan x="878" dy="16.099999999999998">Evidence</tspan></text><g data-takeaway="1"><rect x="24" y="383" width="334" height="88" rx="10" fill="#0b1a2e" stroke="#284466"/><rect x="24" y="395" width="4" height="64" rx="2" fill="#38bdf8"/><text x="38" y="408" fill="#38bdf8" font-size="11.5" font-weight="700"><tspan x="38" dy="0">TAKEAWAY 01 · END-TO-END DATA FLOW</tspan></text><text x="38" y="429" fill="#d5e4f5" font-size="12" font-weight="400"><tspan x="38" dy="0">Left-to-right pipeline from Workload &amp;</tspan><tspan x="38" dy="16.799999999999997">six-layer decisions to Heartbeat &amp; recovery</tspan><tspan x="38" dy="16.799999999999997">evidence with explicit handoffs.</tspan></text></g><g data-takeaway="2"><rect x="373" y="383" width="334" height="88" rx="10" fill="#0b1a2e" stroke="#284466"/><rect x="373" y="395" width="4" height="64" rx="2" fill="#a78bfa"/><text x="387" y="408" fill="#a78bfa" font-size="11.5" font-weight="700"><tspan x="387" dy="0">TAKEAWAY 02 · CONTROL &amp; POLICY GATE</tspan></text><text x="387" y="429" fill="#d5e4f5" font-size="12" font-weight="400"><tspan x="387" dy="0">Core boundary at Compute, memory &amp;</tspan><tspan x="387" dy="16.799999999999997">interconnect: Tong–Yun–Ge supernodes · GPU</tspan><tspan x="387" dy="16.799999999999997">/ network / state</tspan></text></g><g data-takeaway="3"><rect x="722" y="383" width="334" height="88" rx="10" fill="#0b1a2e" stroke="#284466"/><rect x="722" y="395" width="4" height="64" rx="2" fill="#34d399"/><text x="736" y="408" fill="#34d399" font-size="11.5" font-weight="700"><tspan x="736" dy="0">TAKEAWAY 03 · EVIDENCE &amp; BOUNDARY</tspan></text><text x="736" y="429" fill="#d5e4f5" font-size="12" font-weight="400"><tspan x="736" dy="0">E2B / Nomad: failure detection, retries and</tspan><tspan x="736" dy="16.799999999999997">source caveats · Conceptual flow, not</tspan><tspan x="736" dy="16.799999999999997">measured latency.</tspan></text></g></svg><figcaption style="font:13px/1.6 system-ui,sans-serif;margin:10px auto 0;max-width:1080px;color:#9fb2ca;overflow-wrap:anywhere">Architecture & data-flow blueprint: follow the left-to-right stage handoffs, policy gates, and three key takeaway callouts below (conceptual topology, not measured latency or rankings).</figcaption></figure><!-- site-remediation-knowledge:end -->
 <main class="container">
   <div class="topbar">
@@ -277,6 +377,106 @@ function updateMoeSizer() {
 updateSizer();
 updateMoeSizer();
 updateStorageSizer();
+
+const ROCE_DATA = [
+  { id: 'static_ecmp_pfc_dcqcn', name: '1. Static 5-Tuple ECMP + PFC/DCQCN', util: 47.0, noisyUtil: 29.15, moeP99: 42.5, pfc: 1420, stepMs: 1480.0, waste256: 1472201, saved256: 0, speedup: '1.00x' },
+  { id: 'multi_qp_ecmp_dcqcn', name: '2. Multi-QP (8 QPs/Rank) + Early ECN', util: 67.0, noisyUtil: 49.58, moeP99: 28.4, pfc: 410, stepMs: 1185.0, waste256: 872415, saved256: 599786, speedup: '1.43x' },
+  { id: 'flowlet_dlb_dcqcn', name: '3. Switch Flowlet DLB (Tomahawk 5)', util: 83.0, noisyUtil: 71.38, moeP99: 19.6, pfc: 95, stepMs: 1042.0, waste256: 436208, saved256: 1035993, speedup: '1.77x' },
+  { id: 'adaptive_packet_spray_nic_ooo', name: '4. Per-Packet Spray + NIC OoO RDMA (Spectrum-X / UEC)', util: 95.5, noisyUtil: 91.0, moeP99: 11.4, pfc: 12, stepMs: 965.0, waste256: 163578, saved256: 1308623, speedup: '2.03x' }
+];
+
+function updateRoceSizer() {
+  const gpuEl = document.getElementById('roceGpuSlider');
+  if (!gpuEl) return;
+  const gpus = parseInt(gpuEl.value, 10);
+  const nicGbps = parseFloat(document.getElementById('roceNicSelect').value);
+  const mode = document.getElementById('roceTenantSelect').value;
+  document.getElementById('roceGpuVal').textContent = gpus;
+
+  const scaleFactor = gpus / 256.0;
+  const tbody = document.getElementById('roceSizerTbody');
+  tbody.innerHTML = '';
+
+  ROCE_DATA.forEach((row, idx) => {
+    const u = mode === 'noisy' ? row.noisyUtil : row.util;
+    const bw = (nicGbps * (u / 100.0)).toFixed(1);
+    const p99 = (row.moeP99 * (400.0 / nicGbps) * (mode === 'noisy' && idx === 0 ? 1.35 : 1.0)).toFixed(1);
+    const waste = Math.round(row.waste256 * scaleFactor);
+    const saved = Math.round(row.saved256 * scaleFactor);
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #334155';
+    if (idx === 3) tr.style.background = 'rgba(16, 185, 129, 0.10)';
+    tr.innerHTML = `
+      <td style="padding:10px;font-weight:700;color:${idx===3?'#34d399':'#f8fafc'};">${row.name}</td>
+      <td style="padding:10px;"><code>${bw} Gbps (${u.toFixed(1)}% · ${row.speedup})</code></td>
+      <td style="padding:10px;"><code>${p99} ms</code></td>
+      <td style="padding:10px;"><code>${row.pfc} pauses/s</code></td>
+      <td style="padding:10px;"><code>${row.stepMs.toFixed(1)} ms</code></td>
+      <td style="padding:10px;"><code>$${waste.toLocaleString()}/yr</code> ${saved > 0 ? `<span style="color:#34d399;font-weight:700;">(Save $${saved.toLocaleString()}/yr)</span>` : ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const callout = document.getElementById('roceDecisionCallout');
+  if (gpus <= 64 && mode === 'isolated') {
+    callout.innerHTML = '<strong>架构师选型建议 (<=64 GPUs 单任务)</strong>：设置 <code>NCCL_IB_QPS_PER_CONNECTION=8</code> 配合交换机 ECN 水线前移即可低成本获得 <code>67.0%</code> 有效带宽；若已配 Tomahawk 5 交换机建议开启 Flowlet DLB (<code>83.0%</code>)。';
+  } else {
+    const savedTotal = Math.round(1308623 * scaleFactor).toLocaleString();
+    callout.innerHTML = `<strong>架构师选型建议 (${gpus} GPUs / ${mode==='noisy'?'多租户共享 Spine':'跨 Pod 规模'})</strong>：强烈推荐 <strong>Tier 4 逐包自适应喷洒 + 网卡硬件乱序重排 (Spectrum-X / UEC)</strong>，达到 <code>95.5%</code> 线速利用率（隔离度 <code>95.3%</code>），MoE All-to-All P99 压至 <code>11.4 ms</code>，相比静态 ECMP 每年挽回 <strong>$${savedTotal}</strong> 闲置 GPU 算力成本！`;
+  }
+}
+
+updateRoceSizer();
 </script>
+
+  <!-- ROUND 5: ROCEV2 LOAD BALANCING & CONGESTION CONTROL SIZER -->
+  <div class="panel" id="rocev2-sizer" style="margin-top: 24px; border-color: #38bdf8;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <h2 style="margin:0;color:#38bdf8;">🌐 Round 5 Interactive Sizer: AI Cluster RoCEv2 Load Balancing &amp; Congestion Control (Static ECMP vs. Multi-QP vs. Flowlet DLB vs. Packet Spray + NIC OoO)</h2>
+      <span style="font-size:12px;background:#0f172a;color:#34d399;padding:4px 10px;border-radius:999px;border:1px solid #334155;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:16px;">
+      Strictly bound to sealed evaluator <code>experiments/rocev2_load_balancing_selection/results.json</code> (Baseline: <code>256 × H100</code>, <code>400 Gbps</code> 1:1 non-blocking Leaf-Spine Clos, <code>$2.50/GPU·h</code>). Adjust GPU scale or toggle Multi-Tenant Noisy-Neighbor burst traffic to inspect effective collective bandwidth, MoE All-to-All P99 latency, and annualized GPU idle waste savings.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster GPU Count: <span id="roceGpuVal" style="color:#38bdf8;">256</span> GPUs</label>
+        <input type="range" id="roceGpuSlider" min="64" max="1024" step="64" value="256" style="width:100%;margin-top:8px;" oninput="updateRoceSizer()" />
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">NIC Port Speed (Line Rate)</label>
+        <select id="roceNicSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRoceSizer()">
+          <option value="400" selected>400 Gbps RoCEv2 (H100 / ConnectX-7 / BF-3 Baseline)</option>
+          <option value="200">200 Gbps RoCEv2 (A100 / ConnectX-6)</option>
+          <option value="800">800 Gbps RoCEv2 / UEC (B200 / ConnectX-8 / TH5)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Shared Spine Contention Mode</label>
+        <select id="roceTenantSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRoceSizer()">
+          <option value="isolated" selected>Dedicated Spine (Isolated Baseline)</option>
+          <option value="noisy">Multi-Tenant 120 Gbps Checkpoint Burst (Noisy Neighbor)</option>
+        </select>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">RoCEv2 Routing &amp; Congestion Architecture</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Effective Collective BW (Util %)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">MoE EP=32 All-to-All P99</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">PFC Pause Rate</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Training Step Time</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Annualized GPU Idle Waste (Savings)</th>
+          </tr>
+        </thead>
+        <tbody id="roceSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="roceDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #34d399;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>updateRoceSizer();</script>
 </body>
 </html>
