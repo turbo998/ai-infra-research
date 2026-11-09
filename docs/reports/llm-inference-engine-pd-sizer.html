@@ -3003,5 +3003,90 @@ function updateEvalJudgeSizer() {
 }
 updateEvalJudgeSizer();
 </script>
+
+  <!-- Round 34: Multi-Tenant GPU Fractional Sharing & Isolation Selection Sizer -->
+  <div id="gpu-sharing-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#4f46e5;color:#eef2ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 34 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧩 多租户 GPU 算力切分与故障隔离计算器（Time-Slicing vs. CUDA MPS vs. 硬件 MIG vs. K8s DRA + HAMi）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/multi_tenant_gpu_sharing_mig_mps_dra_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/multi-tenant-gpu-sharing-mig-mps-dra-selection-faq.md" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/multi-tenant-gpu-sharing-mig-mps-dra-selection-faq.en.md" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./multi-tenant-gpu-sharing-mig-mps-dra-selection-cards.html" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">并发承载小模型/Embedding/Notebook 微服务数量:</label>
+        <select id="gsServicesSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGpuSharingSizer()">
+          <option value="28">28 个微服务实例 (中型业务集群)</option>
+          <option value="56" selected>56 个微服务实例 (企业多部门混部基线)</option>
+          <option value="112">112 个微服务实例 (集团级 AI 共享底座)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">租户信任边界与工作负载特征:</label>
+        <select id="gsTrustSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGpuSharingSizer()">
+          <option value="dra" selected>跨部门多租户 + 多规格混部 (含在线推理与开发 Notebook，要求 0% 故障传染)</option>
+          <option value="mig">跨部门统一规格 (~18GB/实例，追求最简静态硬件 MIG 切分)</option>
+          <option value="mps">单一应用内部受信微服务组 (如同一条 RAG 内部的 Emb + Reranker)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU 切分与共享架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单卡吞吐 / 吵闹邻居 P99 抖动</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">OOM / XID 31 跨租户爆炸半径</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">整卡有效装箱率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">所需 H200 卡数 / 年度总 TCO</th>
+          </tr>
+        </thead>
+        <tbody id="gsSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="gsDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #4f46e5;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateGpuSharingSizer() {
+  const svcs = parseInt(document.getElementById('gsServicesSelect').value, 10) || 56;
+  const trust = document.getElementById('gsTrustSelect').value || 'dra';
+  const mult = svcs / 56.0;
+  const bestId = trust === 'dra' ? 't4' : (trust === 'mig' ? 't3' : 't2');
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: K8s 原生 Time-Slicing 时间片轮转', qps: '142.0 QPS / P99 +215.0% ✕', blast: 'OOM 100% 陪葬 ✕ / XID31 0%', util: '42.0%', tco: `${Math.round(16*mult)} 张 H200 · $${Math.round(384000*mult).toLocaleString()}/年` },
+    { id: 't2', name: '🟨 Tier 2: NVIDIA CUDA MPS 空间算力并发', qps: '333.7 QPS / P99 +28.5%', blast: 'OOM 0% / XID31 100% 团灭 ✕', util: '79.5%', tco: `${Math.round(10*mult)} 张 H200 · $${Math.round(240000*mult).toLocaleString()}/年` },
+    { id: 't3', name: '🟦 Tier 3: 静态硬件 MIG 物理切分 (7×1g.20gb)', qps: '298.0 QPS / P99 +1.8% 🏆', blast: 'OOM 0% 🏆 / XID31 0% 🏆', util: '74.0%', tco: `${Math.round(10*mult)} 张 H200 · $${Math.round(240000*mult).toLocaleString()}/年` },
+    { id: 't4', name: '🟩 Tier 4: K8s DRA 动态 MIG + 租户内 HAMi/MPS', qps: '352.0 QPS 🏆 / P99 +3.2% 🏆', blast: 'OOM 0% 🏆 / XID31 0% 🏆', util: '88.5% 🏆', tco: `${Math.round(8*mult)} 张 H200 · $${Math.round(192000*mult).toLocaleString()}/年 (省 $${Math.round(480000*mult).toLocaleString()} 🏆)` }
+  ];
+
+  document.getElementById('gsSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(79,70,229,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#a5b4fc':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.qps}</code></td>
+      <td style="padding:10px;"><code>${r.blast}</code></td>
+      <td style="padding:10px;"><code>${r.util}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.tco}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('gsDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${svcs} 个并发微服务 · 跨部门多租户混部)</strong>：必选 <strong>Tier 4 (K8s DRA 动态硬件 MIG 跨租户硬隔离 + 租户内 HAMi/MPS 弹性复用)</strong>，跨租户 OOM 与 XID 31 爆炸半径降为 <code>0.0%</code>，整卡装箱率达 <code>88.5%</code>，仅需 <code>${Math.round(8*mult)} 张 H200</code>（每年净省 <code>$${Math.round(480000*mult).toLocaleString()}</code>）！`
+    : (bestId === 't3'
+      ? `<strong>架构师选型建议 (${svcs} 个并发微服务 · 统一规格硬隔离)</strong>：首选 <strong>Tier 3 (静态硬件 MIG 7×1g.20gb)</strong>，硅片级独占显存控制器与 L2 Cache，吵闹邻居下 P99 抖动仅 <code>+1.8%</code>！`
+      : `<strong>架构师选型建议 (${svcs} 个并发微服务 · 同应用受信容器组)</strong>：可在单个硬件 MIG 切片内部开启 <strong>Tier 2 (CUDA MPS)</strong>，让 Embedding 与 Reranker 空间并发共享 SM，吞吐比时间片提升 <code>2.35x</code>！`);
+}
+updateGpuSharingSizer();
+</script>
 </body>
 </html>

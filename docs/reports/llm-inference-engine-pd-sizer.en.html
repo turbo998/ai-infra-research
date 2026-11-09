@@ -3002,5 +3002,90 @@ function updateEvalJudgeSizer() {
 }
 updateEvalJudgeSizer();
 </script>
+
+  <!-- Round 34: Multi-Tenant GPU Fractional Sharing & Isolation Selection Sizer -->
+  <div id="gpu-sharing-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#4f46e5;color:#eef2ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 34 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧩 Multi-Tenant GPU Fractional Sharing &amp; Isolation Sizer (Time-Slicing vs. CUDA MPS vs. Hardware MIG vs. K8s DRA + HAMi)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/multi_tenant_gpu_sharing_mig_mps_dra_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/multi-tenant-gpu-sharing-mig-mps-dra-selection-faq.en.md" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/multi-tenant-gpu-sharing-mig-mps-dra-selection-faq.md" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./multi-tenant-gpu-sharing-mig-mps-dra-selection-cards.html" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Concurrent Microservices / Dev Pods:</label>
+        <select id="gsServicesSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGpuSharingSizer()">
+          <option value="28">28 Microservice Instances (Departmental Cluster)</option>
+          <option value="56" selected>56 Microservice Instances (Enterprise Baseline)</option>
+          <option value="112">112 Microservice Instances (Global Shared Platform)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Tenant Trust &amp; Workload Geometry:</label>
+        <select id="gsTrustSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGpuSharingSizer()">
+          <option value="dra" selected>Untrusted Multi-Tenant + Heterogeneous Sizes (Prod + Dev Notebooks, 0% Blast Radius)</option>
+          <option value="mig">Untrusted Uniform ~18GB Instances (Static 7×1g.20gb Hardware MIG)</option>
+          <option value="mps">Co-Trusted Microservices Inside 1 App Pod (e.g., RAG Emb + Reranker)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU Sharing &amp; Isolation Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">QPS/GPU / Noisy-Neighbor P99</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">OOM / XID 31 Blast Radius</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Packing Utilization</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">H200 GPUs / Annual TCO</th>
+          </tr>
+        </thead>
+        <tbody id="gsSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="gsDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #4f46e5;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateGpuSharingSizer() {
+  const svcs = parseInt(document.getElementById('gsServicesSelect').value, 10) || 56;
+  const trust = document.getElementById('gsTrustSelect').value || 'dra';
+  const mult = svcs / 56.0;
+  const bestId = trust === 'dra' ? 't4' : (trust === 'mig' ? 't3' : 't2');
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Vanilla K8s Time-Slicing', qps: '142.0 QPS / P99 +215.0% ✕', blast: 'OOM 100% Kill ✕ / XID31 0%', util: '42.0%', tco: `${Math.round(16*mult)} H200s · $${Math.round(384000*mult).toLocaleString()}/yr` },
+    { id: 't2', name: '🟨 Tier 2: NVIDIA CUDA MPS Spatial Sharing', qps: '333.7 QPS / P99 +28.5%', blast: 'OOM 0% / XID31 100% Kill ✕', util: '79.5%', tco: `${Math.round(10*mult)} H200s · $${Math.round(240000*mult).toLocaleString()}/yr` },
+    { id: 't3', name: '🟦 Tier 3: Static Hardware MIG (7×1g.20gb)', qps: '298.0 QPS / P99 +1.8% 🏆', blast: 'OOM 0% 🏆 / XID31 0% 🏆', util: '74.0%', tco: `${Math.round(10*mult)} H200s · $${Math.round(240000*mult).toLocaleString()}/yr` },
+    { id: 't4', name: '🟩 Tier 4: K8s DRA Dynamic MIG + HAMi/MPS', qps: '352.0 QPS 🏆 / P99 +3.2% 🏆', blast: 'OOM 0% 🏆 / XID31 0% 🏆', util: '88.5% 🏆', tco: `${Math.round(8*mult)} H200s · $${Math.round(192000*mult).toLocaleString()}/yr (Saves $${Math.round(480000*mult).toLocaleString()} 🏆)` }
+  ];
+
+  document.getElementById('gsSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(79,70,229,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#a5b4fc':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.qps}</code></td>
+      <td style="padding:10px;"><code>${r.blast}</code></td>
+      <td style="padding:10px;"><code>${r.util}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.tco}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('gsDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>Architect Recommendation (${svcs} Services · Untrusted Multi-Tenant Mix)</strong>: Standardize on <strong>Tier 4 (K8s DRA Dynamic Hardware MIG across tenants + HAMi/MPS inside trusted slices)</strong> for <code>0.0%</code> OOM/XID-31 blast radius, <code>88.5%</code> packing utilization, and <code>$${Math.round(480000*mult).toLocaleString()}/yr (-71.4%)</code> GPU savings!`
+    : (bestId === 't3'
+      ? `<strong>Architect Recommendation (${svcs} Services · Uniform Multi-Tenant Slices)</strong>: Deploy <strong>Tier 3 (Static Hardware MIG 7×1g.20gb)</strong> for dedicated silicon HBM controllers/L2 banks and just <code>+1.8%</code> P99 noisy-neighbor jitter!`
+      : `<strong>Architect Recommendation (${svcs} Services · Co-Trusted App Pod)</strong>: Enable <strong>Tier 2 (CUDA MPS)</strong> inside a dedicated MIG slice so Embedding and Reranker containers share SMs spatially for <code>2.35x</code> higher QPS!`);
+}
+updateGpuSharingSizer();
+</script>
 </body>
 </html>

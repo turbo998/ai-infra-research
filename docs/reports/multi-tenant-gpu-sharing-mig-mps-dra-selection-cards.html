@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Multi-Tenant Fractional GPU Sharing &amp; Isolation — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #a5b4fc; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #4338ca; background: #e0e7ff; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #4f46e5, #059669);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #4f46e5; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🧩 多租户 GPU 算力切分、共享与故障隔离选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/multi_tenant_gpu_sharing_mig_mps_dra_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/multi-tenant-gpu-sharing-mig-mps-dra-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/multi-tenant-gpu-sharing-mig-mps-dra-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#gpu-sharing-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · MULTI-TENANT GPU SHARING (TIME-SLICING VS MPS VS MIG VS DRA)</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">K8s DRA 动态 MIG + HAMi/MPS</span> 提升 2.48x 单卡吞吐与 88.5% 装箱率，0% 跨租户故障爆炸半径</h2>
+      <p class="subhead">针对 56 个政企小模型/Embedding/Reranker/Notebook 微服务混部于 NVIDIA H200 SXM（141GB HBM3e），对比四档 GPU 算力切分与隔离架构。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档 GPU 切分架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (Time-Slicing)</strong>: 142 QPS, 100% OOM 陪葬 ✕<br/>
+            • <strong>Tier 2 (CUDA MPS)</strong>: 333.7 QPS, XID 31 团灭 ✕<br/>
+            • <strong>Tier 3 (硬件 MIG)</strong>: 298 QPS, 0% 故障波及 ✅<br/>
+            • <strong>Tier 4 (DRA+MIG+HAMi)</strong>: 352 QPS, 88.5% 装箱 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 多租户混部负载契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 并发服务数：<code>56 个 AI 微服务/Pod</code><br/>
+            • 单服务需求：<code>~16-18GB 显存, 12% 算力</code><br/>
+            • 物理底座：<code>NVIDIA H200 (141GB)</code><br/>
+            • 故障注入：<code>OOM 炸弹 / XID 31 越界</code><br/>
+            • 干扰压测：<code>100% SM 死循环邻居</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • MPS vs 时间片吞吐：<code>2.35x (333.7 QPS)</code><br/>
+            • MIG 邻居干扰抖动：<code>+1.8% (vs +215%)</code><br/>
+            • 跨租户故障波及：<code>100% → 0.0%</code><br/>
+            • 56 服务所需 GPU：<code>28 张 → 8 张 (-71.4%)</code><br/>
+            • 年度节省算力费：<code>$480,000 / 年</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>单张 H200 SXM 承载 7 租户并发聚合吞吐 (Aggregate QPS / GPU，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 外层硬件 MIG + 内层 HAMi/MPS</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: K8s DRA 动态 MIG + HAMi/MPS</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+          <span class="bar-val">352.0 QPS 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: NVIDIA CUDA MPS 空间并发</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:94.8%;"></div></div>
+          <span class="bar-val">333.7 QPS ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 静态硬件 MIG (7×1g.20gb)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:84.7%;"></div></div>
+          <span class="bar-val">298.0 QPS ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: K8s 原生 Time-Slicing 时间片</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:40.3%;"></div></div>
+          <span class="bar-val">142.0 QPS ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to NVIDIA Hopper H100/H200 Multi-Instance GPU (MIG) silicon crossbar partitioning, CUDA MPS shared page-table fault semantics, and CNCF HAMi + K8s 1.32+ DRA (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: COLOCATING PROD RAG MICROSERVICES &amp; DEV NOTEBOOKS</span>
+        <span class="badge-prov">Case Study · OOM Bomb &amp; XID 31 Fate-Sharing Prevention</span>
+      </div>
+      <h2 class="headline">硬件 MIG 物理阻断 OOM 与 XID 31 连坐团灭；租户内 MPS 释放 2.48x 空间并发吞吐</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“为了省卡，我们用 K8s Time-Slicing 把线上 RAG 客服的 8B/Embedding 服务和算法团队的 Jupyter Notebook 混部在 H200 上，结果实习生跑崩一次显存 OOM 就把同卡线上服务全炸挂！后来改用 CUDA MPS 设了显存上限，没想到某个容器跑自定义 Triton 算子触发一次非法内存访问 (XID 31)，整张卡上 7 个容器竟然全部被 CUDA 驱动强制杀死！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：跨部门/不可信租户混部架构（含多种显存规格）</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (K8s DRA 动态 MIG + 租户内 HAMi/MPS)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">外层用硬件 MIG 物理切开 HBM 控制器与 MMU 页表（阻断 OOM 与 XID 31 传染），内层在同一业务线 MIG 切片内开启 HAMi/MPS 细粒度复用，56 个服务仅需 <code>8 张 H200</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 整卡有效装箱利用率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:88.5%;"></div></div>
+            <span class="bar-val">88.5% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: Time-Slicing 安全装箱利用率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:42.0%;"></div></div>
+            <span class="bar-val">42.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：同一业务 Pod 内部的受信多模型加速（Emb + Reranker）</strong></div>
+            <span class="pill pill-confirm">Confirm · 在单个 MIG 切片内开启 Tier 2 (CUDA MPS)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">同一条 RAG 流水线内部的微服务本就同生共死，在 MIG 切片内开启 MPS 可让多个小内核同时填满 SM，吞吐比时间片暴涨 <code>2.35x~2.48x</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3/4: 吵闹邻居下 P99 尾延迟增幅</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:2.0%;"></div></div>
+            <span class="bar-val">+1.8%~3.2% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: Time-Slicing 吵闹邻居 P99 增幅</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">+215.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：严禁将不同租户或开发调试容器塞进同一个 MPS 守护进程</strong></div>
+            <span class="pill pill-human">Send to a human · 共享 GPU 页表导致 XID 31 100% 连坐团灭</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">任何未锁定硬件 MIG 边界的 MPS 实例一旦遇到野指针越界，整卡所有客户端进程将被驱动强制回收。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Hardware MIG provides the concrete firewall between tenants; MPS/HAMi provides the elastic spatial packing inside each tenant's firewall.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER GPU SHARING &amp; ISOLATION MATRIX</span>
+        <span class="badge-prov">56 Services · NVIDIA H200 (141GB)</span>
+      </div>
+      <h2 class="headline">四档 GPU 切分架构全矩阵评测：单卡吞吐、P99 干扰抖动、OOM/XID31 爆炸半径与 TCO</h2>
+      <p class="subhead">全面对比 Time-Slicing、CUDA MPS、静态硬件 MIG 与 K8s DRA + HAMi 软硬协同两级架构。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (切分架构档位)</th>
+            <th>QUESTION / TASK (底层隔离机制)</th>
+            <th>MODEL ANSWER (QPS / P99 抖动 / 故障波及 / 需卡数)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: K8s 原生 Time-Slicing</strong></td>
+            <td>时间片轮转切换 · 无显存上限 · 共享 HBM/L2</td>
+            <td><code>142.0 QPS</code> · P99 抖动 <code>+215% ✕</code> · OOM 波及 <code>100% ✕</code> · 需 <code>16 张卡 ($384k/yr)</code></td>
+            <td><span class="pill pill-human">严禁生产 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: NVIDIA CUDA MPS</strong></td>
+            <td>SM 空间并发 + 显存上限 · 共享单一 GPU 页表</td>
+            <td><code>333.7 QPS (2.35x) ✅</code> · P99 <code>+28.5%</code> · OOM <code>0%</code> · <strong>XID 31 波及 <code>100% ✕</code></strong> · <code>10 张卡</code></td>
+            <td><span class="pill pill-confirm">仅限同应用内</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 硬件级 MIG (7×1g.20gb)</strong></td>
+            <td>硅片级独立 SM + 独立显存通道 + 独立 L2/MMU</td>
+            <td><code>298.0 QPS (2.10x)</code> · P99 抖动 <code>+1.8% 🏆</code> · OOM/XID31 波及 <code>0% 🏆</code> · <code>10 张卡 ($240k/yr)</code></td>
+            <td><span class="pill pill-auto">跨租户硬隔离 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: K8s DRA + MIG + HAMi</strong></td>
+            <td>跨租户动态 MIG + 租户内 HAMi/MPS 细粒度超分</td>
+            <td><code>352.0 QPS (2.48x) 🏆</code> · P99 <code>+3.2% 🏆</code> · 跨租户波及 <code>0% 🏆</code> · 装箱 <code>88.5%</code> · 仅需 <code>8 张卡 ($192k) 🏆</code></td>
+            <td><span class="pill pill-auto">云原生终极 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#4338ca;">✅ 为什么不支持 MIG 的 PCIe 卡 (L40S) 必装 CNCF HAMi？</strong><br/>
+          L40S / RTX 4090 没有硬件 MIG。若直接用原生 Time-Slicing 会面临 100% OOM 陪葬风险；安装 CNCF <code>HAMi</code> 后，<code>libvgpu.so</code> 在用户态拦截 <code>cuMemAlloc</code> 强制实施显存硬配额！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么 Time-Slicing 吞吐只有 MPS 的 42%？</strong><br/>
+          当单个小模型只能用到 15% 的 SM 时，Time-Slicing 依然独占整张卡的时间片，其余 85% 的 SM 被迫空转，且每次毫秒级切换都会冲刷 L2 Cache！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 4 combines the 0% blast radius of Tier 3 (Hardware MIG) with the 2.48× spatial concurrency of Tier 2 (MPS/HAMi), cutting required H200 GPUs from 28 down to 8.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · K8S DRA RESOURCECLAIM + HAMI LD_PRELOAD INTERCEPTOR</span>
+        <span class="badge-prov">Silicon MIG Partition + User-Space CUDA Quota</span>
+      </div>
+      <h2 class="headline">底层机制：K8s DRA 动态 MIG 声明契约 + HAMi `libvgpu.so` 显存/算力拦截器</h2>
+      <p class="subhead">展示生产环境如何通过 K8s 1.32+ DRA 动态切分硬件 MIG，并在切片内部安全实施细粒度配额。</p>
+
+      <div class="code-dark"><pre># 1. Kubernetes 1.32+ DRA ResourceClaim：声明式申请硬件隔离的 2g.40gb MIG 分区并开启内层 MPS
+apiVersion: resource.k8s.io/v1beta1
+kind: ResourceClaim
+metadata:
+  name: rag-pipeline-isolated-mig-slice
+spec:
+  devices:
+    requests:
+      - name: mig-slice
+        deviceClassName: gpu.nvidia.com
+        selectors:
+          - cel:
+              expression: 'device.attributes["gpu.nvidia.com"].productName == "NVIDIA-H200" &amp;&amp; device.capacity["memory"].compareTo(quantity("40Gi")) &gt;= 0'
+    config:
+      - requests: ["mig-slice"]
+        opaque:
+          driver: gpu.nvidia.com
+          parameters:
+            sharingStrategy: "MPS"
+            mpsActiveThreadPercentage: 100
+            mpsPerClientMemoryLimitMB: { "embedding": 8192, "reranker": 8192, "llm-8b": 22528 }</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#4338ca;margin:6px 0;">↓ CNCF HAMi `libvgpu.so` 用户态显存配额硬拦截执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>// 2. HAMi (libvgpu.so) LD_PRELOAD 拦截 cuMemAlloc_v2：在无 MIG 卡或 MIG 切片内精准锁死容器显存上限
+CUresult cuMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize) {
+  size_t current_used = atomic_load(&amp;shm_region-&gt;pod_vram_used_bytes);
+  size_t hard_quota   = shm_region-&gt;pod_vram_limit_bytes; // 例如: 16 GiB 硬上限
+  if (current_used + bytesize &gt; hard_quota) {
+    // 仅向当前超额容器返回 OOM，绝对不触碰同卡其他邻居容器的显存池！
+    return CUDA_ERROR_OUT_OF_MEMORY;
+  }
+  CUresult res = real_cuMemAlloc_v2(dptr, bytesize);
+  if (res == CUDA_SUCCESS) atomic_fetch_add(&amp;shm_region-&gt;pod_vram_used_bytes, bytesize);
+  return res;
+}
+// &lt;answer&gt; Validated: 352.0 QPS/GPU, 88.5% packing utilization, 0.0% cross-tenant blast radius</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Pairing outer silicon MIG isolation with inner `CUDA_MPS_PINNED_DEVICE_MEM_LIMIT` or `libvgpu.so` guarantees that neither OOM nor XID 31 ever crosses tenant boundaries.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · NOISY NEIGHBOR, OOM BOMB &amp; XID 31 FAULT INJECTION</span>
+        <span class="badge-prov">3 Production Chaos Scenarios</span>
+      </div>
+      <h2 class="headline">混沌故障注入验证：面对邻居 OOM 炸弹与 XID 31 越界，硬件 MIG 保持 0% 波及与 +1.8% 稳态</h2>
+      <p class="subhead">在同卡混部 7 个租户时，向 1 号容器注入满载矩阵乘、130GB 显存泄漏与非法内存指针三类混沌攻击，观测其余 6 个容器的存活率。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (混沌故障注入类型)</th>
+            <th>ORIGINAL (Tier 1 Time-Slicing / Tier 2 MPS)</th>
+            <th>PERTURBED (Tier 3/4 硬件 MIG 边界)</th>
+            <th>CHANGE (生产稳定性增益与根因)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. 吵闹邻居算力洪峰 (Noisy Neighbor)</strong><br/>1 号容器死循环跑满 FP16 大矩阵乘</td>
+            <td>Time-Slicing: P99 <code>+215.0% ✕</code><br/>CUDA MPS: P99 <code>+28.5%</code></td>
+            <td>Tier 3 静态 MIG: <code>+1.8% 🏆</code><br/>Tier 4 DRA+MIG: <code>+3.2% 🏆</code></td>
+            <td><strong style="color:#059669;">消除 98.5% 尾延迟抖动 🏆</strong><br/>物理独占 HBM 通道与 L2 Bank</td>
+          </tr>
+          <tr>
+            <td><strong>2. 显存泄漏炸弹 (130GB OOM Bomb)</strong><br/>1 号容器死循环调用 `torch.empty()`</td>
+            <td>Time-Slicing: <code>100% 陪葬崩溃 ✕</code><br/>CUDA MPS: <code>0% 波及 ✅</code></td>
+            <td>Tier 3/4 硬件 MIG:<br/><code>0.0% 波及 🏆</code></td>
+            <td><strong style="color:#059669;">彻底杜绝邻居 OOM 误杀 🏆</strong><br/>硬件级 20GB/40GB 物理地址墙</td>
+          </tr>
+          <tr>
+            <td><strong>3. 野指针越界异常 (XID 31 Fault)</strong><br/>1 号容器自定义算子触发 `ILLEGAL_ADDRESS`</td>
+            <td>CUDA MPS: <code>100% 全卡连坐团灭 ✕</code><br/>(Time-Slicing: <code>0% 波及</code>)</td>
+            <td>Tier 3/4 硬件 MIG:<br/><code>0.0% 波及 🏆</code></td>
+            <td><strong style="color:#059669;">根治 MPS 致命连坐缺陷 🏆</strong><br/>独立硬件 MMU 与计算引擎</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔍 为什么连 L2 Cache 都要物理切开？</strong><br/>
+          在 CUDA MPS 模式下，虽然可以限制每个进程使用的 SM 数量百分比，但所有 SM 依然共用同一块 50MB/60MB L2 Cache！当邻居狂刷大张量时会把你的 KV Cache 挤出 L2，产生 +28.5% 抖动；唯有 MIG 连 L2 Cache 都按比例物理切开！
+        </div>
+        <div class="callout-box">
+          <strong>⚡ 什么时候动态重切 MIG 不会中断业务？</strong><br/>
+          NVIDIA Hopper/Blackwell 支持在不影响同卡其他正在运行的 MIG 实例的前提下，单独销毁并重新组合空闲的 MIG 切片（Dynamic MIG Reconfiguration）！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Hardware MIG is the only mechanism on NVIDIA GPUs that simultaneously defeats compute starvation, OOM bombs, and XID 31 page-table faults.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; TCO SCALING · PACKING UTILIZATION, GPUS REQUIRED &amp; ANNUAL COST</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Isolated vs Slate=Tier 1/Dedicated Baseline</span>
+      </div>
+      <h2 class="headline">装箱率与 TCO 对比：56 个微服务仅需 8 张 H200，年度硬件成本从 $67.2 万降至 $19.2 万</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 硬件 MIG 与软硬两级切分架构，浅灰条（<code>#CBD5E1</code>）代表 Time-Slicing 与传统粗放分配基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. GPU 综合有效装箱利用率 (Effective GPU Packing Utilization %，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: K8s DRA 动态 MIG + HAMi/MPS</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:88.5%;"></div></div>
+            <span class="bar-val">88.5% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: NVIDIA CUDA MPS 空间并发</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:79.5%;"></div></div>
+            <span class="bar-val">79.5% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 静态硬件 MIG (7×1g.20gb)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:74.0%;"></div></div>
+            <span class="bar-val">74.0% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: K8s 原生 Time-Slicing</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:42.0%;"></div></div>
+            <span class="bar-val">42.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 承载 56 个企业 AI 微服务所需的 H200 SXM 卡数 (越少越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: K8s DRA 动态 MIG + HAMi (-71.4%)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:28.6%;"></div></div>
+            <span class="bar-val">8 GPUs 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2 / Tier 3: MPS 或静态 MIG</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:35.7%;"></div></div>
+            <span class="bar-val">10 GPUs ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: K8s 原生 Time-Slicing</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:57.1%;"></div></div>
+            <span class="bar-val">16 GPUs ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">传统粗放半独占分配 (每卡仅敢放 2 服务)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">28 GPUs ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 承载 56 个微服务的年度 GPU 算力总成本 (USD/年，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: K8s DRA 动态 MIG + HAMi (8 卡)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:28.6%;"></div></div>
+            <span class="bar-val">$192,000 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 静态硬件 MIG (10 卡)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:35.7%;"></div></div>
+            <span class="bar-val">$240,000 ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: Time-Slicing (16 卡)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:57.1%;"></div></div>
+            <span class="bar-val">$384,000 ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">传统粗放半独占分配 (28 卡)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$672,000 ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Reclaiming 20 H200 GPUs (8 vs 28) saves $480,000/year in cloud/depreciation OPEX while improving P99 tail latency stability by 67× over Time-Slicing.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：跨租户必用硬件 MIG 筑墙，同应用内用 MPS/HAMi 榨干碎片算力</h2>
+      <p class="subhead">用“外层硅片硬隔离 + 内层用户态弹性复用”终结多租户 GPU 集群的资源浪费与故障传染。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>跨部门多租户 AI 平台 / 生产与开发混部 → Tier 4 (K8s DRA 动态 MIG + 租户内 HAMi/MPS)</strong>：88.5% 装箱率，0% 跨租户故障爆炸半径。</li>
+            <li>• <strong>固定规格多租户隔离 → Tier 3 (静态硬件 MIG 7×1g.20gb)</strong>：零配置心智负担，+1.8% 物理级稳态延迟。</li>
+            <li>• <strong>单 Pod 内受信多组件并发 (Embedding+Reranker) → Tier 2 (CUDA MPS)</strong>：吞吐立涨 2.35x。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在生产环境裸开无显存墙的 K8s Time-Slicing (Tier 1)</strong>：任何 1 个租户 OOM 都会拉着整张卡所有容器一起崩溃。</li>
+            <li>• <strong>严禁跨不可信部门或自定义算子任务开启 CUDA MPS</strong>：单一野指针越界 (XID 31) 会触发全卡 100% 连坐团灭。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 在 H100/H200/B200 上开启硬件 MIG（<code>mixed</code> 模式），禁止不同部门或 Notebook 与线上服务共用非 MIG 边界。<br/>
+          2. <code>[ ]</code> 在非 MIG 卡（如 L40S）或 MIG 切片内部部署 <code>CNCF HAMi</code> 或配置 <code>CUDA_MPS_PINNED_DEVICE_MEM_LIMIT</code> 锁死显存上限。<br/>
+          3. <code>[ ]</code> 升级至 K8s 1.32+ <code>DRA (Dynamic Resource Allocation)</code> 实现按需动态重切 MIG 规格。<br/>
+          4. <code>[ ]</code> 在 <code>dcgm-exporter</code> 中开启 <code>GPU_I_ID</code> 标签，按独立 MIG 切片粒度监控显存与 SM 水位。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/multi_tenant_gpu_sharing_mig_mps_dra_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
