@@ -1589,5 +1589,100 @@ function updateSchedulerSizer() {
 }
 updateSchedulerSizer();
 </script>
+
+  <!-- Round 18: Billion-Scale RAG Vector Search & Hybrid Indexing Selection Sizer -->
+  <div id="rag-vector-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 18 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🔍 十亿级企业 RAG 向量检索与混合索引选型计算器（全内存 FP32 HNSW vs. SQ8/RaBitQ vs. NVMe DiskANN vs. GPU cuVS CAGRA）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/rag_vector_index_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/rag-vector-index-ann-hardware-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/rag-vector-index-ann-hardware-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./rag-vector-index-ann-hardware-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">企业向量知识库总规模 (1,536 维稠密向量):</label>
+        <select id="ragScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRagSizer()">
+          <option value="10">1,000 万条 (10M · 部门级热库)</option>
+          <option value="100" selected>1 亿条 (100M · 企业级主力分片基线)</option>
+          <option value="500">5 亿条 (500M · 跨事业部知识库)</option>
+          <option value="1000">10 亿条 (1,000M / 1B · 全集团多模态归档)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">并发检索与建库 SLA 模式:</label>
+        <select id="ragQpsSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRagSizer()">
+          <option value="tco" selected>常规在线 RAG (&le; 3,000 QPS · 追求最低月度常驻 TCO)</option>
+          <option value="storm">DeepResearch Agent 并发风暴 (&ge; 15,000 QPS 或小时级高频重建)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">向量索引与硬件档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单亿条 DRAM 占用 / 建库</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">P99 延迟 / 单分片 QPS</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Recall@10 精度</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前规模月度基础设施账单</th>
+          </tr>
+        </thead>
+        <tbody id="ragSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="ragDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateRagSizer() {
+  const vecM = parseInt(document.getElementById('ragScaleSelect').value, 10) || 100;
+  const qmode = document.getElementById('ragQpsSelect').value || 'tco';
+  const costMap = {
+    10:   { t1: 648.0,   t2: 182.0,   t3: 95.0,   t4: 540.0 },
+    100:  { t1: 6480.0,  t2: 1820.0,  t3: 580.0,  t4: 2160.0 },
+    500:  { t1: 32400.0, t2: 9100.0,  t3: 2900.0, t4: 10800.0 },
+    1000: { t1: 64800.0, t2: 18200.0, t3: 5800.0, t4: 21600.0 }
+  };
+  const c = costMap[vecM] || costMap[100];
+  let bestId = 't3';
+  if (qmode === 'storm') bestId = 't4';
+  else if (vecM <= 10) bestId = 't2';
+  else bestId = 't3';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 全内存未压缩 FP32 HNSW (DRAM Baseline)', dram: '890.9 GB/亿 · 建库 14.50h', perf: '4.20 ms · 1,850 QPS', rec: '98.2%', cost: `$${c.t1.toLocaleString()}/月 (基准)` },
+    { id: 't2', name: '🟨 Tier 2: 内存量化 HNSW (SQ8 / RaBitQ + Top-100 精排)', dram: '235.6 GB/亿 (3.78x) · 8.20h', perf: '3.10 ms ✅ · 2,940 QPS', rec: '97.4%', cost: `$${c.t2.toLocaleString()}/月 (-71.9%)` },
+    { id: 't3', name: '🟩 Tier 3: NVMe SSD DiskANN (Vamana + 48GB PQ + 4KB 块)', dram: '48.0 GB/亿 (18.56x) · 6.80h', perf: '11.80 ms ✅ · 1,120 QPS', rec: '95.8%', cost: `$${c.t3.toLocaleString()}/月 (-91.0% 🏆)` },
+    { id: 't4', name: '🟪 Tier 4: GPU 加速 NVIDIA cuVS CAGRA + Host-DRAM 重排', dram: '192.0 GB · 建库 0.92h (15.8x)', perf: '1.35 ms 🏆 · 22,400 QPS (12x)', rec: '98.0%', cost: `$${c.t4.toLocaleString()}/月 ($0.04/亿次查询)` }
+  ];
+
+  document.getElementById('ragSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.dram}</code></td>
+      <td style="padding:10px;"><code>${r.perf}</code></td>
+      <td style="padding:10px;"><code>${r.rec}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const msgMap = {
+    t2: `<strong>架构师选型建议 (${vecM}M 向量 · 低延迟热库模式)</strong>：首选 <strong>Tier 2 (SQ8 / RaBitQ 内存量化 + Top-100 精排)</strong>，无需改存储架构即可将内存削减 <code>3.78x</code>，P99 压至 <code>3.10 ms</code>，月成本降至 <code>$${c.t2.toLocaleString()}/月 (-71.9%)</code>！`,
+    t3: `<strong>架构师选型建议 (${vecM}M 向量 · 海量企业知识库 TCO 模式)</strong>：全内存 FP32 HNSW 月租高达 <code>$${c.t1.toLocaleString()}/月</code>；必须采用 <strong>Tier 3 (NVMe SSD DiskANN Vamana)</strong>，将常驻 DRAM 缩减 <code>18.56x</code>（每亿条仅 <code>48.0 GB</code>），P99 <code>11.80 ms (&le;15ms SLA)</code>，月度成本直降至 <code>$${c.t3.toLocaleString()}/月 (-91.0%)</code>！`,
+    t4: `<strong>架构师选型建议 (${vecM}M 向量 · 万级 QPS Agent 风暴与高频建库模式)</strong>：首选 <strong>Tier 4 (GPU cuVS CAGRA)</strong>，将单分片建库耗时从 <code>14.50 小时</code> 压至 <code>55 分钟 (快 15.76x)</code>，吞吐飙升至 <code>22,400 QPS (高 12.11x)</code>，每亿次查询成本仅 <code>$0.04 (-97.0%)</code>！`
+  };
+  document.getElementById('ragDecisionCallout').innerHTML = msgMap[bestId];
+}
+updateRagSizer();
+</script>
 </body>
 </html>

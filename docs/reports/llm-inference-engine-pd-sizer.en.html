@@ -1588,5 +1588,100 @@ function updateSchedulerSizer() {
 }
 updateSchedulerSizer();
 </script>
+
+  <!-- Round 18: Billion-Scale RAG Vector Search & Hybrid Indexing Selection Sizer -->
+  <div id="rag-vector-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 18 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🔍 Billion-Scale Enterprise RAG Vector Search &amp; Hybrid Indexing Sizer (FP32 HNSW vs. SQ8/RaBitQ vs. NVMe DiskANN vs. GPU cuVS CAGRA)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/rag_vector_index_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/rag-vector-index-ann-hardware-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/rag-vector-index-ann-hardware-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./rag-vector-index-ann-hardware-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Total Enterprise Vector Corpus Scale (1,536-dim):</label>
+        <select id="ragScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRagSizer()">
+          <option value="10">10 Million Vectors (10M · Departmental Hot Corpus)</option>
+          <option value="100" selected>100 Million Vectors (100M · Primary Shard Baseline)</option>
+          <option value="500">500 Million Vectors (500M · Multi-BU Knowledge Base)</option>
+          <option value="1000">1 Billion Vectors (1,000M / 1B · Enterprise Archive)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Query Throughput &amp; Build SLA Mode:</label>
+        <select id="ragQpsSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRagSizer()">
+          <option value="tco" selected>Standard Online RAG (&le; 3,000 QPS · Lowest Monthly TCO)</option>
+          <option value="storm">DeepResearch Agent Storm (&ge; 15,000 QPS or Hourly Index Rebuilds)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Vector Index &amp; Hardware Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">DRAM / 100M &amp; Build Time</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">P99 Latency / Shard QPS</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Recall@10</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Infrastructure Cost</th>
+          </tr>
+        </thead>
+        <tbody id="ragSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="ragDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateRagSizer() {
+  const vecM = parseInt(document.getElementById('ragScaleSelect').value, 10) || 100;
+  const qmode = document.getElementById('ragQpsSelect').value || 'tco';
+  const costMap = {
+    10:   { t1: 648.0,   t2: 182.0,   t3: 95.0,   t4: 540.0 },
+    100:  { t1: 6480.0,  t2: 1820.0,  t3: 580.0,  t4: 2160.0 },
+    500:  { t1: 32400.0, t2: 9100.0,  t3: 2900.0, t4: 10800.0 },
+    1000: { t1: 64800.0, t2: 18200.0, t3: 5800.0, t4: 21600.0 }
+  };
+  const c = costMap[vecM] || costMap[100];
+  let bestId = 't3';
+  if (qmode === 'storm') bestId = 't4';
+  else if (vecM <= 10) bestId = 't2';
+  else bestId = 't3';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: In-Memory Uncompressed FP32 HNSW (DRAM Baseline)', dram: '890.9 GB/100M · 14.50h', perf: '4.20 ms · 1,850 QPS', rec: '98.2%', cost: `$${c.t1.toLocaleString()}/mo (Baseline)` },
+    { id: 't2', name: '🟨 Tier 2: Quantized HNSW (SQ8 / RaBitQ + Top-100 Rerank)', dram: '235.6 GB/100M (3.78x) · 8.20h', perf: '3.10 ms ✅ · 2,940 QPS', rec: '97.4%', cost: `$${c.t2.toLocaleString()}/mo (-71.9%)` },
+    { id: 't3', name: '🟩 Tier 3: NVMe SSD DiskANN (Vamana + 48GB PQ + 4KB Read)', dram: '48.0 GB/100M (18.56x) · 6.80h', perf: '11.80 ms ✅ · 1,120 QPS', rec: '95.8%', cost: `$${c.t3.toLocaleString()}/mo (-91.0% 🏆)` },
+    { id: 't4', name: '🟪 Tier 4: GPU-Accelerated NVIDIA cuVS CAGRA + Host Rerank', dram: '192.0 GB · 0.92h Build (15.8x)', perf: '1.35 ms 🏆 · 22,400 QPS (12x)', rec: '98.0%', cost: `$${c.t4.toLocaleString()}/mo ($0.04/100M q)` }
+  ];
+
+  document.getElementById('ragSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.dram}</code></td>
+      <td style="padding:10px;"><code>${r.perf}</code></td>
+      <td style="padding:10px;"><code>${r.rec}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const msgMap = {
+    t2: `<strong>Architect Recommendation (${vecM}M Vectors · Low-Latency Hot Corpus Mode)</strong>: Pick <strong>Tier 2 (SQ8 / RaBitQ Quantized HNSW + Top-100 Rerank)</strong> to shrink DRAM <code>3.78x</code>, cut P99 to <code>3.10 ms</code>, and reduce monthly cost to <code>$${c.t2.toLocaleString()}/mo (-71.9%)</code>!`,
+    t3: `<strong>Architect Recommendation (${vecM}M Vectors · Billion-Scale TCO Mode)</strong>: Uncompressed FP32 HNSW costs <code>$${c.t1.toLocaleString()}/mo</code>; deploy <strong>Tier 3 (NVMe SSD DiskANN Vamana)</strong> to shrink DRAM <code>18.56x</code> (<code>48.0 GB/100M</code>), hold P99 at <code>11.80 ms (&le;15ms SLA)</code>, and slash monthly cost to <code>$${c.t3.toLocaleString()}/mo (-91.0%)</code>!`,
+    t4: `<strong>Architect Recommendation (${vecM}M Vectors · High-QPS Agent Storm &amp; Fast Rebuild Mode)</strong>: Deploy <strong>Tier 4 (GPU cuVS CAGRA)</strong> to cut 100M index build time from <code>14.50 hrs -> 55 min (15.76x faster)</code> and boost throughput to <code>22,400 QPS (12.11x)</code> at <code>$0.04 per 100M queries (-97.0%)</code>!`
+  };
+  document.getElementById('ragDecisionCallout').innerHTML = msgMap[bestId];
+}
+updateRagSizer();
+</script>
 </body>
 </html>
