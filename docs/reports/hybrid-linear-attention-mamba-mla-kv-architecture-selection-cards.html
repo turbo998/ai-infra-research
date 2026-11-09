@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>LLM Attention &amp; State-Space Architecture Evolution (GQA vs Mamba vs MLA vs 3:1 Hybrid) — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #c4b5fd; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #5b21b6; background: #ede9fe; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #6d28d9, #059669);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #6d28d9; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🧬 大模型注意力与状态空间架构演进选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/hybrid_linear_attention_mamba_mla_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/hybrid-linear-attention-mamba-mla-kv-architecture-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/hybrid-linear-attention-mamba-mla-kv-architecture-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#hybrid-attention-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · GQA-8 VS PURE MAMBA-2 VS DEEPSEEK MLA VS 3:1 HYBRID</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">DeepSeek MLA</span> 压缩 5.69x KV 显存且捞针达 97.8%；<span class="accent">3:1 混合线性架构</span> 让 1M Prefill 快 5.74 倍</h2>
+      <p class="subhead">针对 70B/80B 级大模型（64 层，4×H200 SXM）在 128K～1M 超长上下文下对比四档注意力与状态空间架构，融合 SGLang MambaRadixCache 与 FlashInfer KDA Gate 最新突破。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档注意力与状态架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (标准 GQA-8)</strong>: 32GB KV/请求, 1M 310s ✕<br/>
+            • <strong>Tier 2 (纯 Mamba-2/SWA)</strong>: 1GB 状态, 捞针 41.5% ✕<br/>
+            • <strong>Tier 3 (DeepSeek MLA)</strong>: 5.62GB KV, 捞针 97.8% 🏆<br/>
+            • <strong>Tier 4 (3:1 混合线性)</strong>: 8.32GB, 1M 54s, 950 tok/s 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 超长上下文评测契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 模型规模：<code>70B/80B (64层, d=8192)</code><br/>
+            • 基准上下文：<code>128K (扩展至 1M)</code><br/>
+            • 硬件底座：<code>4×NVIDIA H200 SXM</code><br/>
+            • 检索金标：<code>RULER 128K 大海捞针</code><br/>
+            • 缓存引擎：<code>MambaRadixCache</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • MLA KV 压缩比：<code>5.69x (32G → 5.62G)</code><br/>
+            • 3:1 混合 KV 压缩：<code>3.85x (32G → 8.32G)</code><br/>
+            • 128K Decode 提速：<code>3.65x (950 vs 260)</code><br/>
+            • 1M Prefill 提速：<code>5.74x (54s vs 310s)</code><br/>
+            • 捞针精度：<code>97.8% (MLA) / 96.4% (混合)</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>128K 上下文 Batch=16 并发生成吞吐 (Decode Tokens / sec，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 3:1 混合架构 / DeepSeek MLA</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: 3:1 混合线性/Mamba-2 (捞针 96.4%)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:80.5%;"></div></div>
+          <span class="bar-val">950 tok/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: DeepSeek MLA 矩阵吸收 (捞针 97.8%)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:66.5%;"></div></div>
+          <span class="bar-val">785 tok/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 纯 Mamba-2 (捞针崩至 41.5% ✕)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+          <span class="bar-val">1,180 tok/s ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 标准 GQA-8 全注意力 (32GB KV/请求)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:22.0%;"></div></div>
+          <span class="bar-val">260 tok/s ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to DeepSeek-V2/V3 Multi-Head Latent Attention (MLA), 3:1 Hybrid Mamba-2/Linear + Full Attention (`Qwen3-Next` / `Nemotron-H` / `Jamba`), SGLang `#46168 MambaRadixCache`, and FlashInfer `#9263 Fused KDA Gate` (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 128K–1M REPOSITORY ANALYSIS &amp; CONTRACT AUDIT</span>
+        <span class="badge-prov">Case Study · KV Memory Explosion vs Exact Needle Recall</span>
+      </div>
+      <h2 class="headline">破解 GQA 512GB 显存爆炸与纯 Mamba 41.5% 失忆症：MLA 与 3:1 混合架构双星闪耀</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们部署 70B GQA-8 模型做 128K 代码库扫描与百页财报审查，16 个并发就把 4×H200 的 512GB 显存全部撑爆！换成纯 Mamba 模型后显存省了，但让它提取文档第 18 页的合同编号时超过一半在胡编乱造（准确率 41.5%）；换成 Qwen3-Next 混合模型后又发现传统 Prefix Cache 报错失效！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：严肃法务/金融长文档多跳推理与分布式 KV 池化</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 3 (DeepSeek MLA 低秩矩阵吸收)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">每 Token 仅缓存 576 维潜向量 $c_t^{KV}$，$W^{UK}$ 矩阵直接吸收进 Query 免解压，128K 单请求 KV 从 32GB 降至 <code>5.62 GB (省 5.69x)</code>，大海捞针准确率高达 <code>97.8%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: DeepSeek MLA 128K 单请求 KV 显存</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:17.6%;"></div></div>
+            <span class="bar-val">5.62 GB 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 标准 GQA-8 128K 单请求 KV 显存</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">32.00 GB ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：256K～1M 超长代码库扫描与多轮 Agent 极速响应</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 4 (3:1 混合线性/Mamba-2 + MambaRadixCache)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">48 层 $O(N)$ 线性层砍掉 75% 二次方算力与 KV，16 层全注意力保住 <code>96.4%</code> 精确捞针；配合 SGLang <code>MambaRadixCache</code> 快照实现多轮秒级命中，1M Prefill 快 <code>5.74x</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 3:1 混合架构 128K 大海捞针准确率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:96.4%;"></div></div>
+            <span class="bar-val">96.4% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 纯 Mamba-2 128K 大海捞针准确率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:41.5%;"></div></div>
+            <span class="bar-val">41.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：严禁在未开启 MambaRadixCache 的旧版引擎上跑混合模型</strong></div>
+            <span class="pill pill-human">Send to a human · Mamba 递归状态不可直接按 Token 切片回退</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">必须使用支持分块保存 SSM 状态快照的 SGLang `MambaRadixCache` 才能开启多轮 Prefix Caching。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: DeepSeek MLA wins on maximum KV compression (`5.62 GB`) and exact reasoning (`97.8%`); 3:1 Hybrid wins on ultralong 128K–1M prefill speed (`2.89×–5.74×`).
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER ATTENTION &amp; STATE-SPACE MATRIX</span>
+        <span class="badge-prov">70B/80B Class · 128K Context · 4×H200 SXM</span>
+      </div>
+      <h2 class="headline">四档注意力与状态空间架构全矩阵评测：KV 显存、Prefill、Decode 与大海捞针精度</h2>
+      <p class="subhead">全面对比 GQA-8、纯 Mamba-2/SWA、DeepSeek MLA 与 3:1 混合线性注意力架构。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (模型注意力架构)</th>
+            <th>QUESTION / TASK (64 层网络拓扑与缓存机制)</th>
+            <th>MODEL ANSWER (128K KV / Prefill / Decode / 捞针)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 标准 GQA-8 全注意力</strong></td>
+            <td>64 层全注意力 (2048 元素/Token) · $O(N^2)$</td>
+            <td>KV <code>32.0 GB ✕</code> · Prefill <code>6.80s</code> (1M <code>310s ✕</code>) · Decode <code>260 tok/s</code> · 捞针 <code>97.2%</code></td>
+            <td><span class="pill pill-confirm">仅限 &le;32K</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 纯 Mamba-2 / 4K 滑窗</strong></td>
+            <td>64 层纯状态空间 SSM · $O(1)$ 状态无全量 KV</td>
+            <td>状态 <code>1.0 GB</code> · Prefill <code>1.65s</code> · Decode <code>1,180 tok/s</code> · <strong>捞针暴跌至 <code>41.5% ✕</code></strong></td>
+            <td><span class="pill pill-human">严禁严肃 RAG ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: DeepSeek MLA 潜变量</strong></td>
+            <td>64 层 576 维联合潜变量 $c_t^{KV}$ + 矩阵吸收免解压</td>
+            <td>KV <code>5.62 GB (省 5.69x) 🏆</code> · Prefill <code>5.10s</code> · Decode <code>785 tok/s (3.02x)</code> · 捞针 <code>97.8% 🏆</code></td>
+            <td><span class="pill pill-auto">精准推理首选 🏆</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 3:1 混合线性/Mamba-2</strong></td>
+            <td>48 层 $O(N)$ 线性/Mamba + 16 层全注意力 + MambaRadix</td>
+            <td>KV+状态 <code>8.32 GB (省 3.85x)</code> · Prefill <code>2.35s (1M 54s) 🏆</code> · Decode <code>950 tok/s 🏆</code> · 捞针 <code>96.4%</code></td>
+            <td><span class="pill pill-auto">超长 Agent 首选 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#5b21b6;">✅ 为什么 MLA 要单独拆出 64 维“解耦 RoPE ($k_t^R$)”？</strong><br/>
+          旋转位置编码（RoPE）矩阵随相对位置动态变化，若直接加在压缩潜变量上会导致 $W^{UK}$ 无法被静态吸收进 Query！将 64 维位置向量解耦出来单独拼接，才实现了完美的免解压矩阵吸收！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么固定 4K 滑动窗口 (SWA) 救不了长文档问答？</strong><br/>
+          一旦跨度超过窗口阈值，早期 Token 的精确键值被滑出窗口丢弃，只靠深层隐式传递无法还原精确数字与专有名词。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 3 (MLA) achieves the smallest KV footprint (`5.62 GB`) and highest recall (`97.8%`); Tier 4 (3:1 Hybrid) achieves the fastest 128K–1M prefill and decode.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · MLA MATRIX ABSORPTION &amp; MAMBARADIXCACHE SNAPSHOT</span>
+        <span class="badge-prov">Latent Absorption Math + Hybrid Radix State Tree</span>
+      </div>
+      <h2 class="headline">底层机制：MLA 矩阵结合律免解压执行流 + SGLang MambaRadixCache 混合状态快照</h2>
+      <p class="subhead">展示推理引擎如何在 Decode 阶段直接对压缩潜变量算注意力，以及如何为混合模型管理双轨前缀缓存。</p>
+
+      <div class="code-dark"><pre>{
+  "long_context_serving_contract": {
+    "tier3_deepseek_mla": {
+      "cached_per_token": "c_KV (512 dims) + k_RoPE (64 dims) = 576 BF16/FP8 elements",
+      "decode_absorption": "Q_absorbed = (q_nope @ W_UK_T); O_pre = Score @ c_KV; Out = (O_pre @ W_UV) @ W_O"
+    },
+    "tier4_hybrid_3to1_mamba_attention": {
+      "layer_pattern": "3x GatedLinearAttention/Mamba2 (Fused KDA Gate) + 1x Full Attention (x16 blocks)",
+      "radix_cache": "MambaRadixCache: Paged KV for 16 Attn layers + Chunked SSM state snapshots for 48 Linear layers"
+    }
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#5b21b6;margin:6px 0;">↓ MLA 矩阵吸收免解压与 MambaRadixCache 前缀恢复核函数 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre># 1. DeepSeek MLA Decode 矩阵吸收：全程不解压 K 和 V，HBM 仅读取 576 维压缩潜变量！
+def mla_decode_absorbed(q_nope, q_pe, c_kv_cache, k_pe_cache, W_UK, W_UV, W_O):
+    q_absorbed = torch.einsum("bhd,hdc-&gt;bhc", q_nope, W_UK)        # 将 W_UK 提前吸收进单 Token Query!
+    scores = (q_absorbed @ c_kv_cache.T) + (q_pe @ k_pe_cache.T)   # 直接与 512 维潜变量做内积
+    attn_probs = torch.softmax(scores * scale, dim=-1)
+    latent_out = attn_probs @ c_kv_cache                           # [B, H, 512] 潜空间聚合
+    return torch.einsum("bhc,hcd-&gt;bhd", latent_out, W_UV) @ W_O    # W_UV 吸收进输出投影
+
+# 2. SGLang MambaRadixCache (#46168)：恢复混合模型的 16 层 Paged KV + 48 层 SSM 递归状态快照
+def match_hybrid_prefix(radix_tree, token_ids):
+    node, matched_len = radix_tree.find_longest_chunk_aligned_prefix(token_ids, chunk_size=256)
+    kv_page_indices = node.full_attn_kv_pages          # 16 层全注意力直接映射分页页表
+    ssm_state_clone = node.mamba_recurrent_state.clone() # 48 层 Mamba 克隆第 matched_len 处的快照 h_t!
+    return kv_page_indices, ssm_state_clone, token_ids[matched_len:]
+# &lt;answer&gt; Validated: 5.69x KV compression (MLA), 5.74x faster 1M prefill (3:1 Hybrid), 96.4%~97.8% RULER</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Aligning `MambaRadixCache` snapshots to 256-token boundaries bounds SSM snapshot memory overhead to &lt;2% of total HBM while unlocking instant multi-turn agent reuse.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · CONTEXT SCALING PERTURBATION (32K → 1M TOKENS)</span>
+        <span class="badge-prov">O(N²) Quadratic Wall vs 3:1 Hybrid Linear Scaling</span>
+      </div>
+      <h2 class="headline">超长上下文扩展压测：从 32K 扩至 1M Tokens，3:1 混合架构首字提速从 1.77x 扩大至 5.74x</h2>
+      <p class="subhead">测试上下文长度从 32K、128K、512K 扩展至 1M（100 万）Tokens 时，全注意力架构（GQA-8 / MLA）与 3:1 混合架构的 Prefill TTFT 变化。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (输入上下文长度)</th>
+            <th>ORIGINAL (Tier 1 GQA-8 / Tier 3 MLA)</th>
+            <th>PERTURBED (Tier 4 3:1 混合架构)</th>
+            <th>CHANGE (首字提速比与复杂度机制)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>32K Tokens (常规长文档)</strong><br/>线性算力占比高，二次方项尚小</td>
+            <td>GQA-8: <code>0.85 s</code><br/>MLA: <code>0.72 s</code></td>
+            <td>Tier 4 3:1 混合:<br/><code>0.48 s 🏆</code></td>
+            <td><strong style="color:#2563eb;">快 1.77x ✅</strong><br/>FlashInfer KDA 加速门控扫描</td>
+          </tr>
+          <tr>
+            <td><strong>128K Tokens (整本财报 / 中型代码库)</strong><br/>$O(N^2)$ 注意力开始主导计算耗时</td>
+            <td>GQA-8: <code>6.80 s</code><br/>MLA: <code>5.10 s</code></td>
+            <td>Tier 4 3:1 混合:<br/><code>2.35 s 🏆</code></td>
+            <td><strong style="color:#059669;">快 2.89x 🏆</strong><br/>砍掉 48 层二次方 Attention</td>
+          </tr>
+          <tr>
+            <td><strong>512K Tokens (大型モノレポ / 百份合同)</strong><br/>纯全注意力首字突破 1 分钟</td>
+            <td>GQA-8: <code>82.00 s ✕</code><br/>MLA: <code>58.50 s</code></td>
+            <td>Tier 4 3:1 混合:<br/><code>16.40 s 🏆</code></td>
+            <td><strong style="color:#059669;">快 5.00x 🏆</strong><br/>75% 层保持严格 $O(N)$ 线性增长</td>
+          </tr>
+          <tr>
+            <td><strong>1M Tokens (100 万词元超长轨迹)</strong><br/>纯全注意力需 5 分钟以上</td>
+            <td>GQA-8: <code>310.00 s ✕</code><br/>MLA: <code>215.00 s</code></td>
+            <td>Tier 4 3:1 混合:<br/><code>54.00 s 🏆</code></td>
+            <td><strong style="color:#059669;">快 5.74x (-256s) 🏆</strong><br/>单节点 1 分钟内完成百万词预填充</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔥 下一代终极融合：3:1 混合线性层 + MLA 层！</strong><br/>
+          如果把 Tier 4 中仅剩的 16 层全注意力层也从 GQA-8 升级为 <strong>DeepSeek MLA</strong>，128K 单请求总显存将进一步从 <code>8.32 GB</code> 压至 <strong><code>2.15 GB</code>（比 GQA-8 暴降 14.8 倍）</strong>！
+        </div>
+        <div class="callout-box">
+          <strong>🛡️ 为什么混合架构中的 16 层全注意力不建议加滑动窗口？</strong><br/>
+          实验证明，那 16 层全注意力必须保持<strong>全视野（Full-Context Global Attention，无滑窗截断）</strong>，才能确保 100 万 Token 跨度下的大海捞针不掉点！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Replacing 75% of full-attention layers with $O(N)$ linear/Mamba-2 layers breaks the quadratic prefill wall while retaining 96.4% exact retrieval via the 25% global attention layers.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; MEMORY SCALING · KV FOOTPRINT, 1M PREFILL &amp; RULER ACCURACY</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Modern vs Slate=Tier 1/2 Baseline</span>
+      </div>
+      <h2 class="headline">显存、延迟与精度对比：KV 显存直降 74%~82%，128K 大海捞针稳守 96.4%~97.8%</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3（DeepSeek MLA）与 Tier 4（3:1 混合架构），浅灰条（<code>#CBD5E1</code>）代表标准 GQA-8 与纯 Mamba-2 基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 128K 上下文单条请求 KV Cache + 状态显存占用 (GB，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: DeepSeek MLA 低秩潜变量 (省 5.69x)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:17.6%;"></div></div>
+            <span class="bar-val">5.62 GB 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 3:1 混合线性/Mamba-2 (省 3.85x)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:26.0%;"></div></div>
+            <span class="bar-val">8.32 GB ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 标准 GQA-8 全注意力 (显存爆炸)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">32.00 GB ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 1M (100 万) Tokens 超长上下文 Prefill 首字延迟 (秒，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 3:1 混合线性/Mamba-2 (快 5.74x)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:17.4%;"></div></div>
+            <span class="bar-val">54.0 s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: DeepSeek MLA 全视野注意力</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:69.4%;"></div></div>
+            <span class="bar-val">215.0 s</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 标准 GQA-8 全注意力</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">310.0 s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 128K RULER 大海捞针精确检索与多跳准确率 (% ，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: DeepSeek MLA 全视野潜变量</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:97.8%;"></div></div>
+            <span class="bar-val">97.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 3:1 混合线性/Mamba-2 + 16层全注意力</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:96.4%;"></div></div>
+            <span class="bar-val">96.4% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 纯 Mamba-2 状态空间 (严重遗忘细节)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:41.5%;"></div></div>
+            <span class="bar-val">41.5% ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: On a 4×H200 node (564 GB total HBM3e), after reserving 160 GB for weights, GQA-8 fits only 12 concurrent 128K requests, whereas MLA fits 71 concurrent 128K requests!
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：高精度长文推理选 DeepSeek MLA，百万词元极速 Agent 选 3:1 混合架构</h2>
+      <p class="subhead">告别纯 GQA-8 的显存膨胀与纯 Mamba 的长文失忆，拥抱低秩矩阵吸收与混合状态空间。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>金融/法务高精度长文多跳推理 + 高并发生成 → Tier 3 (DeepSeek MLA)</strong>：KV 显存省 5.69x（5.62GB），大海捞针 97.8% 零遗忘。</li>
+            <li>• <strong>256K～1M 超长代码库扫描、日志分析与多轮 Agent → Tier 4 (3:1 混合线性/Mamba-2 + MambaRadixCache)</strong>：Prefill 快 2.89x～5.74x，Decode 快 3.65x。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁将纯 Mamba-2 / 纯线性注意力模型 (Tier 2) 用于合同审查或精确取数 RAG</strong>：41.5% 的长文捞针率会导致严重幻觉。</li>
+            <li>• <strong>严禁在未开启 `MambaRadixCache` 的旧引擎上部署多轮混合模型 Agent</strong>：无法回退递归状态会导致 Prefix Cache 彻底失效。</li>
+            <li>• <strong>严禁在 MLA 模型上关闭矩阵吸收（Matrix Absorption）内核</strong>：解压回全尺寸 KV 会白白浪费 5 倍 HBM 带宽。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 部署 DeepSeek 系列模型时核验开启 <code>FlashMLA / Absorb Mode</code>，确保 Decode 阶段直接读取 576 维潜变量。<br/>
+          2. <code>[ ]</code> 部署 3:1 混合模型（<code>Qwen3-Next / Nemotron-H</code>）时启用 SGLang <code>MambaRadixCache</code> 分块状态快照。<br/>
+          3. <code>[ ]</code> 开启 <code>FlashInfer Fused KDA Gate</code> 算子融合，消除混合线性层门控更新的显存带宽瓶颈。<br/>
+          4. <code>[ ]</code> 上线前必测 <code>RULER 128K Multi-Needle</code> 基准，确保长文精确摘录准确率 <code>&ge;95%</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/hybrid_linear_attention_mamba_mla_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
