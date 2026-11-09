@@ -3346,5 +3346,97 @@ function updateGuardrailsSizer() {
 }
 updateGuardrailsSizer();
 </script>
+
+  <!-- Round 38: AI Cluster In-Network Computing (NVLS + IB SHARP) & Collective Offload Sizer -->
+  <div id="sharp-collective-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0891b2;color:#ecfeff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 38 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🖧 AI 集群网内计算 (NVLS + IB SHARP) 与集合通信拓扑选型计算器（Ring vs. Tree vs. NVLS+SHARPv3 vs. 分层+跨园区 DiLoCo）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/in_network_computing_sharp_nvls_collective/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-cluster-in-network-computing-sharp-collective-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/ai-cluster-in-network-computing-sharp-collective-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./ai-cluster-in-network-computing-sharp-collective-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群 GPU 规模 (Cluster Scale):</label>
+        <select id="shScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSharpCollectiveSizer()">
+          <option value="256">256 GPUs (32 台节点)</option>
+          <option value="1024">1,024 GPUs (128 台节点)</option>
+          <option value="2048" selected>2,048 GPUs (256 台节点基准)</option>
+          <option value="4096">4,096 GPUs (512 台节点万卡级)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">机房物理拓扑与网络底座:</label>
+        <select id="shFabricSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSharpCollectiveSizer()">
+          <option value="ib_single" selected>单数据中心 InfiniBand NDR/XDR 集群 (支持 NVLS + IB SHARPv3)</option>
+          <option value="multi_dc">跨园区/跨楼宇双机房拼集群 (10ms 城域光纤 RTT)</option>
+          <option value="roce">单数据中心 RoCEv2 以太网集群 (机内支持 NVLS，跨机无 IB SHARP)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">集合通信与网内计算档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">有效算法带宽 (algbw)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前规模 256MB AllReduce 延迟</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">流量放大比 / 占用 GPU SM</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">端到端训练算力利用率 (MFU)</th>
+          </tr>
+        </thead>
+        <tbody id="shSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="shDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0891b2;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateSharpCollectiveSizer() {
+  const gpus = parseInt(document.getElementById('shScaleSelect').value, 10) || 2048;
+  const fab = document.getElementById('shFabricSelect').value || 'ib_single';
+  const latMap = {
+    256: { t1: 3.8, t2: 2.9, t3: 1.7, t4: 1.7 },
+    1024: { t1: 8.2, t2: 4.6, t3: 2.4, t4: 2.3 },
+    2048: { t1: 14.8, t2: 6.4, t3: 3.2, t4: 3.1 },
+    4096: { t1: 28.5, t2: 8.9, t3: 3.9, t4: 3.8 }
+  };
+  const l = latMap[gpus] || latMap[2048];
+  const bestId = fab === 'roce' ? 't2' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 传统 NCCL Ring 环状 AllReduce', bw: '200.0 GB/s (半速上限 ✕)', lat: `${l.t1.toFixed(1)} ms ✕`, tax: '2.0× 流量 · 占 20 个 SM ✕', mfu: fab === 'multi_dc' ? '11.2% (跨园瘫痪 ✕)' : '43.5%' },
+    { id: 't2', name: '🟨 Tier 2: 机内 NVLS + 跨机 Double Binary Tree', bw: '258.0 GB/s', lat: `${l.t2.toFixed(1)} ms`, tax: '2.0× 跨机流量 · 跨机占 20 SM', mfu: fab === 'multi_dc' ? '16.5% ✕' : '49.2% (RoCE 推荐 ✅)' },
+    { id: 't3', name: '🟦 Tier 3: 机内 NVLS + 跨机 IB SHARPv3 网内规约', bw: '368.0 GB/s (1.84x 🏆)', lat: `${l.t3.toFixed(1)} ms 🏆`, tax: '1.0× 流量 (-50%) · 仅占 4 SM 🏆', mfu: fab === 'multi_dc' ? '21.0% (无法跨子网)' : '56.8% ✅' },
+    { id: 't4', name: '🟩 Tier 4: 分层通信域 SHARP + 跨园区 DiLoCo (H=50)', bw: '375.0 GB/s (93.8% 线速 🏆)', lat: `${l.t4.toFixed(1)} ms 🏆`, tax: '1.0× 流量 · 0 树冲突 · 4 SM 🏆', mfu: fab === 'multi_dc' ? '53.8% (+42.6pt 🏆)' : '57.6% 🏆' }
+  ];
+
+  document.getElementById('shSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(8,145,178,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.lat}</code></td>
+      <td style="padding:10px;"><code>${r.tax}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.mfu}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('shDecisionCallout').innerHTML = fab === 'multi_dc'
+    ? `<strong>架构师选型建议 (${gpus} GPUs · 跨园区 10ms 光纤拼集群)</strong>：必选 <strong>Tier 4 (园区内 NVLS + DP 专属 IB SHARPv3 + 跨园区每 H=50 步 DiLoCo 外动量同步)</strong>，将跨楼宇联合训练 MFU 从 <code>11.2%</code> 拯救至 <code>53.8%</code>！`
+    : (fab === 'roce'
+      ? `<strong>架构师选型建议 (${gpus} GPUs · RoCEv2 以太网集群)</strong>：配置 <strong>Tier 2 (开启机内 NCCL_NVLS_ENABLE=1 + 跨机 Double Binary Tree)</strong>，利用服务器主板 NVSwitch 加速机内 TP 并用双二叉树压低跨机跳数（<code>${l.t2.toFixed(1)} ms</code>）！`
+      : `<strong>架构师选型建议 (${gpus} GPUs · 单中心 InfiniBand 集群)</strong>：必选 <strong>Tier 4 (机内 TP 用 NVLS + 跨机 DP 用 IB SHARPv3 + NCCL_SHARP_GROUP_SIZE_THRESH=16)</strong>，网卡流量直接砍半 (<code>1.0x</code>)，算法带宽飙至 <code>375.0 GB/s</code>，延迟压至 <code>${l.t4.toFixed(1)} ms</code>，且每张卡释放 <code>16 个 SM</code> 给矩阵乘！`);
+}
+updateSharpCollectiveSizer();
+</script>
 </body>
 </html>

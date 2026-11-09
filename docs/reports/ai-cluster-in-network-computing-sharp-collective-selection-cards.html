@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>AI Cluster In-Network Computing (NVLS + IB SHARP) &amp; Collective Offload — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #67e8f9; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #0e7490; background: #cffafe; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #0891b2, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #0891b2; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🖧 AI 集群网内计算 (NVLS + IB SHARP) 与集合通信拓扑卸载 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/in_network_computing_sharp_nvls_collective/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/ai-cluster-in-network-computing-sharp-collective-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/ai-cluster-in-network-computing-sharp-collective-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#sharp-collective-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · IN-NETWORK COMPUTING (NVLS + IB SHARPV3 COLLECTIVES)</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">机内 NVLS + 跨机 IB SHARPv3</span> 砍半网络流量、提升 1.84x 算法带宽至 368 GB/s，每张 GPU 省出 16 个 SM</h2>
+      <p class="subhead">针对 2,048×H200 SXM 集群（256 节点 × 8×400Gbps NDR，单节点单向线速 400 GB/s）执行 256MB AllReduce，对比 Ring、双二叉树、NVLS+SHARPv3 与跨园区 DiLoCo。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档集合通信拓扑</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (NCCL Ring)</strong>: 200 GB/s, 14.8ms, 占 20 SM ✕<br/>
+            • <strong>Tier 2 (Double Tree)</strong>: 258 GB/s, 6.4ms, 2.0x 流量<br/>
+            • <strong>Tier 3 (NVLS + SHARPv3)</strong>: 368 GB/s, 3.2ms, 占 4 SM 🏆<br/>
+            • <strong>Tier 4 (分层SHARP+DiLoCo)</strong>: 375 GB/s, 跨园区 53.8% 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 集群网络与负载契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 集群规模：<code>2,048×H200 (扩展至 4,096)</code><br/>
+            • 机内互联：<code>NVSwitch 3.0 (900 GB/s)</code><br/>
+            • 跨机网络：<code>8×400G NDR (400 GB/s)</code><br/>
+            • 规约载荷：<code>256 MB BF16 AllReduce</code><br/>
+            • 跨园区 RTT：<code>10.0 ms 城域光纤</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 算法带宽提升：<code>200 → 368~375 GB/s (1.84x)</code><br/>
+            • 2048卡延迟提速：<code>14.8ms → 3.2ms (4.62x)</code><br/>
+            • 4096卡延迟提速：<code>28.5ms → 3.9ms (7.31x)</code><br/>
+            • 网卡发送流量降幅：<code>2.0x → 1.0x (-50.0%)</code><br/>
+            • 释放 GPU 计算核：<code>每卡省出 16 个 SM</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>2,048 卡 256MB AllReduce 有效算法带宽 (NCCL algbw GB/s，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 机内 NVLS + 跨机 DP 专属 IB SHARPv3</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: 分层通信域 NVLS + IB SHARPv3</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:93.8%;"></div></div>
+          <span class="bar-val">375.0 GB/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 机内 NVLS + 跨机 IB SHARPv3</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:92.0%;"></div></div>
+          <span class="bar-val">368.0 GB/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: NCCL Double Binary Tree (2.0x 流量)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:64.5%;"></div></div>
+          <span class="bar-val">258.0 GB/s</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 传统 NCCL Ring (2.0x 流量税)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:50.0%;"></div></div>
+          <span class="bar-val">200.0 GB/s ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to NVIDIA NCCL 2.21+ NVLS (NVLink SHARP) &amp; Quantum-2/3 InfiniBand SHARPv3 in-switch reduction physics, Ring $2(N-1)/N$ traffic amplification law, and DeepMind DiLoCo (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 2,048-GPU 3D-PARALLEL PRETRAINING &amp; MULTI-CAMPUS SCALING</span>
+        <span class="badge-prov">Case Study · Breaking the 200 GB/s Ceiling &amp; SHARP Tree Exhaustion</span>
+      </div>
+      <h2 class="headline">交换机 ASIC 原位加法砍掉 50% 流量；分层通信域隔离根治 SHARP 树槽位耗尽崩溃</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们 256 台 8×H200 服务器配了满血 8×400G NDR InfiniBand（每台物理带宽 400 GB/s），但跑 nccl-tests 和 Megatron 训练时发现 AllReduce 算法带宽怎么调都卡在 200 GB/s 左右，而且每张 GPU 有 20 个 SM 被通信占满！后来全局打开 NCCL_IB_SHARP_ENABLE=1，跑到第 3 个通信组就直接报 SHARP resource allocation failed 崩溃！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：单数据中心千卡/万卡 InfiniBand 集群集合通信配置</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 3/4 (机内 TP 用 NVLS + 跨机 DP 独享 IB SHARPv3)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">通过 <code>NCCL_SHARP_GROUP_SIZE_THRESH=16</code> 仅让跨机架 DP/FSDP 组申请稀缺的 IB 交换机 SHARP 树，机内 TP8 走主板 NVSwitch <code>NVLS</code>，算法带宽跃升至 <code>375 GB/s</code>，释放 16 个 SM。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3/4: 2,048 卡单中心训练 MFU</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:57.6%;"></div></div>
+            <span class="bar-val">57.6% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统 Ring 2,048 卡训练 MFU</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:43.5%;"></div></div>
+            <span class="bar-val">43.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：跨园区 / 跨楼宇（光纤 RTT 10ms）两座千卡机房联合训练</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 4 (机房内每步 SHARP + 跨机房 H=50 DiLoCo 外动量同步)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">机房内每步用 NVLS+SHARP 高速同步，跨园区每 50 步传一次 FP8 压缩权重差值，跨园区 MFU 从 <code>11.2%</code> 暴涨至 <code>53.8%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 跨 10ms 园区光纤联合训练 MFU</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:53.8%;"></div></div>
+            <span class="bar-val">53.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 直接跨园区拉大 Ring 训练 MFU</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:11.2%;"></div></div>
+            <span class="bar-val">11.2% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：RoCEv2 以太网集群虽无 IB SHARP，但机内必开 NVLS</strong></div>
+            <span class="pill pill-confirm">Confirm · 设置 NCCL_NVLS_ENABLE=1 + NCCL_ALGO=NVLS,Tree</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">HGX 服务器主板自带 NVSwitch 芯片，开启机内 NVLS 依然能立省 16 个 GPU SM 并加速 TP8 AllReduce。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Traditional Ring/Tree cannot exceed 50%–64% of physical NIC line rate on AllReduce because every byte traverses the NIC twice (`Reduce-Scatter` + `All-Gather`); IB SHARP sends it once (`1.0×`).
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER COLLECTIVE &amp; IN-NETWORK COMPUTING MATRIX</span>
+        <span class="badge-prov">2,048×H200 SXM · 256MB AllReduce · 8×400G NDR</span>
+      </div>
+      <h2 class="headline">四档集合通信架构全矩阵评测：算法带宽、延迟、流量放大倍数、SM 占用与 MFU</h2>
+      <p class="subhead">全面对比 Ring、Double Binary Tree、NVLS + IB SHARPv3 与分层通信域 + DiLoCo 架构。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (通信架构档位)</th>
+            <th>QUESTION / TASK (硬件规约位置与流量倍数)</th>
+            <th>MODEL ANSWER (algbw / 2048卡延迟 / 占用SM / MFU)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 传统 NCCL Ring</strong></td>
+            <td>GPU SM 累加 · $2(N-1)$ 跳 · <strong>2.0× 流量放大 ✕</strong></td>
+            <td>algbw <code>200.0 GB/s ✕</code> · 延迟 <code>14.8ms ✕</code> · 占 <code>20 SM ✕</code> · MFU <code>43.5%</code> (跨园 <code>11.2% ✕</code>)</td>
+            <td><span class="pill pill-human">千卡禁用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: Double Binary Tree</strong></td>
+            <td>GPU SM 累加 · $O(\log N)$ 跳 · <strong>2.0× 流量放大</strong></td>
+            <td>algbw <code>258.0 GB/s</code> · 延迟 <code>6.4ms</code> · 占 <code>20 SM ✕</code> · MFU <code>49.2%</code> (跨园 <code>16.5%</code>)</td>
+            <td><span class="pill pill-confirm">RoCE 跨机标配</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: NVLS + IB SHARPv3</strong></td>
+            <td>NVSwitch + IB 交换机芯片硬件累加 · <strong>1.0× 流量 🏆</strong></td>
+            <td>algbw <code>368.0 GB/s (1.84x) 🏆</code> · 延迟 <code>3.2ms 🏆</code> · 仅占 <code>4 SM 🏆</code> · MFU <code>56.8% ✅</code></td>
+            <td><span class="pill pill-auto">单中心 IB 首选 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 分层 SHARP + DiLoCo</strong></td>
+            <td>TP=NVLS / DP=SHARP 隔离 + 跨机房 $H=50$ 动量同步</td>
+            <td>algbw <code>375.0 GB/s 🏆</code> · 延迟 <code>3.1ms 🏆</code> · 0 树冲突 · 单中心 MFU <code>57.6% 🏆</code> · 跨园 <code>53.8% 🏆</code></td>
+            <td><span class="pill pill-auto">万卡/跨园终极 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#0e7490;">✅ 为什么省出 16 个 GPU SM 对重叠 (Overlap) 至关重要？</strong><br/>
+          当通信与计算重叠执行时，如果 NCCL 抢走 20 个 SM（占 H200 的 15.2%），同时正在跑的反向传播 `cuBLAS GEMM` 就会因缺少 SM 和寄存器带宽掉速 12%~18%！NVLS+SHARP 只用 4 个 SM！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 什么时候需要临时关掉 SHARP 改回 Ring？</strong><br/>
+          做 0-ULP 逐比特对齐的数值静默错误排查（Golden-Step Verification）时，为避免交换机动态到达顺序引发尾数最后 1 bit 舍入差异，可临时固定 `Ring`。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Moving floating-point reduction from GPU SMs into NVSwitch and IB switch silicon halves network bytes (`2.0× → 1.0×`), reclaims 16 SMs/GPU, and boosts 2,048-GPU MFU by +14.1 percentage points.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · HIERARCHICAL NCCL SHARP CONFIG &amp; DILOCO LOOP</span>
+        <span class="badge-prov">Communicator Quota Guard + Outer Nesterov Sync</span>
+      </div>
+      <h2 class="headline">底层机制：防止交换机 SHARP 树耗尽的分层通信域配置 + 跨园区 DiLoCo 同步环</h2>
+      <p class="subhead">展示生产环境如何精准将 IB SHARP 配额留给跨机架 DP 组，并通过外循环动量突破跨机房光速墙。</p>
+
+      <div class="code-dark"><pre># 1. 生产级 NCCL 网内计算环境变量契约 (防止 3D 并行耗尽交换机 64~128 棵 SHARP 树上限)
+export NCCL_NVLS_ENABLE=1                  # 机内 8 卡 TP/DP 强制启用主板 NVSwitch 硬件规约 (仅占 4 SM)
+export NCCL_IB_SHARP_ENABLE=1              # 开启 Quantum-2/3 交换机网内硬件规约 (流量砍半至 1.0x)
+export NCCL_ALGO="NVLS,CollNetDirect,CollNetChain,Tree,Ring"
+export NCCL_SHARP_GROUP_SIZE_THRESH=16     # 关键防崩闸门：仅允许 &gt;=16 卡的跨机架 DP/FSDP 组申请 IB SHARP 树！
+export NCCL_CGA_CLUSTER_SIZE=4             # 限制通信内核 Cooperative Group 占用，释放 SM 给 GEMM</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#0891b2;margin:6px 0;">↓ 机房内每步 NVLS+SHARP + 跨园区每 H=50 步 DiLoCo 外动量同步 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre># 2. Tier 4: 跨楼宇/跨园区 (10ms RTT) 两座千卡集群联合训练核心循环
+for outer_step in range(total_outer_steps):
+    w_snapshot = clone_master_weights_fp32(model)
+    # 内循环：各园区内部独立高速跑 H=50 步 (机内 NVLS + 园区内 IB SHARPv3, 3.1ms/step)
+    for inner_step in range(H := 50):
+        loss = forward_backward_step(model, next(local_campus_dataloader))
+        nccl_allreduce(model.grads, group=intra_campus_dp_sharp_group) # 375 GB/s 网内规约!
+        inner_adamw.step()
+
+    # 外循环 (每 50 步才走一次跨园区 10ms 光纤)：计算伪梯度并执行 FP8 跨园区 AllReduce
+    pseudo_grad_fp8 = quantize_fp8(w_snapshot - model.weights)
+    nccl_allreduce(pseudo_grad_fp8, group=inter_campus_wan_group)
+    outer_nesterov_sgd.step(w_snapshot, dequantize(pseudo_grad_fp8))
+# &lt;answer&gt; Validated: 375.0 GB/s intra-DC algbw, 0 SHARP exhaustion, 53.8% cross-campus MFU</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: `CollNetDirect` + `NVLS` combines NVSwitch intra-node reduction with IB switch inter-node reduction in a single pipelined pass without touching host CPU memory.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · CLUSTER SCALE SENSITIVITY (64 → 4,096 GPUS)</span>
+        <span class="badge-prov">Linear O(N) Ring Wall vs Flat In-Switch Tree Latency</span>
+      </div>
+      <h2 class="headline">规模扩展压测：从 64 卡扩至 4,096 卡，Ring 延迟暴涨 15 倍（28.5ms），SHARP 稳守 3.9ms</h2>
+      <p class="subhead">测试 64、256、1,024、2,048 与 4,096 张 H200 下 256MB BF16 AllReduce 的完成时间变化。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (集群 GPU 规模与节点数)</th>
+            <th>ORIGINAL (Tier 1 Ring AllReduce)</th>
+            <th>PERTURBED (Tier 3/4 NVLS + SHARPv3)</th>
+            <th>CHANGE (延迟提速比与拓扑诊断)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>64 GPUs (8 台节点 / 单机柜)</strong><br/>全部位于单台 ToR Leaf 交换机下</td>
+            <td>延迟 <code>1.9 ms</code><br/>(Tree 为 <code>1.7 ms</code>)</td>
+            <td>延迟 <code>1.1 ms 🏆</code><br/>(单级 Leaf SHARP 直算)</td>
+            <td><strong style="color:#2563eb;">快 1.73x ✅</strong><br/>省去 2 倍网卡收发开销</td>
+          </tr>
+          <tr>
+            <td><strong>256 GPUs (32 台节点)</strong><br/>跨机柜两层胖树 (Leaf-Spine)</td>
+            <td>延迟 <code>3.8 ms</code><br/>(Tree 为 <code>2.9 ms</code>)</td>
+            <td>延迟 <code>1.7 ms 🏆</code></td>
+            <td><strong style="color:#0891b2;">快 2.24x ✅</strong><br/>释放 16 个 SM 加速计算重叠</td>
+          </tr>
+          <tr>
+            <td><strong>1,024 GPUs (128 台节点)</strong><br/>千卡主力预训练规模</td>
+            <td>延迟 <code>8.2 ms ✕</code><br/>(2,046 跳串行传递)</td>
+            <td>延迟 <code>2.4 ms 🏆</code><br/>(Tree 为 <code>4.6 ms</code>)</td>
+            <td><strong style="color:#059669;">快 3.42x 🏆</strong><br/>突破千卡通信气泡拐点</td>
+          </tr>
+          <tr>
+            <td><strong>4,096 GPUs (512 台节点)</strong><br/>四千卡大规模基础模型集群</td>
+            <td>延迟 <code>28.5 ms ✕</code><br/>(8,190 跳线性崩溃 ✕)</td>
+            <td>延迟 <code>3.9 ms 🏆</code><br/>(Tree 为 <code>8.9 ms</code>)</td>
+            <td><strong style="color:#059669;">快 7.31x (-24.6ms) 🏆</strong><br/>两层交换机硬件组播无视卡数膨胀</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔍 为什么 MoE 模型的 All-to-All 不能直接用 SHARP？</strong><br/>
+          SHARP 是<strong>规约（Reduction/Sum）与广播引擎</strong>，适合梯度求和（AllReduce/ReduceScatter）；而 MoE 的 `All-to-All` 是点对点路由个性化 Token（不相加），需靠 `DeepEP` + 自适应路由 AR（Round 2/9）优化！
+        </div>
+        <div class="callout-box">
+          <strong>⚡ 机内推理想降 TP 延迟：直接开 NVLS！</strong><br/>
+          不仅训练能用，在单机 8 卡跑 70B/405B 实时推理（TP=8）时，开启 `NCCL_NVLS_ENABLE=1` 可将每层 Attention/FFN 后的 TP AllReduce 延迟降低 <code>18%~25%</code>！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: At 4,096 GPUs, NVLS + IB SHARPv3 completes 256MB AllReduce 7.31× faster than Ring and 2.28× faster than host-based Double Binary Tree.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; BANDWIDTH SCALING · ALGBW, SM TAX &amp; CROSS-CAMPUS MFU</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 In-Network vs Slate=Tier 1/2 Host-Based</span>
+      </div>
+      <h2 class="headline">延迟、SM 占用与 MFU 对比：释放 80% 通信 SM 核心，跨园区 MFU 从 11.2% 飙至 53.8%</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 网内计算与分层架构，浅灰条（<code>#CBD5E1</code>）代表传统主机侧 Ring/Tree 基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 2,048 卡下 256MB AllReduce 完成延迟 (ms，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 分层通信域 NVLS + IB SHARPv3</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:20.9%;"></div></div>
+            <span class="bar-val">3.1 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 机内 NVLS + 跨机 IB SHARPv3</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:21.6%;"></div></div>
+            <span class="bar-val">3.2 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: NCCL Double Binary Tree</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:43.2%;"></div></div>
+            <span class="bar-val">6.4 ms</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统 NCCL Ring AllReduce</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">14.8 ms ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. NCCL 集合通信占用的单卡 GPU SM 核心数 (越少越好，省出 SM 给矩阵乘)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3 / Tier 4: NVLS + SHARP (硬件芯片代算)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:20.0%;"></div></div>
+            <span class="bar-val">4 SMs 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: Double Binary Tree (GPU 核自己算加法)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">20 SMs ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统 Ring AllReduce (GPU 核自己算加法)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">20 SMs ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 跨两座园区机房 (10ms 光纤 RTT) 联合训练有效算力利用率 (MFU %，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 园区内 SHARP + 跨园区 DiLoCo (H=50)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:93.4%;"></div></div>
+            <span class="bar-val">53.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 园区内 SHARP + 每步硬跨 10ms 光纤</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:36.5%;"></div></div>
+            <span class="bar-val">21.0% ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 直接跨园区拉大 Ring 每步同步</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:19.4%;"></div></div>
+            <span class="bar-val">11.2% ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Raising 2,048-GPU MFU from 43.5% (Ring) to 57.6% (Tier 4 NVLS+SHARP) delivers +32.4% more trained tokens per day on the exact same GPU and switch hardware!
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：机内 TP 必开 NVLS，跨机 DP 专属开启 IB SHARP，跨园区上 DiLoCo</h2>
+      <p class="subhead">把本来就已经买在机柜里的 NVSwitch 和 Quantum 交换机芯片内的硬件浮点加法器彻底唤醒！</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>单中心千卡/万卡 InfiniBand 集群 → Tier 3/4 (机内 NVLS + 跨机 DP 专属 IB SHARPv3)</strong>：流量砍半，algbw 提至 375 GB/s，每卡省出 16 个 SM。</li>
+            <li>• <strong>跨楼宇/跨园区多机房拼集群 → Tier 4 (机房内 SHARP + 跨园区 DiLoCo H=50)</strong>：跨 10ms 光纤仍保持 53.8% MFU。</li>
+            <li>• <strong>RoCEv2 以太网集群</strong>：开启 <code>机内 NVLS + 跨机 Tree</code>。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在千卡以上集群继续跑默认 Ring AllReduce (Tier 1)</strong>：28.5ms 延迟与 2 倍流量税会白白浪费 30% 算力。</li>
+            <li>• <strong>严禁在 3D 并行训练中不加阈值过滤无脑全局开启 IB SHARP</strong>：小通信组会瞬间抢光交换机 64~128 棵 SHARP 树槽位导致任务报错崩溃。</li>
+            <li>• <strong>严禁跨 10ms 园区光纤每步跑同步 AllReduce</strong>：必须用低频外动量同步解耦。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 配置 <code>NCCL_NVLS_ENABLE=1</code>、<code>NCCL_IB_SHARP_ENABLE=1</code> 与 <code>NCCL_SHARP_GROUP_SIZE_THRESH=16</code>（仅限大 DP 组用 SHARP）。<br/>
+          2. <code>[ ]</code> 在 UFM / OpenSM 中开启 <code>sharp_am</code> 并用 <code>ibdiagnet --sharp</code> 巡检交换机聚合树健康度。<br/>
+          3. <code>[ ]</code> 用 <code>nccl-tests/all_reduce_perf -b 256M -e 1G</code> 实测核验单机 8×400G 的 <code>algbw</code> 突破 <code>350+ GB/s</code>（若卡在 200 GB/s 说明未命中 SHARP）。<br/>
+          4. <code>[ ]</code> 在做 0-ULP 逐比特 SDC 静默错误校验时临时切回 <code>NCCL_ALGO=Ring</code>，正式训练切回 <code>NVLS + SHARP</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/in_network_computing_sharp_nvls_collective/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -3345,5 +3345,97 @@ function updateGuardrailsSizer() {
 }
 updateGuardrailsSizer();
 </script>
+
+  <!-- Round 38: AI Cluster In-Network Computing (NVLS + IB SHARP) & Collective Offload Sizer -->
+  <div id="sharp-collective-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0891b2;color:#ecfeff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 38 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🖧 AI Cluster In-Network Computing (NVLS + IB SHARP) &amp; Collective Sizer (Ring vs. Tree vs. NVLS+SHARPv3 vs. Hierarchical+DiLoCo)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/in_network_computing_sharp_nvls_collective/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-cluster-in-network-computing-sharp-collective-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/ai-cluster-in-network-computing-sharp-collective-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./ai-cluster-in-network-computing-sharp-collective-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster GPU Scale:</label>
+        <select id="shScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSharpCollectiveSizer()">
+          <option value="256">256 GPUs (32 Nodes)</option>
+          <option value="1024">1,024 GPUs (128 Nodes)</option>
+          <option value="2048" selected>2,048 GPUs (256 Nodes Baseline)</option>
+          <option value="4096">4,096 GPUs (512 Nodes)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Datacenter Fabric &amp; Topology:</label>
+        <select id="shFabricSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSharpCollectiveSizer()">
+          <option value="ib_single" selected>Single-DC InfiniBand NDR/XDR (NVLS + IB SHARPv3 Supported)</option>
+          <option value="multi_dc">Multi-Campus / Two-Building Cluster (10ms Inter-DC Fiber RTT)</option>
+          <option value="roce">Single-DC RoCEv2 Ethernet (Intra-Node NVLS Only, No IB SHARP)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Collective &amp; In-Network Computing Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Algorithm BW (algbw)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">256MB AllReduce Latency</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Traffic Multiplier / SMs Used</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">End-to-End Training MFU</th>
+          </tr>
+        </thead>
+        <tbody id="shSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="shDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0891b2;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateSharpCollectiveSizer() {
+  const gpus = parseInt(document.getElementById('shScaleSelect').value, 10) || 2048;
+  const fab = document.getElementById('shFabricSelect').value || 'ib_single';
+  const latMap = {
+    256: { t1: 3.8, t2: 2.9, t3: 1.7, t4: 1.7 },
+    1024: { t1: 8.2, t2: 4.6, t3: 2.4, t4: 2.3 },
+    2048: { t1: 14.8, t2: 6.4, t3: 3.2, t4: 3.1 },
+    4096: { t1: 28.5, t2: 8.9, t3: 3.9, t4: 3.8 }
+  };
+  const l = latMap[gpus] || latMap[2048];
+  const bestId = fab === 'roce' ? 't2' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Legacy NCCL Ring AllReduce', bw: '200.0 GB/s (50% Ceiling ✕)', lat: `${l.t1.toFixed(1)} ms ✕`, tax: '2.0× Bytes · 20 SMs/GPU ✕', mfu: fab === 'multi_dc' ? '11.2% (WAN Stall ✕)' : '43.5%' },
+    { id: 't2', name: '🟨 Tier 2: Intra-Node NVLS + Double Binary Tree', bw: '258.0 GB/s', lat: `${l.t2.toFixed(1)} ms`, tax: '2.0× Inter-Node Bytes · 20 SMs', mfu: fab === 'multi_dc' ? '16.5% ✕' : '49.2% (RoCE Best ✅)' },
+    { id: 't3', name: '🟦 Tier 3: Intra-Node NVLS + IB SHARPv3 In-Switch', bw: '368.0 GB/s (1.84x 🏆)', lat: `${l.t3.toFixed(1)} ms 🏆`, tax: '1.0× Bytes (-50%) · Only 4 SMs 🏆', mfu: fab === 'multi_dc' ? '21.0%' : '56.8% ✅' },
+    { id: 't4', name: '🟩 Tier 4: Hierarchical SHARP + Cross-DC DiLoCo (H=50)', bw: '375.0 GB/s (93.8% Line Rate 🏆)', lat: `${l.t4.toFixed(1)} ms 🏆`, tax: '1.0× Bytes · 0 Tree Conflict · 4 SMs 🏆', mfu: fab === 'multi_dc' ? '53.8% (+42.6pt 🏆)' : '57.6% 🏆' }
+  ];
+
+  document.getElementById('shSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(8,145,178,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.lat}</code></td>
+      <td style="padding:10px;"><code>${r.tax}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.mfu}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('shDecisionCallout').innerHTML = fab === 'multi_dc'
+    ? `<strong>Architect Recommendation (${gpus} GPUs · Multi-Campus 10ms Fiber)</strong>: Standardize on <strong>Tier 4 (Intra-DC NVLS+SHARPv3 + Cross-Campus DiLoCo H=50 Outer-Momentum Sync)</strong> to lift multi-building training MFU from <code>11.2%</code> to <code>53.8%</code>!`
+    : (fab === 'roce'
+      ? `<strong>Architect Recommendation (${gpus} GPUs · RoCEv2 Ethernet)</strong>: Configure <strong>Tier 2 (NCCL_NVLS_ENABLE=1 + Double Binary Tree)</strong> to offload intra-node TP reductions to onboard NVSwitches and keep inter-node latency at <code>${l.t2.toFixed(1)} ms</code>!`
+      : `<strong>Architect Recommendation (${gpus} GPUs · Single-DC InfiniBand)</strong>: Deploy <strong>Tier 4 (TP=NVLS + DP=IB SHARPv3 with NCCL_SHARP_GROUP_SIZE_THRESH=16)</strong> to cut network bytes by <code>50% (1.0x)</code>, hit <code>375.0 GB/s</code> algbw (` + `${l.t4.toFixed(1)} ms` + `), and reclaim <code>16 SMs/GPU</code> for GEMM overlap!`);
+}
+updateSharpCollectiveSizer();
+</script>
 </body>
 </html>
