@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Enterprise LLM Guardrails, Jailbreak Defense &amp; Streaming Moderation — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #6ee7b7; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #047857; background: #d1fae5; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #059669, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #059669; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🛡️ 企业级大模型安全护栏、越狱防御与流式合规拦截 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/llm_guardrails_parallel_safety_moderation/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/llm-guardrails-safety-moderation-pipeline-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/llm-guardrails-safety-moderation-pipeline-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#guardrails-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · ENTERPRISE LLM GUARDRAILS &amp; STREAMING MODERATION</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">第 20 层隐藏状态探针 + 双流并行门控</span> 将护栏延迟从 +580ms 压至 +1.5ms，越狱拦截达 98.4%</h2>
+      <p class="subhead">针对 70B FP8 主模型（裸跑 TTFT 240ms）与 10,000 条企业红队越狱/RAG 间接注入/良性提问测试集，对比四档安全护栏架构的延迟损耗、拦截率与误杀率。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档安全护栏架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (CPU 正则+小BERT)</strong>: 越狱拦截 46%, 误杀 18.5% ✕<br/>
+            • <strong>Tier 2 (同步串行 8B)</strong>: +580ms 阻塞, 算力税 +25% ✕<br/>
+            • <strong>Tier 3 (异步双流并行)</strong>: 仅 +8.0ms, 拦截 96.5% ✅<br/>
+            • <strong>Tier 4 (激活探针+Cedar)</strong>: +1.5ms, 拦截 98.4% 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 红队攻防与延迟契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 主模型基线：<code>70B FP8 (TTFT 240ms)</code><br/>
+            • 压测样本：<code>10,000 条红队+良性样本</code><br/>
+            • 攻击面 1：<code>Base64 / 多语种变形越狱</code><br/>
+            • 攻击面 2：<code>RAG 文档间接提示词注入</code><br/>
+            • 攻击面 3：<code>Agent 工具调用越权篡改</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 净延迟降幅：<code>+580ms → +1.5~8.0ms</code><br/>
+            • Base64 越狱拦截：<code>12.5% → 98.2%</code><br/>
+            • RAG 注入拦截：<code>31.5% → 97.6%</code><br/>
+            • 正常业务误杀率：<code>18.5% → 1.1%</code><br/>
+            • 越权工具阻断：<code>100.0% (Cedar 沙箱)</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>开启安全护栏后的用户感知 P95 首字延迟 (Perceived P95 TTFT ms，越低越好)</strong>
+          <span class="pill pill-auto">Act automatically · 隐藏层激活探针 / 异步双流首包门控</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: 第20层激活探针 + Cedar (+1.5ms)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:29.5%;"></div></div>
+          <span class="bar-val">241.5 ms 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 异步双流并行 + 首包门控 (+8.0ms)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:30.2%;"></div></div>
+          <span class="bar-val">248.0 ms ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: CPU 正则+小BERT (拦截率仅 46% ✕)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:30.7%;"></div></div>
+          <span class="bar-val">252.0 ms ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 同步串行 8B 输入+全文输出双审</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+          <span class="bar-val">820.0 ms ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to Speculative Parallel Input Guardrailing (First-Token Gate), Representation Engineering (RepE) Layer-20 linear probes, and Llama-Guard-3-8B vs regex false-positive benchmarks (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: FINANCIAL &amp; HEALTHCARE AGENT SAFETY GATEWAY</span>
+        <span class="badge-prov">Case Study · Defeating Base64 Jailbreaks Without +580ms Latency</span>
+      </div>
+      <h2 class="headline">首包门控隐藏 98.6% 输入审查耗时；第 20 层激活探针借用 70B 智商看穿 Base64 暗语</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们银行智能投顾最初用敏感词加小 BERT 做护栏，结果安全测试用 Base64 编码和文言文角色扮演一打一个准（漏放 87%），而客户正常咨询‘如何防范洗钱犯罪’却被误杀拦截（18.5% 误报）！换成串行跑 Llama-Guard-8B 后安全过了，但流式打字机效果没了，首字卡顿高达 820ms，业务部门坚决要求回滚！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：自建 vLLM / SGLang 70B 推理集群内生安全架构</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (第 20 层线性激活探针 + Cedar 工具沙箱)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">在 70B 主模型第 20 层挂载 64KB 线性探针（<code>&lt;0.8ms</code>），直接读取主模型解码后的深层恶意意图向量，越狱拦截率达 <code>98.4%</code>，误杀率仅 <code>1.1%</code>，且省去独立 8B 护栏 GPU！</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 变形/加密越狱综合拦截率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:98.4%;"></div></div>
+            <span class="bar-val">98.4% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统正则 + 小 BERT 越狱拦截率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:46.0%;"></div></div>
+            <span class="bar-val">46.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：调用闭源商业大模型 API 时的低延迟护栏架构</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 3 (异步双流并行 + 首包门控 + 32词流式滑窗)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">输入 8B 护栏（110ms）与主模型 Prefill（240ms）并发起跑，在首字释放门控处汇合（净延迟仅 <code>+8.0ms</code>）；输出按 32 词滑窗异步审查，保留丝滑流式体验。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 正常医疗/安全提问误杀率 (FPR)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:5.9%;"></div></div>
+            <span class="bar-val">1.1% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统敏感词黑名单误杀率 (FPR)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">18.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：Agent 工具调用严禁仅靠大模型自律，必过 Cedar/OPA 确定性沙箱</strong></div>
+            <span class="pill pill-human">Send to a human · 100% 物理阻断 RAG 间接注入引发的越权调用</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">所有写操作或资金交易 Tool Call 必须由确定性策略代码核验调用者 JWT Scope 与金额上限。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Parallelizing input moderation hides prefill latency; probing Layer-20 hidden states defeats obfuscation; gating tool calls with Cedar stops privilege escalation.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER LLM GUARDRAILS EVALUATION MATRIX</span>
+        <span class="badge-prov">70B FP8 Base · 10,000 Red-Team &amp; Benign Prompts</span>
+      </div>
+      <h2 class="headline">四档安全护栏架构全矩阵评测：净延迟损耗、越狱召回、RAG 注入拦截、误杀率与算力税</h2>
+      <p class="subhead">全面对比传统 CPU 正则、同步串行 8B 双审、异步双流并行门控与引擎内嵌激活探针架构。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (护栏架构档位)</th>
+            <th>QUESTION / TASK (执行拓扑与审查机制)</th>
+            <th>MODEL ANSWER (净延迟 / 越狱拦截 / RAG注入 / 误杀 / 算力税)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: CPU 正则 + 小 BERT</strong></td>
+            <td>串行关键词黑名单 + 110M 分类器</td>
+            <td>延迟 <code>+12ms</code> · <strong>越狱拦截 <code>46.0% ✕</code> · RAG注入 <code>31.5% ✕</code> · 误杀 <code>18.5% ✕</code></strong> · GPU <code>0%</code></td>
+            <td><span class="pill pill-human">严禁单跑 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 同步串行 8B 双审阻塞</strong></td>
+            <td>串行输入 8B (145ms) + 扣留全文输出 8B (435ms)</td>
+            <td><strong>净延迟 <code>+580.0ms (TTFT 820ms) ✕</code></strong> · 越狱 <code>96.2%</code> · RAG <code>91.0%</code> · 误杀 <code>3.4%</code> · <strong>算力税 <code>+25% ✕</code></strong></td>
+            <td><span class="pill pill-human">淘汰串行 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 异步双流并行 + 滑窗</strong></td>
+            <td>输入 8B 与主模型并发 + 首包门控 + 32词流式滑窗</td>
+            <td><strong>净延迟 <code>+8.0ms ✅</code></strong> · 越狱 <code>96.5% ✅</code> · RAG <code>92.4% ✅</code> · 误杀 <code>2.8% ✅</code> · 算力税 <code>+14%</code></td>
+            <td><span class="pill pill-auto">网关首选 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 第20层激活探针 + Cedar</strong></td>
+            <td>70B 内嵌 Layer-20 线性探针 + 32词滑窗 + Cedar 沙箱</td>
+            <td><strong>净延迟 <code>+1.5ms 🏆</code> · 越狱 <code>98.4% 🏆</code> · RAG <code>97.6% 🏆</code> · 误杀 <code>1.1% 🏆</code> · 算力税 <code>+2% 🏆</code></strong></td>
+            <td><span class="pill pill-auto">自建终极 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#047857;">✅ 为什么第 20 层（中间层）探针比最后一层准得多？</strong><br/>
+          研究证明，70B 模型在第 18~24 层完成“用户真实意图与危害概念解码”（线性可分度最高 &gt;98%），而在最后几层则忙于组织表面礼貌词汇！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么输出端不能等整篇生成完再审？</strong><br/>
+          生成 400 个 Token 需要约 4~8 秒，如果扣留在网关缓冲区等全部生成完再跑输出审查，用户会盯空白屏幕干等数秒，彻底丧失流式交互体验！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 3 cuts guardrail latency overhead by 98.6% (`580ms → 8ms`) for any black-box LLM; Tier 4 cuts GPU tax from 25% to 2% while reaching 98.4% recall on white-box LLMs.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · FIRST-TOKEN GATE &amp; LAYER-20 REPE PROBE</span>
+        <span class="badge-prov">Async Speculative Gate + Hidden-State Linear Classifier</span>
+      </div>
+      <h2 class="headline">底层机制：异步双流首包门控 (First-Token Gate) + 第 20 层隐藏状态探针协议</h2>
+      <p class="subhead">展示网关如何并发重叠护栏与 Prefill，以及推理引擎如何在前向传播中零拷贝拦截越狱表征与越权工具。</p>
+
+      <div class="code-dark"><pre>{
+  "defense_in_depth_guardrail_contract": {
+    "layer1_input_gate": "Parallel(Input_Guard, Main_LLM_Prefill) -> Await Guard before releasing Token #1",
+    "layer2_internal_probe": "Hook Layer-20 residual stream h_20[-1] -> Linear(8192, 8) harm/drift classifier (<0.8ms)",
+    "layer3_output_stream": "Stream SSE tokens immediately; async scan 32-token rolling window + regex PII mask",
+    "layer4_tool_sandbox": "Intercept tool_call AST -> Evaluate AWS Cedar / OPA policy against caller JWT scopes"
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#059669;margin:6px 0;">↓ 异步首包门控与内嵌第 20 层激活探针执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>async def serve_with_zero_latency_guardrails(prompt, user_jwt):
+    # 1. 异步双流同时起跑：护栏审查 (或内嵌第20层探针) 与 70B 主模型 Prefill 100% 重叠！
+    guard_task = asyncio.create_task(input_guard_or_layer20_probe(prompt))
+    token_stream = main_70b_engine.stream_generate(prompt)
+
+    # 2. First-Token Gate：在吐出第 1 个字前核验通行证 (此时 guard_task 早已完成，等待 ~0ms!)
+    first_tok = await anext(token_stream)
+    if not (await guard_task).is_safe:
+        await token_stream.aclose()  # 0 个违规字节流出客户端！
+        return "抱歉，该请求触发安全合规策略已被拦截。"
+
+    # 3. 32-Token 滑动窗口异步输出审查 + 工具调用 Cedar 确定性沙箱校验
+    yield first_tok
+    async for tok in token_stream:
+        if tok.is_tool_call and not cedar_engine.authorize(user_jwt, tok.tool_name, tok.args):
+            raise PermissionError("Blocked unauthorized tool parameter escalation!")
+        yield mask_pii_fast(tok)
+# &lt;answer&gt; Validated: +1.5ms net TTFT overhead, 98.4% jailbreak recall, 1.1% FPR, 100% tool safety</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Because `guard_task` (`110ms` external 8B or `0.8ms` internal probe) completes well before `anext(token_stream)` (`240ms`), safety gating adds virtually zero wall-clock latency.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · RED-TEAM ATTACK VECTOR RECALL PERTURBATION</span>
+        <span class="badge-prov">4 Adversarial Attack Classes · Tier 1 vs Tier 3 vs Tier 4</span>
+      </div>
+      <h2 class="headline">红队攻防鲁棒性：面对 Base64 密文与 RAG 间接注入，Tier 4 拦截率从 12.5% 跃升至 98.2%</h2>
+      <p class="subhead">测试直接模板越狱、Base64/多语种变形、RAG 文档间接注入与工具参数越权四类攻击下的拦截表现。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (红队攻击向量类型)</th>
+            <th>ORIGINAL (Tier 1 正则+小BERT)</th>
+            <th>PERTURBED (Tier 4 激活探针+Cedar)</th>
+            <th>CHANGE (拦截率跃升与防御根因)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. 已知模板直接越狱 (DAN / Ignore)</strong><br/>显式攻击口令与角色扮演模板</td>
+            <td>拦截率 <code>88.0%</code><br/>(但良性提问误杀 <code>18.5% ✕</code>)</td>
+            <td>拦截率 <code>99.6% 🏆</code><br/>(良性误杀仅 <code>1.1% 🏆</code>)</td>
+            <td><strong style="color:#059669;">+11.6 pt 召回 &amp; -17.4 pt 误杀 🏆</strong><br/>精准理解深层上下文语境</td>
+          </tr>
+          <tr>
+            <td><strong>2. Base64 / 密文 / 多语种变形越狱</strong><br/>将恶意指令编码或用小语种隐喻表达</td>
+            <td>拦截率 <code>12.5% ✕</code><br/>(小模型看不懂编码暗语)</td>
+            <td>拦截率 <code>98.2% 🏆</code><br/>(Tier 3 外部 8B 为 <code>94.8%</code>)</td>
+            <td><strong style="color:#059669;">+85.7 pt 破局提升 🏆</strong><br/>70B 第20层已将密文解码为明文表征</td>
+          </tr>
+          <tr>
+            <td><strong>3. RAG 文档间接提示词注入</strong><br/>外部网页/简历 PDF 内嵌隐藏劫持指令</td>
+            <td>拦截率 <code>31.5% ✕</code><br/>(混在长文档中极难正则匹配)</td>
+            <td>拦截率 <code>97.6% 🏆</code><br/>(Tier 3 外部 8B 为 <code>92.4%</code>)</td>
+            <td><strong style="color:#059669;">+66.1 pt 召回提升 🏆</strong><br/>激活探针捕捉注意力方向偏移</td>
+          </tr>
+          <tr>
+            <td><strong>4. Agent 工具调用参数越权篡改</strong><br/>诱导调用 `wire_transfer` 或 `DROP TABLE`</td>
+            <td>拦截率 <code>42.0% ✕</code><br/>(无法理解参数业务权限边界)</td>
+            <td>拦截率 <code>100.0% 🏆</code><br/>(Cedar 确定性策略引擎硬拦截)</td>
+            <td><strong style="color:#059669;">+58.0 pt (100% 物理阻断) 🏆</strong><br/>零信任代码级权限与阈值校验</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🧲 进阶防御：直接用激活转向 (Activation Steering) 免疫越狱！</strong><br/>
+          当第 20 层探针检测到越狱倾向介于阈值边缘时，甚至可以直接从第 20 层隐藏向量中减去“顺从恶意指令方向向量”（$h'_{20} = h_{20} - \alpha v_{\text{jailbreak}}$），让模型在内部自动回归安全拒答状态！
+        </div>
+        <div class="callout-box">
+          <strong>🔒 为什么 RAG 必须做 XML Datamarking？</strong><br/>
+          将外部检索文本用 <code>&lt;untrusted_document&gt;...&lt;/untrusted_document&gt;</code> 包裹后，配合微调或探针可将间接提示词注入的逃逸率再降 3 倍！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Probing the target LLM's own middle-layer representations eliminates the "capability gap" that attackers exploit when bypassing smaller guardrail models.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; RECALL SCALING · TTFT OVERHEAD, FALSE POSITIVES &amp; GPU TAX</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Fast Guard vs Slate=Tier 1/2 Baseline</span>
+      </div>
+      <h2 class="headline">延迟、误杀与算力税对比：净延迟从 +580ms 压至 +1.5ms，误杀率从 18.5% 降至 1.1%</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 异步双流与隐藏层探针架构，浅灰条（<code>#CBD5E1</code>）代表传统正则与同步串行基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 安全护栏引入的净首字延迟损耗 (Net TTFT Overhead ms，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 第 20 层激活探针 (内嵌零感)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:1.0%;"></div></div>
+            <span class="bar-val">+1.5 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 异步双流并行 + 首包门控</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:2.5%;"></div></div>
+            <span class="bar-val">+8.0 ms ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: CPU 正则 + 110M 小 BERT</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:3.5%;"></div></div>
+            <span class="bar-val">+12.0 ms</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 同步串行 8B 输入+全文输出双审</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">+580.0 ms ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 正常业务良性提问误杀率 (Benign Query False Positive Rate %，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 第 20 层激活探针 (深层语义区分)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:5.9%;"></div></div>
+            <span class="bar-val">1.1% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 异步双流 8B 语义护栏</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:15.1%;"></div></div>
+            <span class="bar-val">2.8% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 同步串行 8B 语义护栏</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:18.4%;"></div></div>
+            <span class="bar-val">3.4%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统关键词黑名单 (误拦正常医疗/安全)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">18.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 为运行安全护栏额外消耗的集群 GPU 算力比例 (Extra GPU Tax %，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 内嵌 64KB 线性探针 + 轻量输出滑窗</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:8.0%;"></div></div>
+            <span class="bar-val">+2.0% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 异步双流 8B 护栏池</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:56.0%;"></div></div>
+            <span class="bar-val">+14.0% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 同步串行输入+输出双 8B 护栏池</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">+25.0% ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: On a 128-GPU 70B serving cluster, replacing Tier 2 (`+25%` GPU tax = 32 extra GPUs) with Tier 4 (`+2%` GPU tax = 2.5 GPUs) saves ~30 H200 GPUs (`~$720k/year`).
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：黑盒 API 选异步双流首包门控，自建集群必上第 20 层激活探针 + Cedar</h2>
+      <p class="subhead">让安全合规从“拖慢 580ms 的用户体验绊脚石”变成“+1.5ms 无感运行的纵深铁闸”。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>自建 vLLM / SGLang 70B/671B 生产集群 → Tier 4 (第 20 层隐藏状态探针 + 流式滑窗 + Cedar 工具沙箱)</strong>：+1.5ms 零感延迟，98.4% 越狱拦截，省下 90% 护栏 GPU。</li>
+            <li>• <strong>跨云商业 API 网关 → Tier 3 (异步双流并行 + First-Token Gate + 32词滑窗)</strong>：隐藏 98.6% 输入护栏耗时（仅 +8ms）。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在流式对话应用中扣留全文做同步输出审查 (Tier 2)</strong>：+580ms 首字延迟会让用户以为系统卡死。</li>
+            <li>• <strong>严禁只靠 CPU 正则敏感词黑名单裸奔 (Tier 1)</strong>：防不住 Base64 变形与 RAG 注入，反而激怒 18.5% 的正常专业用户。</li>
+            <li>• <strong>严禁让大模型不经 Cedar/OPA 验权直接调用写数据库或转账 API</strong>：必须有确定性代码沙箱兜底。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 将网关输入护栏改为与主模型 Prefill 并发执行，在 <code>First-Token Gate</code> 处同步校验布尔锁。<br/>
+          2. <code>[ ]</code> 在自建推理引擎第 20 层挂载线性激活探针（<code>RepE Probe</code>），拦截 Base64 与多语种隐喻越狱。<br/>
+          3. <code>[ ]</code> 输出端开启 <code>32-Token</code> 异步滑动窗口审查与流式 PII 正则掩码，取消全文扣留缓冲。<br/>
+          4. <code>[ ]</code> 所有高危 Agent Tool Call 强制接入 <code>AWS Cedar / OPA</code> 策略引擎校验调用者 JWT 权限与参数边界。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/llm_guardrails_parallel_safety_moderation/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

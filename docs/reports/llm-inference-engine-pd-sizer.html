@@ -3259,5 +3259,92 @@ function updateMultiRegionDrSizer() {
 }
 updateMultiRegionDrSizer();
 </script>
+
+  <!-- Round 37: Enterprise LLM Guardrails & Streaming Safety Moderation Sizer -->
+  <div id="guardrails-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 37 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🛡️ 企业级大模型安全护栏 (Guardrails) 与流式合规拦截计算器（正则 vs. 同步串行 8B vs. 异步双流门控 vs. 激活探针+Cedar）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/llm_guardrails_parallel_safety_moderation/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/llm-guardrails-safety-moderation-pipeline-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/llm-guardrails-safety-moderation-pipeline-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./llm-guardrails-safety-moderation-pipeline-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">底层大模型部署模式:</label>
+        <select id="gdDeploySelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGuardrailsSizer()">
+          <option value="self" selected>自建开源推理集群 (vLLM / SGLang 托管 70B/671B，可挂载第 20 层激活探针)</option>
+          <option value="api">调用闭源商业 API 或黑盒多模型网关 (通过异步双流并发隐藏延迟)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">重点防御的红队攻击类型预览:</label>
+        <select id="gdAttackSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGuardrailsSizer()">
+          <option value="b64" selected>Base64 / 密文 / 多语种角色扮演变形越狱</option>
+          <option value="rag">外部网页/PDF 隐藏的 RAG 间接提示词注入</option>
+          <option value="tool">Agent 工具调用参数越权篡改 (SQL Drop / 巨额转账)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">安全护栏架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">感知 P95 TTFT (净延迟损耗)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前攻击拦截率 / 综合召回</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">正常业务误杀率 (FPR)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">额外护栏 GPU 算力税</th>
+          </tr>
+        </thead>
+        <tbody id="gdSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="gdDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateGuardrailsSizer() {
+  const dep = document.getElementById('gdDeploySelect').value || 'self';
+  const atk = document.getElementById('gdAttackSelect').value || 'b64';
+  const bestId = dep === 'self' ? 't4' : 't3';
+  const atkMap = {
+    b64: { t1: '12.5% ✕', t2: '94.5%', t3: '94.8% ✅', t4: '98.2% 🏆' },
+    rag: { t1: '31.5% ✕', t2: '91.0%', t3: '92.4% ✅', t4: '97.6% 🏆' },
+    tool: { t1: '42.0% ✕', t2: '89.5%', t3: '91.0% (+Cedar 100%)', t4: '100.0% (Cedar 硬拦截 🏆)' }
+  };
+  const a = atkMap[atk] || atkMap.b64;
+
+  const rows = [
+    { id: 't1', name: '⬜ Tier 1: 传统 CPU 正则 + 敏感词 + 110M 小 BERT', lat: '252.0 ms (+12.0 ms)', rec: `${a.t1} / 综合 46.0% ✕`, fpr: '18.5% (频繁误杀 ✕)', gpu: '0.0% (纯 CPU)' },
+    { id: 't2', name: '🟥 Tier 2: 同步串行 8B 输入+全文缓冲输出双审', lat: '820.0 ms (+580.0 ms ✕)', rec: `${a.t2} / 综合 96.2%`, fpr: '3.4%', gpu: '+25.0% 算力税 ✕' },
+    { id: 't3', name: '🟦 Tier 3: 异步双流并行 + 首包门控 + 32词流式滑窗', lat: '248.0 ms (+8.0 ms ✅)', rec: `${a.t3} / 综合 96.5% ✅`, fpr: '2.8% ✅', gpu: '+14.0% ✅' },
+    { id: 't4', name: '🟩 Tier 4: 第 20 层隐藏状态探针 (RepE) + Cedar 沙箱', lat: '241.5 ms (+1.5 ms 🏆)', rec: `${a.t4} / 综合 98.4% 🏆`, fpr: '1.1% (最低误杀 🏆)', gpu: '+2.0% (免独立 8B 卡 🏆)' }
+  ];
+
+  document.getElementById('gdSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.lat}</code></td>
+      <td style="padding:10px;"><code>${r.rec}</code></td>
+      <td style="padding:10px;"><code>${r.fpr}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.gpu}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('gdDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (自建开源推理集群)</strong>：必选 <strong>Tier 4 (内嵌第 20 层隐藏状态线性探针 + 32-Token 异步流式滑窗 + Cedar 工具调用策略沙箱)</strong>，护栏净延迟仅 <code>+1.5 ms</code>，借用 70B 深层语义将变形越狱拦截率推至 <code>98.4%</code>，误杀率压至 <code>1.1%</code>！`
+    : `<strong>架构师选型建议 (闭源商业 API / 通用网关)</strong>：首选 <strong>Tier 3 (异步双流并行 + First-Token Gate 首包门控 + 32-Token 流式滑窗 + Cedar 沙箱)</strong>，让 8B 护栏与主模型 Prefill 并发重叠，将净延迟从 <code>+580ms</code> 砍至 <code>+8.0ms</code>！`;
+}
+updateGuardrailsSizer();
+</script>
 </body>
 </html>
