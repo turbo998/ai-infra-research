@@ -1868,5 +1868,94 @@ function updateP2pSizer() {
 }
 updateP2pSizer();
 </script>
+
+  <!-- Round 21: AI Cluster Observability, Straggler & Silent Data Corruption (SDC) Selection Sizer -->
+  <div id="observability-sdc-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 21 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🩺 Large-Scale AI Cluster Observability, Straggler &amp; Silent Data Corruption (SDC) Sizer (Polling vs. DCGM+XID vs. FlightRecorder+RAS vs. Golden-Step SDC Guard)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/ai_cluster_observability_sdc_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-cluster-observability-silent-corruption-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/ai-cluster-observability-silent-corruption-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./ai-cluster-observability-silent-corruption-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Synchronous Training Cluster Scale (H100 GPUs):</label>
+        <select id="obsScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateObsSizer()">
+          <option value="256">256 GPUs (32 Nodes · Medium Training Cluster)</option>
+          <option value="1024">1,024 GPUs (128 Nodes · Thousand-GPU Pre-Training)</option>
+          <option value="2048" selected>2,048 GPUs (256 Nodes Baseline · $3.74M/mo Lease)</option>
+          <option value="8192">8,192 GPUs (1,024 Nodes · 10K-Scale Supercluster)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Reliability Defense Scope:</label>
+        <select id="obsFaultSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateObsSizer()">
+          <option value="sdc" selected>Full Defense (NCCL Hangs + Grey Stragglers + Tensor Core ALU SDC Guard)</option>
+          <option value="hang">Collective Hangs &amp; Stragglers Only (No Golden-Step SDC Verification)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Observability &amp; Triage Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Patient-Zero Triage / MTTR</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Straggler / SDC Catch Rate</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Scale Effective Goodput</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Fault Waste (2,048 GPUs)</th>
+          </tr>
+        </thead>
+        <tbody id="obsSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="obsDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateObsSizer() {
+  const gpus = parseInt(document.getElementById('obsScaleSelect').value, 10) || 2048;
+  const fmode = document.getElementById('obsFaultSelect').value || 'sdc';
+  const gpMap = {
+    256:  { t1: 86.0, t2: 91.5, t3: 95.2, t4: 97.5 },
+    1024: { t1: 76.5, t2: 86.4, t3: 93.4, t4: 96.9 },
+    2048: { t1: 68.4, t2: 82.2, t3: 91.5, t4: 96.4 },
+    8192: { t1: 42.0, t2: 69.5, t3: 86.8, t4: 94.8 }
+  };
+  const g = gpMap[gpus] || gpMap[2048];
+  const bestId = (fmode === 'hang' && gpus <= 256) ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Basic Prometheus + 30s nvidia-smi + Manual Bisect', mttr: '8,700 s / MTTR 145.0m ✕', catchRate: '12.0% Straggler · 0.0% SDC ✕', gp: `${g.t1.toFixed(1)}%`, cost: 'Wastes $1,181,082 / mo' },
+    { id: 't2', name: '🟨 Tier 2: NVIDIA DCGM Telemetry + NPD XID Auto-Cordon', mttr: '45.0 s / MTTR 12.5m', catchRate: '48.0% Straggler · 0.0% SDC ✕', gp: `${g.t2.toFixed(1)}%`, cost: 'Wastes $665,293 / mo (-43.7%)' },
+    { id: 't3', name: '🟩 Tier 3: PyTorch FlightRecorder + NCCL RAS + Kernel Timer', mttr: '0.65 s ✅ / MTTR 1.80m', catchRate: '98.5% Straggler ✅ · 15.0% SDC', gp: `${g.t3.toFixed(1)}%`, cost: 'Wastes $317,696 / mo (-73.1%)' },
+    { id: 't4', name: '🟪 Tier 4: Tier 3 + Online Tensor Hash & Golden-Step SDC Guard', mttr: '0.65 s 🏆 / MTTR 0.85m', catchRate: '99.4% Straggler · 99.6% SDC 🏆', gp: `${g.t4.toFixed(1)}% 🏆`, cost: 'Wastes $134,554 · Saves $1,046,528 (-88.6%)' }
+  ];
+
+  document.getElementById('obsSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.mttr}</code></td>
+      <td style="padding:10px;"><code>${r.catchRate}</code></td>
+      <td style="padding:10px;"><code>${r.gp}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('obsDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>Architect Recommendation (${gpus} GPUs · Medium Cluster Hang-Triage Mode)</strong>: Enable <strong>Tier 3 (PyTorch FlightRecorder + NCCL RAS)</strong> to pinpoint Patient Zero in <code>0.65s</code> and reach <code>${g.t3.toFixed(1)}%</code> effective goodput!`
+    : `<strong>Architect Recommendation (${gpus.toLocaleString()} GPUs · Large-Scale Pre-Training Mode)</strong>: Mandate <strong>Tier 4 (DCGM + FlightRecorder/NCCL RAS + Online Tensor Checksum &amp; 0-ULP Golden-Step SDC Guard)</strong> to intercept <code>99.6%</code> of silent Tensor Core bit flips at just <code>0.35%</code> overhead, lifting goodput to <code>${g.t4.toFixed(1)}%</code> and saving <code>$1,046,528.00/mo (-88.6%)</code> on a 2,048-GPU cluster!`;
+}
+updateObsSizer();
+</script>
 </body>
 </html>
