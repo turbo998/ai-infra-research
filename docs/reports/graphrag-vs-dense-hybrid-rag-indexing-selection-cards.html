@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Enterprise RAG &amp; Multi-Hop Reasoning Architecture Selection — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #c4b5fd; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #6d28d9; background: #ede9fe; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #7c3aed, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #7c3aed; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🕸️ 企业级大模型知识检索与多跳推理 RAG 选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/enterprise_rag_graphrag_hybrid_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/graphrag-vs-dense-hybrid-rag-indexing-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/graphrag-vs-dense-hybrid-rag-indexing-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#enterprise-rag-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · ENTERPRISE RAG, CONTEXTUAL CHUNKING &amp; LAZYGRAPHRAG</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">Contextual Hybrid + LazyGraphRAG</span> 将全局多跳准确率提升 +50pt 至 88.5%，建库费比初代 GraphRAG 省 99.2%</h2>
+      <p class="subhead">针对 50,000 篇政企文档（1,000 万 Tokens，日更 1,500 篇）评测四档知识检索架构：治愈“512-Token 碎片丢失主语”与“初代全量 GraphRAG $4,850 建库破产账单”。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档企业 RAG 架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (512-Tok 硬切片)</strong>: 指代 54.0%, 全局 24.5% ✕<br/>
+            • <strong>Tier 2 (Hybrid BM25+精排)</strong>: 单跳 91.2%, 全局 38.5%<br/>
+            • <strong>Tier 3 (Contextual/Late)</strong>: 单跳 94.6%, 指代 91.8% ✅<br/>
+            • <strong>Tier 4 (LazyGraphRAG)</strong>: 全局 88.5%, 综合 91.9% 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 企业知识库评测契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 文档规模：<code>50,000 篇 (10M Tok)</code><br/>
+            • 每日增量：<code>1,500 篇 / 天</code><br/>
+            • 任务 1：<code>单跳精确条款/编号</code><br/>
+            • 任务 2：<code>跨段代词隐式背景</code><br/>
+            • 任务 3：<code>全库归纳 &amp; 3 跳推理</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 跨段指代提升：<code>54.0% → 91.8% (+37.8pt)</code><br/>
+            • 全局多跳提升：<code>38.5% → 88.5% (+50.0pt)</code><br/>
+            • 10M 建库费对比：<code>$38 vs 初代 $4,850</code><br/>
+            • 建库成本降幅：<code>-99.2% (省 $4,812)</code><br/>
+            • 全局查询 P95：<code>680 ms (快 6.18x)</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>企业全场景综合问答准确率 (Blended Enterprise Accuracy %，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 自适应路由 + Contextual + LazyGraphRAG</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: Contextual + LazyGraphRAG 路由</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:91.9%;"></div></div>
+          <span class="bar-val">91.9% 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: Contextual / Late-Chunking + 精排</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:79.5%;"></div></div>
+          <span class="bar-val">79.5% ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: Hybrid BM25 + 向量 + Reranker</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:66.1%;"></div></div>
+          <span class="bar-val">66.1%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 传统 512-Token 硬切片 + 纯向量</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:50.0%;"></div></div>
+          <span class="bar-val">50.0% ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to Anthropic Contextual Retrieval (Prompt-Cached headers + BM25 + Reranker), Jina Late-Chunking, and Microsoft Research LazyGraphRAG / HKU LightRAG (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 50,000 FINANCIAL &amp; REGULATORY AUDIT DOCUMENTS</span>
+        <span class="badge-prov">Case Study · Pronoun Resolution + Multi-Hop Risk Audit</span>
+      </div>
+      <h2 class="headline">Contextual 背景题头治愈“孤儿切片丢主语”（91.8%）；LazyGraphRAG 攻克跨文档多跳推理（88.5%）</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们把 5 万份财报与合规审计报告切成 512-Token 进向量库，结果问‘星辰科技 Q3 毛利率为何下跌’搜不到（因为切片里只写了‘其毛利率下跌’），问‘汇总全库排名前五的系统性供应链违规风险’更是答非所问；想试微软初代 GraphRAG，算出来每 1,000 万 Token 建库费高达 $4,850，每天更新 1,500 篇文档根本烧不起！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：单文档/跨段落精确问答底座（占企业流量 80%）</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 3 (Contextual / Late-Chunking + Hybrid Rerank)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">利用 KV Prefix Cache 为每个切片生成 50 词篇章背景头（或使用 8K 长文 Late-Chunking），配合 BM25 + 向量 RRF + Cross-Encoder 精排，跨段代词准确率从 <code>54.0%</code> 飙升至 <code>91.8%</code>，P95 仅 <code>245 ms</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 跨段代词/隐式背景准确率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:91.8%;"></div></div>
+            <span class="bar-val">91.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统 512-Token 硬切片指代准确率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:54.0%;"></div></div>
+            <span class="bar-val">54.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：跨文档全局归纳与 3 跳供应链穿透（占企业流量 20%）</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 4 (LazyGraphRAG 按需子图合成)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">建库期零 LLM 调用（NLP 抽概念共现图，10M 建库费仅 <code>$38</code>），查询期按需展开命中 Leiden 子社区提炼论断，全局多跳准确率达 <code>88.5%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: LazyGraphRAG 全局/多跳推理准确率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:88.5%;"></div></div>
+            <span class="bar-val">88.5% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: Hybrid BM25+Dense 全局/多跳准确率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:38.5%;"></div></div>
+            <span class="bar-val">38.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：禁止在日更动态语料库上跑初代 Eager Full GraphRAG</strong></div>
+            <span class="pill pill-human">Send to a human · 建库费贵 127 倍且社区漂移需重算</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">初代全量 LLM 抽图与预写社区报告每 1,000 万 Token 耗资 $4,850，仅适合静态一次性小型情报库。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Combining Contextual Hybrid RAG (for 80% local queries) with LazyGraphRAG (for 20% global/multi-hop queries) achieves 91.9% blended accuracy at $38/10M-token indexing cost.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER ENTERPRISE RAG EVALUATION MATRIX</span>
+        <span class="badge-prov">50,000 Docs · 10M Tokens · 3 Query Archetypes</span>
+      </div>
+      <h2 class="headline">四档企业级 RAG 全矩阵评测：单跳事实、跨段指代、全局多跳、建库成本与 P95 延迟</h2>
+      <p class="subhead">全面对比四档架构在三类企业真实查询上的准确率、1,000 万 Token 建库账单、在线 P95 延迟与单文档增量更新速度。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (RAG 架构档位)</th>
+            <th>QUESTION / TASK (核心索引与检索机制)</th>
+            <th>MODEL ANSWER (单跳 / 指代 / 全局 / 建库费 / P95)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 512-Token 硬切片 + 纯向量</strong></td>
+            <td>固定窗口截断 + 单路 Dense Top-K</td>
+            <td>单跳 <code>71.5% ✕</code> · 跨段指代 <code>54.0% ✕</code> · 全局多跳 <code>24.5% ✕</code> · 建库 <code>$14</code> · P95 <code>145ms</code></td>
+            <td><span class="pill pill-human">严禁裸跑 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: Hybrid BM25+Dense + 精排</strong></td>
+            <td>稀疏 BM25 + 稠密向量 RRF + Cross-Encoder</td>
+            <td>单跳 <code>91.2% ✅</code> · 跨段指代 <code>68.5% ✕</code> · 全局多跳 <code>38.5% ✕</code> · 建库 <code>$18</code> · P95 <code>235ms</code></td>
+            <td><span class="pill pill-confirm">仅限简单 FAQ</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: Contextual / Late-Chunking</strong></td>
+            <td>Prefix-Cached 篇章背景头 / 延迟池化 + 混合精排</td>
+            <td>单跳 <code>94.6% 🏆</code> · 跨段指代 <code>91.8% 🏆</code> · 全局多跳 <code>52.0%</code> · 建库 <code>$42</code> · P95 <code>245ms ✅</code></td>
+            <td><span class="pill pill-auto">80% Local 标配 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 路由 + Contextual + LazyGraphRAG</strong></td>
+            <td>NLP 概念共现图 + Leiden 层级 + 查询期按需子图合成</td>
+            <td>单跳 <code>94.8% 🏆</code> · 指代 <code>92.4% 🏆</code> · 全局多跳 <code>88.5% 🏆</code> · 建库 <code>$38 (-99.2%) 🏆</code> · P95 <code>680ms 🏆</code></td>
+            <td><span class="pill pill-auto">全能企业标配 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#6d28d9;">✅ 为什么 Prefix Cache 让 Contextual 建库便宜 90%？</strong><br/>
+          同一篇文档的 20 个切片共享完全相同的全文前缀（Document Prefix）。开启 vLLM/SGLang Prefix Caching 后，整篇文档只需算 1 次 Prefill，生成 20 个切片背景头每 10M Token 仅需约 <code>$24</code>！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么纯向量检索做不了“全库 Top-5 风险汇总”？</strong><br/>
+          向量检索的本质是“局部语义相似度匹配（Top-K Similarity）”，它没有全局计数器和跨文档聚合能力，必须靠概念子图或结构化元数据过滤。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 3 solves local &amp; pronoun-heavy retrieval (`94.6% / 91.8%`); Tier 4 solves global &amp; multi-hop synthesis (`88.5%`) without Eager GraphRAG's `$4,850` indexing bill.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · CONTEXTUAL HEADER + LAZYGRAPHRAG SUBGRAPH PIPELINE</span>
+        <span class="badge-prov">Prefix-Cached Indexing + Iterative Subgraph Synthesis</span>
+      </div>
+      <h2 class="headline">底层机制：Prefix-Cache 上下文题头注入 + LazyGraphRAG 查询期按需子图合成协议</h2>
+      <p class="subhead">展示生产环境如何在离线期零大模型成本构建概念共现图，并在在线期分流 Local 与 Global 查询。</p>
+
+      <div class="code-dark"><pre>{
+  "enterprise_rag_pipeline_contract": {
+    "offline_indexing": {
+      "contextual_header": "50-token doc/section summary via KV-Prefix-Cached 8B model",
+      "hybrid_index": "BM25 lexical + bge-m3 dense vector + Cross-Encoder reranker",
+      "lazy_concept_graph": "NLP noun-phrase extraction + sentence co-occurrence edges + hierarchical Leiden"
+    },
+    "online_routing": {
+      "local_factoid_path": "RRF(BM25, Dense) Top-50 -> Rerank Top-5 (P95: 245ms)",
+      "global_multihop_path": "Best-First Subgraph Expansion -> Map-Reduce Claim Synthesis (P95: 680ms)"
+    }
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#6d28d9;margin:6px 0;">↓ 在线自适应路由与按需子图归纳执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>def answer_enterprise_query(query: str) -&gt; str:
+    intent = classify_query_intent(query)  # &lt;15ms classifier: "LOCAL_FACTOID" vs "GLOBAL_MULTIHOP"
+    if intent == "LOCAL_FACTOID":
+        cands = rrf_merge(bm25.search(query, k=50), dense.search(query, k=50))
+        top5 = cross_encoder.rerank(query, cands, top_k=5)  # Each chunk carries Contextual Header!
+        return llm.generate(query, context=top5)
+
+    # GLOBAL_MULTIHOP: LazyGraphRAG iterative best-first concept subgraph expansion
+    seed_concepts = concept_index.match_noun_phrases(query, top_k=12)
+    subcommunities = leiden_graph.best_first_expand(seed_concepts, budget_chunks=30)
+    claims = parallel_extract_atomic_claims(query, subcommunities.chunks)
+    return llm.synthesize_global_report(query, claims)
+# &lt;answer&gt; Validated: 91.9% blended accuracy, $38/10M-tok index cost, 680ms global P95</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Because LazyGraphRAG never pre-generates LLM community summaries offline, adding 1,500 daily docs simply appends concept nodes/edges in 3.2 seconds per doc.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · EAGER FULL GRAPHRAG VS LAZYGRAPHRAG PERTURBATION</span>
+        <span class="badge-prov">Cost, Latency &amp; Query Archetype Sensitivity</span>
+      </div>
+      <h2 class="headline">鲁棒性对比：LazyGraphRAG 砍掉 99.2% 建库费、提速 6.18 倍，且保留 99% 图谱推理精度</h2>
+      <p class="subhead">对比初代 Eager Full GraphRAG、Hybrid RAG (Tier 2)、Contextual RAG (Tier 3) 与 LazyGraphRAG (Tier 4) 在不同维度下的表现变化。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (对比维度与压测场景)</th>
+            <th>ORIGINAL (传统基线 / 初代 GraphRAG)</th>
+            <th>PERTURBED (Tier 3 Contextual / Tier 4 Lazy)</th>
+            <th>CHANGE (核心收益与变化幅度)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1,000 万 Token 离线建库账单</strong><br/>50,000 篇文档首次全量建库</td>
+            <td>初代 Eager GraphRAG:<br/><code>$4,850.00 ✕</code></td>
+            <td>Tier 4 LazyGraphRAG:<br/><code>$38.00 🏆</code></td>
+            <td><strong style="color:#059669;">-99.2% (-$4,812) 🏆</strong><br/>建库期零 LLM 抽图与预摘要</td>
+          </tr>
+          <tr>
+            <td><strong>全局归纳与 3 跳关系准确率</strong><br/>跨文档产业链穿透与审计综述</td>
+            <td>Tier 2 Hybrid RAG:<br/><code>38.5% ✕</code> (初代图谱 <code>89.4%</code>)</td>
+            <td>Tier 4 LazyGraphRAG:<br/><code>88.5% 🏆</code></td>
+            <td><strong style="color:#059669;">+50.0 pt (vs Hybrid) 🏆</strong><br/>追平初代全量图谱 99% 精度</td>
+          </tr>
+          <tr>
+            <td><strong>跨段代词指代消解准确率</strong><br/>切片含“该公司 / 其三季度 / 上述条款”</td>
+            <td>Tier 1 硬切片:<br/><code>54.0% ✕</code></td>
+            <td>Tier 3 Contextual Header:<br/><code>91.8% 🏆</code></td>
+            <td><strong style="color:#059669;">+37.8 pt 🏆</strong><br/>50 词背景头锚定全文主语</td>
+          </tr>
+          <tr>
+            <td><strong>全局查询在线 P95 响应延迟</strong><br/>并发处理高管综述型提问</td>
+            <td>初代 Eager GraphRAG:<br/><code>4,200.0 ms ✕</code></td>
+            <td>Tier 4 LazyGraphRAG:<br/><code>680.0 ms 🏆</code></td>
+            <td><strong style="color:#2563eb;">快 6.18x (-3,520ms) ✅</strong><br/>仅归纳命中的 Top-30 子图块</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔄 日更 1,500 篇文档下的增量鲁棒性</strong><br/>
+          初代 Eager GraphRAG 因社区聚类漂移需定期全量重跑数千美元 LLM 摘要；Tier 4 LazyGraphRAG / LightRAG 支持直接向概念共现图追加增量边，单篇入库仅需 <code>3.2s</code>。
+        </div>
+        <div class="callout-box">
+          <strong>🎯 什么时候优先选 Jina Late-Chunking？</strong><br/>
+          若完全不想在入库期调用小模型生成 50 词背景头，可直接用 <code>jina-embeddings-v3 (8192 context)</code> 对整篇文档编码后再按段落池化切向量，零生成成本解决代词丢失！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: LazyGraphRAG eliminates the 346× indexing cost penalty of Eager GraphRAG while preserving 88.5% multi-hop synthesis accuracy.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; ACCURACY SCALING · QUERY ARCHETYPES &amp; INDEXING COST</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Optimized vs Slate=Tier 1/2/Eager Baseline</span>
+      </div>
+      <h2 class="headline">三类查询精度与延迟对比：跨段指代 92.4%、全局多跳 88.5%、Local P95 仅 245ms</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 新一代上下文与按需子图架构，浅灰条（<code>#CBD5E1</code>）代表传统硬切片与初代全量图谱基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 跨段代词/隐式背景问答准确率 (Implicit-Context Pronoun Accuracy %，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Contextual + LazyGraphRAG</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:92.4%;"></div></div>
+            <span class="bar-val">92.4% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: Contextual / Late-Chunking + 精排</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:91.8%;"></div></div>
+            <span class="bar-val">91.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: Hybrid BM25 + Dense + 精排</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:68.5%;"></div></div>
+            <span class="bar-val">68.5%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统 512-Token 硬切片 (丢主语)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:54.0%;"></div></div>
+            <span class="bar-val">54.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 跨全库宏观归纳与 3 跳关系推理准确率 (Global / Multi-Hop Accuracy %，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: LazyGraphRAG 按需子图合成</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:88.5%;"></div></div>
+            <span class="bar-val">88.5% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: Contextual Hybrid RAG</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:52.0%;"></div></div>
+            <span class="bar-val">52.0%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: Hybrid BM25 + Dense + 精排</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:38.5%;"></div></div>
+            <span class="bar-val">38.5% ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统 512-Token 硬切片</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:24.5%;"></div></div>
+            <span class="bar-val">24.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 在线查询 P95 响应延迟对比 (ms，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: Contextual Hybrid (80% Local 流量)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:5.8%;"></div></div>
+            <span class="bar-val">245.0 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: LazyGraphRAG (20% Global 流量)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:16.2%;"></div></div>
+            <span class="bar-val">680.0 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">初代 Eager Full GraphRAG (遍历全社区)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">4,200.0 ms ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: With an 80/20 Local-to-Global query mix, the Adaptive Router achieves a weighted average P95 latency of just 332 ms while delivering 91.9% overall accuracy.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：用 Contextual Header 消灭孤儿切片，用 LazyGraphRAG 替代天价全量图谱</h2>
+      <p class="subhead">坚持“意图路由分流：80% 单跳走 Contextual Hybrid (245ms) + 20% 多跳走 LazyGraphRAG (680ms)”的企业知识中台标准架构。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>跨文档审计归纳、研报产业链穿透、复杂法务合规 → Tier 4 (自适应路由 + LazyGraphRAG)</strong>：建库仅 $38/10M Tok，全局多跳准确率从 38.5% 跃升至 88.5%。</li>
+            <li>• <strong>政企规章制度、技术手册、合同条款精准问答 → Tier 3 (Contextual / Late-Chunking + BM25 + Reranker)</strong>：245ms 拿到 94.6% 单跳与 91.8% 跨段指代准确率。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在长篇财报/合同库裸跑无背景头的 512-Token 硬切片 (Tier 1)</strong>：代词丢失主语导致跨段召回率腰斩至 54.0%。</li>
+            <li>• <strong>严禁在日更百万 Token 级动态知识库上跑初代 Eager Full GraphRAG</strong>：$4,850/10M Tok 的离线 LLM 抽图账单与社区重算会让项目直接停摆。</li>
+            <li>• <strong>严禁不加意图路由把所有简单查询都送进 GraphRAG</strong>：查单个参数跑图遍历纯属浪费 400ms+ 延迟。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 切块入库时注入 50 词篇章定位头（开启推理引擎 KV Prefix Caching）或采用 8K 长文 <code>Late-Chunking</code>。<br/>
+          2. <code>[ ]</code> 必配 <code>BM25/SPLADE + Dense Vector (RRF) + Cross-Encoder Reranker (Top-50 → Top-5)</code>，保住编号与专有名词召回。<br/>
+          3. <code>[ ]</code> 采用 <code>LazyGraphRAG / LightRAG</code> 构建轻量概念共现图，将 1,000 万 Token 建库成本锁死在 <code>&lt;$50</code>。<br/>
+          4. <code>[ ]</code> 前置 <code>&lt;15ms</code> 查询意图分类器分流 Local 单跳查询（245ms）与 Global 多跳查询（680ms）。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/enterprise_rag_graphrag_hybrid_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
