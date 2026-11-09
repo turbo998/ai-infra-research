@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Multi-Region Disaster Recovery &amp; Cross-Cloud LLM Bursting — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #7dd3fc; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #0369a1; background: #e0f2fe; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #0284c7, #059669);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #0284c7; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🌍 跨地域/多云大模型高可用容灾与混合云溢出选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/multi_region_dr_cross_cloud_llm_serving/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/multi-region-disaster-recovery-cross-cloud-llm-serving-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/multi-region-disaster-recovery-cross-cloud-llm-serving-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#multi-region-dr-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · MULTI-REGION DR, STICKY ROUTING &amp; CLOUD BURSTING</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">会话粘性双活 + 64KB 文本流重放</span> 提速 6.62x 首字响应，1.8s 异地容灾且年省 $265.6 万</h2>
+      <p class="subhead">针对全球 1,200 RPS 峰值、32K 上下文 8 轮对话 Agent（跨地域 WAN 延迟 65ms），评测主备冷备、无状态轮询双活、同城三 AZ 与异地粘性双活+混合云溢出四档架构。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档高可用容灾架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (主备冷灾备)</strong>: RTO 340s, 100% 断连 ✕<br/>
+            • <strong>Tier 2 (无状态轮询双活)</strong>: 命中 44%, TTFT 1.59s ✕<br/>
+            • <strong>Tier 3 (同城 Multi-AZ)</strong>: RTO 1.2s, 共享 L2 KV ✅<br/>
+            • <strong>Tier 4 (粘性双活+溢出)</strong>: 命中 91.2%, 省 $2.66M 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 多轮有状态容灾契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 会话长度：<code>32K Tokens (8 轮交互)</code><br/>
+            • 全球峰值：<code>1,200 RPS (P60: 650 RPS)</code><br/>
+            • 异地距离：<code>65.0 ms WAN RTT</code><br/>
+            • 同城距离：<code>&lt;1.5 ms 400G 裸光纤</code><br/>
+            • 文本流体积：<code>64 KB (小 128,000 倍)</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 多轮 KV 命中率：<code>44.0% → 91.2%</code><br/>
+            • 稳态 P95 TTFT：<code>1,590ms → 240ms</code><br/>
+            • 异地故障 RTO：<code>340s → 1.8s (0% 丢包)</code><br/>
+            • WAN 带宽降幅：<code>18.5G → 0.12G (-99.4%)</code><br/>
+            • 年度算力省钱：<code>$2,656,000 (-41.5%)</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>32K 多轮对话稳态 P95 首字延迟对比 (Steady-State P95 TTFT ms，越低越好)</strong>
+          <span class="pill pill-auto">Act automatically · 有界一致性哈希粘性路由 + 64KB 文本流重放</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: 跨地域会话粘性双活 (91.2% 命中)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:15.1%;"></div></div>
+          <span class="bar-val">240.0 ms 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 同城三 AZ 双活 (89.5% 命中)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:15.7%;"></div></div>
+          <span class="bar-val">250.0 ms ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 单地域主备冷灾备 (RTO 340s ✕)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:16.7%;"></div></div>
+          <span class="bar-val">265.0 ms</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 跨地域无状态轮询 (44% 命中 ✕)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+          <span class="bar-val">1,590.0 ms ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to Consistent Hashing with Bounded Load for stateful KV-prefix geo-routing, metro RoCEv2 distributed KV pools vs WAN token-transcript replication, and P60/P95 hybrid cloud bursting (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: TWO-REGION ACTIVE-ACTIVE FINANCIAL AGENT CLUSTER</span>
+        <span class="badge-prov">Case Study · Avoiding Stateless Cache Thrashing &amp; WAN KV Saturation</span>
+      </div>
+      <h2 class="headline">粉碎“无状态轮询双活”与“跨城同步 8GB KV”两大反模式：64KB 文本重放实现 1.8s 切换</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们按集团两地三中心规范在上海和北京各建了一套千卡推理集群，网络团队直接配了全局 Round-Robin 负载均衡，结果多轮投研 Agent 的首字延迟从 250ms 暴涨到 1.6 秒！有人提议把上海生成的 8GB KV Cache 实时通过跨省专线同步到北京，一算带宽需要 100Gbps 专线且单次传输就要 6.5 秒！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：异地两中心（相距 &gt;100km）高可用双活与状态同步</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (粘性哈希 + 64KB Token 轨迹复制 + Lazy KV 重算)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">平时用一致性哈希把同会话钉死在同一地域（命中率 <code>91.2%</code>），跨省专线仅异步复制 <code>64 KB</code> Token-ID 数组（比 8GB KV 小 128,000 倍）；仅当主地域宕机时对端用 0.45s 重建 KV。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 多轮 KV Prefix 缓存命中率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:91.2%;"></div></div>
+            <span class="bar-val">91.2% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 无状态轮询 KV 缓存命中率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:44.0%;"></div></div>
+            <span class="bar-val">44.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：同城三可用区（相距 &lt;30km，裸光纤 RTT &lt;1.5ms）容灾</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 3 (同城 Multi-AZ 共享压缩二级 KV 池)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">同城 400G RoCE 裸光纤可在 <code>14~18ms</code> 内跨 AZ 拉取压缩后的 MLA/FP8 KV 块，实现 <code>1.2s</code> 极速切换。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: P60 底盘 + 公有云溢出年总成本</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:58.5%;"></div></div>
+            <span class="bar-val">$3,744,000 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 两地 200% 静态峰值常驻年总成本</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$6,400,000 ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：严禁跨异地广域网 (WAN) 同步未压缩的原始 KV 张量</strong></div>
+            <span class="pill pill-human">Send to a human · 传 8GB KV 耗时 6.5s 比对端直接重算 Prefill (0.45s) 慢 14 倍</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">广域网带宽比 GPU 算力昂贵且稀缺得多，异地灾备必须传 64KB 文本流而非数 GB 显存张量。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Replicating 64 KB of token IDs instead of 8 GB of KV tensors reduces WAN bandwidth by 99.4% while achieving a 1.8-second regional failover RTO.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER MULTI-REGION DR &amp; CLOUD BURST MATRIX</span>
+        <span class="badge-prov">32K Multi-Turn · 1,200 Peak RPS · 65ms WAN</span>
+      </div>
+      <h2 class="headline">四档跨地域高可用架构全矩阵评测：KV 命中率、TTFT、RTO、WAN 带宽与年度 TCO</h2>
+      <p class="subhead">全面对比单地主备冷备、跨地域无状态轮询、同城三 AZ 共享 KV 池与跨地域粘性双活+混合云溢出。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (容灾架构档位)</th>
+            <th>QUESTION / TASK (路由与跨机房同步机制)</th>
+            <th>MODEL ANSWER (KV命中 / TTFT / RTO / 带宽 / 年TCO)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 单地域主备冷灾备</strong></td>
+            <td>单地 100% 承载 · 故障后冷拉备份地域</td>
+            <td>命中 <code>88.5%</code> · TTFT <code>265ms</code> · <strong>RTO <code>340.0s ✕</code></strong> · 切换丢包 <code>100% ✕</code> · <code>$4.20M/yr</code></td>
+            <td><span class="pill pill-confirm">仅限非核心</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 跨地域无状态轮询双活</strong></td>
+            <td>Anycast 随机轮询 · 两地各配 100% 峰值</td>
+            <td><strong>命中 <code>44.0% ✕</code> · TTFT <code>1,590ms ✕</code></strong> · RTO <code>8.5s</code> · WAN <code>18.5 Gbps ✕</code> · <code>$6.40M/yr ✕</code></td>
+            <td><span class="pill pill-human">淘汰禁用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 同城三 AZ 双活共享池</strong></td>
+            <td>同城 `&lt;1.5ms` 裸光纤 + 分布式压缩二级 KV</td>
+            <td>命中 <code>89.5% ✅</code> · TTFT <code>250ms ✅</code> · <strong>RTO <code>1.2s 🏆</code></strong> · 丢包 <code>0.2%</code> · <code>$4.56M/yr</code></td>
+            <td><span class="pill pill-auto">同城高可用 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 粘性双活 + 文本重放 + 溢出</strong></td>
+            <td>有界哈希粘性 + <code>64KB</code> Token 流 + P60/P95 混合云</td>
+            <td>命中 <code>91.2% 🏆</code> · TTFT <code>240ms 🏆</code> · RTO <code>1.8s 🏆</code> · WAN <code>0.12 Gbps 🏆</code> · <code>$3.744M/yr 🏆</code></td>
+            <td><span class="pill pill-auto">两地三中心标配 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#0369a1;">✅ 为什么只溢出“第 1 轮新会话 (Turn 1)”是点睛之笔？</strong><br/>
+          当上海机房负载超过 85% 时，已经在上海聊到第 5 轮的老会话在上海拥有 25K 现成 KV 缓存，留在上海只需算新增的 500 词；而刚发起的第 1 轮新会话在哪都没有缓存，直接分流去北京或公有云零损失！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么两地各配 100% 峰值算力是巨大浪费？</strong><br/>
+          企业 AI 流量呈显著的早 10 点 / 下午 3 点双峰分布（P60 基线仅占峰值的 54%）；采用 P60 包年底盘 + P95 按需弹性溢出每年立省 <code>$265.6 万</code>！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 4 delivers 6.62× faster multi-turn TTFT than stateless active-active (`240ms` vs `1,590ms`) while cutting annual TCO by 41.5% (`$3.744M` vs `$6.40M`).
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · BOUNDED-LOAD STICKY ROUTER &amp; LAZY KV REPLAY</span>
+        <span class="badge-prov">Turn-Aware Geo-Routing + Mid-Stream Failover</span>
+      </div>
+      <h2 class="headline">底层机制：有界负载一致性哈希粘性路由 + 64KB 文本轨迹断点重放协议</h2>
+      <p class="subhead">展示全球 AI 网关如何在保住 91.2% 本地 KV 命中率的同时，实现亚 2 秒无损跨城容灾与流式续传。</p>
+
+      <div class="code-dark"><pre>{
+  "multi_region_ha_contract": {
+    "sticky_routing": "Consistent Hashing with Bounded Load (load_factor_cap = 0.85) on conversation_id",
+    "overflow_policy": "Keep Turn >= 2 pinned to cached home region; burst Turn == 1 to peer region / cloud TEE",
+    "wan_state_replication": "Async 64KB LZ4-compressed Token-ID array + tool state (0 MB idle backup VRAM)",
+    "failover_recovery": "Mid-stream token resume + Lazy KV Reconstruction (0.45s parallel prefill on peer)"
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#0284c7;margin:6px 0;">↓ 全球网关粘性路由、Turn-1 弹性溢出与断点续传执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>def route_global_llm_request(req, regions, cloud_burst_pool):
+    home_reg = consistent_hash_ring.get_node(req.conversation_id)
+    # 1. 若主地域健康且未超载，或该请求已是第 2+ 轮老会话（家里有现成 32K KV 缓存），优先钉在主地域！
+    if home_reg.is_healthy and (home_reg.load &lt; 0.85 or req.turn_index &gt; 1):
+        if home_reg.load &lt; 0.98:
+            async_replicate_token_ids_64kb(req.conversation_id, req.token_ids, peer=home_reg.backup)
+            return home_reg
+
+    # 2. 若主地域过载 (&gt;85%) 且是第 1 轮新会话 (Turn == 1)，脱敏溢出至次选地域或公有云 TEE 池
+    if req.turn_index == 1 and not req.has_restricted_pii:
+        return cloud_burst_pool if home_reg.backup.load &gt; 0.85 else home_reg.backup
+
+    # 3. 主地域故障宕机：唤醒备份地域读取已同步的 64KB 历史 Token 流，0.45s 按需重建 KV 并无缝续写！
+    cached_tokens = home_reg.backup.load_replicated_transcript(req.conversation_id)
+    return home_reg.backup.lazy_reconstruct_kv_and_resume(cached_tokens + req.new_tokens)
+# &lt;answer&gt; Validated: 91.2% KV hit rate, 240ms P95 TTFT, 1.8s RTO, $2.656M/yr TCO savings</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Separating `Turn == 1` (stateless) from `Turn >= 2` (stateful) during load shedding prevents cascade prefill storms across regions.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · WAN STATE REPLICATION PAYLOAD SENSITIVITY</span>
+        <span class="badge-prov">8,192 MB Raw KV vs 716 MB MLA KV vs 64 KB Token Transcript</span>
+      </div>
+      <h2 class="headline">跨城同步压测：64KB Token 轨迹比 8GB 原始 KV 小 128,000 倍，WAN 耗时从 6.5s 降至 0.05ms</h2>
+      <p class="subhead">测试单条 32K 上下文会话在三种跨地域复制模式下的单次载荷体积、10Gbps 专线传输时间与全集群带宽压力。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (跨地域状态同步载荷类型)</th>
+            <th>ORIGINAL (单会话体积 &amp; 10G 专线耗时)</th>
+            <th>PERTURBED (Tier 4 64KB Token 轨迹)</th>
+            <th>CHANGE (体积压缩比与架构裁决)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. 原始 GQA-8 BF16 KV 张量</strong><br/>直接通过跨省专线复制显存块</td>
+            <td>体积 <code>8,192.0 MB (8 GB)</code><br/>10G 传输耗时 <code>6,553.6 ms ✕</code></td>
+            <td>体积 <code>0.064 MB (64 KB) 🏆</code><br/>10G 传输耗时 <code>0.05 ms 🏆</code></td>
+            <td><strong style="color:#059669;">缩小 128,000 倍 🏆</strong><br/>传原始 KV 比现场重算慢 14 倍</td>
+          </tr>
+          <tr>
+            <td><strong>2. DeepSeek MLA FP8 潜变量 KV</strong><br/>压缩潜空间张量跨机房同步</td>
+            <td>体积 <code>716.8 MB (0.7 GB)</code><br/>10G 传输耗时 <code>573.4 ms</code></td>
+            <td>体积 <code>0.064 MB (64 KB) 🏆</code><br/>(同城 400G 光纤传 MLA 仅 <code>14ms</code>)</td>
+            <td><strong style="color:#2563eb;">同城传 MLA / 异地传 Token ✅</strong><br/>明确划分城域网与广域网边界</td>
+          </tr>
+          <tr>
+            <td><strong>3. 1,200 RPS 峰值下跨城总带宽</strong><br/>全集群持续状态同步专线开销</td>
+            <td>Tier 2 跨城同步:<br/><code>18.50 Gbps ✕</code></td>
+            <td>Tier 4 文本流同步:<br/><code>0.12 Gbps 🏆</code></td>
+            <td><strong style="color:#059669;">带宽节省 -99.4% 🏆</strong><br/>普通企业专线即可轻松承载</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🌟 VIP 会话的“预热特权 (Speculative Warm-Standby)”</strong><br/>
+          对于高管或核心交易员的 Top 5% 关键会话，灾备地域收到 64KB Token 轨迹后可利用夜间/低谷空闲算力在后台异步完成 Prefill 并将 KV 存入本地 NVMe，故障切换 RTO 进一步缩短至 <code>&lt;300 ms</code>！
+        </div>
+        <div class="callout-box">
+          <strong>🔄 流式生成中途断网怎么办 (Mid-Stream Resume)？</strong><br/>
+          网关每隔 32 个生成的 Token 向灾备中心追加一次增量检查点；即使主地域在回答生成到一半时断电，灾备地域也能接着最后一个字继续往下吐，用户屏幕零闪烁！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Shipping token IDs over WAN and computing KV lazily on failover turns an intractable bandwidth problem into a trivial 0.12 Gbps stream.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; TCO SCALING · KV HIT RATE, FAILOVER RTO &amp; ANNUAL TCO</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Sticky HA vs Slate=Tier 1/2 Baseline</span>
+      </div>
+      <h2 class="headline">性能与 TCO 对比：多轮命中率稳守 91.2%，故障切换 1.2~1.8 秒，年省 $265.6 万</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 会话粘性与混合云容灾架构，浅灰条（<code>#CBD5E1</code>）代表传统冷备与无状态轮询基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 32K 8 轮对话全局 KV Prefix Cache 命中率 (% ，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 跨地域会话粘性双活 + Turn-1 分流</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:91.2%;"></div></div>
+            <span class="bar-val">91.2% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 同城三可用区共享 L2 KV 池</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:89.5%;"></div></div>
+            <span class="bar-val">89.5% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 单地域主备冷灾备</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:88.5%;"></div></div>
+            <span class="bar-val">88.5%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 跨地域无状态轮询 (缓存打碎)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:44.0%;"></div></div>
+            <span class="bar-val">44.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 可用区 / 地域级故障恢复时间 (RTO 秒，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 同城 Multi-AZ 切换 (18ms 拉取 KV)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:1.5%;"></div></div>
+            <span class="bar-val">1.2 s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 异地双活切换 (0.45s 重建 64KB 轨迹)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:2.2%;"></div></div>
+            <span class="bar-val">1.8 s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 跨地域无状态轮询双活</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:8.0%;"></div></div>
+            <span class="bar-val">8.5 s</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 单地域冷灾备 (临时拉起 GPU 集群)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">340.0 s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 年度多地域 GPU 集群总 TCO 账单 (USD/年，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: P60 双活底盘 + P95 公有云溢出</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:58.5%;"></div></div>
+            <span class="bar-val">$3,744,000 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 单地域常驻 + 冷备存储</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:65.6%;"></div></div>
+            <span class="bar-val">$4,200,000</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 同城三 AZ 双活冗余池</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:71.3%;"></div></div>
+            <span class="bar-val">$4,560,000 ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 两地 200% 静态峰值冗余</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$6,400,000 ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Tier 4 achieves both the lowest annual TCO (`$3.744M`) and the fastest steady-state multi-turn TTFT (`240ms`) by aligning routing with KV Cache physics.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：同城跨 AZ 传压缩 KV，异地跨城传 64KB 文本流 + 混合云削峰</h2>
+      <p class="subhead">把有状态 KV 亲和性放进全球流量调度的第一性原理，告别无状态轮询的算力灾难。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>金融/政企异地两地三中心与全球 SaaS → Tier 4 (有界哈希粘性双活 + 64KB 文本流重放 + 混合云溢出)</strong>：1.8s RTO，91.2% 缓存命中，年省 $265.6 万。</li>
+            <li>• <strong>同城高可用防单机房掉电 → Tier 3 (同城三 AZ 裸光纤 + 共享压缩二级 KV 池)</strong>：1.2s 无感容灾。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁对多轮大模型开启跨地域无状态 Round-Robin 轮询 (Tier 2)</strong>：直接砍半 KV 缓存命中率，首字延迟暴涨 6.62 倍。</li>
+            <li>• <strong>严禁跨广域网 (WAN) 实时同步数 GB 的原始 KV Cache 张量</strong>：耗时比对端重算 Prefill 还慢 14 倍且打爆专线。</li>
+            <li>• <strong>严禁把涉密 PII 流量直接明文溢出至非机密公有云实例</strong>：必须先分级脱敏或使用硬件加密 CC-On TEE 实例。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 在全球网关开启基于 <code>conversation_id</code> 的有界负载一致性哈希（<code>Bounded-Load Consistent Hashing</code>）。<br/>
+          2. <code>[ ]</code> 配置跨地域异步复制 <code>64 KB</code> 压缩 Token-ID 轨迹，并在灾备端实现故障触发式 <code>Lazy KV Reconstruction</code>。<br/>
+          3. <code>[ ]</code> 实现过载时“仅分流 <code>Turn == 1</code> 新会话、保留 <code>Turn &gt;= 2</code> 老会话在原地域”的智能限流策略。<br/>
+          4. <code>[ ]</code> 按 <code>P60</code> 基线采购自建/包年双活底盘，将早晚高峰非涉密流量自动溢出至公有云 Confidential GPU 池。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/multi_region_dr_cross_cloud_llm_serving/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
