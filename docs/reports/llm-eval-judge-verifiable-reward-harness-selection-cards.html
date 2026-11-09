@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Enterprise LLM Evaluation, Debiased Judge &amp; RLVR — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #f9a8d4; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #be185d; background: #fce7f3; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #db2777, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #db2777; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>⚖️ 企业级大模型自动化评测、LLM-as-a-Judge 去偏与 RLVR 选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/llm_eval_judge_verifiable_reward_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/llm-eval-judge-verifiable-reward-harness-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/llm-eval-judge-verifiable-reward-harness-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#eval-judge-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · LLM-AS-A-JUDGE DE-BIASING &amp; VERIFIABLE REWARDS (RLVR)</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">RLVR 确定性沙箱 + 双向去偏量表裁判</span> 达 96.8% 专家一致率，消除 28.4% 位置翻转与 RL 刷分坍塌</h2>
+      <p class="subhead">针对 100,000 条企业评测与强化学习后训练样本（40% 代码/SQL/工具 + 30% 数理金融 + 30% 开放问答），对比四档自动化裁判与奖励验证架构。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档评测与奖励架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (BLEU/ROUGE)</strong>: 48.5% 一致率, 误杀等价解 ✕<br/>
+            • <strong>Tier 2 (单次 API 裁判)</strong>: 28.4% 换位翻转, $420 ✕<br/>
+            • <strong>Tier 3 (双向+原子量表)</strong>: 86.4% 一致率, $18.50 ✅<br/>
+            • <strong>Tier 4 (RLVR 沙箱+PRM)</strong>: 96.8% 一致, 0% 刷分 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 企业评测集与攻击契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 评测规模：<code>100,000 条企业样本</code><br/>
+            • 结构化占比：<code>70% (代码/SQL/数学/JSON)</code><br/>
+            • 开放式占比：<code>30% (公文/总结/语气)</code><br/>
+            • 对抗压测：<code>换位 / +300词注水 / 伪装</code><br/>
+            • RL 训练步数：<code>2,000 步 GRPO/PPO</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 位置翻转率：<code>28.4% → 2.1% / 0.4%</code><br/>
+            • 啰嗦注水虚高：<code>+24.0% → +0.6%</code><br/>
+            • RL 刷分坍塌率：<code>31.5% → 0.0%</code><br/>
+            • 专家一致率：<code>74.2% → 96.8%</code><br/>
+            • 10万次评测成本：<code>$420 → $18.50 (-95.6%)</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>与人类领域专家评分一致率 (Human Expert Agreement %，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · RLVR 确定性沙箱 + 双向去偏量表裁判</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: RLVR 确定性沙箱 + PRM + 去偏裁判</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:96.8%;"></div></div>
+          <span class="bar-val">96.8% 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 双向交换 + 原子量表专属裁判</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:86.4%;"></div></div>
+          <span class="bar-val">86.4% ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 单次直评商业大模型裁判 (GPT-4o)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:74.2%;"></div></div>
+          <span class="bar-val">74.2%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 传统 BLEU / ROUGE 字面匹配</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:48.5%;"></div></div>
+          <span class="bar-val">48.5% ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to LMSYS MT-Bench / Chatbot Arena position &amp; verbosity bias taxonomy, AlpacaEval 2.0 length-controlled GLM, Prometheus-2 rubric judge, and DeepSeek-R1 / Tulu-3 RLVR (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: ENTERPRISE MODEL RELEASE GATE &amp; GRPO REWARD PIPELINE</span>
+        <span class="badge-prov">Case Study · Position Flip + Verbosity Reward Hacking</span>
+      </div>
+      <h2 class="headline">双向 (A,B)+(B,A) 门控把位置偏见从 28.4% 压至 2.1%；RLVR 沙箱彻底根治 RL 刷废话坍塌</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们用商业大模型做上线前 A/B 盲评与 RL 后训练奖励，结果发现把新老模型位置对调后有 28.4% 的胜负直接反转！更糟的是，GRPO 训练跑到第 600 步时，模型学会了不管对错先输出 400 字华丽 Markdown 表格和讨好套话，裁判得分一路狂飙，但真实代码和财务计算正确率反而暴跌了 20%！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：代码 / SQL / 数学财务 / 工具调用评测与 RL 奖励（占 70%）</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (RLVR 确定性执行沙箱 + PRM)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">用 Wasm/容器单元测试、<code>SymPy</code> 符号化简与 Pydantic AST 校验取代主观大模型打分，对废话注水 100% 免疫，RL 刷分坍塌率降至 <code>0.0%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 2,000 步 RL 刷分坍塌率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:0.5%;"></div></div>
+            <span class="bar-val">0.0% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 单次大模型裁判 RL 刷分坍塌率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">31.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：开放式文科 / 摘要 / 语气评测（占 30%）</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 3 (双向位置交换 + 5 档原子量表 + 长度回归)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">自建 SGLang 托管 <code>Prometheus-2</code>（开启 Prefix Cache 共享题干与量表），强制正反跑两次 <code>(A,B)</code> 与 <code>(B,A)</code> 并扣除 GLM 字数水分，成本从 $420 降至 <code>$18.50 (-95.6%)</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 双向门控后位置调换翻转率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:7.4%;"></div></div>
+            <span class="bar-val">2.1% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 单向盲评位置调换翻转率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">28.4% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：禁止用被测模型同家族大模型做唯一裁判</strong></div>
+            <span class="pill pill-human">Send to a human · 存在 5%~10% 自恋偏见 (Self-Preference Bias)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">生产发版门禁必须采用跨家族异构裁判或经过人类金标校准的专属中立裁判。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Never ask a neural LLM judge to guess whether code or math is right—execute it in an RLVR sandbox and reserve debiased rubric judges strictly for open-ended prose.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER EVALUATION &amp; REWARD HARNESS MATRIX</span>
+        <span class="badge-prov">100,000 Enterprise Samples · 2,000 RL Steps</span>
+      </div>
+      <h2 class="headline">四档评测与奖励架构全矩阵对比：专家一致率、位置翻转、长度虚高、RL 坍塌与成本</h2>
+      <p class="subhead">全面对比传统字面匹配、单次 API 裁判、双向去偏量表裁判与 RLVR 确定性沙箱混合架构。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (评测架构档位)</th>
+            <th>QUESTION / TASK (核心判分与去偏机制)</th>
+            <th>MODEL ANSWER (一致率 / 位置翻转 / 长度偏见 / 成本)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: BLEU / ROUGE / 字面匹配</strong></td>
+            <td>N-gram 表面词频重合 + 字符串完全相等</td>
+            <td>专家一致率 <code>48.5% ✕</code> · 翻转 <code>0.0%</code> · 长度虚高 <code>+14.5%</code> · RL 坍塌 <code>42.0% ✕</code> · <code>$0.50</code></td>
+            <td><span class="pill pill-human">淘汰禁用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 单次直评商业 API 裁判</strong></td>
+            <td>单向 (A,B) 盲评 / 笼统 1~10 打分 (无去偏)</td>
+            <td>专家一致率 <code>74.2%</code> · 位置翻转 <code>28.4% ✕</code> · 长度虚高 <code>+24.0% ✕</code> · RL 坍塌 <code>31.5% ✕</code> · <code>$420 ✕</code></td>
+            <td><span class="pill pill-human">禁止裸用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 双向交换 + 原子量表裁判</strong></td>
+            <td><code>(A,B)+(B,A)</code> 一致门控 + 5 档量表 + GLM 长度回归</td>
+            <td>专家一致率 <code>86.4% ✅</code> · 翻转 <code>2.1% ✅</code> · 长度虚高 <code>3.8% ✅</code> · RL 坍塌 <code>9.2%</code> · <code>$18.50 (-95.6%) ✅</code></td>
+            <td><span class="pill pill-auto">开放问答标配 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: RLVR 确定性沙箱 + PRM</strong></td>
+            <td>70% Wasm 单测/SymPy/AST + PRM + 30% 双向去偏裁判</td>
+            <td>专家一致率 <code>96.8% 🏆</code> · 翻转 <code>0.4% 🏆</code> · 长度虚高 <code>0.6% 🏆</code> · RL 坍塌 <code>0.0% 🏆</code> · <code>$22.00 (680条/s) 🏆</code></td>
+            <td><span class="pill pill-auto">全栈终极标配 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#be185d;">✅ 为什么 Prefix Cache 让双向跑两次反而便宜 95%？</strong><br/>
+          自建 SGLang 跑 <code>Prometheus-2</code> 时，<code>(A,B)</code> 与 <code>(B,A)</code> 共享全部系统提示词、题干、参考答案与 5 档评分量表，RadixAttention 缓存命中率超 80%，吞吐高达 420 条/秒！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么不剥离讨好前缀会导致评测失真？</strong><br/>
+          单次裁判对 <code>"Certainly! Here is an expert breakdown:"</code> 具有极强正向偏见；送审前用正则剥离礼貌寒暄与多余粗体是低成本提准利器。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 3 cuts LLM-as-a-Judge cost by 95.6% while reducing position flips by 13.5×; Tier 4 reaches 96.8% human agreement and 0% RL reward hacking.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · RLVR VERIFIER + BIDIRECTIONAL SWAP &amp; GLM DE-BIASING</span>
+        <span class="badge-prov">Deterministic SymPy/AST + Swap-and-Vote Gate</span>
+      </div>
+      <h2 class="headline">底层机制：RLVR 符号/沙箱验证器 + 双向位置交换门控与 GLM 长度去偏协议</h2>
+      <p class="subhead">展示生产环境如何将结构化任务路由至确定性验证器，并对开放式任务执行正反双向盲评与长度回归。</p>
+
+      <div class="code-dark"><pre>{
+  "evaluation_and_reward_contract": {
+    "verifiable_tasks_70pct": {
+      "code_and_sql": "Isolated Wasm/gVisor sandbox pytest + DuckDB result-set hash match",
+      "math_and_finance": "Regex extract \\boxed{} -> SymPy simplify(pred - gold) == 0",
+      "tool_calling": "Pydantic strict JSON Schema + AST argument equivalence"
+    },
+    "open_ended_tasks_30pct": {
+      "judge_model": "Self-hosted Prometheus-2 / Qwen2.5-Judge with SGLang Prefix Cache",
+      "position_debias": "Run (A,B) and (B,A); require unanimous winner else Tie",
+      "length_debias": "GLM logistic regression setting delta_length = 0"
+    }
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#be185d;margin:6px 0;">↓ 混合 RLVR 沙箱验证与双向去偏裁判执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>def evaluate_or_score_rl(sample, resp_a, resp_b=None):
+    if sample.is_verifiable:  # 70% 企业任务：代码 / SQL / 数学 / 工具调用
+        if sample.domain == "math":
+            return 1.0 if sympy_equivalent(extract_boxed(resp_a), sample.gold) else 0.0
+        return 1.0 if wasm_sandbox_run_tests(resp_a, sample.unit_tests).passed else 0.0
+
+    # 30% 开放式主观任务：剥离讨好前缀 + 双向位置交换 (命中 KV Prefix Cache)
+    clean_a, clean_b = strip_sycophancy(resp_a), strip_sycophancy(resp_b)
+    v_ab = judge_llm(sample.question, sample.rubric_5pt, first=clean_a, second=clean_b) # 'A' or 'B'
+    v_ba = judge_llm(sample.question, sample.rubric_5pt, first=clean_b, second=clean_a) # 'A' or 'B'
+    if (v_ab == "A" and v_ba == "B"): raw_win = 1.0
+    elif (v_ab == "B" and v_ba == "A"): raw_win = 0.0
+    else: raw_win = 0.5  # 正反矛盾直接判平局，消灭 28.4% 位置偏见！
+    return glm_length_debias(raw_win, len(clean_a) - len(clean_b))
+# &lt;answer&gt; Validated: 96.8% human agreement, 0.4% position flip, 0.0% RL reward hacking</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Forcing contradictory `(A,B)` and `(B,A)` judgments to `0.5 (Tie)` mathematically zeroes out first-position bias while preserving high sensitivity on true quality gaps.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · RED-TEAM ADVERSARIAL ATTACKS AGAINST LLM JUDGES</span>
+        <span class="badge-prov">4 Adversarial Perturbations · Tier 2 vs Tier 4</span>
+      </div>
+      <h2 class="headline">对抗鲁棒性压测：面对四大红队骗分攻击，Tier 4 将误判率从 24%~31.5% 压至 &le;0.6%</h2>
+      <p class="subhead">测试位置对调、300 词废话表格注水、专家口吻伪装与等价数学/代码变形四种攻击下的裁判失误率。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (红队对抗扰动类型)</th>
+            <th>ORIGINAL (Tier 2 单次 API 裁判误判)</th>
+            <th>PERTURBED (Tier 4 RLVR+去偏误判)</th>
+            <th>CHANGE (鲁棒性提升与防御机制)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. 位置对调攻击 (Position Swap)</strong><br/>将 `(Response A, Response B)` 换为 `(B, A)`</td>
+            <td>误判率 <code>28.4% ✕</code><br/>(严重偏爱排第一的回答)</td>
+            <td>误判率 <code>0.4% 🏆</code><br/>(双向不一致强制归为 Tie)</td>
+            <td><strong style="color:#059669;">-28.0 pt 误判消除 🏆</strong><br/>彻底根治顺序敏感症</td>
+          </tr>
+          <tr>
+            <td><strong>2. 啰嗦注水攻击 (Verbosity Stuffing)</strong><br/>错误答案塞入 +300 词礼貌套话与表格</td>
+            <td>误判率 <code>24.0% ✕</code><br/>(被长篇排版迷惑判赢)</td>
+            <td>误判率 <code>0.6% 🏆</code><br/>(沙箱忽略文字 + GLM 扣长度)</td>
+            <td><strong style="color:#059669;">-23.4 pt 误判消除 🏆</strong><br/>杜绝“靠堆字数刷榜”</td>
+          </tr>
+          <tr>
+            <td><strong>3. 讨好口吻伪装 (Sycophancy Spoofing)</strong><br/>开头写满专家套话但内含隐蔽逻辑 Bug</td>
+            <td>误判率 <code>31.5% ✕</code><br/>(触发 RL 刷分坍塌的主因)</td>
+            <td>误判率 <code>0.0% 🏆</code><br/>(单元测试直接报错拦截)</td>
+            <td><strong style="color:#059669;">-31.5 pt 误判清零 🏆</strong><br/>守住 GRPO 强化学习底线</td>
+          </tr>
+          <tr>
+            <td><strong>4. 符号/代码等价变形 (Surface Variation)</strong><br/>输出 `1/2` vs `0.5` 或重命名局部变量</td>
+            <td>误判率 <code>6.5%</code><br/>(Tier 1 字面匹配误判 <code>51.5% ✕</code>)</td>
+            <td>误判率 <code>0.0% 🏆</code><br/>(SymPy 化简 + AST 等价)</td>
+            <td><strong style="color:#2563eb;">100% 识别等价解 ✅</strong><br/>零误杀正确推理路径</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🧪 为什么 GRPO 训练离不开 SymPy 与沙箱？</strong><br/>
+          DeepSeek-R1 等推理模型每次采样 8~64 条长达上万 Token 的思维链；只有确定性验证器才能给出零噪声的 `0/1` 组内相对优势（Group Relative Advantage），让模型自发涌现反思能力！
+        </div>
+        <div class="callout-box">
+          <strong>📏 200 条人类金标元评测集 (Meta-Eval) 的妙用</strong><br/>
+          把上述 4 类红队样本做成 200 条固定回归测试集，每次升级裁判模型先跑一遍 Meta-Eval，5 分钟即可验明裁判自身是否公正。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Combining deterministic RLVR sandboxes with bidirectional swap-and-vote rubric judges reduces adversarial judge error rates by &gt;40×.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; COST SCALING · BIAS RATES, COST PER 100K &amp; THROUGHPUT</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Calibrated vs Slate=Tier 1/2 Baseline</span>
+      </div>
+      <h2 class="headline">偏见率、成本与吞吐对比：10 万次评测成本从 $420 降至 $18.50，吞吐提速 19.4 倍</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 去偏与可验证架构，浅灰条（<code>#CBD5E1</code>）代表 Tier 1/2 传统与单次直评基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. A/B 位置对调翻转率与 RL 刷分坍塌率对比 (% ，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: RLVR 沙箱 + 去偏裁判 (翻转 0.4% / 坍塌 0%)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:1.4%;"></div></div>
+            <span class="bar-val">0.4% / 0.0% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 双向交换 + 原子量表 (翻转 2.1% / 坍塌 9.2%)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:7.4%;"></div></div>
+            <span class="bar-val">2.1% / 9.2% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 单次直评 API 裁判 (翻转 28.4% / 坍塌 31.5%)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">28.4% / 31.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 每 100,000 次评测总账单对比 (USD，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 自建 Prometheus-2 + Prefix Cache</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:4.4%;"></div></div>
+            <span class="bar-val">$18.50 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: RLVR 确定性沙箱 + PRM + 去偏裁判</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:5.2%;"></div></div>
+            <span class="bar-val">$22.00 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 商业旗舰 API 单次直评 (GPT-4o)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$420.00 ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 自动化评测系统并发吞吐 (Evaluations / sec，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: RLVR 沙箱并发 + Prefix-Cached 裁判</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">680 条/s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 自建 SGLang Prefix-Cached 裁判池</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:61.8%;"></div></div>
+            <span class="bar-val">420 条/s ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 外部商业 API 裁判 (受限于 TPM 配额)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:5.1%;"></div></div>
+            <span class="bar-val">35 条/s ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: At 680 evals/sec, Tier 4 completes a 100,000-sample pre-release regression suite in 2.45 minutes for $22, compared to 47.6 minutes and $420 on Tier 2.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：70% 理科结构化任务走 RLVR 沙箱，30% 开放任务走双向去偏量表裁判</h2>
+      <p class="subhead">用确定性执行沙箱守住客观真值，用双向位置交换与原子量表管住主观审美。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>代码、SQL、数学财务计算、工具调用与 GRPO 强化学习 → Tier 4 (RLVR 确定性沙箱 + PRM)</strong>：96.8% 人类一致率，0.0% 刷分坍塌。</li>
+            <li>• <strong>开放式公文总结、多轮对话语气、RAG 回答可读性评测 → Tier 3 (双向位置交换 + 5 档原子量表 + GLM 长度去偏)</strong>：位置翻转压至 2.1%，成本省 95.6%。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在 RLHF/GRPO 训练中用单次无保护大模型裁判 (Tier 2)</strong>：31.5% 概率在数百步内训出只会写礼貌套话和长表格的刷分模型。</li>
+            <li>• <strong>严禁对 Pairwise A/B 盲评只跑单向顺序</strong>：28.4% 的位置偏见会让版本上线门禁沦为随机抽签。</li>
+            <li>• <strong>严禁用 BLEU/ROUGE 评估数学推理或代码生成 (Tier 1)</strong>：误杀一切等价公式与重构代码。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 将代码/SQL/数学/JSON 任务全部接入隔离执行沙箱、<code>SymPy</code> 符号化简与 Pydantic 校验器（RLVR）。<br/>
+          2. <code>[ ]</code> 主观 Pairwise 评测强制执行 <code>(A,B)</code> 与 <code>(B,A)</code> 双向门控（矛盾即判 Tie），并开启 SGLang/vLLM Prefix Cache。<br/>
+          3. <code>[ ]</code> 为每个业务场景编写 1~5 分原子事实扣分量表（Atomic Rubric），送审前剥离讨好前缀并做 GLM 长度归一化。<br/>
+          4. <code>[ ]</code> 维护 200 条含红队注水攻击的人类专家金标集（Meta-Eval），要求裁判一致率 <code>&ge;85%</code> 且翻转率 <code>&lt;3%</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/llm_eval_judge_verifiable_reward_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
