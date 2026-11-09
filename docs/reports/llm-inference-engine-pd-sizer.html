@@ -2837,5 +2837,90 @@ function updateLowPrecisionTrainSizer() {
 }
 updateLowPrecisionTrainSizer();
 </script>
+
+  <!-- Round 32: Kubernetes Serverless GPU Autoscaling & Cold-Start Selection Sizer -->
+  <div id="serverless-coldstart-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0284c7;color:#f0f9ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 32 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚀 K8s Serverless GPU 自动弹性伸缩与秒级冷启动计算器（原生 HPA vs. KEDA+NVMe vs. cuda-checkpoint vs. ServerlessLLM P2P）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/k8s_serverless_gpu_autoscaling_coldstart/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/k8s-gpu-autoscaling-coldstart-serverless-selection-faq.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/k8s-gpu-autoscaling-coldstart-serverless-selection-faq.en.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./k8s-gpu-autoscaling-coldstart-serverless-selection-cards.html" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">平台托管 70B 大模型数量:</label>
+        <select id="scModelsSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateServerlessColdstartSizer()">
+          <option value="8">8 个模型 (中型部门推理池)</option>
+          <option value="24" selected>24 个模型 (集团级多垂类模型混部基线)</option>
+          <option value="64">64 个模型 (AI 云 SaaS 多租户平台)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">核心弹性诉求 (Scale-to-Zero vs. 常驻扩缩):</label>
+        <select id="scGoalSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateServerlessColdstartSizer()">
+          <option value="p2p" selected>极致 Scale-to-Zero (0 GB 闲置显存 + 1.8s RDMA P2P 秒级唤醒)</option>
+          <option value="ckpt">单机多模型快速切换 (CRIU + cuda-checkpoint 主机内存 4.6s 恢复)</option>
+          <option value="keda">主力常驻模型云原生改造 (KEDA 排队/KV 水位 + 本地 NVMe 图缓存)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Serverless GPU 弹性与冷启动档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">四阶段拆解 (镜像+初始化+权重+编译)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">总冷启动耗时</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">10× 洪峰超时率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">月度集群 GPU 总账单</th>
+          </tr>
+        </thead>
+        <tbody id="scSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="scDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0284c7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateServerlessColdstartSizer() {
+  const models = parseInt(document.getElementById('scModelsSelect').value, 10) || 24;
+  const goal = document.getElementById('scGoalSelect').value || 'p2p';
+  const mRatio = models / 24.0;
+  const bestId = goal === 'p2p' ? 't4' : (goal === 'ckpt' ? 't3' : 't2');
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 原生 HPA (GPU_UTIL) + 冷拉镜像', stages: '65.0s + 22.0s + 100.0s + 98.0s', tot: '285.0 s (1.0x ✕)', drop: '64.5% ✕', bill: `$${Math.round(288000*mRatio).toLocaleString()} / 月` },
+    { id: 't2', name: '🟨 Tier 2: KEDA (队列+KV) + NVMe 预缓存', stages: '1.5s + 14.0s + 19.5s + 7.0s', tot: '42.0 s (6.8x)', drop: '8.2%', bill: `$${Math.round(164000*mRatio).toLocaleString()} / 月 (-43.1%)` },
+    { id: 't3', name: '🟦 Tier 3: CRIU + cuda-checkpoint 快照恢复', stages: '0.2s + 0.6s + 3.4s + 0.4s', tot: '4.6 s (62.0x ✅)', drop: '0.4% ✅', bill: `$${Math.round(108000*mRatio).toLocaleString()} / 月 (-62.5%)` },
+    { id: 't4', name: '🟩 Tier 4: ServerlessLLM 块对齐 + RDMA P2P 直注', stages: '0.0s + 0.1s + 1.5s + 0.2s', tot: '1.8 s (158.3x 🏆)', drop: '0.0% 🏆', bill: `$${Math.round(91000*mRatio).toLocaleString()} / 月 (省 $${Math.round(197000*mRatio).toLocaleString()}/月 🏆)` }
+  ];
+
+  document.getElementById('scSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(2,132,199,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#7dd3fc':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.stages}</code></td>
+      <td style="padding:10px;"><code>${r.tot}</code></td>
+      <td style="padding:10px;"><code>${r.drop}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.bill}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('scDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${models} 个 70B 模型池 · 极致 Scale-to-Zero)</strong>：首选 <strong>Tier 4 (预热 0-VRAM 空壳 + ServerlessLLM 64MB 块对齐 DMA + 跨机 RDMA P2P 直注)</strong>，端到端唤醒仅 <code>1.8s (快 158.3x)</code>，10× 突发零丢包，每月净省算力费 <code>$${Math.round(197000*mRatio).toLocaleString()} (-68.4%)</code>！`
+    : (bestId === 't3'
+      ? `<strong>架构师选型建议 (${models} 个 70B 模型池 · 主机内存休眠切换)</strong>：首选 <strong>Tier 3 (CRIU + NVIDIA cuda-checkpoint)</strong>，将已初始化的 CUDA Graph 与权重卸载回主机 Pinned DRAM，<code>4.6s</code> 原位满血恢复，月省 <code>62.5%</code>！`
+      : `<strong>架构师选型建议 (${models} 个 70B 模型池 · 主力常驻弹性)</strong>：立即实施 <strong>Tier 2 (KEDA 排队深度/KV 水位触发器 + 宿主机挂载 VLLM_CACHE_ROOT)</strong>，淘汰失灵的 GPU_UTIL HPA，冷启动降至 <code>42.0s</code>，月省 <code>43.1%</code>！`);
+}
+updateServerlessColdstartSizer();
+</script>
 </body>
 </html>

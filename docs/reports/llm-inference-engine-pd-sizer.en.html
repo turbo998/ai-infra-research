@@ -2836,5 +2836,90 @@ function updateLowPrecisionTrainSizer() {
 }
 updateLowPrecisionTrainSizer();
 </script>
+
+  <!-- Round 32: Kubernetes Serverless GPU Autoscaling & Cold-Start Selection Sizer -->
+  <div id="serverless-coldstart-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0284c7;color:#f0f9ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 32 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚀 K8s Serverless GPU Autoscaling &amp; Sub-2s Cold-Start Sizer (Vanilla HPA vs. KEDA+NVMe vs. cuda-checkpoint vs. ServerlessLLM P2P)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/k8s_serverless_gpu_autoscaling_coldstart/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/k8s-gpu-autoscaling-coldstart-serverless-selection-faq.en.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/k8s-gpu-autoscaling-coldstart-serverless-selection-faq.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./k8s-gpu-autoscaling-coldstart-serverless-selection-cards.html" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Number of Hosted 70B Enterprise Models:</label>
+        <select id="scModelsSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateServerlessColdstartSizer()">
+          <option value="8">8 Models (Departmental Pool)</option>
+          <option value="24" selected>24 Models (Enterprise Multi-Model Baseline)</option>
+          <option value="64">64 Models (Multi-Tenant AI Cloud Platform)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Target Autoscaling &amp; Wakeup Mode:</label>
+        <select id="scGoalSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateServerlessColdstartSizer()">
+          <option value="p2p" selected>True Scale-to-Zero (0 GB Idle VRAM + 1.8s RDMA P2P Wakeup)</option>
+          <option value="ckpt">Host-RAM Snapshot Multiplexing (CRIU + cuda-checkpoint 4.6s Restore)</option>
+          <option value="keda">Drop-In K8s Upgrade (KEDA Queue/KV Trigger + Host NVMe Graph Cache)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Serverless GPU Cold-Start Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">4 Stages (Image+Init+Weight+Compile)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Total Cold Start</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">10x Burst Timeout</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Cluster GPU Bill</th>
+          </tr>
+        </thead>
+        <tbody id="scSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="scDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0284c7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateServerlessColdstartSizer() {
+  const models = parseInt(document.getElementById('scModelsSelect').value, 10) || 24;
+  const goal = document.getElementById('scGoalSelect').value || 'p2p';
+  const mRatio = models / 24.0;
+  const bestId = goal === 'p2p' ? 't4' : (goal === 'ckpt' ? 't3' : 't2');
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Vanilla HPA (GPU_UTIL) + Cold Pull', stages: '65.0s + 22.0s + 100.0s + 98.0s', tot: '285.0 s (1.0x ✕)', drop: '64.5% ✕', bill: `$${Math.round(288000*mRatio).toLocaleString()} / mo` },
+    { id: 't2', name: '🟨 Tier 2: KEDA (Queue+KV) + Host NVMe Cache', stages: '1.5s + 14.0s + 19.5s + 7.0s', tot: '42.0 s (6.8x)', drop: '8.2%', bill: `$${Math.round(164000*mRatio).toLocaleString()} / mo (-43.1%)` },
+    { id: 't3', name: '🟦 Tier 3: CRIU + cuda-checkpoint Snapshot', stages: '0.2s + 0.6s + 3.4s + 0.4s', tot: '4.6 s (62.0x ✅)', drop: '0.4% ✅', bill: `$${Math.round(108000*mRatio).toLocaleString()} / mo (-62.5%)` },
+    { id: 't4', name: '🟩 Tier 4: ServerlessLLM DMA + RDMA P2P Stream', stages: '0.0s + 0.1s + 1.5s + 0.2s', tot: '1.8 s (158.3x 🏆)', drop: '0.0% 🏆', bill: `$${Math.round(91000*mRatio).toLocaleString()} / mo (Saves $${Math.round(197000*mRatio).toLocaleString()}/mo 🏆)` }
+  ];
+
+  document.getElementById('scSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(2,132,199,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#7dd3fc':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.stages}</code></td>
+      <td style="padding:10px;"><code>${r.tot}</code></td>
+      <td style="padding:10px;"><code>${r.drop}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.bill}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('scDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>Architect Recommendation (${models}×70B Models · True Scale-to-Zero)</strong>: Standardize on <strong>Tier 4 (Pre-Warmed 0-VRAM Stub + ServerlessLLM 64MB Aligned DMA + RDMA P2P Weight Streaming)</strong> for <code>1.8s (158.3x faster)</code> wakeup, <code>0.0%</code> burst timeout, and <code>$${Math.round(197000*mRatio).toLocaleString()}/mo (-68.4%)</code> GPU savings!`
+    : (bestId === 't3'
+      ? `<strong>Architect Recommendation (${models}×70B Models · Host-RAM Snapshot Multiplexing)</strong>: Deploy <strong>Tier 3 (CRIU + NVIDIA cuda-checkpoint)</strong> to evict idle VRAM to host pinned DRAM and restore full CUDA Graph contexts in <code>4.6s</code>, saving <code>62.5%</code> monthly!`
+      : `<strong>Architect Recommendation (${models}×70B Models · Drop-In K8s Upgrade)</strong>: Deploy <strong>Tier 2 (KEDA Queue/KV Trigger + Host NVMe VLLM_CACHE_ROOT)</strong> to replace broken GPU_UTIL HPA, cut startup to <code>42.0s</code>, and save <code>43.1%</code>!`);
+}
+updateServerlessColdstartSizer();
+</script>
 </body>
 </html>
