@@ -2756,5 +2756,86 @@ function updateEnterpriseRagSizer() {
 }
 updateEnterpriseRagSizer();
 </script>
+
+  <!-- Round 31: Low-Precision Pretraining (FP8 / NVFP4 vs BF16) Selection Sizer -->
+  <div id="low-precision-train-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#f59e0b;color:#451a03;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 31 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧮 大模型低精度预训练 (FP8 / NVFP4 vs. BF16) 数值稳定性与算力成本计算器</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/low_precision_fp8_fp4_pretraining_stability/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/fp8-fp4-low-precision-pretraining-stability-selection-faq.md" style="color:#fde68a;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/fp8-fp4-low-precision-pretraining-stability-selection-faq.en.md" style="color:#fde68a;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./fp8-fp4-low-precision-pretraining-stability-selection-cards.html" style="color:#fde68a;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群 GPU 硬件代际:</label>
+        <select id="lpArchSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLowPrecisionTrainSizer()">
+          <option value="hopper" selected>NVIDIA Hopper (H100 / H200 / H800 SXM)</option>
+          <option value="blackwell">NVIDIA Blackwell (B200 / GB200 NVL72)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">预训练 / 持续预训练词元规模 (Trillion Tokens):</label>
+        <select id="lpTokensSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLowPrecisionTrainSizer()">
+          <option value="1">1 万亿 (1T) Tokens (行业垂类 CPT 微调)</option>
+          <option value="10" selected>10 万亿 (10T) Tokens (671B MoE 基座预训练)</option>
+          <option value="15">15 万亿 (15T) Tokens (旗舰全量预训练)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">低精度预训练数值架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单卡吞吐 (加速比)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">验证集 Loss 误差 / 回滚次数</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">1000x 离群值 SQNR / 激活显存</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">总训练算力账单 ($2.50/GPU-hr)</th>
+          </tr>
+        </thead>
+        <tbody id="lpSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="lpDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateLowPrecisionTrainSizer() {
+  const arch = document.getElementById('lpArchSelect').value || 'hopper';
+  const tMult = parseFloat(document.getElementById('lpTokensSelect').value) / 10.0;
+  const bestId = arch === 'blackwell' ? 't4' : 't3';
+
+  const rows = [
+    { id: 't1', name: '⬜ Tier 1: 标准 BF16 混合精度 (FP32 累加基线)', tps: '2,950 tok/s (1.00x)', loss: '0.00% · 0 回滚', mem: '基准无损 · 54.0 GB/卡', cost: `$${Math.round(4590000*tMult).toLocaleString()}` },
+    { id: 't2', name: '🟥 Tier 2: 粗粒度 Per-Tensor 延迟缩放 FP8', tps: '3,980 tok/s (1.35x)', loss: '+1.85% 掉点 · 11次回滚/1T ✕', mem: '-1.4 dB (崩溃 ✕) · 34.5 GB', cost: `$${Math.round(3820000*tMult).toLocaleString()} (含重训浪费 ✕)` },
+    { id: 't3', name: '🟦 Tier 3: DeepSeek-V3 分块 FP8 (1×128 + FP32 提升)', tps: '4,366 tok/s (1.48x 🏆)', loss: '0.07% 无损 · 0 回滚 🏆', mem: '35.9 dB 🏆 · 28.2 GB (-47.8%)', cost: `$${Math.round(3100000*tMult).toLocaleString()} (省 $${Math.round(1490000*tMult).toLocaleString()} 🏆)` },
+    { id: 't4', name: '🟩 Tier 4: Blackwell 原生 MXFP8 / 混合 NVFP4', tps: '6,342 tok/s (2.15x 🏆)', loss: '0.14% 无损 · 0 回滚 🏆', mem: '硬件微缩放 🏆 · 19.5 GB (-63.9%)', cost: `$${Math.round(2135000*tMult).toLocaleString()} (省 $${Math.round(2455000*tMult).toLocaleString()} 🏆)` }
+  ];
+
+  document.getElementById('lpSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(245,158,11,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#fde68a':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.tps}</code></td>
+      <td style="padding:10px;"><code>${r.loss}</code></td>
+      <td style="padding:10px;"><code>${r.mem}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('lpDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>架构师选型建议 (Hopper H100/H200 · ${tMult*10}T Tokens)</strong>：必选 <strong>Tier 3 (DeepSeek-V3 1×128 激活切片 + 128×128 权重块 + 每 128 步 CUDA 核 FP32 累加提升)</strong>，根治 SwiGLU 离群值下溢与 WGMMA 13位尾数漂移，吞吐提升 <code>1.48x</code>，算力费净省 <code>$${Math.round(1490000*tMult).toLocaleString()}</code>！`
+    : `<strong>架构师选型建议 (Blackwell B200/GB200 · ${tMult*10}T Tokens)</strong>：首选 <strong>Tier 4 (第五代 Tensor Core 原生 MXFP8 / 混合 NVFP4 + 随机哈达玛旋转 + 硬件随机舍入)</strong>，吞吐提升 <code>2.15x</code>，算力费净省 <code>$${Math.round(2455000*tMult).toLocaleString()}</code>！`;
+}
+updateLowPrecisionTrainSizer();
+</script>
 </body>
 </html>

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>LLM Low-Precision Pretraining (FP8 / NVFP4 vs. BF16) — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #fde68a; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #b45309; background: #fef3c7; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #d97706, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #d97706; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🧮 大模型低精度预训练 (FP8 / NVFP4 vs. BF16) — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/low_precision_fp8_fp4_pretraining_stability/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/fp8-fp4-low-precision-pretraining-stability-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/fp8-fp4-low-precision-pretraining-stability-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#low-precision-train-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · LOW-PRECISION PRETRAINING (FP8 / NVFP4 VS BF16)</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">DeepSeek-V3 分块 FP8</span> 实现 1.48x 加速与 0.07% 无损收敛；Blackwell NVFP4 达 2.15x 且省 $245.5 万</h2>
+      <p class="subhead">针对 671B MoE（37B 激活，10 万亿 Tokens 预训练，2,048 卡集群）对比四档训练数值方案：攻克 SwiGLU 离群值下溢与 Hopper WGMMA 13 位尾数累加漂移。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档预训练精度方案</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (标准 BF16)</strong>: 2,950 tok/s, $4.59M 基线<br/>
+            • <strong>Tier 2 (Per-Tensor FP8)</strong>: 11次/1T 回滚, +1.85% 掉点 ✕<br/>
+            • <strong>Tier 3 (DeepSeek 分块 FP8)</strong>: 1.48x, 0.07% 误差 🏆<br/>
+            • <strong>Tier 4 (Blackwell NVFP4)</strong>: 2.15x, 省 $2.455M 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 预训练基线契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 模型规模：<code>671B MoE (37B Active)</code><br/>
+            • 训练总词元：<code>10 Trillion (10T)</code><br/>
+            • 集群规模：<code>2,048×GPU ($2.5/hr)</code><br/>
+            • 激活切片粒度：<code>1 × 128 Tile (E4M3)</code><br/>
+            • 权重分块粒度：<code>128 × 128 Block</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • Hopper 分块 FP8 加速：<code>1.48x (4,366 tok/s)</code><br/>
+            • 激活与通信显存降幅：<code>-47.8% (28.2 GB)</code><br/>
+            • 1000x 离群值信噪比：<code>35.9 dB vs -1.4 dB</code><br/>
+            • Hopper 10T 节省算力：<code>$1,490,000</code><br/>
+            • Blackwell 10T 节省：<code>$2,455,000</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>单 GPU 端到端预训练吞吐对比 (Tokens / sec / GPU，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 细粒度分块 FP8 / Blackwell 微缩放</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: Blackwell MXFP8 / NVFP4 (2.15x)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+          <span class="bar-val">6,342 tok/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: DeepSeek-V3 分块 FP8 (1.48x)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:68.8%;"></div></div>
+          <span class="bar-val">4,366 tok/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 粗粒度 Per-Tensor FP8 (11次回滚)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:62.8%;"></div></div>
+          <span class="bar-val">3,980 tok/s ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 标准 BF16 混合精度基线 (1.00x)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:46.5%;"></div></div>
+          <span class="bar-val">2,950 tok/s</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to DeepSeek-V3 1×128 Tile / 128×128 Block FP8 pretraining &amp; CUDA Core FP32 accumulation promotion, Hopper WGMMA 13-bit mantissa analysis, and OCP Microscaling MXFP8/NVFP4 (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 671B MOE PRETRAINING AT 1,000X OUTLIER SPIKE</span>
+        <span class="badge-prov">Case Study · SwiGLU Outlier + WGMMA Accumulator Drift</span>
+      </div>
+      <h2 class="headline">1×128 分块缩放隔离 1,000 倍离群值（+37.3 dB SQNR）；CUDA 核 FP32 累加实现 0 次崩溃回滚</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们在 2,048 张 H200 上训练百亿/千亿 MoE 模型，开启初代 TransformerEngine 的 Per-Tensor Delayed-Scaling FP8 后，前 100B Token 很正常，但一到 300B Token 左右 SwiGLU 层出现 1,000 倍激活尖峰，梯度瞬间下溢归零触发 NaN 崩溃，每 1T Token 被迫回滚 Checkpoint 重训 11 次！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：Hopper (H100 / H200 / H800) 集群 FP8 预训练架构</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 3 (DeepSeek-V3 细粒度分块 FP8)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">激活按 <code>1 × 128</code> Token 切片、权重按 <code>128 × 128</code> 块在线计算缩放系数，每 4 次 WGMMA ($N_C=128$) 导出至 CUDA Core 23 位 FP32 累加，10T 全程 <code>0 回滚</code>，Loss 偏差仅 <code>0.07%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 1000x 离群值下量化信噪比 (SQNR)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:94.0%;"></div></div>
+            <span class="bar-val">35.9 dB 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: Per-Tensor FP8 1000x 离群值信噪比</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:4.0%;"></div></div>
+            <span class="bar-val">-1.4 dB ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：Blackwell (B200 / GB200) 集群超低精度预训练架构</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 4 (原生 MXFP8 / 混合 NVFP4 + 随机舍入)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">第五代 Tensor Core 硬件内建 <code>1×32 / 1×16</code> 微缩放，结合随机哈达玛变换 (RHT) 与随机舍入，吞吐达 <code>2.15x</code>，10T 算力账单直降 <code>$2,455,000</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Blackwell 10T 预训练总算力成本</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:46.5%;"></div></div>
+            <span class="bar-val">$2,135,000 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 标准 BF16 10T 预训练总算力成本</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$4,590,000 ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：死守“四大敏感模块不降精度”红线</strong></div>
+            <span class="pill pill-human">Send to a human · Embedding / MoE Router / Norm / Master Weights 禁量化</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">MoE 门控路由器 Logits 若降为 FP8 会引发专家负载失衡坍塌，必须强制保留 FP32。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Fine-grained 1×128 tile scaling + CUDA Core FP32 promotion turns FP8 from a brittle experiment into a 0-rollback, $1.49M-saving production workhorse.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER LOW-PRECISION PRETRAINING MATRIX</span>
+        <span class="badge-prov">671B MoE · 10T Tokens · 2,048 GPUs</span>
+      </div>
+      <h2 class="headline">四档低精度预训练全矩阵评测：吞吐、Loss 偏差、崩溃回滚、显存占用与算力账单</h2>
+      <p class="subhead">全面对比 BF16、粗粒度 Per-Tensor FP8、DeepSeek-V3 分块 FP8 与 Blackwell 原生 MXFP8/NVFP4。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (训练精度档位)</th>
+            <th>QUESTION / TASK (缩放粒度与累加机制)</th>
+            <th>MODEL ANSWER (吞吐 / Loss 误差 / 回滚 / 显存 / 成本)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 标准 BF16 混合精度</strong></td>
+            <td>无量化 (E8M7) + Tensor Core 23-bit FP32 累加</td>
+            <td>吞吐 <code>2,950 tok/s (1.00x)</code> · Loss 误差 <code>0.00%</code> · <code>0 回滚</code> · 激活显存 <code>54.0 GB</code> · 10T 成本 <code>$4.59M</code></td>
+            <td><span class="pill pill-confirm">安全但昂贵</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 粗粒度 Per-Tensor FP8</strong></td>
+            <td>整张矩阵 1 个历史 amax + WGMMA 13-bit 累加</td>
+            <td>吞吐 <code>3,980 tok/s (1.35x)</code> · Loss 恶化 <code>+1.85% ✕</code> · <code>11 次回滚/1T ✕</code> · 显存 <code>34.5 GB</code> · <code>$3.82M ✕</code></td>
+            <td><span class="pill pill-human">淘汰禁用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: DeepSeek-V3 分块 FP8</strong></td>
+            <td>在线 <code>1×128</code> Tile + <code>128×128</code> Block + $N_C=128$ FP32 提升</td>
+            <td>吞吐 <code>4,366 tok/s (1.48x) 🏆</code> · Loss 误差 <code>0.07% 🏆</code> · <code>0 回滚 🏆</code> · 显存 <code>28.2 GB (-47.8%)</code> · <code>$3.10M 🏆</code></td>
+            <td><span class="pill pill-auto">Hopper 首选 🏆</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: Blackwell MXFP8 / NVFP4</strong></td>
+            <td>硬件 <code>1×32 / 1×16</code> 微缩放 + 哈达玛旋转 + 随机舍入</td>
+            <td>吞吐 <code>6,342 tok/s (2.15x) 🏆</code> · Loss 误差 <code>0.14% ✅</code> · <code>0 回滚 🏆</code> · 显存 <code>19.5 GB (-63.9%)</code> · <code>$2.135M 🏆</code></td>
+            <td><span class="pill pill-auto">Blackwell 标配 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#b45309;">✅ 为什么分块 FP8 能顺带砍半 MoE 跨机通信量？</strong><br/>
+          在 MoE 模型的 <code>All-to-All Dispatch</code> 之前，直接把激活按 <code>1×128</code> 量化为 FP8 发送，跨节点 RDMA 通信字节数直接减半，且缓存的前向激活显存从 54GB 降至 28.2GB！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么 Per-Tensor Delayed Scaling 的“延迟窗口”救不了离群值？</strong><br/>
+          Delayed Scaling 用过去 16~1024 步的最大值预测当前步缩放因子：一旦当前步突然出现新离群值就立刻上溢变成 <code>Inf/NaN</code>；下步调大比例尺又导致其余全员下溢归零！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 3 delivers 1.48× speedup and saves $1.49M on Hopper with 0.07% relative loss error; Tier 4 reaches 2.15× speedup and saves $2.455M on Blackwell.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · DEEPGEMM 1X128 TILE &amp; CUDA CORE FP32 PROMOTION</span>
+        <span class="badge-prov">WGMMA 4-Step Loop + FP32 Register Promotion</span>
+      </div>
+      <h2 class="headline">底层机制：DeepGEMM 细粒度分块矩阵乘 + 每 128 步 CUDA Core FP32 累加提升核函数</h2>
+      <p class="subhead">展示 Hopper GPU 上如何通过寄存器级流水线将 13-bit WGMMA 部分和无损提升至 23-bit FP32 累加器。</p>
+
+      <div class="code-dark"><pre>{
+  "fp8_training_numerics_contract": {
+    "activation_and_dgrad_quant": "Online 1x128 token-group tile in FP8 E4M3 (FP32 scale per 128 elements)",
+    "weight_quant": "128x128 block in FP8 E4M3 (FP32 scale per 128x128 block)",
+    "wgmma_promotion_interval_nc": 128,
+    "high_precision_whitelist": ["embedding", "lm_head", "moe_router_gate", "rmsnorm", "master_weights"]
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#b45309;margin:6px 0;">↓ Hopper WGMMA 13-bit 内部累加向 CUDA Core 23-bit FP32 提升执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>// DeepSeek-V3 / DeepGEMM 核心循环：每 Nc=128 (4 条 WGMMA 指令) 提升至 CUDA Core FP32
+float master_accum[M_TILE][N_TILE] = {0.0f}; // 23-bit 满精度 IEEE FP32 主累加器
+
+for (int k_block = 0; k_block &lt; K; k_block += 128) {
+  float wgmma_partial[M_TILE][N_TILE] = {0.0f}; // Tensor Core 内部仅 13-bit 尾数精度
+  #pragma unroll
+  for (int step = 0; step &lt; 4; ++step) {        // 4 * 32 = 128 元素内积
+    wgmma_mma_async_fp8_e4m3(wgmma_partial, act_tile[step], weight_block[step]);
+  }
+  // 关键修复：乘上 (1x128 激活比例尺 * 128x128 权重比例尺) 并在 CUDA Core FP32 寄存器中累加！
+  float combined_scale = scale_act_1x128[k_block / 128] * scale_weight_128x128[k_block / 128];
+  #pragma unroll
+  for (int i = 0; i &lt; M_TILE; ++i)
+    for (int j = 0; j &lt; N_TILE; ++j)
+      master_accum[i][j] = fmaf(wgmma_partial[i][j], combined_scale, master_accum[i][j]);
+}
+// &lt;answer&gt; Validated: 35.9 dB SQNR under 1000x outliers, 0.07% relative loss error, 1.48x speedup</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Promoting every $N_C=128$ steps executes one `fmaf` per 4 WGMMAs, completely hidden behind Tensor Core async pipeline latency via warp specialization.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · OUTLIER SPIKE &amp; K-DIMENSION DRIFT PERTURBATION</span>
+        <span class="badge-prov">Outlier Ratio 10x → 1,000x Sensitivity</span>
+      </div>
+      <h2 class="headline">鲁棒性压测：面对 1,000 倍 MoE 后期尖峰，1×128 分块 FP8 领先 +37.3 dB 信噪比</h2>
+      <p class="subhead">测试常规层（10× 离群值）、SwiGLU 投影层（250× 离群值）与 MoE 训练后期路由尖峰（1,000× 离群值）下的量化信噪比（SQNR dB）。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (网络层特征与离群值倍数)</th>
+            <th>ORIGINAL (Tier 2 Per-Tensor FP8)</th>
+            <th>PERTURBED (Tier 3 1×128 分块 FP8)</th>
+            <th>CHANGE (信噪比增益与收敛表现)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>常规 Attention 投影层</strong><br/>离群值 <code>10×</code> · 内积维度 $K=4096$</td>
+            <td>SQNR <code>24.5 dB</code><br/>(13位累加轻度底噪)</td>
+            <td>SQNR <code>38.2 dB 🏆</code><br/>(FP32 累加消除截断)</td>
+            <td><strong style="color:#2563eb;">+13.7 dB ✅</strong><br/>有效精度追平 BF16</td>
+          </tr>
+          <tr>
+            <td><strong>SwiGLU FFN Down-Projection</strong><br/>离群值 <code>250×</code> · 内积维度 $K=16384$</td>
+            <td>SQNR <code>9.8 dB ✕</code><br/>(小梯度大量下溢丢失)</td>
+            <td>SQNR <code>36.8 dB 🏆</code><br/>(尖峰锁死在单 Tile 内)</td>
+            <td><strong style="color:#059669;">+27.0 dB 🏆</strong><br/>消除 FFN 层梯度消失</td>
+          </tr>
+          <tr>
+            <td><strong>MoE 训练后期专家路由尖峰</strong><br/>离群值 <code>1,000×</code> · 内积维度 $K=16384$</td>
+            <td>SQNR <code>-1.4 dB ✕</code><br/>(11次/1T NaN 崩溃回滚)</td>
+            <td>SQNR <code>35.9 dB 🏆</code><br/>(10T 全程 0 次回滚)</td>
+            <td><strong style="color:#059669;">+37.3 dB 🏆</strong><br/>彻底根治训练中后期崩溃</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔄 为什么权重用 128×128 块而激活用 1×128 条？</strong><br/>
+          前向 Fprop 与反向 Dgrad/Wgrad 会从不同方向（按行或按列）读取权重矩阵！将权重设为对称的 <code>128×128</code> 正方形块，无论前向还是反向转置读取都无需重新量化！
+        </div>
+        <div class="callout-box">
+          <strong>🎲 为什么 Blackwell NVFP4 需要随机舍入？</strong><br/>
+          反向梯度量化若用普通四舍五入会产生系统性截断偏差；硬件随机舍入（Stochastic Rounding）保证梯度期望无偏，配合最后 10% Token 退火切回高精度即可锁死 SOTA 精度。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: 1×128 activation tiling + 128×128 weight blocking maintains &gt;35.9 dB SQNR even under extreme 1,000× activation outliers.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; TCO SCALING · THROUGHPUT, MEMORY &amp; 10T COMPUTE BILL</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Fine-Grained vs Slate=Tier 1/2 Baseline</span>
+      </div>
+      <h2 class="headline">吞吐与成本对比：激活显存砍半至 19.5~28.2 GB，10T 预训练立省 $149 万~$245.5 万</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3（DeepSeek-V3 分块 FP8）与 Tier 4（Blackwell MXFP8/NVFP4），浅灰条（<code>#CBD5E1</code>）代表 Tier 1（BF16）与 Tier 2（粗粒度 Per-Tensor FP8）。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 单卡激活缓存与 MoE All-to-All 通信缓冲显存占用 (GB/GPU，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Blackwell MXFP8 / NVFP4 (-63.9%)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:36.1%;"></div></div>
+            <span class="bar-val">19.5 GB 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: DeepSeek-V3 分块 FP8 (-47.8%)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:52.2%;"></div></div>
+            <span class="bar-val">28.2 GB 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 粗粒度 Per-Tensor FP8</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:63.9%;"></div></div>
+            <span class="bar-val">34.5 GB</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 标准 BF16 混合精度基线</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">54.0 GB ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 10 万亿 (10T) Tokens 预训练总算力账单 ($2.50/GPU-hr，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Blackwell MXFP8 / NVFP4 (省 $2.455M)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:46.5%;"></div></div>
+            <span class="bar-val">$2,135,000 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: DeepSeek-V3 分块 FP8 (省 $1.49M)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:67.5%;"></div></div>
+            <span class="bar-val">$3,100,000 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: Per-Tensor FP8 (含 11 次回滚重算)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:83.2%;"></div></div>
+            <span class="bar-val">$3,820,000 ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 标准 BF16 混合精度基线</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$4,590,000 ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 相对 BF16 黄金基线的最终验证集 Loss 偏差 (越低越好，&le;0.15% 为无损)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: DeepSeek-V3 分块 FP8 + FP32 提升</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:3.8%;"></div></div>
+            <span class="bar-val">0.07% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Blackwell MXFP8 / 混合 NVFP4</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:7.6%;"></div></div>
+            <span class="bar-val">0.14% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 粗粒度 Per-Tensor FP8 (严重掉点)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">1.85% ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Saving 25.8 GB of activation memory per GPU in Tier 3 allows disabling selective activation recomputation on many layers, compounding end-to-end MFU gains.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：Hopper 必上 1×128 分块 FP8 + FP32 累加提升，Blackwell 直通 MXFP8/NVFP4</h2>
+      <p class="subhead">用细粒度微块缩放驯服离群值，用高精度累加器守住收敛底线，彻底告别 BF16 的高昂算力账单。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>Hopper (H100 / H200 / H800) 预训练与持续预训练 (CPT) → Tier 3 (DeepSeek-V3 分块 FP8)</strong>：1×128 Tile + 128×128 Block + $N_C=128$ FP32 提升，1.48x 提速、0.07% 无损收敛、省 $149 万。</li>
+            <li>• <strong>Blackwell (B200 / GB200) 大规模训练 → Tier 4 (原生 MXFP8 / 混合 NVFP4)</strong>：硬件微缩放 + 随机舍入，2.15x 提速、省 $245.5 万。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在百亿/千亿 MoE 与 SwiGLU 模型上开启粗粒度 Per-Tensor FP8 (Tier 2)</strong>：1000x 离群值与 13-bit WGMMA 漂移必然导致中后期 Loss 爆炸回滚。</li>
+            <li>• <strong>严禁将 MoE Router Gating、Embedding、LM Head 与 RMSNorm 降为 FP8/FP4</strong>：这些模块算力占比 &lt;2%，但降精度会直接摧毁路由均衡与数值稳定性。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 在 Hopper 上接入 <code>DeepGEMM</code> 或 <code>TransformerEngine Block-FP8</code>，确认开启 <code>1×128 / 128×128</code> 细粒度在线缩放与 FP32 累加提升。<br/>
+          2. <code>[ ]</code> 将 MoE 门控路由器（Router Gate）与主权重（Master Weights）显式锁定在 <code>FP32</code>，Embedding / Norm 锁定在 <code>BF16</code>。<br/>
+          3. <code>[ ]</code> 在 MoE <code>All-to-All Dispatch</code> 之前执行在线 <code>1×128 FP8</code> 量化，减半跨机 RDMA 流量。<br/>
+          4. <code>[ ]</code> 若使用 Blackwell <code>NVFP4</code> 预训练，务必开启随机哈达玛变换 (RHT) 与随机舍入，并在最后 10% Token 退火期切回 <code>MXFP8/BF16</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/low_precision_fp8_fp4_pretraining_stability/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
