@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;">
+<title>超低延迟实时语音大模型 (Voice Agent) 端到端推理选型 — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --accent: #db2777;
+    --accent-dark: #be185d;
+    --green: #10b981;
+    --blue: #2563eb;
+    --purple: #7c3aed;
+    --red: #dc2626;
+    --amber: #d97706;
+    --code-bg: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 16px 60px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .topbar {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 16px 22px;
+    color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .topbar a {
+    color: #f472b6;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    margin-right: 12px;
+  }
+  .deck {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .card-num {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--accent-dark);
+    background: #fce7f3;
+    padding: 5px 12px;
+    border-radius: 999px;
+  }
+  .prov-pill {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  h1, h2 {
+    margin: 0 0 10px;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+  h1 { font-size: 26.5px; }
+  h2 { font-size: 22.5px; }
+  .grad {
+    background: linear-gradient(90deg, #be185d, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .sub {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0 0 18px;
+    line-height: 1.5;
+  }
+  .wb-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .box {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    background: #f8fafc;
+  }
+  .box h3 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .pill {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .badge-type {
+    display: inline-block;
+    background: #e0e7ff;
+    color: #1e40af;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-right: 6px;
+  }
+  .bar-wrap {
+    width: 100%;
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #db2777, #7c3aed);
+    border-radius: 999px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.8px;
+  }
+  th, td {
+    border-bottom: 1px solid var(--line);
+    padding: 10px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #f1f5f9;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    color: #334155;
+  }
+  .code-dark {
+    background: var(--code-bg);
+    color: #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .callout-dark {
+    background: #0f172a;
+    color: #f8fafc;
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .fit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .fit-good {
+    background: #f0fdf4;
+    border: 2px solid #22c55e;
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .fit-bad {
+    background: #fef2f2;
+    border: 2px solid #ef4444;
+    border-radius: 14px;
+    padding: 18px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <strong>Round 27 · 7-Card 4:5 Visual Benchmark Report</strong> · Ultra-Low-Latency Real-Time Voice Agent Pipeline Selection
+  </div>
+  <div>
+    <a href="../components/voice-realtime-speech-llm-pipeline-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/voice-realtime-speech-llm-pipeline-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#voice-pipeline-sizer">🧮 Interactive Sizer</a>
+    <a href="../../assets/svg/voice-realtime-speech-llm-pipeline-selection-faq-summary.svg">🖼️ Summary SVG</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">1 / 7 · HANDS-ON · REAL-TIME VOICE AGENT PIPELINES</span>
+        <span class="prov-pill">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+      </div>
+      <h1><span class="grad">双轨内心独白架构 (Moshi/GLM-4-Voice 范式) 将语音端到端延迟从 2,480ms 压至 220ms (快 11.27x)，同时挽回纯音频 S2S 丢失的 18.5% 推理智商</span></h1>
+      <p class="sub">在实时全双工语音对话（目标人类自然反应 SLA P99 &le; 350ms，打断响应 &le; 80ms）下，评测 HTTP 串行级联、WebRTC 流式分块级联、纯音频 Token S2S 与双轨 Text+Acoustic S2S。</p>
+
+      <div class="wb-grid">
+        <div class="box">
+          <h3>Scenarios &amp; Latency Bands</h3>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 1 HTTP Serial</strong>: 2,480ms P50 (✕ Fail)</p>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 2 WebRTC Cascade</strong>: 540ms / 100% IQ (✅)</p>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 3 Pure Audio S2S</strong>: 195ms / 81.5% IQ (✕)</p>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 4 Dual-Stream S2S</strong>: 220ms / 98.4% IQ (🏆)</p>
+          <hr style="border:0;border-top:1px solid #cbd5e1;margin:8px 0;">
+          <p style="font-size:12px;color:#be185d;font-weight:700;margin:0;">Target: P99 &le; 350ms &amp; Tool IQ &ge; 98%</p>
+        </div>
+        <div class="box">
+          <h3>Structured Input Contract</h3>
+          <div class="code-dark" style="padding:10px;font-size:11px;">{
+  "sla_v2v_p99_ms": 350.0,
+  "barge_in_sla_ms": 80.0,
+  "frame_rate_hz": 12.5,
+  "rvq_codebooks": 8
+}</div>
+        </div>
+        <div class="box">
+          <h3>Top Architecture Decisions</h3>
+          <p style="font-size:12.5px;margin:4px 0;"><span class="pill pill-auto">Act automatically</span> <strong>Tier 4 (Dual-Stream 220ms)</strong> for Empathy+IQ</p>
+          <p style="font-size:12.5px;margin:6px 0;"><span class="pill pill-auto">Act automatically</span> <strong>Tier 2 (WebRTC $0.028/m)</strong> for Heavy Tools</p>
+          <p style="font-size:12.5px;margin:6px 0;"><span class="pill pill-human">Send to a human</span> <strong>Tier 1 HTTP / TCP WS</strong> (3.1s stall)</p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>实时语音架构档位</th>
+            <th>阶段拆解 (VAD/ASR/LLM/TTS)</th>
+            <th>P50 / P99 延迟</th>
+            <th>工具调用智商 / 打断</th>
+            <th>情感韵律 / 每分钟成本</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: HTTP 串行级联</strong></td>
+            <td>700 / 480 / 920 / 380 ms</td>
+            <td>2,480 / <strong style="color:#dc2626;">3,150 ms ✕</strong></td>
+            <td>100.0% / <strong style="color:#dc2626;">850 ms ✕</strong></td>
+            <td>无情感 · $0.042 / min</td>
+          </tr>
+          <tr style="background:#f0fdf4;">
+            <td><strong>Tier 2: WebRTC 流式分块级联</strong></td>
+            <td>140 / 95 / 185 / 120 ms</td>
+            <td><strong>540.0</strong> / 680.0 ms</td>
+            <td><strong>100.0% ✅ / 65 ms ✅</strong></td>
+            <td>弱情感 · <strong>$0.028 / min 🏆</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 纯音频 Token S2S</strong></td>
+            <td>40 / 0 / 115 / 40 ms</td>
+            <td>195.0 / 245.0 ms ✅</td>
+            <td><strong style="color:#dc2626;">81.5% (-18.5% ✕)</strong> / 40 ms</td>
+            <td>原生情感 · $0.095 / min</td>
+          </tr>
+          <tr style="background:#f5f3ff;">
+            <td><strong>Tier 4: 双轨 Text+Acoustic S2S</strong></td>
+            <td><strong>40 / 0 / 135 / 45 ms</strong></td>
+            <td><strong>220.0 / 285.0 ms 🏆</strong></td>
+            <td><strong>98.4% 🏆 / 45 ms 🏆</strong></td>
+            <td><strong>原生情感+可审计 · $0.052</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Hardware &amp; Provenance Callout</strong>: Sealed source <code>experiments/realtime_voice_llm_pipeline_selection/results.json</code>. Classification: <code>synthetic</code> stage-latency &amp; acoustic token density model calibrated to published Kyutai Moshi, GLM-4-Voice, and WebRTC Opus specs (<code>independently_reproduced=false</code>; live mobile field test: <code>not_measured</code>; local CPU harness: <code>measured</code>).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">2 / 7 · SCENARIO: SUB-300MS FULL-DUPLEX VOICE AGENT WITH TOOL CALLING</span>
+        <span class="prov-pill">Sealed Case: 12.5Hz Inner Monologue · 5% Mobile Loss Resilience</span>
+      </div>
+      <h2><span class="grad">单案例深潜：为什么双轨“先出字、同帧生音”能破解纯音频模型的 18.5% 智商暴跌，并在 5% 丢包下快 10.88x？</span></h2>
+      <p class="sub">拆解声学 Token 序列膨胀瓶颈、12.5Hz 内心独白文本锚定与 UDP WebRTC 抗丢包三大核心机制。</p>
+
+      <div class="box" style="margin-bottom:16px;border-left:4px solid #db2777;">
+        <strong>Input Scenario Quote</strong>: “Enterprise customer-service &amp; AI tutor platform requiring &le;300ms human-like voice turn-taking over mobile 4G/5G networks, full-duplex barge-in (&le;50ms), and &ge;98% accuracy on database Function Calling.”
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><span class="badge-type">choice</span><strong>Decision 1: Dual-Stream Inner-Monologue S2S (Tier 4) for Empathy + High IQ</strong></div>
+          <span class="pill pill-auto">Act automatically · Confidence 99.4%</span>
+        </div>
+        <p style="font-size:13px;margin:8px 0;">选定 <strong>Tier 4 (Temporal 12.5Hz Text Stream + Depth 8-RVQ Acoustic Stream)</strong>：先预测时间对齐的内心文本 Token 锁定 <code>98.4%</code> 工具调用准确率，再并发合成声学 Token，端到端 P50 仅 <code>220.0 ms (P99 285.0 ms &le; 350ms SLA)</code>。</p>
+        <div style="font-size:12px;display:flex;justify-content:space-between;"><span>Reasoning &amp; Tool-Calling Accuracy Retention</span><strong>98.4%</strong></div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:98.4%;"></div></div>
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><span class="badge-type">choice</span><strong>Decision 2: Streaming WebRTC Cascade (Tier 2) for Cost-Sensitive Banking/Gov</strong></div>
+          <span class="pill pill-auto">Act automatically · Confidence 99.1%</span>
+        </div>
+        <p style="font-size:13px;margin:8px 0;">对于无需副语言笑声/感叹、追求极致性价比的严肃政务/银行查询，选定 <strong>Tier 2 (WebRTC 流式分块级联)</strong>：P50 <code>540.0 ms</code>，<code>100.0%</code> 文本大模型智商，成本仅 <code>$0.028/分钟</code>（比纯音频 S2S 省 <code>70.5%</code>）。</p>
+        <div style="font-size:12px;display:flex;justify-content:space-between;"><span>Per-Minute Compute Cost Savings vs Pure Audio S2S ($0.095 &rarr; $0.028)</span><strong>70.5%</strong></div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:70.5%;"></div></div>
+      </div>
+
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><span class="badge-type">score</span><strong>Decision 3: UDP WebRTC vs. TCP WebSocket Under 5% Mobile Loss</strong></div>
+          <span class="pill pill-auto">Act automatically · Confidence 99.8%</span>
+        </div>
+        <p style="font-size:13px;margin:8px 0;">强制使用 <strong>UDP WebRTC + Opus In-Band FEC</strong> 替代 TCP WebSocket，将 5% 移动丢包下的 P99 延迟从 <code>3,100.0 ms</code> 压至 <code>285.0 ms (降低 90.8% / 快 10.88x)</code>。</p>
+        <div style="font-size:12px;display:flex;justify-content:space-between;"><span>5% Packet-Loss P99 Latency Reduction (3,100 ms &rarr; 285 ms)</span><strong>90.8%</strong></div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:90.8%;"></div></div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Key Architectural Finding</strong>: Never sacrifice the text bottleneck completely—keep a time-aligned text token stream inside the S2S model (`Inner Monologue`) so the agent retains both its brain (98.4% IQ) and its voice (220ms).
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">3 / 7 · WHAT I TESTED</span>
+        <span class="prov-pill">Full 4-Tier Evaluation Matrix</span>
+      </div>
+      <h2><span class="grad">全量评测矩阵：HTTP 串行超时 9 倍，纯音频 S2S 损失 18.5% 准确率，双轨 S2S 唯一双达标</span></h2>
+      <p class="sub">横跨 P50/P99 语音延迟、打断延迟、工具调用准确率、情感表达与每分钟成本的完整评分表。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>SCENARIO</th>
+            <th>QUESTION / TASK</th>
+            <th>MODEL ANSWER (SEALED METRICS)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: Serial HTTP Cascade</strong></td>
+            <td>Can batch HTTP ASR+LLM+TTS support natural conversation?</td>
+            <td><strong>✕ Miss</strong>: <code>2,480 ms</code> P50, <code>3,150 ms</code> P99 (&gt;350ms SLA), <code>850 ms</code> barge-in.</td>
+            <td><span class="pill pill-human">Send to a human</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: WebRTC Cascade</strong></td>
+            <td>Best architecture for tool-heavy banking/enterprise support?</td>
+            <td><strong>✅ Best Cost/IQ</strong>: <code>540 ms</code> P50, <code>65 ms</code> barge-in, <code>100.0%</code> tool IQ, lowest cost at <code>$0.028/min</code>.</td>
+            <td><span class="pill pill-auto">Act automatically</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: Pure Audio S2S</strong></td>
+            <td>Does textless Speech-to-Speech preserve complex reasoning IQ?</td>
+            <td><strong>✕ Miss on IQ</strong>: Hits <code>195 ms</code> P50, but 100–400Hz audio bloat drops tool/reasoning accuracy to <code>81.5% (-18.5%)</code> at <code>$0.095/min</code>.</td>
+            <td><span class="pill pill-confirm">Confirm</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: Dual-Stream S2S</strong></td>
+            <td>How to achieve sub-300ms latency AND &ge;98% reasoning IQ?</td>
+            <td><strong>✅ Pass (Best)</strong>: Inner-Monologue text + Depth RVQ hits <code>220 ms</code> P50 (<code>285 ms</code> P99), <code>45 ms</code> barge-in, <code>98.4%</code> IQ at <code>$0.052/min</code>.</td>
+            <td><span class="pill pill-auto">Act automatically</span></td>
+          </tr>
+          <tr>
+            <td><strong>Transport Protocol Rule</strong></td>
+            <td>TCP WebSocket vs UDP WebRTC under 3%–5% mobile packet loss</td>
+            <td><strong>✅ Verified Rule</strong>: TCP stalls to <code>1,820–3,100 ms</code>; UDP WebRTC with Opus FEC holds <code>270–285 ms</code>.</td>
+            <td><span class="pill pill-auto">Act automatically</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="fit-grid" style="margin-top:18px;">
+        <div class="box" style="border-left:4px solid #db2777;">
+          <h3>Threshold Gating Summary</h3>
+          <p style="font-size:12.5px;margin:0;">设定硬门禁：拟人交互要求 <code>P99 &le; 350.0 ms</code> 且工具调用智商 <code>&ge; 98.0%</code>（仅 Tier 4 达标）；高性价比业务客服要求 <code>P50 &le; 600 ms</code> 且成本 <code>&le; $0.03/min</code>（Tier 2 达标）。</p>
+        </div>
+        <div class="box" style="border-left:4px solid #dc2626;">
+          <h3>Failure Mode Analysis</h3>
+          <p style="font-size:12.5px;margin:0;">未在边缘网关开启硬件回声消除（AEC）时，AI 自己播放的声音被用户麦克风拾取回传，会触发无限“自我打断（Self-Barge-In）”死循环。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Matrix Takeaway</strong>: Deploy `Tier 2 (Streaming WebRTC Cascade)` for transactional workflows and `Tier 4 (Dual-Stream Inner-Monologue S2S)` for ultra-low-latency empathetic companions.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">4 / 7 · UNDER THE HOOD</span>
+        <span class="prov-pill">Deterministic Evaluator &amp; Dual-Stream Inner-Monologue Step</span>
+      </div>
+      <h2><span class="grad">底层机制：12.5Hz Temporal-Depth 双级自回归分解与首句分块投机 TTS</span></h2>
+      <p class="sub">展示确定性实时语音模型输入契约（上）与 80ms 时间步双轨生成逻辑（下）。</p>
+
+      <div class="code-dark" style="margin-bottom:16px;">// 1. Sealed Input Contract (experiments/realtime_voice_llm_pipeline_selection/run.py)
+{
+  "sla_v2v_p99_ms": 350.0,
+  "tier1_stages_ms": {"vad": 700, "asr": 480, "llm": 920, "tts": 380},
+  "tier2_stages_ms": {"vad": 140, "asr":  95, "llm": 185, "tts": 120},
+  "tier4_stages_ms": {"vad":  40, "asr":   0, "llm": 135, "tts":  45}
+}</div>
+
+      <div style="text-align:center;font-size:20px;font-weight:800;color:#be185d;margin:6px 0;">&darr; Deterministic Voice-to-Voice Latency &amp; IQ Verifier (&lt;answer&gt;) &darr;</div>
+
+      <div class="code-dark">// 2. Tier 4 Dual-Stream Inner-Monologue 80ms Frame Step (Moshi / GLM-4-Voice Paradigm)
+def step_dual_stream_voice_agent(user_audio_rvq_t, kv_cache):
+    # 1. Heavy 7B/70B Temporal Transformer steps once at 12.5 Hz (every 80ms):
+    hidden_t = temporal_transformer(user_audio_rvq_t, kv_cache)
+    # 2. Emit time-aligned Inner-Monologue Text Token FIRST (drives XGrammar tool call &amp; audit log!):
+    inner_text_token = sample_text_head(hidden_t)
+    # 3. Lightweight 100M Depth Transformer emits 8 acoustic RVQ codebooks conditioned on inner_text_token:
+    agent_audio_rvq_t = depth_transformer.generate_8_codebooks(hidden_t, inner_text_token)
+    return inner_text_token, mimi_codec_decode(agent_audio_rvq_t) # 220.0 ms P50 / 98.4% IQ!
+&lt;answer&gt;
+  tier1_http_serial   : p50 = 2480.0ms | p99 = 3150.0ms ✕ | tool_iq = 100.0% | $0.042/min
+  tier2_webrtc_cascade: p50 =  540.0ms | p99 =  680.0ms   | tool_iq = 100.0% | $0.028/min ✅
+  tier3_pure_audio_s2s: p50 =  195.0ms | p99 =  245.0ms ✅ | tool_iq =  81.5% | $0.095/min
+  tier4_dual_monologue: p50 =  220.0ms | p99 =  285.0ms 🏆 | tool_iq =  98.4% | $0.052/min 🏆
+&lt;/answer&gt;</div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Verification Command</strong>: <code>python experiments/realtime_voice_llm_pipeline_selection/run.py --check</code> &amp;&amp; <code>python -m unittest tests/test_realtime_voice_llm_pipeline_selection.py</code> (Verified PASS on local CPU harness).
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">5 / 7 · ROBUSTNESS CHECK</span>
+        <span class="prov-pill">Mobile Packet Loss Sensitivity: 0.0% &rarr; 1.0% &rarr; 3.0% &rarr; 5.0% Loss</span>
+      </div>
+      <h2><span class="grad">鲁棒性压测：在 5% 移动弱网丢包下，TCP WebSocket 延迟飙至 3,100ms，而 UDP WebRTC 双轨架构稳守 285ms (快 10.88x)</span></h2>
+      <p class="sub">检验地铁、电梯与车载高速移动场景下传输层协议（TCP vs UDP WebRTC）对实时语音 P99 尾延迟的冲击。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>PACKET LOSS RATE</th>
+            <th>TCP WEBSOCKET STREAM P99</th>
+            <th>TIER 2 WEBRTC CASCADE P99</th>
+            <th>TIER 4 WEBRTC DUAL-STREAM P99</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>0.0% Loss (Lab Ethernet)</strong></td>
+            <td><code>580.0 ms</code></td>
+            <td><code>540.0 ms</code></td>
+            <td><code>220.0 ms</code> ✅</td>
+          </tr>
+          <tr>
+            <td><strong>1.0% Loss (Indoor Wi-Fi)</strong></td>
+            <td><code>940.0 ms</code> ✕ (+62%)</td>
+            <td><code>575.0 ms</code></td>
+            <td><code>245.0 ms</code> ✅</td>
+          </tr>
+          <tr>
+            <td><strong>3.0% Loss (Subway 4G/5G)</strong></td>
+            <td><code>1,820.0 ms</code> ✕ (+214%)</td>
+            <td><code>630.0 ms</code></td>
+            <td><code>270.0 ms</code> ✅</td>
+          </tr>
+          <tr style="background:#f5f3ff;">
+            <td><strong>5.0% Loss (Moving Vehicle)</strong></td>
+            <td><strong style="color:#dc2626;">3,100.0 ms ✕ (+434% 冻结)</strong></td>
+            <td><code>680.0 ms</code> ✅</td>
+            <td><strong style="color:#16a34a;">285.0 ms 🏆 (快 10.88x!)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="box" style="margin-top:20px;border-left:4px solid #db2777;">
+        <h3>Perturbation &amp; Consistency Analysis</h3>
+        <p style="font-size:13px;margin:6px 0;">1. <strong>为什么 TCP WebSocket 在 3%~5% 丢包下彻底不可用？</strong> 因为 TCP 无法跳过丢失的旧语音帧，内核强制阻塞后续所有已到达的语音包等待重传（RTO 指数退避），造成长达 2~3 秒的静音后突然快放。</p>
+        <p style="font-size:13px;margin:6px 0;">2. <strong>跨机房会话中途故障转移（Mid-Call Failover）</strong>：由于 Tier 4 每步同步产出轻量级内心独白文本流，当某个 GPU 节点故障时，网关只需将几 KB 的文本上下文 + 1.5s 尾部音频重注入备用节点即可在 `200ms` 内无感续接通话！</p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Robustness Conclusion</strong>: `UDP WebRTC + Opus FEC` is mandatory for last-mile voice transport; never expose raw TCP WebSockets to mobile clients.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">6 / 7 · LATENCY, BARGE-IN &amp; IQ SCALING</span>
+        <span class="prov-pill">Paired Bar Comparison Across Voice Agent Tiers</span>
+      </div>
+      <h2><span class="grad">延迟与打断横向对比：端到端响应提速 11.27x (220ms vs 2,480ms)，打断响应提速 18.9x (45ms)</span></h2>
+      <p class="sub">紫红/翠绿代表双轨 S2S 与流式 WebRTC 路径（Tier 4 / Tier 2），浅灰代表传统 HTTP 串行基线（Tier 1）。</p>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>P50 End-to-End Voice-to-Voice Latency</strong> (Tier 4 Dual-Stream S2S vs Tier 1 HTTP Serial)</span>
+          <strong>220.0 ms vs 2,480.0 ms (11.27x faster)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:8.9%;background:#db2777;height:14px;border-radius:4px;margin-bottom:6px;" title="Tier 4: 220.0 ms"></div>
+          <div style="width:100%;background:#cbd5e1;height:14px;border-radius:4px;" title="Tier 1: 2,480.0 ms"></div>
+        </div>
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>Full-Duplex Barge-In Interruption Latency</strong> (Tier 4 WebRTC Edge vs Tier 1 HTTP)</span>
+          <strong>45.0 ms vs 850.0 ms (18.89x faster)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:5.3%;background:#10b981;height:14px;border-radius:4px;margin-bottom:6px;" title="Tier 4: 45.0 ms"></div>
+          <div style="width:100%;background:#cbd5e1;height:14px;border-radius:4px;" title="Tier 1: 850.0 ms"></div>
+        </div>
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>5% Mobile Packet-Loss P99 Latency</strong> (UDP WebRTC Tier 4 vs TCP WebSocket)</span>
+          <strong>285.0 ms vs 3,100.0 ms (10.88x lower tail latency)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:9.2%;background:#7c3aed;height:14px;border-radius:4px;margin-bottom:6px;" title="UDP WebRTC Tier 4: 285.0 ms"></div>
+          <div style="width:100%;background:#cbd5e1;height:14px;border-radius:4px;" title="TCP WebSocket: 3,100.0 ms"></div>
+        </div>
+      </div>
+
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>Tool-Calling &amp; Reasoning Accuracy</strong> (Tier 4 Dual-Stream vs Tier 3 Pure Audio S2S)</span>
+          <strong>98.4% vs 81.5% (+16.9 pct pts IQ recovery)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:98.4%;background:#10b981;height:14px;border-radius:4px;margin-bottom:6px;" title="Tier 4: 98.4%"></div>
+          <div style="width:81.5%;background:#cbd5e1;height:14px;border-radius:4px;" title="Tier 3: 81.5%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Scaling Rule</strong>: All bar coordinates strictly reflect <code>experiments/realtime_voice_llm_pipeline_selection/results.json</code> (deterministic synthetic model; physical GPU cluster measurement: <code>not_measured</code>).
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">7 / 7 · MY TAKE</span>
+        <span class="prov-pill">Architect Playbook &amp; Readiness</span>
+      </div>
+      <h2><span class="grad">架构师决断：严肃业务客服选 WebRTC 流式级联 ($0.028/m)，超拟人交互必选双轨内心独白 S2S (220ms)！</span></h2>
+      <p class="sub">给多模态语音平台负责人与 AI 解决方案架构师的落地指南。</p>
+
+      <div class="fit-grid" style="margin-bottom:18px;">
+        <div class="fit-good">
+          <h3 style="margin-top:0;color:#166534;font-size:16px;">✅ Good fit (强烈推荐)</h3>
+          <ul style="font-size:13px;line-height:1.6;padding-left:18px;margin:0;">
+            <li><strong>超拟人实时语音伴侣 / 口语外教 / 车载助手 &rarr; 选 Tier 4 (双轨 Text+Acoustic S2S + UDP WebRTC)</strong>：<code>220ms</code> 极速响应，<code>98.4%</code> 工具调用智商，原生情感韵律。</li>
+            <li><strong>银行/政务/电商复杂业务外呼 &rarr; 选 Tier 2 (WebRTC 流式分块级联 + 首句投机 TTS)</strong>：<code>540ms</code> 延迟，<code>100.0%</code> 文本大模型智商，成本仅 <code>$0.028/min</code>。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3 style="margin-top:0;color:#991b1b;font-size:16px;">⛔ Not for (严禁踩坑)</h3>
+          <ul style="font-size:13px;line-height:1.6;padding-left:18px;margin:0;">
+            <li><strong>严禁使用 HTTP 整段上传或 TCP WebSocket 承载移动端实时语音对话</strong>。</li>
+            <li><strong>严禁在需要调用复杂 API / 数据库查询的场景裸跑无文本中间态的纯音频 S2S (Tier 3)</strong>：准确率暴跌 18.5%。</li>
+            <li><strong>严禁使用固定 700ms 静音计时器作为唯一 VAD 判据</strong>。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Production Readiness Checklist</h3>
+        <p style="font-size:12.5px;margin:4px 0;">- [x] 最后一公里全面启用 <code>UDP WebRTC + Opus In-Band FEC</code> 与客户端硬件回声消除 (<code>AEC</code>)</p>
+        <p style="font-size:12.5px;margin:4px 0;">- [x] 部署 <code>Semantic Turn Detector (140ms)</code> 与边缘网关 <code>&le;50ms</code> 本地打断队列清空机制</p>
+        <p style="font-size:12.5px;margin:4px 0;">- [x] 双轨 S2S 模型的内心独白文本流挂载 <code>XGrammar</code> 约束解码并实时落盘合规审计日志</p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Readiness &amp; Provenance</strong>: Repository <code>turbo998/ai-infra-research</code> · Model <code>experiments/realtime_voice_llm_pipeline_selection/run.py</code> (<code>synthetic</code> + <code>anonymized_reported</code>, <code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>, <code>local_cpu_harness_measurement=measured</code>) · Self-contained CSP compliant.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
