@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="1200" height="720" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg16" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accent16" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="720" fill="url(#bg16)" rx="16"/>
+  <rect x="24" y="20" width="1152" height="84" rx="12" fill="#1e293b" stroke="#334155"/>
+  <rect x="24" y="20" width="8" height="84" rx="4" fill="url(#accent16)"/>
+  <text x="48" y="54" fill="#f8fafc" font-size="21.5" font-weight="800">大模型分布式训练并行与显存优化架构选型一图流 (Round 16 · 256×H100 · 120B)</text>
+  <text x="48" y="82" fill="#94a3b8" font-size="13.5">DDP/ZeRO-1 (244GB OOM) vs. 全量 ZeRO-3/FSDP (36.4% MFU) vs. 混合 HFSDP (54.0% MFU) vs. Megatron 3D + DualPipe (66.8% MFU)</text>
+  <rect x="930" y="34" width="228" height="54" rx="8" fill="#0f172a" stroke="#10b981"/>
+  <text x="1044" y="56" fill="#6ee7b7" font-size="12" font-weight="700" text-anchor="middle">PROVENANCE: SYNTHETIC</text>
+  <text x="1044" y="75" fill="#94a3b8" font-size="11" text-anchor="middle">independently_reproduced = false</text>
+
+  <!-- Left Panel: First-Principles Memory & Communication Breakdown -->
+  <rect x="24" y="120" width="550" height="440" rx="12" fill="#0f172a" stroke="#334155"/>
+  <text x="44" y="150" fill="#6ee7b7" font-size="16" font-weight="800">① 为什么 120B 模型装不进 80GB 显存？为什么全量 ZeRO-3 跨节点会变慢？</text>
+
+  <rect x="44" y="168" width="510" height="78" rx="8" fill="#450a0a" stroke="#dc2626"/>
+  <text x="58" y="190" fill="#fca5a5" font-size="13.5" font-weight="700">⛔ 16×Ψ 显存定律 (Tier 1 DDP/ZeRO-1): 单卡需 244.20 GB 瞬间 OOM</text>
+  <text x="58" y="212" fill="#fecaca" font-size="12">• 混合精度训练每参数需 16B (2B 权重 + 2B 梯度 + 12B FP32 主权重与 Adam m/v 状态)</text>
+  <text x="58" y="232" fill="#fecaca" font-size="12">• ZeRO-1 仅切分优化器状态，剩余权重+梯度+激活达 244.20 GB，被迫走 PCIe CPU 卸载 (MFU 28.5%)</text>
+
+  <rect x="44" y="258" width="510" width-note="510" height="84" rx="8" fill="#422006" stroke="#eab308"/>
+  <text x="58" y="280" fill="#fde047" font-size="13.5" font-weight="700">🟨 Tier 2 全量 ZeRO-3 / FSDP 跨机陷阱: 显存仅 46.8GB，但 44.2% 时间卡在网卡</text>
+  <text x="58" y="302" fill="#fef08a" font-size="12">• 把权重切碎到全部 256 张卡虽然省显存，但每层前向/反向都要跑 256 卡全局 All-Gather</text>
+  <text x="58" y="324" fill="#fef08a" font-size="12">• 跨节点 400G RoCE (50 GB/s) 被每层高频集合通信打爆，单步耗时 6.45s，MFU 跌至 36.4%</text>
+
+  <rect x="44" y="354" width="510" height="88" rx="8" fill="#064e3b" stroke="#10b981"/>
+  <text x="58" y="376" fill="#6ee7b7" font-size="13.5" font-weight="700">🟩 Tier 3 混合分片 HFSDP (<=64~128 卡首选): 机内 NVLink 分片 + 跨机副本</text>
+  <text x="58" y="398" fill="#d1fae5" font-size="12">• 将高频权重 All-Gather 锁死在单机/双机 900 GB/s NVLink 域内，跨节点仅在 Step 末同步梯度</text>
+  <text x="58" y="420" fill="#d1fae5" font-size="12">• 配合 Copy-Engine 异步预取，通信阻塞降至 16.8%，单步 4.35s (比 ZeRO-3 快 1.48x)，MFU 54.0%</text>
+
+  <rect x="44" y="454" width="510" height="90" rx="8" fill="#3b0764" stroke="#a855f7"/>
+  <text x="58" y="476" fill="#e9d5ff" font-size="13.5" font-weight="700">🟪 Tier 4 Megatron 3D + DualPipe (>=256 卡百亿/万亿预训练终局): MFU 66.8%</text>
+  <text x="58" y="498" fill="#f3e8ff" font-size="12">• TP=8 锁在机内 NVSwitch + 跨机 PP=4 (DualPipe 双向流水线将气泡压至 3.8%) + ZeRO-1 DP=8</text>
+  <text x="58" y="520" fill="#f3e8ff" font-size="12">• 峰值显存 51.01 GB，单步压至 3.52s (比 ZeRO-3 快 1.83x)，1T Token 训练省 $124,134 (-45.4%)!</text>
+
+  <!-- Right Panel: Quantitative Benchmark Matrix -->
+  <rect x="590" y="120" width="586" height="440" rx="12" fill="#0f172a" stroke="#334155"/>
+  <text x="610" y="150" fill="#d8b4fe" font-size="16" font-weight="800">② 四档分布式训练并行架构定量对比 (256×H100 · 120B · 1T Tokens)</text>
+
+  <!-- Table Header -->
+  <rect x="610" y="168" width="546" height="34" rx="6" fill="#1e293b"/>
+  <text x="622" y="190" fill="#cbd5e1" font-size="12" font-weight="700">训练并行与显存架构档位</text>
+  <text x="828" y="190" fill="#cbd5e1" font-size="12" font-weight="700">峰值显存 / 阻塞</text>
+  <text x="945" y="190" fill="#cbd5e1" font-size="12" font-weight="700">单步 / MFU</text>
+  <text x="1052" y="190" fill="#cbd5e1" font-size="12" font-weight="700">集群吞吐 / 1T 成本</text>
+
+  <!-- Row 1 -->
+  <rect x="610" y="210" width="546" height="68" rx="6" fill="#1e293b" stroke="#dc2626"/>
+  <text x="622" y="234" fill="#fca5a5" font-size="12.5" font-weight="700">Tier 1: DDP / ZeRO-1 + CPU Offload</text>
+  <text x="622" y="256" fill="#94a3b8" font-size="11">未切分需 244.2 GB (被迫走 PCIe 卸载)</text>
+  <text x="828" y="236" fill="#f87171" font-size="12" font-weight="700">76.50 GB</text>
+  <text x="828" y="256" fill="#fca5a5" font-size="11">阻塞 58.6% ✕</text>
+  <text x="945" y="236" fill="#f8fafc" font-size="12">11.80 s</text>
+  <text x="945" y="256" fill="#fca5a5" font-size="11">MFU 28.5%</text>
+  <text x="1052" y="236" fill="#fca5a5" font-size="12" font-weight="700">355.4k tok/s</text>
+  <text x="1052" y="256" fill="#cbd5e1" font-size="11">$499,885 / 1T</text>
+
+  <!-- Row 2 -->
+  <rect x="610" y="286" width="546" height="68" rx="6" fill="#1e293b" stroke="#eab308"/>
+  <text x="622" y="310" fill="#fde047" font-size="12.5" font-weight="700">Tier 2: 全量 ZeRO-3 / FSDP (256 卡)</text>
+  <text x="622" y="332" fill="#94a3b8" font-size="11">每层跨 32 节点 RoCE All-Gather</text>
+  <text x="828" y="312" fill="#fde047" font-size="12" font-weight="700">46.80 GB</text>
+  <text x="828" y="332" fill="#cbd5e1" font-size="11">阻塞 44.2% ⚠️</text>
+  <text x="945" y="312" fill="#f8fafc" font-size="12">6.45 s (1.83x)</text>
+  <text x="945" y="332" fill="#fde047" font-size="11">MFU 36.4%</text>
+  <text x="1052" y="312" fill="#fde047" font-size="12" font-weight="700">650.3k tok/s</text>
+  <text x="1052" y="332" fill="#cbd5e1" font-size="11">$273,254 (-45.3%)</text>
+
+  <!-- Row 3 -->
+  <rect x="610" y="362" width="546" height="68" rx="6" fill="#1e293b" stroke="#10b981"/>
+  <text x="622" y="386" fill="#6ee7b7" font-size="12.5" font-weight="700">Tier 3: 混合 HFSDP (机内分片+跨机DP)</text>
+  <text x="622" y="408" fill="#94a3b8" font-size="11">PyTorch FSDP2 原生易用 · CE 异步预取</text>
+  <text x="828" y="388" fill="#34d399" font-size="12" font-weight="700">58.40 GB</text>
+  <text x="828" y="408" fill="#6ee7b7" font-size="11">阻塞 16.8% ✅</text>
+  <text x="945" y="388" fill="#f8fafc" font-size="12">4.35 s (2.71x)</text>
+  <text x="945" y="408" fill="#6ee7b7" font-size="11">MFU 54.0%</text>
+  <text x="1052" y="388" fill="#6ee7b7" font-size="12" font-weight="700">964.2k tok/s</text>
+  <text x="1052" y="408" fill="#6ee7b7" font-size="11">$184,285 (-63.1%)</text>
+
+  <!-- Row 4 -->
+  <rect x="610" y="438" width="546" height="68" rx="6" fill="#2e1065" stroke="#a855f7" stroke-width="2"/>
+  <text x="622" y="462" fill="#e9d5ff" font-size="12.5" font-weight="700">Tier 4: Megatron 3D + DualPipe PP</text>
+  <text x="622" y="484" fill="#d8b4fe" font-size="11">TP8 + PP4 DualPipe + DP8 + 选择性卸载</text>
+  <text x="828" y="464" fill="#e9d5ff" font-size="12" font-weight="700">51.01 GB</text>
+  <text x="828" y="484" fill="#34d399" font-size="11" font-weight="700">阻塞 9.2% ✅</text>
+  <text x="945" y="464" fill="#e9d5ff" font-size="12" font-weight="700">3.52 s (3.35x)</text>
+  <text x="945" y="484" fill="#34d399" font-size="11" font-weight="700">MFU 66.8%</text>
+  <text x="1052" y="464" fill="#e9d5ff" font-size="12.5" font-weight="800">1.19M tok/s</text>
+  <text x="1052" y="484" fill="#34d399" font-size="11" font-weight="700">$149,121 (-70.2%)</text>
+
+  <text x="610" y="534" fill="#94a3b8" font-size="12">💡 1,024 卡扩展拐点：全量 ZeRO-3 MFU 暴跌至 24.5%，Megatron 3D DualPipe 稳守 64.2% (快 2.62x)!</text>
+
+  <!-- Bottom Banner -->
+  <rect x="24" y="576" width="1152" height="122" rx="12" fill="#0f172a" stroke="#10b981"/>
+  <text x="44" y="606" fill="#6ee7b7" font-size="15" font-weight="800">③ 架构师一句话选型口诀（Golden Rules for Distributed Training Parallelism）</text>
+  <text x="44" y="632" fill="#e2e8f0" font-size="13">1. <tspan font-weight="700" fill="#6ee7b7">&lt;= 64~128 卡微调与持续预训练首选 Tier 3 (PyTorch FSDP2 混合分片 HFSDP)</tspan>：零侵入改造，MFU 从 ZeRO-3 的 36.4% 跃升至 54.0%。</text>
+  <text x="44" y="656" fill="#e2e8f0" font-size="13">2. <tspan font-weight="700" fill="#d8b4fe">&gt;= 256 卡百亿/万亿大模型预训练必选 Tier 4 (Megatron 3D: 机内 TP8 + 跨机 DualPipe PP + ZeRO-1 DP)</tspan>：MFU 高达 66.8%，省 70.2% 成本。</text>
+  <text x="44" y="680" fill="#94a3b8" font-size="12">封存证据：experiments/distributed_training_parallelism_selection/results.json · tests/test_distributed_training_parallelism_selection.py · 7-Card &amp; Sizer 1:1 绑定</text>
+</svg>

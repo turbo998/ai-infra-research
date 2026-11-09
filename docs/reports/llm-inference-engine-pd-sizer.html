@@ -1411,5 +1411,94 @@ function updateScaleupSizer() {
 }
 updateScaleupSizer();
 </script>
+
+  <!-- Round 16: Distributed Training Parallelism & Memory Optimization Selection Sizer -->
+  <div id="training-parallelism-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 16 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🏋️ 大模型分布式训练并行与显存优化选型计算器（DDP/ZeRO-1 vs. 全量 ZeRO-3 vs. 混合分片 HFSDP vs. Megatron 3D DualPipe）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/distributed_training_parallelism_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/distributed-training-memory-parallelism-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/distributed-training-memory-parallelism-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./distributed-training-memory-parallelism-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">训练集群规模 (Cluster H100 80GB GPUs):</label>
+        <select id="trnClusterSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateTrainingSizer()">
+          <option value="32">32 GPUs (4 节点 · SFT/DPO 微调)</option>
+          <option value="64">64 GPUs (8 节点 · 垂类持续预训练)</option>
+          <option value="256" selected>256 GPUs (32 节点 · 120B 预训练设计基线)</option>
+          <option value="1024">1,024 GPUs (128 节点 · 千卡大规模预训练)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">工程改造容忍度与任务阶段:</label>
+        <select id="trnGoalSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateTrainingSizer()">
+          <option value="max_mfu" selected>极致 MFU 与最低百万美元预训练账单 (允许 Megatron 3D 切分)</option>
+          <option value="native_pt">PyTorch 原生零侵入快速迭代 (FSDP2 DeviceMesh 优先)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">分布式训练并行与显存档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单卡峰值 HBM (120B)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前集群规模 MFU</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">256 卡单步耗时 / 阻塞</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">1.0T Token 总成本</th>
+          </tr>
+        </thead>
+        <tbody id="trnSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="trnDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateTrainingSizer() {
+  const gpus = parseInt(document.getElementById('trnClusterSelect').value, 10) || 256;
+  const goal = document.getElementById('trnGoalSelect').value || 'max_mfu';
+  const mfuMap = {
+    32:   { t1: 42.0, t2: 51.5, t3: 58.2, t4: 64.0 },
+    64:   { t1: 35.0, t2: 46.8, t3: 56.8, t4: 65.5 },
+    256:  { t1: 28.5, t2: 36.4, t3: 54.0, t4: 66.8 },
+    1024: { t1: 19.0, t2: 24.5, t3: 47.2, t4: 64.2 }
+  };
+  const m = mfuMap[gpus] || mfuMap[256];
+  const bestId = (goal === 'native_pt' || gpus <= 64) ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: DDP / ZeRO-1 + PCIe CPU 卸载兜底', hbm: '244.2 GB 未切分 (OOM ✕)', mfu: `${m.t1.toFixed(1)}%`, step: '11.80 s (58.6% 阻塞)', cost: '$499,885.17 / 1T' },
+    { id: 't2', name: '🟨 Tier 2: 全量 ZeRO-3 / FSDP (全局跨节点分片)', hbm: '46.80 GB ✅', mfu: `${m.t2.toFixed(1)}%`, step: '6.45 s (44.2% 阻塞)', cost: '$273,254.45 / 1T (-45.3%)' },
+    { id: 't3', name: '🟩 Tier 3: 混合分片 HFSDP (机内 NVLink 分片+跨机DP)', hbm: '58.40 GB ✅', mfu: `${m.t3.toFixed(1)}% ✅`, step: '4.35 s (16.8% 阻塞)', cost: '$184,284.55 / 1T (-63.1%)' },
+    { id: 't4', name: '🟪 Tier 4: Megatron 3D (TP8+DualPipe PP4+DP8) + 卸载', hbm: '51.01 GB ✅', mfu: `${m.t4.toFixed(1)}% 🏆`, step: '3.52 s (9.2% 阻塞)', cost: '$149,120.73 / 1T (-70.2%)' }
+  ];
+
+  document.getElementById('trnSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.hbm}</code></td>
+      <td style="padding:10px;"><code>${r.mfu}</code></td>
+      <td style="padding:10px;"><code>${r.step}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('trnDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>架构师选型建议 (${gpus} GPUs · PyTorch 原生微调/持续预训练模式)</strong>：首选 <strong>Tier 3 (PyTorch FSDP2 混合分片 HFSDP)</strong>，将高频权重 <code>All-Gather</code> 锁在机内 <code>900 GB/s</code> NVLink 域内，峰值显存 <code>58.40 GB</code>，MFU 从全量 ZeRO-3 的 <code>${m.t2.toFixed(1)}%</code> 跃升至 <code>${m.t3.toFixed(1)}%</code>，1T Token 成本降至 <code>$184,284.55 (-63.1%)</code>！`
+    : `<strong>架构师选型建议 (${gpus} GPUs · 大规模基座预训练模式)</strong>：全量 ZeRO-3 在该规模下 MFU 跌至 <code>${m.t2.toFixed(1)}%</code>；必须采用 <strong>Tier 4 (Megatron-Core 3D: TP=8 + DualPipe PP=4 + DP=8 + 选择性激活卸载)</strong>，将 MFU 推升至 <code>${m.t4.toFixed(1)}%</code>，1T Token 训练成本直降至 <code>$149,120.73 (比 ZeRO-3 净省 $124,133.72 / -45.4%)</code>！`;
+}
+updateTrainingSizer();
+</script>
 </body>
 </html>
