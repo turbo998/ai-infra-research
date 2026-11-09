@@ -3613,5 +3613,93 @@ function updateAgentMemorySizer() {
 }
 updateAgentMemorySizer();
 </script>
+
+  <!-- Round 41: High-Throughput Embedding & Cross-Encoder Reranker Serving Sizer -->
+  <div id="embedding-reranker-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#2563eb;color:#eff6ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 41 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ 企业级高吞吐 Embedding 与 Reranker 精排服务选型计算器（PyTorch 补零 vs. CPU ONNX vs. HF TEI/Infinity vs. TRT-FP8+套娃 MRL）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/embedding_reranker_serving_engine_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/embedding-reranker-serving-hardware-engine-selection-faq.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/embedding-reranker-serving-hardware-engine-selection-faq.en.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./embedding-reranker-serving-hardware-engine-selection-cards.html" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Batch 内文档长度偏斜分布 (Sequence Skew):</label>
+        <select id="erSkewSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateEmbeddingRerankerSizer()">
+          <option value="uniform">理想均匀长度 (64 条全为 180 Tokens)</option>
+          <option value="mod">轻度偏斜 (均值 180，最大 512 Tokens)</option>
+          <option value="rag" selected>典型企业 RAG 偏斜 (63 条 80 词 + 1 条 1024 词)</option>
+          <option value="long">长文离群值 (63 条 120 词 + 1 条 4096 词)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">企业向量库总切片规模 (Million Chunks):</label>
+        <select id="erScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateEmbeddingRerankerSizer()">
+          <option value="0.1">1,000 万条向量 (10M 中型知识库)</option>
+          <option value="1" selected>1 亿条向量 (100M 大型企业知识库基线)</option>
+          <option value="5">5 亿条向量 (500M 全集团文档中心)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Embedding 与精排引擎档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前分布单卡编码吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Top-50 精排 P99 延迟</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">[PAD] 补零浪费率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前规模向量库内存占用</th>
+          </tr>
+        </thead>
+        <tbody id="erSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="erDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #2563eb;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateEmbeddingRerankerSizer() {
+  const skew = document.getElementById('erSkewSelect').value || 'rag';
+  const sMult = parseFloat(document.getElementById('erScaleSelect').value) || 1.0;
+  const skewMap = {
+    uniform: { t1: 5400, t4: 18500 },
+    mod: { t1: 2450, t4: 18480 },
+    rag: { t1: 1250, t4: 18450 },
+    long: { t1: 190, t4: 18200 }
+  };
+  const k = skewMap[skew] || skewMap.rag;
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 原生 PyTorch 补零批处理 (pad_sequence)', tps: `${k.t1.toLocaleString()} docs/s ✕`, lat: '380.0 ms ✕', pad: '82.4% 浪费 ✕', ram: `${(409.6*sMult).toFixed(1)} GB (1024d FP32)` },
+    { id: 't2', name: '⬜ Tier 2: 64 核 CPU ONNX Runtime INT8', tps: '420 docs/s', lat: '195.0 ms', pad: '45.0% 浪费', ram: `${(409.6*sMult).toFixed(1)} GB` },
+    { id: 't3', name: '🟦 Tier 3: HuggingFace TEI / Infinity (cu_seqlens)', tps: '10,500 docs/s ✅', lat: '28.5 ms (快 13.3x ✅)', pad: '0.0% 补零 🏆', ram: `${(409.6*sMult).toFixed(1)} GB` },
+    { id: 't4', name: '🟩 Tier 4: TRT-FP8 零填充 + 俄罗斯套娃 MRL (256d INT8)', tps: `${k.t4.toLocaleString()} docs/s (快 ${(k.t4/k.t1).toFixed(1)}x 🏆)`, lat: '14.2 ms (快 26.8x 🏆)', pad: '0.0% 补零 🏆', ram: `${(25.6*sMult).toFixed(1)} GB (省 16.0x 🏆)` }
+  ];
+
+  document.getElementById('erSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === 't4';
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(37,99,235,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#93c5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.tps}</code></td>
+      <td style="padding:10px;"><code>${r.lat}</code></td>
+      <td style="padding:10px;"><code>${r.pad}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.ram}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('erDecisionCallout').innerHTML =
+    `<strong>架构师选型建议 (${Math.round(100*sMult)}M 向量库)</strong>：必选 <strong>Tier 4 (TensorRT-FP8 一维零填充 cu_seqlens + 俄罗斯套娃 MRL 256d INT8 两阶段漏斗)</strong>，编码吞吐比补零 PyTorch 快 <code>${(k.t4/k.t1).toFixed(1)}x</code>，Top-50 精排 P99 从 <code>380ms</code> 压至 <code>14.2ms</code>，且向量库内存从 <code>${(409.6*sMult).toFixed(1)} GB</code> 暴降至 <code>${(25.6*sMult).toFixed(1)} GB</code>！`;
+}
+updateEmbeddingRerankerSizer();
+</script>
 </body>
 </html>
