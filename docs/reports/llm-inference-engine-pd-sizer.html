@@ -1500,5 +1500,94 @@ function updateTrainingSizer() {
 }
 updateTrainingSizer();
 </script>
+
+  <!-- Round 17: GPU Cluster Scheduler & Topology Orchestration Selection Sizer -->
+  <div id="cluster-scheduler-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#2563eb;color:#eff6ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 17 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧭 企业级 AI 智算集群调度器与拓扑编排选型计算器（原生 K8s vs. 独立 Slurm vs. Volcano/Kueue Gang vs. Kueue TAS + K8s DRA）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/gpu_cluster_scheduler_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/gpu-cluster-scheduler-orchestration-selection-faq.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/gpu-cluster-scheduler-orchestration-selection-faq.en.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./gpu-cluster-scheduler-orchestration-selection-cards.html" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">主力分布式训练单任务规模 (Job GPUs):</label>
+        <select id="schJobSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSchedulerSizer()">
+          <option value="16">16 GPUs (2 节点微调任务)</option>
+          <option value="64" selected>64 GPUs (8 节点整柜训练基线 · 512 卡集群)</option>
+          <option value="128">128 GPUs (16 节点跨双柜训练)</option>
+          <option value="256">256 GPUs (32 节点半集群大任务)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群业务形态:</label>
+        <select id="schModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSchedulerSizer()">
+          <option value="unified" selected>企业训推一体 AI 平台 (预训练 + 微调 + 在线推理潮汐复用)</option>
+          <option value="hpc">100% 纯离线预训练封闭实验室 (无在线微服务)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">调度器与拓扑编排档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">死锁 / 静态孤岛浪费</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">通信拓扑惩罚</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前任务规模 Goodput</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">512 卡月度浪费 / 挽回</th>
+          </tr>
+        </thead>
+        <tbody id="schSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="schDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #2563eb;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateSchedulerSizer() {
+  const jobGpus = parseInt(document.getElementById('schJobSelect').value, 10) || 64;
+  const mode = document.getElementById('schModeSelect').value || 'unified';
+  const gpMap = {
+    16:  { t1: 62.0, t2: 78.0, t3: 79.5, t4: 91.0 },
+    64:  { t1: 48.2, t2: 74.0, t3: 71.5, t4: 88.6 },
+    128: { t1: 34.5, t2: 72.5, t3: 64.0, t4: 86.4 },
+    256: { t1: 21.0, t2: 71.0, t3: 56.5, t4: 84.8 }
+  };
+  const g = gpMap[jobGpus] || gpMap[64];
+  const bestId = mode === 'hpc' ? 't4' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 原生 K8s Default Scheduler + Static Plugin', waste: '18.5% 逐 Pod 死锁 ✕', comm: '+38.0% 跨柜/UPI ✕', gp: `${g.t1.toFixed(1)}%`, cost: '浪费 $484,019/月 ($518.67/100h)' },
+    { id: 't2', name: '🟨 Tier 2: 独立 Slurm HPC + Pyxis + topology/tree', waste: '14.0% 训推孤岛浪费', comm: '+4.5% 交换机树 ✅', gp: `${g.t2.toFixed(1)}%`, cost: '浪费 $242,944/月 (挽回 $241.1k)' },
+    { id: 't3', name: '🟩 Tier 3: K8s + Volcano / Kueue 基础 Gang 调度', waste: '1.5% 死锁 ✅', comm: '+24.0% 跨柜散落 ⚠️', gp: `${g.t3.toFixed(1)}%`, cost: '浪费 $266,304/月 (挽回 $217.7k)' },
+    { id: 't4', name: '🟦 Tier 4: Kueue TAS (机柜紧致) + K8s DRA + NUMA', waste: '0.8% 潮汐池化 🏆', comm: '+3.2% 同柜+PIX 🏆', gp: `${g.t4.toFixed(1)}% ✅`, cost: '仅耗 $106,522/月 · 挽回 $377,498 (-45.6%)' }
+  ];
+
+  document.getElementById('schSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(37,99,235,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#93c5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.waste}</code></td>
+      <td style="padding:10px;"><code>${r.comm}</code></td>
+      <td style="padding:10px;"><code>${r.gp}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#60a5fa':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('schDecisionCallout').innerHTML = mode === 'hpc'
+    ? `<strong>架构师选型建议 (${jobGpus} GPUs/Job · 纯离线 HPC 实验室模式)</strong>：可采用 <strong>Tier 2 (独立 Slurm + Pyxis + topology/tree)</strong> 或在统一底座上部署 <strong>Tier 4 (Kueue TAS + K8s DRA / Slinky Slurm-on-K8s)</strong>，将单任务有效 Goodput 提升至 <code>${g.t4.toFixed(1)}%</code>！`
+    : `<strong>架构师选型建议 (${jobGpus} GPUs/Job · 企业训推一体云平台模式)</strong>：首选 <strong>Tier 4 (Kubernetes + Kueue TAS + K8s DRA + TopologyManager)</strong>，既消除无拓扑感知 Gang (Tier 3: <code>${g.t3.toFixed(1)}%</code>) 的跨机柜散落惩罚，又打通夜间空闲推理卡潮汐借用，将集群有效 Goodput 推至 <code>${g.t4.toFixed(1)}%</code>，每月在 512 卡集群上净挽回 <code>$377,497.60 (-45.6%)</code>！`;
+}
+updateSchedulerSizer();
+</script>
 </body>
 </html>

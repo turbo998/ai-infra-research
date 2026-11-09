@@ -1499,5 +1499,94 @@ function updateTrainingSizer() {
 }
 updateTrainingSizer();
 </script>
+
+  <!-- Round 17: GPU Cluster Scheduler & Topology Orchestration Selection Sizer -->
+  <div id="cluster-scheduler-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#2563eb;color:#eff6ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 17 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧭 Enterprise AI GPU Cluster Scheduler &amp; Topology Orchestration Sizer (Vanilla K8s vs. Slurm vs. Volcano/Kueue Gang vs. Kueue TAS + K8s DRA)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/gpu_cluster_scheduler_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/gpu-cluster-scheduler-orchestration-selection-faq.en.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/gpu-cluster-scheduler-orchestration-selection-faq.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./gpu-cluster-scheduler-orchestration-selection-cards.html" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Distributed Training Job Size (GPUs/Job):</label>
+        <select id="schJobSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSchedulerSizer()">
+          <option value="16">16 GPUs (2-Node Fine-Tuning Job)</option>
+          <option value="64" selected>64 GPUs (8-Node Single-Rack Baseline · 512-GPU Fleet)</option>
+          <option value="128">128 GPUs (16-Node Dual-Rack Training)</option>
+          <option value="256">256 GPUs (32-Node Half-Cluster Run)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster Operating Model:</label>
+        <select id="schModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSchedulerSizer()">
+          <option value="unified" selected>Unified Enterprise Training + Online Inference Cloud (Elastic Borrowing)</option>
+          <option value="hpc">100% Dedicated Offline HPC Pre-Training Lab</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Scheduler &amp; Topology Orchestration Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Deadlock / Silo Waste</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Topology Comm Penalty</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Job Scale Goodput</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Waste / Recovered</th>
+          </tr>
+        </thead>
+        <tbody id="schSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="schDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #2563eb;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateSchedulerSizer() {
+  const jobGpus = parseInt(document.getElementById('schJobSelect').value, 10) || 64;
+  const mode = document.getElementById('schModeSelect').value || 'unified';
+  const gpMap = {
+    16:  { t1: 62.0, t2: 78.0, t3: 79.5, t4: 91.0 },
+    64:  { t1: 48.2, t2: 74.0, t3: 71.5, t4: 88.6 },
+    128: { t1: 34.5, t2: 72.5, t3: 64.0, t4: 86.4 },
+    256: { t1: 21.0, t2: 71.0, t3: 56.5, t4: 84.8 }
+  };
+  const g = gpMap[jobGpus] || gpMap[64];
+  const bestId = 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Vanilla K8s Default Scheduler + Static Plugin', waste: '18.5% Pod Deadlock ✕', comm: '+38.0% Rack/UPI ✕', gp: `${g.t1.toFixed(1)}%`, cost: 'Wastes $484,019/mo ($518.67/100h)' },
+    { id: 't2', name: '🟨 Tier 2: Standalone Slurm HPC + Pyxis + topology/tree', waste: '14.0% Silo Waste', comm: '+4.5% Switch Tree ✅', gp: `${g.t2.toFixed(1)}%`, cost: 'Wastes $242,944/mo (Recovers $241.1k)' },
+    { id: 't3', name: '🟩 Tier 3: K8s + Volcano / Kueue Basic Gang Scheduling', waste: '1.5% Deadlock ✅', comm: '+24.0% Rack Scatter ⚠️', gp: `${g.t3.toFixed(1)}%`, cost: 'Wastes $266,304/mo (Recovers $217.7k)' },
+    { id: 't4', name: '🟦 Tier 4: Kueue TAS (Rack Compact) + K8s DRA + NUMA', waste: '0.8% Elastic Pool 🏆', comm: '+3.2% Rack+PIX 🏆', gp: `${g.t4.toFixed(1)}% ✅`, cost: 'Wastes $106,522/mo · Recovers $377,498 (-45.6%)' }
+  ];
+
+  document.getElementById('schSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(37,99,235,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#93c5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.waste}</code></td>
+      <td style="padding:10px;"><code>${r.comm}</code></td>
+      <td style="padding:10px;"><code>${r.gp}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#60a5fa':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('schDecisionCallout').innerHTML = mode === 'hpc'
+    ? `<strong>Architect Recommendation (${jobGpus} GPUs/Job · Dedicated HPC Lab Mode)</strong>: Deploy either <strong>Tier 2 (Standalone Slurm + Pyxis + topology/tree)</strong> or <strong>Tier 4 (Kueue TAS + K8s DRA / Slinky Slurm-on-K8s)</strong> to reach <code>${g.t4.toFixed(1)}%</code> effective goodput!`
+    : `<strong>Architect Recommendation (${jobGpus} GPUs/Job · Unified Enterprise AI Cloud Mode)</strong>: Standardize on <strong>Tier 4 (Kubernetes + Kueue TAS + K8s DRA + TopologyManager)</strong> to eliminate both topology-blind rack scatter (Tier 3: <code>${g.t3.toFixed(1)}%</code>) and static Slurm/K8s silo waste, lifting goodput to <code>${g.t4.toFixed(1)}%</code> and recovering <code>$377,497.60/mo (-45.6%)</code>!`;
+}
+updateSchedulerSizer();
+</script>
 </body>
 </html>
