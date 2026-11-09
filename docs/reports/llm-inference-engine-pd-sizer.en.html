@@ -2044,5 +2044,94 @@ function updateCfgSizer() {
 }
 updateCfgSizer();
 </script>
+
+  <!-- Round 23: Multi-LoRA High-Density Serving Selection Sizer -->
+  <div id="multi-lora-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 23 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🎛️ Multi-LoRA High-Density Adapter Serving Sizer (Merged Replicas vs. Serial Swap vs. vLLM BGMV vs. S-LoRA Unified Paged + MBGMM)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/multi_lora_serving_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/multi-lora-adapter-serving-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/multi-lora-adapter-serving-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./multi-lora-adapter-serving-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Concurrent Active LoRA Adapters:</label>
+        <select id="loraCountSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLoraSizer()">
+          <option value="8">8 Active LoRAs (Small Multi-Team Pool)</option>
+          <option value="32">32 Active LoRAs (Medium Vertical Pool)</option>
+          <option value="128" selected>128 Active LoRAs (Enterprise Baseline · 70B FP8)</option>
+          <option value="512">512 Active LoRAs (Multi-Tenant SaaS Peak)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Adapter Rank (r) Distribution:</label>
+        <select id="loraRankSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLoraSizer()">
+          <option value="hetero" selected>Heterogeneous Ranks (Mixed r = 8, 16, 32, 64)</option>
+          <option value="uniform">Uniform Fixed Rank (All r = 16)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Multi-LoRA Serving Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Required GPUs (Consolidation)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">P99 TTFT @ Active Count</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Cluster QPS / GPU Util</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Fleet Cost (128 Models)</th>
+          </tr>
+        </thead>
+        <tbody id="loraSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="loraDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateLoraSizer() {
+  const cnt = parseInt(document.getElementById('loraCountSelect').value, 10) || 128;
+  const rmode = document.getElementById('loraRankSelect').value || 'hetero';
+  const ttftMap = {
+    8:   { t2: 420.0,  t3: 95.0,  t4: 86.0 },
+    32:  { t2: 1120.0, t3: 124.0, t4: 89.0 },
+    128: { t2: 1840.0, t3: 165.0, t4: 92.0 },
+    512: { t2: 4600.0, t3: 340.0, t4: 118.0 }
+  };
+  const tt = ttftMap[cnt] || ttftMap[128];
+  const bestId = (rmode === 'uniform' && cnt <= 32) ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Dedicated Merged Full-Model Replicas (W\' = W_0 + B·A)', gpus: '128 GPUs (1.0x ✕)', ttft: '85.0 ms', qps: '320.0 req/s · 6.8% Util', cost: '$233,600.00 / mo' },
+    { id: 't2', name: '🟨 Tier 2: Shared Base + Serial Unbatched Hot-Swap', gpus: '8 GPUs (16.0x)', ttft: `${tt.t2.toFixed(1)} ms ✕`, qps: '38.0 req/s · 24.5% Util', cost: '$14,600.00 / mo (SLA Fail ✕)' },
+    { id: 't3', name: '🟩 Tier 3: vLLM Multi-LoRA (Punica BGMV + Fixed Slots)', gpus: '4 GPUs (32.0x ✅)', ttft: `${tt.t3.toFixed(1)} ms ${tt.t3<=250?'✅':'✕'}`, qps: '168.0 req/s · 78.5% Util', cost: '$7,300.00 / mo (-96.9% ✅)' },
+    { id: 't4', name: '🟪 Tier 4: S-LoRA Unified Paged Pool + MBGMM + Prefetch', gpus: '4 GPUs (32.0x 🏆)', ttft: `${tt.t4.toFixed(1)} ms 🏆`, qps: '264.0 req/s (1.57x) · 91.2% 🏆', cost: '$7,300.00 / mo (Saves $226.3k 🏆)' }
+  ];
+
+  document.getElementById('loraSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.gpus}</code></td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><code>${r.qps}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('loraDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>Architect Recommendation (${cnt} Uniform Active LoRAs Mode)</strong>: Enable <strong>Tier 3 (vLLM Multi-LoRA + Punica BGMV)</strong> to consolidate 128 GPUs down to <code>4 GPUs</code>, holding P99 TTFT at <code>${tt.t3.toFixed(1)} ms</code> and saving <code>$226,300.00/mo (-96.9%)</code>!`
+    : `<strong>Architect Recommendation (${cnt} Active LoRAs · Heterogeneous-Rank High-Density Mode)</strong>: Deploy <strong>Tier 4 (S-LoRA Unified Paged Pool + Heterogeneous MBGMM + Async Prefetch)</strong> to eliminate fixed-slot thrashing (Tier 3: <code>${tt.t3.toFixed(1)} ms</code> -> Tier 4: <code>${tt.t4.toFixed(1)} ms</code>), boost throughput <code>1.57x (264.0 req/s)</code>, and serve all 128 vertical models on just <code>4 GPUs ($7,300/mo)</code>!`;
+}
+updateLoraSizer();
+</script>
 </body>
 </html>
