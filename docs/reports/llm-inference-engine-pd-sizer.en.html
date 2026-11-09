@@ -1311,5 +1311,104 @@ function updateSandboxSizer() {
 }
 updateSandboxSizer();
 </script>
+
+  <!-- Round 15: Intra-Node & Supernode Scale-Up Interconnect Selection Sizer -->
+  <div id="scaleup-interconnect-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#3b82f6;color:#eff6ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 15 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🔌 AI Server Intra-Node &amp; Supernode Scale-Up Interconnect Selection Sizer (PCIe Gen5 vs. 8-GPU NVSwitch HGX vs. 72-GPU Copper NVL72 vs. CXL 3.0 Pool)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/nvlink_pcie_cxl_scaleup_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/nvlink-pcie-cxl-scaleup-interconnect-selection-faq.en.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/nvlink-pcie-cxl-scaleup-interconnect-selection-faq.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./nvlink-pcie-cxl-scaleup-interconnect-selection-cards.html" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Tightly Coupled Parallel Domain Size (TP / EP GPUs):</label>
+        <select id="scuDomainSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateScaleupSizer()">
+          <option value="2">2 GPUs (32B FP16 / 70B INT4 · TP=2)</option>
+          <option value="4">4 GPUs (70B BF16 / 120B FP8 · TP=4)</option>
+          <option value="8" selected>8 GPUs (405B FP8 Single-Node Workhorse · TP=8)</option>
+          <option value="16">16 GPUs (2-Node Cross-Chassis TP/EP=16 · 8-GPU Cliff)</option>
+          <option value="72">72 GPUs (671B/1T MoE Full-Rack Expert Parallel · EP=72)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Primary Physical Bottleneck Mode:</label>
+        <select id="scuModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateScaleupSizer()">
+          <option value="comm" selected>Compute &amp; Collective Bandwidth Bound (160 Syncs/Token)</option>
+          <option value="mem">Memory Capacity Wall Bound (128K+ KV Cache Pool / Multi-TB DLRM)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Scale-Up Interconnect Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Bi-Dir Raw / Effective BW</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Domain Decode TPOT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Scale-Up Domain / Hop Latency</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Throughput / Cost per 1M</th>
+          </tr>
+        </thead>
+        <tbody id="scuSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="scuDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateScaleupSizer() {
+  const dom = parseInt(document.getElementById('scuDomainSelect').value, 10) || 8;
+  const mode = document.getElementById('scuModeSelect').value || 'comm';
+  const tpotMap = {
+    2:  { t1: 9.60,  t2: 8.20,  t3: 4.85, t4: 9.10 },
+    4:  { t1: 13.40, t2: 8.75,  t3: 5.05, t4: 11.20 },
+    8:  { t1: 20.20, t2: 9.35,  t3: 5.40, t4: 13.80 },
+    16: { t1: 38.50, t2: 22.80, t3: 5.75, t4: 29.40 },
+    72: { t1: 64.20, t2: 31.40, t3: 6.20, t4: 46.80 }
+  };
+  const d = tpotMap[dom] || tpotMap[8];
+  let bestId = 't2';
+  if (mode === 'mem') bestId = 't4';
+  else if (dom <= 2) bestId = 't1';
+  else if (dom <= 8) bestId = 't2';
+  else bestId = 't3';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Dual-Root PCIe Gen5 x16 Switch Tree', bw: '128 GB/s / 48 GB/s eff', tpot: `${d.t1.toFixed(2)} ms ${d.t1<=12?'✅':'✕'}`, domInfo: '4-GPU Domain · 1.85 us', cost: '198 tok/s · $2.60/1M ($1.85/hr)' },
+    { id: 't2', name: '🟩 Tier 2: 8-GPU NVSwitch HGX (NVLink-4 + NVLS)', bw: '900 GB/s / 385 GB/s eff', tpot: `${d.t2.toFixed(2)} ms ${d.t2<=12?'✅':'✕'}`, domInfo: '8-GPU Domain · 0.35 us', cost: '428 tok/s (2.16x) · $1.72/1M (-33.8%)' },
+    { id: 't3', name: '🟪 Tier 3: 72-GPU Copper NVL72 (NVLink-5 MNNVL)', bw: '1,800 GB/s / 780 GB/s eff', tpot: `${d.t3.toFixed(2)} ms ✅`, domInfo: '72-GPU Rack (130 TB/s) · 0.42 us', cost: '890 tok/s (4.49x) · $0.98/1M (-62.3%)' },
+    { id: 't4', name: '🟦 Tier 4: CXL 3.0 Type-3 Memory Pool (+2TB DAX)', bw: '128 GB/s / 18.5ms 128K KV', tpot: `${d.t4.toFixed(2)} ms ${d.t4<=12?'✅':'⚠️'}`, domInfo: '+2,048 GB/node · 210 ns', cost: '540 tok/s (KV Pool) · $1.13/1M (-56.5%)' }
+  ];
+
+  document.getElementById('scuSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(59,130,246,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#93c5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.tpot}</code></td>
+      <td style="padding:10px;"><code>${r.domInfo}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#60a5fa':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const msgMap = {
+    t1: `<strong>Architect Recommendation (${dom} GPUs Small-Domain Mode)</strong>: Pick <strong>Tier 1 (PCIe Gen5 x16 Switch Tree)</strong>—at <code>TP=1/2</code>, TPOT is <code>${d.t1.toFixed(2)} ms (&le;12ms SLA)</code> while saving <code>30%+ CapEx ($1.85/GPU-hr)</code> in standard air-cooled racks!`,
+    t2: `<strong>Architect Recommendation (${dom} GPUs Single-Node Workhorse Mode)</strong>: Pick <strong>Tier 2 (8-GPU NVSwitch HGX)</strong>—<code>900 GB/s</code> NVLink-4 with <code>NVLS</code> multicast cuts 160-sync communication from <code>12.40 ms -> 1.55 ms</code>, holding TPOT at <code>${d.t2.toFixed(2)} ms</code> and cutting cost to <code>$1.72/1M (-33.8%)</code>!`,
+    t3: `<strong>Architect Recommendation (${dom} GPUs Multi-Node MoE / Frontier Mode)</strong>: 8-GPU HGX falls off the 18x inter-node RoCE cliff (TPOT jumps to <code>${d.t2.toFixed(2)} ms</code>); mandate <strong>Tier 3 (72-GPU Copper NVL72 MNNVL)</strong> to unify all 72 GPUs at <code>130 TB/s</code>, locking TPOT at <code>${d.t3.toFixed(2)} ms</code> and cost at <code>$0.98/1M (-62.3%)</code>!`,
+    t4: `<strong>Architect Recommendation (128K+ Long-Context KV / Multi-TB DLRM Memory Wall Mode)</strong>: Attach <strong>Tier 4 (CXL 3.0 Type-3 Memory Pool + 2MiB Device-DAX)</strong> to expand node memory by <code>+2,048 GB at $4.50/GB (-87% vs HBM3e)</code> and reload 128K KV caches in <code>18.5 ms (42.2x faster than recompute)</code>!`
+  };
+  document.getElementById('scuDecisionCallout').innerHTML = msgMap[bestId];
+}
+updateScaleupSizer();
+</script>
 </body>
 </html>

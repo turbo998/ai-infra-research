@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;">
+<title>AI 服务器机内与超节点 Scale-Up 互连架构选型 — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --accent: #3b82f6;
+    --accent-dark: #1d4ed8;
+    --green: #10b981;
+    --purple: #7c3aed;
+    --red: #dc2626;
+    --amber: #d97706;
+    --code-bg: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 16px 60px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .topbar {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 16px 22px;
+    color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .topbar a {
+    color: #93c5fd;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    margin-right: 12px;
+  }
+  .deck {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .card-num {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--accent-dark);
+    background: #dbeafe;
+    padding: 5px 12px;
+    border-radius: 999px;
+  }
+  .prov-pill {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  h1, h2 {
+    margin: 0 0 10px;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+  h1 { font-size: 26.5px; }
+  h2 { font-size: 22.5px; }
+  .grad {
+    background: linear-gradient(90deg, #1d4ed8, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .sub {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0 0 18px;
+    line-height: 1.5;
+  }
+  .wb-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .box {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    background: #f8fafc;
+  }
+  .box h3 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .pill {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .badge-type {
+    display: inline-block;
+    background: #e0e7ff;
+    color: #1e40af;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-right: 6px;
+  }
+  .bar-wrap {
+    width: 100%;
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #7c3aed);
+    border-radius: 999px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.8px;
+  }
+  th, td {
+    border-bottom: 1px solid var(--line);
+    padding: 10px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #f1f5f9;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    color: #334155;
+  }
+  .code-dark {
+    background: var(--code-bg);
+    color: #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .callout-dark {
+    background: #0f172a;
+    color: #f8fafc;
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .fit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .fit-good {
+    background: #f0fdf4;
+    border: 2px solid #22c55e;
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .fit-bad {
+    background: #fef2f2;
+    border: 2px solid #ef4444;
+    border-radius: 14px;
+    padding: 18px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <strong>Round 15 · 7-Card 4:5 Visual Benchmark Report</strong> · AI Server Intra-Node &amp; Supernode Scale-Up Interconnect Selection
+  </div>
+  <div>
+    <a href="../components/nvlink-pcie-cxl-scaleup-interconnect-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/nvlink-pcie-cxl-scaleup-interconnect-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#scaleup-interconnect-sizer">🧮 Interactive Sizer</a>
+    <a href="../../assets/svg/nvlink-pcie-cxl-scaleup-interconnect-selection-faq-summary.svg">🖼️ Summary SVG</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">1 / 7 · HANDS-ON · SCALE-UP INTERCONNECTS (NVLINK vs. PCIE vs. CXL)</span>
+        <span class="prov-pill">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+      </div>
+      <h1><span class="grad">8 卡 NVSwitch HGX 将 TP=8 通信从 12.40ms 压至 1.55ms (快 8.0x)，机柜铜背板 NVL72 打破 8 卡带宽悬崖实现 5.40ms TPOT 与 62.3% TCO 降幅</span></h1>
+      <p class="sub">在 72-GPU Pod 运行 80 层大模型解码（每 Token 触发 160 次集合同步，SLA TPOT &le; 12.0ms）与 128K KV 扩容下，评测 PCIe Gen5、8 卡 NVSwitch HGX、72 卡铜背板 NVL72 (MNNVL) 与 CXL 3.0 内存池。</p>
+
+      <div class="wb-grid">
+        <div class="box">
+          <h3>Scenarios &amp; SLA Bands</h3>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 1 PCIe Gen5 Tree</strong>: 20.20ms TPOT (✕ Fail)</p>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 2 8-GPU HGX NVSwitch</strong>: 9.35ms TPOT (✅ Pass)</p>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 3 72-GPU NVL72 MNNVL</strong>: 5.40ms TPOT (✅ Pass)</p>
+          <p style="font-size:12.5px;margin:4px 0;">• <strong>Tier 4 CXL 3.0 DAX Pool</strong>: 18.5ms 128K KV Reload</p>
+          <hr style="border:0;border-top:1px solid #cbd5e1;margin:8px 0;">
+          <p style="font-size:12px;color:#1d4ed8;font-weight:700;margin:0;">Target SLA: Decode TPOT &le; 12.0 ms</p>
+        </div>
+        <div class="box">
+          <h3>Structured Input Contract</h3>
+          <div class="code-dark" style="padding:10px;font-size:11px;">{
+  "pod_gpus": 72,
+  "layers": 80,
+  "syncs_per_token": 160,
+  "compute_ms_hopper": 7.80,
+  "compute_ms_blackwell": 4.62,
+  "sla_tpot_ms": 12.0
+}</div>
+        </div>
+        <div class="box">
+          <h3>Top Architecture Decisions</h3>
+          <p style="font-size:12.5px;margin:4px 0;"><span class="pill pill-auto">Act automatically</span> <strong>Tier 2 (HGX 9.35ms)</strong> for TP=4/8 70B–405B</p>
+          <p style="font-size:12.5px;margin:6px 0;"><span class="pill pill-auto">Act automatically</span> <strong>Tier 3 (NVL72 5.40ms)</strong> for EP=16–72 MoE</p>
+          <p style="font-size:12.5px;margin:6px 0;"><span class="pill pill-human">Send to a human</span> <strong>Tier 1 PCIe</strong> for TP&ge;4 (61.4% stall)</p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Scale-Up 架构档位</th>
+            <th>双向物理 / 有效集合带宽</th>
+            <th>160 次同步耗时 / 占比</th>
+            <th>解码 TPOT / SLA</th>
+            <th>单卡吞吐 / 百万 Token 成本</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: PCIe Gen5 x16 交换树</strong></td>
+            <td>128.0 / 48.0 GB/s (跨 UPI 22GB/s)</td>
+            <td>12.40 ms / 61.4%</td>
+            <td><strong style="color:#dc2626;">20.20 ms ✕</strong></td>
+            <td>198.0 tok/s · $2.60 / 1M</td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 8-GPU NVSwitch HGX</strong></td>
+            <td>900.0 / 385.0 GB/s (NVLS)</td>
+            <td><strong>1.55 ms / 16.6%</strong></td>
+            <td><strong style="color:#16a34a;">9.35 ms ✅</strong></td>
+            <td>428.0 tok/s · <strong>$1.72 (-33.8%)</strong></td>
+          </tr>
+          <tr style="background:#f5f3ff;">
+            <td><strong>Tier 3: 72-GPU NVL72 铜背板</strong></td>
+            <td><strong>1,800.0 / 780.0 GB/s (130 TB/s)</strong></td>
+            <td><strong>0.78 ms / 14.4%</strong></td>
+            <td><strong style="color:#7c3aed;">5.40 ms ✅</strong></td>
+            <td><strong>890.0 tok/s · $0.98 (-62.3%)</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: CXL 3.0 内存池 (2TB DAX)</strong></td>
+            <td>128.0 / 82.0 GB/s (+2,048 GB)</td>
+            <td>6.00 ms (128K 恢复 18.5ms)</td>
+            <td><strong style="color:#d97706;">13.80 ms ⚠️</strong></td>
+            <td>540.0 tok/s · <strong>$1.13 (-56.5%)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Hardware &amp; Provenance Callout</strong>: Sealed source <code>experiments/nvlink_pcie_cxl_scaleup_selection/results.json</code>. Classification: <code>synthetic</code> Roofline &amp; $\alpha$-$\beta$ collective latency model calibrated to published PCI-SIG Gen5/Gen6, NVIDIA HGX NVLink-4 / NVL72 NVLink-5 MNNVL, and CXL 3.0 specs (<code>independently_reproduced=false</code>; physical 72-GPU NVL72 measurement: <code>not_measured</code>; local CPU harness: <code>measured</code>).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">2 / 7 · SCENARIO: 405B TP=8 &amp; 671B MoE EP=72 REAL-TIME DECODE</span>
+        <span class="prov-pill">Sealed Case: 80 Layers · 160 Syncs/Token · SLA &le; 12.0ms</span>
+      </div>
+      <h2><span class="grad">单案例深潜：为什么每生成 1 个 Token 的 160 次同步会让 PCIe 服务器空转 61.4%，而 NVL72 铜背板能消除 18 倍跨机带宽悬崖？</span></h2>
+      <p class="sub">拆解单节点 8 卡 TP=8、跨节点 72 卡 MoE EP=72 与 128K 超长上下文 KV 缓存池化三类核心场景的物理瓶颈。</p>
+
+      <div class="box" style="margin-bottom:16px;border-left:4px solid #2563eb;">
+        <strong>Input Scenario Quote</strong>: “Enterprise AI infrastructure team sizing a 72-GPU pod for 405B Dense (TP=8) and 671B MoE (EP=72) interactive serving (TPOT &le; 12.0 ms) alongside 128K-context multi-turn RAG sessions with a 2 TB KV cache working set per node.”
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><span class="badge-type">choice</span><strong>Decision 1: Single-Node 8-GPU Tensor Parallelism (TP=4 / TP=8)</strong></div>
+          <span class="pill pill-auto">Act automatically · Confidence 99.3%</span>
+        </div>
+        <p style="font-size:13px;margin:8px 0;">选定 <strong>Tier 2 (8-GPU NVSwitch HGX + NVLS Multicast)</strong>：有效集合归约带宽从 PCIe Gen5 的 <code>48.0 GB/s</code> 跃升至 <code>385.0 GB/s (8.02x)</code>，160 次同步总耗时从 <code>12.40 ms</code> 压至 <code>1.55 ms</code>，TPOT 达 <code>9.35 ms (&le;12ms SLA)</code>，百万 Token 成本降至 <code>$1.72 (-33.8%)</code>。</p>
+        <div style="font-size:12px;display:flex;justify-content:space-between;"><span>Per-Token Communication Stall Reduction (12.40 ms &rarr; 1.55 ms = -87.5%)</span><strong>87.5%</strong></div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:87.5%;"></div></div>
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><span class="badge-type">choice</span><strong>Decision 2: Ultra-Large MoE Expert Parallelism Across 72 GPUs (EP=72)</strong></div>
+          <span class="pill pill-auto">Act automatically · Confidence 99.1%</span>
+        </div>
+        <p style="font-size:13px;margin:8px 0;">选定 <strong>Tier 3 (GB200/GB300 NVL72 Copper Backplane MNNVL)</strong>：消除 8 卡 HGX 跨节点走 400G RoCEv2 (<code>50 GB/s</code>) 的 18 倍带宽悬崖，72 卡全互连 <code>130 TB/s</code> 将 EP=72 TPOT 从 <code>31.40 ms</code> 压至 <code>6.20 ms (快 5.06x)</code>，百万 Token 成本降至 <code>$0.98 (-62.3%)</code>。</p>
+        <div style="font-size:12px;display:flex;justify-content:space-between;"><span>EP=72 Latency Reduction vs Multi-Node HGX (31.40 ms &rarr; 6.20 ms = -80.3%)</span><strong>80.3%</strong></div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:80.3%;"></div></div>
+      </div>
+
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><span class="badge-type">score</span><strong>Decision 3: 128K Long-Context KV Cache &amp; DLRM Memory Expansion</strong></div>
+          <span class="pill pill-auto">Act automatically · Confidence 98.4%</span>
+        </div>
+        <p style="font-size:13px;margin:8px 0;">选定 <strong>Tier 4 (CXL 3.0 Type-3 2TB Device-DAX Pool)</strong> 作为 NVLink 节点的容量扩展层：以 <code>$4.50/GB</code>（比 HBM3e 省 <code>87%</code>）扩展 <code>+2,048 GB/节点</code>，<code>18.5 ms</code> 零拷贝恢复 128K KV 缓存（比 780ms 重算快 <code>42.2x</code>）。</p>
+        <div style="font-size:12px;display:flex;justify-content:space-between;"><span>Memory Expansion CapEx Savings vs HBM3e ($35/GB &rarr; $4.50/GB)</span><strong>87.1%</strong></div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:87.1%;"></div></div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Key Architectural Finding</strong>: Never confuse Scale-Up bandwidth (`NVLink 900–1,800 GB/s` for 160 syncs/token) with Memory Capacity Pooling (`CXL 3.0 128 GB/s` for multi-TB KV/Embedding offload).
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">3 / 7 · WHAT I TESTED</span>
+        <span class="prov-pill">Full 4-Tier Evaluation Matrix</span>
+      </div>
+      <h2><span class="grad">全量评测矩阵：PCIe Gen5 在 TP&ge;4 下因 61.4% 通信阻塞违约，8 卡 HGX 在跨机 EP=16/72 时撞上 18x 悬崖</span></h2>
+      <p class="sub">横跨有效集合带宽、单跳延迟、无阻塞域规模、TPOT 达标率与百万 Token 成本的完整评分表。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>SCENARIO</th>
+            <th>QUESTION / TASK</th>
+            <th>MODEL ANSWER (SEALED METRICS)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: PCIe Gen5 Tree (TP=8)</strong></td>
+            <td>Can air-cooled 8×PCIe Gen5 run 405B TP=8 within 12ms SLA?</td>
+            <td><strong>✕ Miss</strong>: Comm takes <code>12.40 ms</code> (61.4% of step), TPOT <code>20.20 ms</code> (&gt;12ms SLA); cross-UPI drops BW to <code>22.0 GB/s</code>. Fit only for <code>TP=1/2</code>.</td>
+            <td><span class="pill pill-human">Send to a human</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 8-GPU HGX (TP=8)</strong></td>
+            <td>Does 8-GPU NVSwitch HGX meet 405B TP=8 real-time SLA?</td>
+            <td><strong>✅ Pass</strong>: <code>900 GB/s</code> NVLink-4 + <code>NVLS</code> cuts comm to <code>1.55 ms</code>, TPOT <code>9.35 ms</code>, <code>428 tok/s/GPU (2.16x)</code>, <code>$1.72/1M (-33.8%)</code>.</td>
+            <td><span class="pill pill-auto">Act automatically</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: Multi-Node HGX (EP=72)</strong></td>
+            <td>Can nine 8-GPU HGX nodes run 671B MoE EP=72 without a cliff?</td>
+            <td><strong>✕ Miss on Inter-Node Cliff</strong>: Crossing 8-GPU box drops from <code>900 GB/s</code> to <code>50 GB/s</code> RoCE (18x cliff), inflating EP=72 TPOT to <code>31.40 ms</code>.</td>
+            <td><span class="pill pill-confirm">Confirm</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 72-GPU NVL72 (EP=72)</strong></td>
+            <td>How does rack-scale copper MNNVL perform on 72-GPU MoE?</td>
+            <td><strong>✅ Pass</strong>: <code>130 TB/s</code> copper backplane keeps 8-GPU TPOT at <code>5.40 ms</code> and 72-GPU EP=72 TPOT at <code>6.20 ms</code> (<code>5.06x</code> faster), <code>$0.98/1M (-62.3%)</code>.</td>
+            <td><span class="pill pill-auto">Act automatically</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: CXL 3.0 DAX Pool</strong></td>
+            <td>Should CXL 3.0 be used for TP=8 All-Reduce or KV Pooling?</td>
+            <td><strong>✅ KV Pool / ✕ TP=8</strong>: TP=8 TPOT is <code>13.80 ms</code> (✕); but as a <code>+2,048 GB</code> DAX KV pool, it reloads 128K KV in <code>18.5 ms</code> at <code>$1.13/1M (-56.5%)</code>.</td>
+            <td><span class="pill pill-auto">Act automatically</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="fit-grid" style="margin-top:18px;">
+        <div class="box" style="border-left:4px solid #2563eb;">
+          <h3>Threshold Gating Summary</h3>
+          <p style="font-size:12.5px;margin:0;">设定硬门禁：交互式推理要求 <code>TPOT &le; 12.0 ms</code> 且通信开销占比 <code>&le; 25%</code>。在 <code>TP=8</code> 下 Tier 2 (<code>9.35ms / 16.6%</code>) 与 Tier 3 (<code>5.40ms / 14.4%</code>) 达标；在 <code>EP=16~72</code> 下仅 Tier 3 达标。</p>
+        </div>
+        <div class="box" style="border-left:4px solid #dc2626;">
+          <h3>Failure Mode Analysis</h3>
+          <p style="font-size:12.5px;margin:0;">双路 CPU 服务器未配专用 PCIe Switch（`nvidia-smi topo -m` 显示 `SYS`）时，跨 Socket P2P DMA 被迫走 CPU UPI 总线，带宽从 48 GB/s 暴跌至 22 GB/s。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Matrix Takeaway</strong>: Match the physical interconnect to the parallelism primitive: <code>PCIe Gen5</code> for <code>TP&le;2</code>, <code>8-GPU NVSwitch</code> for <code>TP=4..8</code>, <code>NVL72 MNNVL</code> for <code>EP=16..72</code>, and <code>CXL 3.0 DAX</code> for multi-TB KV/Embedding capacity.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">4 / 7 · UNDER THE HOOD</span>
+        <span class="prov-pill">Deterministic Evaluator &amp; Collective Protocol Trace</span>
+      </div>
+      <h2><span class="grad">底层机制：NVLS 硬件多播网内归约 (`multimem.ld_reduce`) 与 CXL.mem 2MiB DAX 零拷贝映射</span></h2>
+      <p class="sub">展示确定性 Scale-Up 互连 Roofline 模型输入契约（上）与 PTX `multimem` + `IMEX` 跨托盘归约验证流（下）。</p>
+
+      <div class="code-dark" style="margin-bottom:16px;">// 1. Sealed Input Contract (experiments/nvlink_pcie_cxl_scaleup_selection/run.py)
+{
+  "pod_gpus": 72,
+  "transformer_layers": 80,
+  "collectives_per_layer": 2,
+  "total_collectives_per_token": 160,
+  "compute_only_ms_per_token": 7.80,
+  "tier2_nvlink4_eff_bw_gbps": 385.0,
+  "tier3_nvlink5_mnnvl_eff_bw_gbps": 780.0
+}</div>
+
+      <div style="text-align:center;font-size:20px;font-weight:800;color:#1d4ed8;margin:6px 0;">&darr; Deterministic Alpha-Beta Collective &amp; TCO Verifier (&lt;answer&gt;) &darr;</div>
+
+      <div class="code-dark">// 2. Topology Audit, NVLS Multicast Reduction &amp; CXL 2MiB DAX Mount
+$ nvidia-smi topo -m                     # Verify NV18 (NVSwitch) vs PIX (PCIe Switch) vs SYS (UPI bottleneck!)
+$ nvidia-imex-ctl -q                     # Verify 72-GPU MNNVL Internode Memory Exchange domain health
+$ ndctl create-namespace -m devdax -a 2M # Align CXL 3.0 Type-3 expander to 2 MiB hugepage boundary
+
+// PTX In-Switch NVLS Reduction (Eliminates 2*(N-1)/N Ring Traffic Amplification):
+multimem.ld_reduce.global.add.v4.f16 {%r0,%r1,%r2,%r3}, [%mc_ptr]; // Switch ALU sums across 72 GPUs
+multimem.st.global.v4.f16 [%mc_ptr], {%r0,%r1,%r2,%r3};            // Hardware multicast writeback
+&lt;answer&gt;
+  tier1_pcie_gen5 : comm = 12.40 ms (61.4%) | tpot = 20.20 ms ✕ | 198 tok/s/GPU | $2.60 / 1M tok
+  tier2_hgx_8gpu  : comm =  1.55 ms (16.6%) | tpot =  9.35 ms ✅ | 428 tok/s/GPU | $1.72 / 1M tok (-33.8%)
+  tier3_nvl72_rack: comm =  0.78 ms (14.4%) | tpot =  5.40 ms ✅ | 890 tok/s/GPU | $0.98 / 1M tok (-62.3%)
+  tier4_cxl3_pool : pool = +2048 GB/node    | 128K_kv_reload = 18.5 ms (42.2x)  | $1.13 / 1M tok (-56.5%)
+&lt;/answer&gt;</div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Verification Command</strong>: <code>python experiments/nvlink_pcie_cxl_scaleup_selection/run.py --check</code> &amp;&amp; <code>python -m unittest tests/test_nvlink_pcie_cxl_scaleup_selection.py</code> (Verified PASS on local CPU harness).
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">5 / 7 · ROBUSTNESS CHECK</span>
+        <span class="prov-pill">Parallel Domain Scaling: TP/EP = 2 &rarr; 8 &rarr; 16 &rarr; 72 GPUs</span>
+      </div>
+      <h2><span class="grad">鲁棒性压测：当并行通信域从 8 卡扩至 16/72 卡时，8 卡 HGX 延迟暴涨 3.36x，而 NVL72 仅微增 0.80ms</span></h2>
+      <p class="sub">检验紧耦合通信域跨出 PCIe Root（&gt;4 卡）与跨出 HGX 机箱边界（&gt;8 卡）时的延迟跳变幅度。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ARCHITECTURE / METRIC</th>
+            <th>INTRA-NODE (2 / 8 GPUs)</th>
+            <th>CROSS-NODE (16 / 72 GPUs)</th>
+            <th>CLIFF DELTA (8 &rarr; 72 GPUs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: PCIe Gen5 Switch Tree</strong></td>
+            <td><code>9.60 ms</code> (2 GPUs ✅)<br><code>20.20 ms</code> (8 GPUs ✕)</td>
+            <td><code>38.50 ms</code> (16 GPUs ✕)<br><code>64.20 ms</code> (72 GPUs ✕)</td>
+            <td><strong style="color:#dc2626;">+44.00 ms (+217.8% 严重崩塌)</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 8-GPU NVSwitch HGX</strong></td>
+            <td><code>8.20 ms</code> (2 GPUs ✅)<br><code>9.35 ms</code> (8 GPUs ✅)</td>
+            <td><code>22.80 ms</code> (16 GPUs ✕)<br><code>31.40 ms</code> (72 GPUs ✕)</td>
+            <td><strong style="color:#d97706;">+22.05 ms (+235.8% 跨机悬崖)</strong></td>
+          </tr>
+          <tr style="background:#f5f3ff;">
+            <td><strong>Tier 3: 72-GPU Copper NVL72</strong></td>
+            <td><code>4.85 ms</code> (2 GPUs ✅)<br><code>5.40 ms</code> (8 GPUs ✅)</td>
+            <td><code>5.75 ms</code> (16 GPUs ✅)<br><code>6.20 ms</code> (72 GPUs ✅)</td>
+            <td><strong style="color:#16a34a;">+0.80 ms (+14.8% 整柜平坦无悬崖)</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: CXL 3.0 Memory Pool</strong></td>
+            <td><code>9.10 ms</code> (2 GPUs ✅)<br><code>13.80 ms</code> (8 GPUs ⚠️)</td>
+            <td><code>29.40 ms</code> (16 GPUs ✕)<br><code>46.80 ms</code> (72 GPUs ✕)</td>
+            <td><strong style="color:#2563eb;">+33.00 ms (仅限单机 KV 容量池化)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="box" style="margin-top:20px;border-left:4px solid #7c3aed;">
+        <h3>Perturbation &amp; Boundary Analysis</h3>
+        <p style="font-size:13px;margin:6px 0;">1. <strong>为什么 Tier 1 在 `TP=2` 时是性价比冠军？</strong> 当模型仅需 2 张卡（如 32B FP16 或 70B INT4/FP8）时，两张卡挂在同一颗 PCIe Switch 下，TPOT 为 <code>9.60 ms (&le;12ms SLA)</code>，直接省下 30%+ HGX 溢价。</p>
+        <p style="font-size:13px;margin:6px 0;">2. <strong>为什么 Tier 2 在 8&rarr;16 卡时发生 `+143.9%` 阶跃？</strong> 因为第 8 卡到第 9 卡离开了 `900 GB/s` 机箱底板，掉入 `50 GB/s` 网卡；唯有 Tier 3 机柜铜背板把无阻塞边界推到 72 卡，才使 `EP=72` 稳守 <code>6.20 ms</code>。</p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Robustness Conclusion</strong>: Never span un-hierarchical Tensor Parallelism (`TP`) across an 8-GPU HGX chassis boundary; if your model requires `>8` tightly coupled GPUs, either use `PP` / Hierarchical `DeepEP` or deploy on rack-scale `NVL72 MNNVL`.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">6 / 7 · LATENCY &amp; BANDWIDTH SCALING</span>
+        <span class="prov-pill">Paired Bar Comparison Across Scale-Up Tiers</span>
+      </div>
+      <h2><span class="grad">带宽与延迟横向对比：有效集合带宽提升 8.0x～16.25x，单卡吞吐跃升 4.49x，单 Token 成本降 62.3%</span></h2>
+      <p class="sub">蓝色/翠绿代表 NVSwitch / NVL72 高速互连路径（Tier 2 / Tier 3），浅灰代表传统 PCIe Gen5 基线（Tier 1）。</p>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>Effective Collective All-Reduce Bandwidth</strong> (Tier 3 NVL72 vs Tier 1 PCIe Gen5)</span>
+          <strong>780.0 GB/s vs 48.0 GB/s (16.25x higher)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:100%;background:#3b82f6;height:14px;border-radius:4px;margin-bottom:6px;" title="Tier 3 NVL72: 780.0 GB/s"></div>
+          <div style="width:6.2%;background:#cbd5e1;height:14px;border-radius:4px;" title="Tier 1 PCIe Gen5: 48.0 GB/s"></div>
+        </div>
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>160-Sync Communication Latency per Token @ TP=8</strong> (Tier 2 HGX vs Tier 1 PCIe)</span>
+          <strong>1.55 ms vs 12.40 ms (8.00x lower)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:12.5%;background:#10b981;height:14px;border-radius:4px;margin-bottom:6px;" title="Tier 2 HGX: 1.55 ms"></div>
+          <div style="width:100%;background:#cbd5e1;height:14px;border-radius:4px;" title="Tier 1 PCIe: 12.40 ms"></div>
+        </div>
+      </div>
+
+      <div class="box" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>72-GPU MoE (EP=72) End-to-End Decode TPOT</strong> (Tier 3 NVL72 vs Tier 2 Multi-Node HGX)</span>
+          <strong>6.20 ms vs 31.40 ms (5.06x lower)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:19.7%;background:#3b82f6;height:14px;border-radius:4px;margin-bottom:6px;" title="Tier 3 NVL72: 6.20 ms"></div>
+          <div style="width:100%;background:#cbd5e1;height:14px;border-radius:4px;" title="Tier 2 Multi-Node HGX: 31.40 ms"></div>
+        </div>
+      </div>
+
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span><strong>Cost per 1M Generated Tokens</strong> (Tier 3 NVL72 vs Tier 1 PCIe Gen5)</span>
+          <strong>$0.98 vs $2.60 (-62.3% TCO savings)</strong>
+        </div>
+        <div style="background:#f1f5f9;padding:8px;border-radius:8px;">
+          <div style="width:37.7%;background:#10b981;height:14px;border-radius:4px;margin-bottom:6px;" title="Tier 3 NVL72: $0.98 / 1M"></div>
+          <div style="width:100%;background:#cbd5e1;height:14px;border-radius:4px;" title="Tier 1 PCIe: $2.60 / 1M"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Scaling Rule</strong>: All bar coordinates strictly reflect <code>experiments/nvlink_pcie_cxl_scaleup_selection/results.json</code> (deterministic synthetic model; physical 72-GPU cluster measurement: <code>not_measured</code>).
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-header">
+        <span class="card-num">7 / 7 · MY TAKE</span>
+        <span class="prov-pill">Architect Playbook &amp; Readiness</span>
+      </div>
+      <h2><span class="grad">架构师决断：何时买风冷 PCIe 省钱，何时上 8 卡 HGX，何时上液冷 NVL72 与 CXL 3.0 内存池？</span></h2>
+      <p class="sub">面向企业算力采购与 AI 基础设施架构评审的最终选型铁律。</p>
+
+      <div class="fit-grid" style="margin-bottom:18px;">
+        <div class="fit-good">
+          <h3 style="margin-top:0;color:#166534;font-size:16px;">✅ Good fit (强烈推荐)</h3>
+          <ul style="font-size:13px;line-height:1.6;padding-left:18px;margin:0;">
+            <li><strong>7B～32B 模型 (`TP=1/2`)、LoRA 微调、AIGC 视频批渲染 &rarr; 选 Tier 1 (PCIe Gen5 交换树)</strong>：<code>9.60 ms</code> TPOT 达标，立省 <code>30%+</code> 硬件采购费并兼容存量风冷机柜。</li>
+            <li><strong>70B～405B 稠密模型 (`TP=4/8`) 实时推理与主力训练 &rarr; 选 Tier 2 (8 卡 NVSwitch HGX)</strong>：<code>900 GB/s</code> 机内全互连将通信压至 <code>1.55 ms</code>，单 Token 成本降 <code>33.8%</code>。</li>
+            <li><strong>671B～1T+ 超大 MoE (`EP=16~72`) &rarr; 选 Tier 3 (机柜铜背板 NVL72)</strong>：<code>130 TB/s</code> 整柜无阻塞域消除 8 卡跨机悬崖，成本降 <code>62.3%</code>；<strong>128K+ KV 池化 &rarr; 选 Tier 4 (CXL 3.0 DAX)</strong>。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3 style="margin-top:0;color:#991b1b;font-size:16px;">⛔ Not for (严禁踩坑)</h3>
+          <ul style="font-size:13px;line-height:1.6;padding-left:18px;margin:0;">
+            <li><strong>严禁采购无 PCIe Switch 的双路服务器跑多卡 TP</strong>：跨 CPU Socket UPI 总线会导致 P2P 带宽跌至 <code>22 GB/s</code>。</li>
+            <li><strong>严禁在 8 卡 HGX 集群上开启跨节点 `TP=16`</strong>：离开机箱底板后带宽暴跌 18 倍，必须将 `TP` 锁死在 `&le;8`。</li>
+            <li><strong>严禁听信宣传用 CXL 3.0 替代 NVLink 跑高频 All-Reduce</strong>：CXL 带宽仅为 NVLink 的 1/7～1/14，应专职做 TB 级容量池化。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Production Readiness Checklist</h3>
+        <p style="font-size:12.5px;margin:4px 0;">- [x] 验收服务器时执行 <code>nvidia-smi topo -m</code>，杜绝跨 Socket <code>SYS</code> 路径承载 TP 流量</p>
+        <p style="font-size:12.5px;margin:4px 0;">- [x] 开启 <code>nvidia-fabricmanager</code> 与 <code>NCCL_NVLS_ENABLE=1</code> 激活交换芯片硬件多播归约</p>
+        <p style="font-size:12.5px;margin:4px 0;">- [x] 将 CXL 3.0 扩展池配置为 <code>2 MiB</code> 对齐的 <code>devdax</code> 模式对接 LMCache / Mooncake 二级 KV 缓存</p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Readiness &amp; Provenance</strong>: Repository <code>turbo998/ai-infra-research</code> · Model <code>experiments/nvlink_pcie_cxl_scaleup_selection/run.py</code> (<code>synthetic</code> + <code>anonymized_reported</code>, <code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>, <code>local_cpu_harness_measurement=measured</code>) · Self-contained CSP compliant.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
