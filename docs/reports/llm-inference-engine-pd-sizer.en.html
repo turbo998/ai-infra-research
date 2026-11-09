@@ -2221,5 +2221,94 @@ function updateDlSizer() {
 }
 updateDlSizer();
 </script>
+
+  <!-- Round 25: Enterprise LLM API Gateway, Semantic Cache & Cascade Routing Sizer -->
+  <div id="llm-gateway-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#2563eb;color:#eff6ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 25 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚦 Enterprise LLM API Gateway, Semantic Cache &amp; Cascade Routing Sizer (Round-Robin vs. TPM+Exact vs. KV-Prefix+SemCache vs. Cascade Router)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/llm_api_gateway_routing_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/llm-api-gateway-semantic-cache-routing-selection-faq.en.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/llm-api-gateway-semantic-cache-routing-selection-faq.md" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./llm-api-gateway-semantic-cache-routing-selection-cards.html" style="color:#93c5fd;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Inference Cluster Replica Count:</label>
+        <select id="gwRepSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGwSizer()">
+          <option value="2">2 Replicas (Small Dual-Active Pool)</option>
+          <option value="8" selected>8 Replicas (Enterprise Baseline · 10M req/mo)</option>
+          <option value="16">16 Replicas (Medium Multi-Node Pool)</option>
+          <option value="32">32 Replicas (Large Enterprise Fleet)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Backend Model Pool Topology:</label>
+        <select id="gwPoolSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGwSizer()">
+          <option value="cascade" selected>Heterogeneous Model Tiers (8B + 70B + 671B Cascade)</option>
+          <option value="single">Single-Model Fleet (KV Affinity &amp; Semantic Cache Only)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Gateway &amp; Routing Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU KV Prefix Hit Rate</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Gateway Cache Hit Rate</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">P99 TTFT / Task Quality</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Monthly Cost (10M Req)</th>
+          </tr>
+        </thead>
+        <tbody id="gwSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="gwDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #2563eb;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateGwSizer() {
+  const rep = parseInt(document.getElementById('gwRepSelect').value, 10) || 8;
+  const pmode = document.getElementById('gwPoolSelect').value || 'cascade';
+  const kvMap = {
+    2:  { rr: 32.5, kv: 64.8 },
+    8:  { rr: 8.1,  kv: 64.2 },
+    16: { rr: 4.1,  kv: 63.5 },
+    32: { rr: 2.0,  kv: 62.8 }
+  };
+  const k = kvMap[rep] || kvMap[8];
+  const bestId = pmode === 'single' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Stateless Round-Robin Proxy (Nginx -> 100% Frontier)', kv: `${k.rr.toFixed(1)}% ✕ (Diluted ${rep}x)`, cache: '0.0%', ttft: '1,420.0 ms ✕ · 100% Quality', cost: '$142,000 / mo ($14.20/1k)' },
+    { id: 't2', name: '🟨 Tier 2: TPM Rate-Limit + Redis Exact Cache (LiteLLM)', kv: `${(k.rr*1.38).toFixed(1)}% ✕`, cache: '8.5% Exact Hit', ttft: '890.0 ms ✕ · 100% Quality', cost: '$129,930 / mo (-8.5%)' },
+    { id: 't3', name: '🟩 Tier 3: KV-Prefix Affinity Router + Verified Semantic Cache', kv: `${k.kv.toFixed(1)}% ✅`, cache: '26.4% Semantic Hit ✅', ttft: '310.0 ms ✅ · 99.6% Quality', cost: '$78,400 / mo (-44.8% ✅)' },
+    { id: 't4', name: '🟪 Tier 4: Tier 3 + Cascade Router (8B->70B->671B) + Breaker', kv: `${k.kv.toFixed(1)}% 🏆`, cache: '26.4% Semantic Hit 🏆', ttft: '185.0 ms 🏆 · 99.2% Quality', cost: '$26,980 / mo (-81.0% 🏆)' }
+  ];
+
+  document.getElementById('gwSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(37,99,235,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#93c5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.kv}</code></td>
+      <td style="padding:10px;"><code>${r.cache}</code></td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#60a5fa':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('gwDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>Architect Recommendation (${rep}-Replica Single-Model Fleet Mode)</strong>: Deploy <strong>Tier 3 (KV-Prefix Affinity Router + Verified Semantic Cache)</strong> to lift GPU KV prefix hit rate from <code>${k.rr.toFixed(1)}% -> ${k.kv.toFixed(1)}%</code> and cut monthly cost to <code>$78,400 (-44.8%)</code>!`
+    : `<strong>Architect Recommendation (${rep}-Replica Enterprise AI Hub Mode)</strong>: Standardize on <strong>Tier 4 (KV-Prefix Affinity + Verified Semantic Cache + 8B/70B/671B Cascade Router)</strong> to preserve <code>${k.kv.toFixed(1)}%</code> KV locality while offloading 85% of routine requests to compact models—cutting P99 TTFT to <code>185.0 ms</code> and saving <code>$115,020.00/mo (-81.0%)</code>!`;
+}
+updateGwSizer();
+</script>
 </body>
 </html>
