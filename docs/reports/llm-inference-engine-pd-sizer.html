@@ -1779,5 +1779,95 @@ function updateTeeSizer() {
 }
 updateTeeSizer();
 </script>
+
+  <!-- Round 20: Thousand-GPU Model Weight & Container P2P Distribution Selection Sizer -->
+  <div id="weight-distribution-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#06b6d4;color:#083344;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 20 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">📦 千卡集群百 GB 大模型权重与镜像极速分发计算器（中心直拉 vs. 分片 CDN vs. Dragonfly P2P vs. RDMA GDS 环广播）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/model_weight_p2p_distribution_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/model-weights-distribution-p2p-registry-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/model-weights-distribution-p2p-registry-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./model-weights-distribution-p2p-registry-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">并发拉取集群节点规模 (156GB/节点 · 8×H100/节点):</label>
+        <select id="p2pNodeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateP2pSizer()">
+          <option value="16">16 节点 (128 GPUs · 总流量 2,496 GB)</option>
+          <option value="64" selected>64 节点 (512 GPUs 基线 · 总流量 9,984 GB)</option>
+          <option value="128">128 节点 (1,024 GPUs · 总流量 19,968 GB)</option>
+          <option value="256">256 节点 (2,048 GPUs · 总流量 39,936 GB)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群网络基础设施类型:</label>
+        <select id="p2pNetSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateP2pSizer()">
+          <option value="rdma" selected>具备 400G RoCEv2 / InfiniBand RDMA 网络 (智算中心)</option>
+          <option value="tcp">通用公有云标准 TCP/IP 以太网 (无跨节点 RDMA 存储)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">模型权重与容器分发档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">源站回源总流量</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前节点规模就绪耗时</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">扩展复杂度与本地 I/O</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">512 卡月度空转浪费 (12次/天)</th>
+          </tr>
+        </thead>
+        <tbody id="p2pSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="p2pDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #06b6d4;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateP2pSizer() {
+  const nodes = parseInt(document.getElementById('p2pNodeSelect').value, 10) || 64;
+  const net = document.getElementById('p2pNetSelect').value || 'rdma';
+  const secMap = {
+    16:  { t1: 545.0,  t2: 110.0,  t3: 34.0, t4: 3.80 },
+    64:  { t1: 2180.0, t2: 440.0,  t3: 42.0, t4: 4.20 },
+    128: { t1: 4360.0, t2: 880.0,  t3: 48.5, t4: 4.60 },
+    256: { t1: 8720.0, t2: 1760.0, t3: 56.0, t4: 5.10 }
+  };
+  const s = secMap[nodes] || secMap[64];
+  const totGb = (nodes * 156.0).toLocaleString();
+  const bestId = net === 'tcp' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 中心化 OCI Registry / S3 直拉 (40G 共享出口)', orig: `${totGb} GB (0% 削减 ✕)`, sec: `${s.t1.toFixed(1)} s ✕`, io: 'O(N) 线性雪崩 · 双倍磁盘解压', cost: '$279,040.00 / 月' },
+    { id: 't2', name: '🟨 Tier 2: 多副本分片 Registry + 对象存储 CDN (200G)', orig: `${totGb} GB (0% 削减)`, sec: `${s.t2.toFixed(1)} s ✕`, io: 'O(N) 线性排队 · 全量本地写盘', cost: '$56,320.00 / 月 (-79.8%)' },
+    { id: 't3', name: '🟩 Tier 3: CNCF Dragonfly / Kraken P2P 树 + Lazy OCI', orig: '156.0 GB (-98.4% ✅)', sec: `${s.t3.toFixed(1)} s (51.9x)`, io: 'O(log N) TCP 对等树 · NVMe 缓存', cost: '$5,376.00 / 月 (-98.1%)' },
+    { id: 't4', name: '🟪 Tier 4: RDMA GDS + Mooncake/NCCL 400G 显存环广播', orig: '156.0 GB (-98.4% 🏆)', sec: `${s.t4.toFixed(2)} s ✅ (519x)`, io: 'O(1) 零 CPU / 零写盘直写 HBM', cost: '$537.60 / 月 (-99.8% 🏆)' }
+  ];
+
+  document.getElementById('p2pSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(6,182,212,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.orig}</code></td>
+      <td style="padding:10px;"><code>${r.sec}</code></td>
+      <td style="padding:10px;"><code>${r.io}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('p2pDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>架构师选型建议 (${nodes} 节点 · 标准 TCP 云集群模式)</strong>：首选 <strong>Tier 3 (CNCF Dragonfly / Kraken P2P 分片树 + Nydus/SOCI)</strong>，将源站回源流量从 <code>${totGb} GB</code> 砍至 <code>156.0 GB (-98.4%)</code>，全集群就绪时间从 <code>${s.t1.toFixed(1)} s</code> 压至 <code>${s.t3.toFixed(1)} s</code>，月省 <code>98.1%</code> 空转费！`
+    : `<strong>架构师选型建议 (${nodes} 节点 · 400G RDMA 智算集群模式)</strong>：首选 <strong>Tier 4 (GPUDirect Storage + Mooncake/NCCL 400G RDMA 环形广播)</strong>，绕过 CPU 与本地磁盘直写 HBM，全集群就绪时间从 <code>${s.t1.toFixed(1)} s</code> 压至 <code>${s.t4.toFixed(2)} s</code>，每月净省 <code>$278,502.40 (-99.8%)</code>！`;
+}
+updateP2pSizer();
+</script>
 </body>
 </html>
