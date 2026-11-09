@@ -2311,5 +2311,100 @@ function updateGwSizer() {
 }
 updateGwSizer();
 </script>
+
+  <!-- Round 26: Enterprise On-Premises Single-Node, Workstation & Edge LLM Hardware Sizer -->
+  <div id="onprem-workstation-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 26 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🖥️ 政企私有化单机/工作站与边缘大模型硬件选型计算器（4×4090 攒机 vs. 统一内存工作站 vs. 2×RTX PRO 6000 vs. 2×H200 NVL）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/onprem_edge_workstation_llm_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/edge-on-prem-workstation-llm-deployment-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/edge-on-prem-workstation-llm-deployment-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./edge-on-prem-workstation-llm-deployment-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">并发活跃内部员工数 (Concurrent Active Users):</label>
+        <select id="onpUsersSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateOnpremSizer()">
+          <option value="1">1 User (个人开发桌面 / 高管本地静音助手)</option>
+          <option value="8">8 Users (小型课题组并发)</option>
+          <option value="16" selected>16 Users (部门级 / 分支机构设计基线)</option>
+          <option value="32">32 Users (全院 / 全所高峰并发)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">物理部署环境与机密要求:</label>
+        <select id="onpEnvSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateOnpremSizer()">
+          <option value="dept" selected>办公室塔式工作站或普通风冷机柜 (追求极致性价比)</option>
+          <option value="dc">核心数据中心机柜 (要求冗余电源/BMC + 硬件 TEE 机密计算)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">私有化单机硬件档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">总显存 / 70B 剩余 KV</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">16K RAG P99 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前并发总吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">年故障率 / 3年TCO / 百万Token</th>
+          </tr>
+        </thead>
+        <tbody id="onpSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="onpDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateOnpremSizer() {
+  const usr = parseInt(document.getElementById('onpUsersSelect').value, 10) || 16;
+  const env = document.getElementById('onpEnvSelect').value || 'dept';
+  const tokMap = {
+    1:  { t1: 42.0,  t2: 21.5, t3: 54.0,   t4: 98.0 },
+    8:  { t1: 165.0, t2: 52.0, t3: 440.0,  t4: 960.0 },
+    16: { t1: 245.0, t2: 68.0, t3: 740.0,  t4: 1680.0 },
+    32: { t1: 210.0, t2: 72.0, t3: 1020.0, t4: 2650.0 }
+  };
+  const tk = tokMap[usr] || tokMap[16];
+  let bestId = 't3';
+  if (env === 'dc' || usr >= 32) bestId = 't4';
+  else if (usr <= 1) bestId = 't2';
+  else bestId = 't3';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 4×消费级 RTX 4090 拼装服务器 (无 P2P)', vram: '96 GB (无ECC · 仅剩20GB KV ✕)', ttft: '980.0 ms', tput: `${tk.t1.toFixed(1)} tok/s`, cost: 'AFR 14.5% ✕ · $24.8k · $1.07/1M' },
+    { id: 't2', name: '🟨 Tier 2: 统一内存工作站 (Mac Studio Ultra 192G / Spark)', vram: '192 GB (剩 116GB KV · 240W)', ttft: '4,850.0 ms ✕', tput: `${tk.t2.toFixed(1)} tok/s`, cost: 'AFR 2.5% · $11.2k (最低) · $1.74/1M' },
+    { id: 't3', name: '🟩 Tier 3: 双卡 NVIDIA RTX PRO 6000 Blackwell (96GB×2)', vram: '192 GB GDDR7 ECC (剩116GB KV ✅)', ttft: '285.0 ms ✅', tput: `${tk.t3.toFixed(1)} tok/s ✅`, cost: 'AFR 1.2% ✅ · $26.4k · $0.34/1M (-68%)' },
+    { id: 't4', name: '🟦 Tier 4: 企业 2U 双卡 NVIDIA H200 NVL (141GB×2)', vram: '282 GB HBM3e ECC (剩206GB KV 🏆)', ttft: '115.0 ms 🏆', tput: `${tk.t4.toFixed(1)} tok/s 🏆`, cost: 'AFR 0.5% 🏆 · $68.5k · $0.25/1M (-77%)' }
+  ];
+
+  document.getElementById('onpSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.vram}</code></td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><code>${r.tput}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const msgMap = {
+    t2: `<strong>架构师选型建议 (单人桌面 / 原型验证模式)</strong>：选用 <strong>Tier 2 (Mac Studio Ultra 192GB / DGX Spark)</strong>，仅 <code>240W</code> 静音桌面即可装下百B级大模型，3 年总成本仅 <code>$11,200</code>！`,
+    t3: `<strong>架构师选型建议 (${usr} 人部门级私有化模式)</strong>：首选 <strong>Tier 3 (双卡 NVIDIA RTX PRO 6000 Blackwell 96GB×2 = 192GB ECC)</strong>，3 年 TCO (<code>$26,400</code>) 与 4×4090 相近，但提供 <code>116 GB</code> 充裕 KV 空间与完整 P2P，并发吞吐达 <code>${tk.t3.toFixed(1)} tok/s</code>，百万 Token 成本降至 <code>$0.34 (-68.2%)</code>！`,
+    t4: `<strong>架构师选型建议 (${usr} 人核心机房 / 机密计算模式)</strong>：首选 <strong>Tier 4 (2×NVIDIA H200 NVL 282GB HBM3e + 900 GB/s NVLink)</strong>，16K 长文档 TTFT 压至 <code>115.0 ms</code>，并发吞吐高达 <code>${tk.t4.toFixed(1)} tok/s</code>，支持硬件 TEE 机密计算且单 Token 成本最低 (<code>$0.25/1M</code>)！`
+  };
+  document.getElementById('onpDecisionCallout').innerHTML = msgMap[bestId];
+}
+updateOnpremSizer();
+</script>
 </body>
 </html>

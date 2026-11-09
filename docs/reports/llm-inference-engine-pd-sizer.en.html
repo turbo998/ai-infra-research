@@ -2310,5 +2310,100 @@ function updateGwSizer() {
 }
 updateGwSizer();
 </script>
+
+  <!-- Round 26: Enterprise On-Premises Single-Node, Workstation & Edge LLM Hardware Sizer -->
+  <div id="onprem-workstation-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 26 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🖥️ On-Premises Single-Node, Workstation &amp; Edge LLM Hardware Sizer (4×4090 DIY vs. Unified SoC vs. 2×RTX PRO 6000 vs. 2×H200 NVL)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/onprem_edge_workstation_llm_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/edge-on-prem-workstation-llm-deployment-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/edge-on-prem-workstation-llm-deployment-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./edge-on-prem-workstation-llm-deployment-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Concurrent Active Internal Users:</label>
+        <select id="onpUsersSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateOnpremSizer()">
+          <option value="1">1 User (Personal Deskside / Executive Assistant)</option>
+          <option value="8">8 Users (Small Lab Team)</option>
+          <option value="16" selected>16 Users (Departmental / Branch Baseline)</option>
+          <option value="32">32 Users (Hospital / Division Peak)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Facility &amp; Security Requirement:</label>
+        <select id="onpEnvSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateOnpremSizer()">
+          <option value="dept" selected>Office Workstation or Standard Air-Cooled Rack (Best ROI)</option>
+          <option value="dc">Enterprise Datacenter Rack (Redundant PSU/BMC + Hardware TEE)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">On-Premises Hardware Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Total VRAM / Free KV (70B)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">16K RAG P99 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Throughput @ Users</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">AFR / 3-Yr TCO / Cost per 1M</th>
+          </tr>
+        </thead>
+        <tbody id="onpSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="onpDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateOnpremSizer() {
+  const usr = parseInt(document.getElementById('onpUsersSelect').value, 10) || 16;
+  const env = document.getElementById('onpEnvSelect').value || 'dept';
+  const tokMap = {
+    1:  { t1: 42.0,  t2: 21.5, t3: 54.0,   t4: 98.0 },
+    8:  { t1: 165.0, t2: 52.0, t3: 440.0,  t4: 960.0 },
+    16: { t1: 245.0, t2: 68.0, t3: 740.0,  t4: 1680.0 },
+    32: { t1: 210.0, t2: 72.0, t3: 1020.0, t4: 2650.0 }
+  };
+  const tk = tokMap[usr] || tokMap[16];
+  let bestId = 't3';
+  if (env === 'dc' || usr >= 32) bestId = 't4';
+  else if (usr <= 1) bestId = 't2';
+  else bestId = 't3';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 4×Consumer RTX 4090 DIY Server (No P2P)', vram: '96 GB (No ECC · 20GB KV left ✕)', ttft: '980.0 ms', tput: `${tk.t1.toFixed(1)} tok/s`, cost: '14.5% AFR ✕ · $24.8k · $1.07/1M' },
+    { id: 't2', name: '🟨 Tier 2: Unified Memory SoC (Mac Studio 192G / Spark)', vram: '192 GB (116GB KV · 240W)', ttft: '4,850.0 ms ✕', tput: `${tk.t2.toFixed(1)} tok/s`, cost: '2.5% AFR · $11.2k (Lowest) · $1.74/1M' },
+    { id: 't3', name: '🟩 Tier 3: Dual NVIDIA RTX PRO 6000 Blackwell (96GB×2)', vram: '192 GB GDDR7 ECC (116GB KV ✅)', ttft: '285.0 ms ✅', tput: `${tk.t3.toFixed(1)} tok/s ✅`, cost: '1.2% AFR ✅ · $26.4k · $0.34/1M (-68%)' },
+    { id: 't4', name: '🟦 Tier 4: Enterprise 2U Dual NVIDIA H200 NVL (141GB×2)', vram: '282 GB HBM3e ECC (206GB KV 🏆)', ttft: '115.0 ms 🏆', tput: `${tk.t4.toFixed(1)} tok/s 🏆`, cost: '0.5% AFR 🏆 · $68.5k · $0.25/1M (-77%)' }
+  ];
+
+  document.getElementById('onpSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.16);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.vram}</code></td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><code>${r.tput}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const msgMap = {
+    t2: `<strong>Architect Recommendation (Single-User Deskside Mode)</strong>: Choose <strong>Tier 2 (Mac Studio Ultra 192GB / DGX Spark)</strong> for silent <code>240W</code> deskside operation at a <code>$11,200</code> 3-year TCO!`,
+    t3: `<strong>Architect Recommendation (${usr}-User Departmental Server Mode)</strong>: Pick <strong>Tier 3 (Dual NVIDIA RTX PRO 6000 Blackwell 96GB×2 = 192GB ECC)</strong>—for nearly the same 3-year TCO as 4×4090s (<code>$26,400</code> vs <code>$24,800</code>), it provides <code>116 GB</code> of free KV cache, full Gen5 P2P, and <code>${tk.t3.toFixed(1)} tok/s</code> at <code>$0.34/1M (-68.2%)</code>!`,
+    t4: `<strong>Architect Recommendation (${usr}-User Core Datacenter / TEE Mode)</strong>: Deploy <strong>Tier 4 (2×NVIDIA H200 NVL 282GB HBM3e + 900 GB/s NVLink)</strong> for <code>115.0 ms</code> 16K TTFT, <code>${tk.t4.toFixed(1)} tok/s</code> throughput, hardware TEE, and the lowest unit cost (<code>$0.25/1M</code>)!`
+  };
+  document.getElementById('onpDecisionCallout').innerHTML = msgMap[bestId];
+}
+updateOnpremSizer();
+</script>
 </body>
 </html>
