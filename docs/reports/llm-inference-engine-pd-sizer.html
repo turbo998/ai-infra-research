@@ -2134,5 +2134,93 @@ function updateLoraSizer() {
 }
 updateLoraSizer();
 </script>
+
+  <!-- Round 24: PB-Scale Multimodal Training Data Loader & Streaming Pipeline Sizer -->
+  <div id="dataloader-pipeline-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#06b6d4;color:#083344;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 24 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚰 PB 级多模态预训练数据加载与流式预处理计算器（POSIX 小文件 vs. WebDataset Tar vs. MosaicML MDS/LitData vs. DALI + GDS）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/ai_training_dataloader_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-training-data-loader-storage-pipeline-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/ai-training-data-loader-storage-pipeline-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./ai-training-data-loader-storage-pipeline-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">预训练数据集模态与分辨率:</label>
+        <select id="dlModSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateDlSizer()">
+          <option value="vlm" selected>512×512 标准多模态图文对 (VLM Pre-Training)</option>
+          <option value="hd">1024×1024 高清文生图 (DiT / Flux)</option>
+          <option value="video">1080p H.264/AV1 视频片段 (Video DiT)</option>
+          <option value="text">纯文本预分词 Token (Text LLM Parquet/MDS)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群弹性与断点恢复要求:</label>
+        <select id="dlResSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateDlSizer()">
+          <option value="elastic" selected>要求亚秒级 (0.4s) 样本级精准恢复 &amp; 支持动态改 world_size</option>
+          <option value="static">静态固定卡数运行</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">数据加载与预处理档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">聚合读取带宽 / 饥饿率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前模态单卡吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">中途断点恢复耗时</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">集群 MFU / 月度饥饿浪费</th>
+          </tr>
+        </thead>
+        <tbody id="dlSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="dlDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #06b6d4;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateDlSizer() {
+  const mod = document.getElementById('dlModSelect').value || 'vlm';
+  const sampMap = {
+    text:  { t1: 820, t2: 1410, t3: 1440, t4: 1445 },
+    vlm:   { t1: 340, t2: 980,  t3: 1140, t4: 1435 },
+    hd:    { t1: 145, t2: 510,  t3: 620,  t4: 1380 },
+    video: { t1: 42,  t2: 165,  t3: 210,  t4: 1290 }
+  };
+  const s = sampMap[mod] || sampMap.vlm;
+  const bestId = mod === 'text' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 原生 POSIX 零散小文件直读 (.jpg + .json)', bw: '11.2 GB/s · 64.5% 饥饿 ✕', samp: `${s.t1} samples/s/GPU`, res: '4,080.0 s (68.0 分钟) ✕', cost: 'MFU 22.0% · 浪费 $301,344/月' },
+    { id: 't2', name: '🟨 Tier 2: WebDataset 1GB .tar 顺序分片 + CPU 解码', bw: '72.0 GB/s · 26.8% 饥饿', samp: `${s.t2} samples/s/GPU`, res: '870.0 s (14.5 分钟) ⚠️', cost: 'MFU 48.5% · 浪费 $125,210/月' },
+    { id: 't3', name: '🟩 Tier 3: MosaicML MDS / LitData 索引分片 + NVMe 环存', bw: '84.5 GB/s · 18.2% 饥饿', samp: `${s.t3} samples/s/GPU`, res: '0.40 s (O(1) 精准寻址 ✅)', cost: 'MFU 56.4% · 浪费 $85,030/月' },
+    { id: 't4', name: '🟪 Tier 4: Tier 3 + NVIDIA DALI 硬件 nvJPEG/NVDEC + GDS', bw: '92.0 GB/s · 1.8% 饥饿 🏆', samp: `${s.t4} samples/s/GPU 🏆`, res: '0.40 s (O(1) 精准寻址 🏆)', cost: 'MFU 68.2% · 月省 $215,846 🏆' }
+  ];
+
+  document.getElementById('dlSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(6,182,212,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.samp}</code></td>
+      <td style="padding:10px;"><code>${r.res}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dlDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>架构师选型建议 (纯文本预训练模式)</strong>：直接选用 <strong>Tier 3 (MosaicML Streaming MDS / Lightning LitData 索引分片)</strong>，单卡吞吐达 <code>1,440 samples/s</code>，并支持 <code>0.40 秒</code> $O(1)$ 样本级精确断点恢复与弹性扩缩容！`
+    : `<strong>架构师选型建议 (多模态图像 / 视频预训练模式)</strong>：宿主机 CPU 软解码在该模态下仅能提供 <code>${s.t3} samples/s</code>；必须开启 <strong>Tier 4 (MDS/LitData + NVIDIA DALI 硬件 nvJPEG/NVDEC + GDS)</strong>，唤醒 H100 片上硬件解码引擎，将单卡吞吐推升至 <code>${s.t4} samples/s</code>，饥饿率压至 <code>1.8%</code>，每月净省 <code>$215,846.40</code>！`;
+}
+updateDlSizer();
+</script>
 </body>
 </html>

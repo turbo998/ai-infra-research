@@ -2133,5 +2133,93 @@ function updateLoraSizer() {
 }
 updateLoraSizer();
 </script>
+
+  <!-- Round 24: PB-Scale Multimodal Training Data Loader & Streaming Pipeline Sizer -->
+  <div id="dataloader-pipeline-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#06b6d4;color:#083344;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 24 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚰 PB-Scale Multimodal Pre-Training Data Loader &amp; Streaming Sizer (POSIX Small Files vs. WebDataset Tar vs. MosaicML MDS/LitData vs. DALI + GDS)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/ai_training_dataloader_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-training-data-loader-storage-pipeline-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/ai-training-data-loader-storage-pipeline-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./ai-training-data-loader-storage-pipeline-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Dataset Modality &amp; Resolution:</label>
+        <select id="dlModSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateDlSizer()">
+          <option value="vlm" selected>512×512 Image-Text VLM Pairs (Baseline)</option>
+          <option value="hd">1024×1024 High-Res DiT Images</option>
+          <option value="video">1080p H.264/AV1 Video Clips (Video DiT)</option>
+          <option value="text">Pre-Tokenized Text Tokens (Parquet/MDS)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Checkpoint Resume &amp; Elastic Scaling SLA:</label>
+        <select id="dlResSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateDlSizer()">
+          <option value="elastic" selected>Sub-Second (0.4s) Sample-Exact Resume &amp; Elastic world_size</option>
+          <option value="static">Static Fixed-Size Run</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Data Pipeline Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Read BW / GPU Starvation</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Throughput @ Modality</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Mid-Epoch Resume Time</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Cluster MFU / Monthly Waste</th>
+          </tr>
+        </thead>
+        <tbody id="dlSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="dlDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #06b6d4;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateDlSizer() {
+  const mod = document.getElementById('dlModSelect').value || 'vlm';
+  const sampMap = {
+    text:  { t1: 820, t2: 1410, t3: 1440, t4: 1445 },
+    vlm:   { t1: 340, t2: 980,  t3: 1140, t4: 1435 },
+    hd:    { t1: 145, t2: 510,  t3: 620,  t4: 1380 },
+    video: { t1: 42,  t2: 165,  t3: 210,  t4: 1290 }
+  };
+  const s = sampMap[mod] || sampMap.vlm;
+  const bestId = mod === 'text' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Naive POSIX Small Files (.jpg + .json)', bw: '11.2 GB/s · 64.5% Stall ✕', samp: `${s.t1} samples/s/GPU`, res: '4,080.0 s (68.0 min) ✕', cost: 'MFU 22.0% · Wastes $301,344/mo' },
+    { id: 't2', name: '🟨 Tier 2: WebDataset 1GB .tar Shards + CPU Decode', bw: '72.0 GB/s · 26.8% Stall', samp: `${s.t2} samples/s/GPU`, res: '870.0 s (14.5 min) ⚠️', cost: 'MFU 48.5% · Wastes $125,210/mo' },
+    { id: 't3', name: '🟩 Tier 3: MosaicML MDS / LitData + NVMe Ring Cache', bw: '84.5 GB/s · 18.2% Stall', samp: `${s.t3} samples/s/GPU`, res: '0.40 s (O(1) Exact Seek ✅)', cost: 'MFU 56.4% · Wastes $85,030/mo' },
+    { id: 't4', name: '🟪 Tier 4: Tier 3 + NVIDIA DALI Hardware nvJPEG/NVDEC + GDS', bw: '92.0 GB/s · 1.8% Stall 🏆', samp: `${s.t4} samples/s/GPU 🏆`, res: '0.40 s (O(1) Exact Seek 🏆)', cost: 'MFU 68.2% · Saves $215,846/mo 🏆' }
+  ];
+
+  document.getElementById('dlSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(6,182,212,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.samp}</code></td>
+      <td style="padding:10px;"><code>${r.res}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dlDecisionCallout').innerHTML = bestId === 't3'
+    ? `<strong>Architect Recommendation (Pre-Tokenized Text LLM Mode)</strong>: Deploy <strong>Tier 3 (MosaicML Streaming MDS / Lightning LitData Indexed Shards)</strong> for <code>1,440 samples/s/GPU</code> and <code>0.40s</code> $O(1)$ sample-exact checkpoint resume!`
+    : `<strong>Architect Recommendation (Multimodal Image / Video Pre-Training Mode)</strong>: Host CPU decoding bottlenecks at <code>${s.t3} samples/s/GPU</code>; mandate <strong>Tier 4 (MDS/LitData + NVIDIA DALI Hardware nvJPEG/NVDEC + GDS)</strong> to lift throughput to <code>${s.t4} samples/s/GPU</code>, cut data starvation to <code>1.8%</code>, and save <code>$215,846.40/mo</code>!`;
+}
+updateDlSizer();
+</script>
 </body>
 </html>
