@@ -3701,5 +3701,87 @@ function updateEmbeddingRerankerSizer() {
 }
 updateEmbeddingRerankerSizer();
 </script>
+
+  <!-- Round 42: GPU-CPU Heterogeneous Memory Offloading & Single-Node 671B MoE Sizer -->
+  <div id="heterogeneous-offload-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#059669;color:#ecfdf5;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 42 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🖥️ GPU-CPU 异构内存卸载与单机跑 671B 超大 MoE 选型计算器（Unified Mem vs. 权重 DMA vs. FlexGen vs. KTransformers）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/gpu_cpu_heterogeneous_moe_offload_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/gpu-cpu-host-offload-zero-infinity-flexgen-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/gpu-cpu-host-offload-zero-infinity-flexgen-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./gpu-cpu-host-offload-zero-infinity-flexgen-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">核心业务执行模式 (Workload Mode):</label>
+        <select id="hoModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateHeterogeneousOffloadSizer()">
+          <option value="interactive" selected>单用户/小并发实时交互问答 &amp; 本地代码 Agent (Batch = 1~4)</option>
+          <option value="offline">夜间大批量离线文档处理 / 合成数据抽取 (Batch = 128)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">宿主机 DDR5 内存通道配置:</label>
+        <select id="hoMemSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateHeterogeneousOffloadSizer()">
+          <option value="1" selected>插满双路 24 通道 DDR5-6400 (760 GB/s 满血内存带宽)</option>
+          <option value="0.5">仅插半数 12 通道 DDR5 (380 GB/s 带宽)</option>
+          <option value="0.2">错误配置：仅插 4 根大容量内存条 (150 GB/s 残血带宽)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">异构内存卸载架构档位 ($18,500 单机)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">实时交互速度 (Batch=1)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">离线批量吞吐 (Batch=128)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">每词跨 PCIe 传输量</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">16K Prefill 首字延迟</th>
+          </tr>
+        </thead>
+        <tbody id="hoSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="hoDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #059669;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateHeterogeneousOffloadSizer() {
+  const mode = document.getElementById('hoModeSelect').value || 'interactive';
+  const mScale = parseFloat(document.getElementById('hoMemSelect').value) || 1.0;
+  const bestId = mode === 'offline' ? 't3' : 't4';
+  const ktTps = (18.6 * mScale).toFixed(2);
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: CUDA Unified Memory 缺页中断', b1: '0.35 tok/s ✕', b128: '4.2 tok/s ✕', pcie: '21,500 MB (21.5 GB ✕)', ttft: '185.0 s ✕' },
+    { id: 't2', name: '🟨 Tier 2: 按层权重 DMA 搬运 (accelerate)', b1: '2.10 tok/s (卡 PCIe ✕)', b128: '48.0 tok/s', pcie: '17,000 MB (17.0 GB ✕)', ttft: '42.0 s' },
+    { id: 't3', name: '🟦 Tier 3: FlexGen Zig-Zag 列优先批量卸载', b1: '2.15 tok/s', b128: '310.0 tok/s 🏆', pcie: '265.0 MB (平摊 64x ✅)', ttft: '28.0 s' },
+    { id: 't4', name: '🟩 Tier 4: KTransformers / Fiddler 异构原位计算', b1: `${ktTps} tok/s 🏆`, b128: `${(195.0*mScale).toFixed(1)} tok/s ✅`, pcie: '0.032 MB (仅 32KB 🏆)', ttft: '6.8 s 🏆' }
+  ];
+
+  document.getElementById('hoSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(5,150,105,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.b1}</code></td>
+      <td style="padding:10px;"><code>${r.b128}</code></td>
+      <td style="padding:10px;"><code>${r.pcie}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.ttft}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('hoDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (实时交互模式)</strong>：必选 <strong>Tier 4 (KTransformers / Fiddler: 48GB GPU 常驻 MLA 注意力+共享专家，双路 CPU AMX 在 DDR5 内存原位计算冷专家)</strong>，每词仅跨 PCIe 传输 <code>32 KB</code> 激活向量（缩小 <code>531,250 倍</code>），单用户交互速度达 <code>${ktTps} tok/s</code>！`
+    : `<strong>架构师选型建议 (夜间大批量离线跑批 Batch=128)</strong>：首选 <strong>Tier 3 (FlexGen Zig-Zag 列优先批量卸载)</strong>，搬 1 次层权重连续横扫算完 128 个 Batch，离线总吞吐高达 <code>310.0 tok/s</code>！`;
+}
+updateHeterogeneousOffloadSizer();
+</script>
 </body>
 </html>

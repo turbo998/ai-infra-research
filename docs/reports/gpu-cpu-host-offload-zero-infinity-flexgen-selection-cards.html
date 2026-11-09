@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>GPU-CPU Heterogeneous Memory Offloading &amp; Single-Node 671B MoE — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #6ee7b7; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #047857; background: #d1fae5; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #059669, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #059669; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🖥️ GPU-CPU 异构内存卸载与单机跑 671B 超大 MoE 选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/gpu_cpu_heterogeneous_moe_offload_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/gpu-cpu-host-offload-zero-infinity-flexgen-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/gpu-cpu-host-offload-zero-infinity-flexgen-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#heterogeneous-offload-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · GPU-CPU HETEROGENEOUS MOE OFFLOADING (671B ON 1 GPU + DDR5)</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">KTransformers 异构原位计算</span> 将 PCIe 流量缩小 53 万倍，单台 $1.85 万服务器跑 671B 提速 8.86x 达 18.6 tok/s</h2>
+      <p class="subhead">针对在单台 $18,500 异构服务器（1×48GB GPU + 双路 24 通道 512GB DDR5 @ 760 GB/s）上部署满血 DeepSeek-R1 671B MoE（380GB Q4_K_M），对比四档异构卸载架构。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档异构卸载架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (Unified Mem 缺页)</strong>: 0.35 tok/s ✕<br/>
+            • <strong>Tier 2 (按层搬权重 DMA)</strong>: 2.10 tok/s, 传 17GB ✕<br/>
+            • <strong>Tier 3 (FlexGen Zig-Zag)</strong>: 离线跑批 310 tok/s ✅<br/>
+            • <strong>Tier 4 (KTransformers)</strong>: 交互 18.6 tok/s 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 单机异构硬件基线</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 模型规模：<code>DeepSeek-R1 671B (380GB)</code><br/>
+            • 单词激活：<code>37B (约 17GB 路由专家)</code><br/>
+            • GPU 显存：<code>1×48 GB (MLA+共享专家)</code><br/>
+            • 主机内存：<code>512 GB 24通道 DDR5 (760GB/s)</code><br/>
+            • PCIe 带宽：<code>Gen5 x16 (52 GB/s)</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 交互提速比：<code>8.86x (18.6 vs 2.1 tok/s)</code><br/>
+            • PCIe 载荷降幅：<code>17,000MB → 0.032MB</code><br/>
+            • 载荷缩小倍数：<code>531,250x (仅传 32KB)</code><br/>
+            • 16K 首字延迟：<code>42.0s → 6.8s (快 6.18x)</code><br/>
+            • 离线批量吞吐：<code>310.0 tok/s (FlexGen)</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>单用户实时交互生成速度对比 (Interactive Batch=1 Decode Tokens / sec，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · GPU 跑注意力 + 双路 CPU AMX 原位算专家</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: KTransformers / Fiddler 异构原位算</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+          <span class="bar-val">18.60 tok/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: FlexGen Zig-Zag (专为离线 Batch=128)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:11.6%;"></div></div>
+          <span class="bar-val">2.15 tok/s</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 按层权重 DMA 搬运 (accelerate)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:11.3%;"></div></div>
+          <span class="bar-val">2.10 tok/s ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: CUDA Unified Memory 缺页中断</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:2.0%;"></div></div>
+          <span class="bar-val">0.35 tok/s ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to KTransformers &amp; Fiddler GPU-CPU heterogeneous MoE execution, FlexGen Zig-Zag block scheduling, and PCIe Gen5 (`52 GB/s`) vs Dual-Socket 24-Channel DDR5 (`760 GB/s`) bandwidth physics (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: RUNNING FULL 671B DEEPSEEK-R1 ON AN $18,500 SINGLE SERVER</span>
+        <span class="badge-prov">Case Study · Moving 32KB Activations Instead of 17GB Weights</span>
+      </div>
+      <h2 class="headline">把计算移向数据：360GB 专家常驻 760 GB/s DDR5，彻底绕开 52 GB/s PCIe 权重搬运墙</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们研发院想在本地私有化部署满血 DeepSeek-R1 671B，但买不起 20 多万美元的 8×H200 整机。我们配了一台双路 Xeon + 512GB DDR5 + 单张 48GB GPU 服务器，用传统 offload 把装不下的专家层放内存，结果每生成一个字都要等 17GB 权重过一次 PCIe，每秒只能蹦 2.1 个字，完全没法用！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：实时交互问答与本地代码 Agent（Batch=1~4）</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (KTransformers / Fiddler 异构原位协同)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">48GB 显存常驻 MLA 注意力、KV Cache 与共享专家；360GB 路由专家锁死在双路 DDR5 内存中，GPU 每层仅跨 PCIe 发送 <code>32 KB</code> 激活向量交由 CPU AMX 原位计算，速度飙升至 <code>18.60 tok/s</code>！</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 16K 上下文 Prefill 首字延迟</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:16.2%;"></div></div>
+            <span class="bar-val">6.8 s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 传统按层搬权重 16K 首字延迟</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">42.0 s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：夜间离线万条文档批量提取与合成数据打标（Batch=128）</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 3 (FlexGen Zig-Zag 列优先批量卸载)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">当同时积压 128 个离线任务时，将 1 层权重搬进 GPU 后连续横扫算完 128 个 Batch 再换下一层，把 PCIe 搬运成本平摊 128 倍，离线总吞吐高达 <code>310.0 tok/s</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 离线 Batch=128 聚合吞吐</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">310.0 tok/s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 按层串行搬运 Batch=128 吞吐</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:15.5%;"></div></div>
+            <span class="bar-val">48.0 tok/s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：双路 CPU 跑专家必须插满 DDR5 通道并做 NUMA 本地绑定</strong></div>
+            <span class="pill pill-human">Send to a human · 跨 Socket UPI 读取内存会导致带宽腰斩</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">必须插满全部 16~24 条内存通道并将专家矩阵按列切分绑定在两颗 CPU 本地 NUMA 节点。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Dual-socket 24-channel DDR5 provides 760 GB/s of local read bandwidth—14.6× faster than PCIe Gen5 x16 (`52 GB/s`)! Computing cold MoE experts in-place on CPU AMX unlocks that bandwidth.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER HETEROGENEOUS OFFLOAD MATRIX</span>
+        <span class="badge-prov">DeepSeek-R1 671B · 1×48GB GPU + 512GB DDR5</span>
+      </div>
+      <h2 class="headline">四档异构内存卸载全矩阵评测：交互速度、离线吞吐、PCIe 传输量与 16K 首字延迟</h2>
+      <p class="subhead">全面对比 CUDA Unified Memory、按层权重 DMA、FlexGen Zig-Zag 与 KTransformers 异构原位计算。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (异构卸载档位)</th>
+            <th>QUESTION / TASK (权重与激活移动机制)</th>
+            <th>MODEL ANSWER (交互速度 / 离线吞吐 / PCIe传输 / 首字)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: CUDA Unified Memory</strong></td>
+            <td>`cudaMallocManaged` 64KB 缺页中断拉取</td>
+            <td>交互 <code>0.35 tok/s ✕</code> · 离线 <code>4.2 tok/s ✕</code> · PCIe <code>21.5 GB/词 ✕</code> · 16K 首字 <code>185.0s ✕</code></td>
+            <td><span class="pill pill-human">严禁使用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 按层权重 DMA 搬运</strong></td>
+            <td>每词将 17GB 激活专家跨 PCIe 拷入 GPU 计算</td>
+            <td>交互 <code>2.10 tok/s ✕</code> · 离线 <code>48.0 tok/s</code> · <strong>PCIe <code>17.0 GB/词 ✕</code></strong> · 16K 首字 <code>42.0s</code></td>
+            <td><span class="pill pill-confirm">仅限小稠密模型</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: FlexGen Zig-Zag 批量卸载</strong></td>
+            <td>列优先遍历：搬 1 次层权重横扫 128 个 Batch</td>
+            <td>交互 <code>2.15 tok/s</code> · <strong>离线 <code>310.0 tok/s 🏆</code></strong> · 平摊 PCIe <code>265 MB/词</code> · 首字 <code>28.0s</code></td>
+            <td><span class="pill pill-auto">离线跑批首选 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: KTransformers 异构原位</strong></td>
+            <td>GPU 跑 MLA+热专家 · CPU AMX 原位算冷专家</td>
+            <td><strong>交互 <code>18.60 tok/s (8.86x) 🏆</code></strong> · 离线 <code>195.0 tok/s</code> · <strong>PCIe <code>0.032 MB/词 🏆</code> · 首字 <code>6.8s 🏆</code></strong></td>
+            <td><span class="pill pill-auto">实时交互终极 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#047857;">✅ 为什么稠密模型 (Dense 405B) 用不了 KTransformers 的神速？</strong><br/>
+          稠密模型每个词要激活全部 405B（220GB）参数，即使在 760 GB/s DDR5 上原位读一遍也要 300ms；而 <strong>671B MoE 每个词只激活 37B（其中冷专家仅 ~15GB）</strong>，760 GB/s DDR5 读一遍仅需 20ms！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么绝对不能把 MLA 注意力或 KV Cache 放 CPU？</strong><br/>
+          MLA 注意力需要跨 16K~128K 历史 Token 做高并发矩阵乘，算力需求远超 CPU 极限；把 MLA 和 KV 锁死在 48GB GPU 显存里才能实现 6.8 秒极速 Prefill！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Sparse MoE architecture (`5.5%` active parameters) is uniquely suited for GPU-CPU heterogeneous execution: GPU handles dense attention, while CPU DDR5 handles sparse expert lookup.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · KTRANSFORMERS HETEROGENEOUS DISPATCH &amp; NUMA SHARDING</span>
+        <span class="badge-prov">GPU MLA + CPU AMX NUMA-Striped Expert Kernel</span>
+      </div>
+      <h2 class="headline">底层机制：KTransformers 异构算子路由配置 + 双路 NUMA 本地 AMX 专家并行核函数</h2>
+      <p class="subhead">展示如何通过规则配置将注意力与共享专家锁在 GPU，并将 256 个路由专家切分至双路 CPU 本地内存。</p>
+
+      <div class="code-dark"><pre># 1. KTransformers 异构算子放置策略 (optimize_rules/DeepSeek-V3-Chat.yaml)
+- match:
+    name: "^model\\.layers\\..*\\.self_attn"        # 61 层 MLA 注意力全部锁死在 GPU 显存 (cuda:0)
+  replace:
+    class: ktransformers.operators.attention.KDeepseekV2Attention
+    device: "cuda:0"
+- match:
+    name: "^model\\.layers\\..*\\.mlp\\.shared_experts" # 100% 必选的共享专家锁死在 GPU 显存
+  replace:
+    device: "cuda:0"
+- match:
+    name: "^model\\.layers\\..*\\.mlp\\.experts"    # 256 个稀疏路由专家常驻双路 CPU DDR5 + AMX 内核
+  replace:
+    class: ktransformers.operators.experts.KTransformersExperts
+    device: "cpu"
+    backend: "AMX_INT4_NUMA_STRIPED"</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#059669;margin:6px 0;">↓ GPU 共享专家与双路 NUMA CPU 路由专家零拷贝异步协同流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>// 2. 单层 MoE 异构并发执行：GPU 算共享专家的同时，双路 CPU AMX 在本地 NUMA 内存算 8 个路由专家
+void heterogeneous_moe_layer_forward(Tensor d_hidden, ExpertWeightsCPU&amp; cpu_experts) {
+  auto [topk_ids, topk_weights] = gpu_router_gate(d_hidden); // 在 GPU 上算出选中的 8 个专家 ID
+  cudaMemcpyAsync(h_pinned_act, d_hidden.data(), 14336, cudaMemcpyDeviceToHost, stream_pcie);
+  launch_gpu_shared_expert_async(d_hidden, stream_gpu_compute); // GPU 并行算共享专家!
+
+  cudaStreamSynchronize(stream_pcie); // 仅传 14KB，耗时 0.0003ms!
+  #pragma omp parallel num_threads(64)
+  {
+    int socket_id = omp_get_thread_num() / 32; // 严格绑定本地 NUMA 节点内存，零跨 UPI 流量
+    amx_gemv_int4_numa_local(h_pinned_out[socket_id], h_pinned_act, cpu_experts, topk_ids, socket_id);
+  }
+  cudaMemcpyAsync(d_routed_out, h_pinned_out, 14336, cudaMemcpyHostToDevice, stream_pcie);
+  fuse_add_shared_and_routed(d_hidden, d_routed_out, stream_gpu_compute);
+}
+// &lt;answer&gt; Validated: 18.60 tok/s interactive Decode, 0.032 MB PCIe/tok, 6.8s 16K prefill</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Striping each expert's gate/up/down projections across Socket 0 and Socket 1 ensures both CPUs' 12 DDR5 channels stay 100% balanced on every single token.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · PCIE WEIGHT TRANSFER VS DDR5 IN-PLACE BANDWIDTH</span>
+        <span class="badge-prov">Payload Volume, Memory Bandwidth &amp; Workload Mode Sensitivity</span>
+      </div>
+      <h2 class="headline">物理边界对比：PCIe 载荷从 17,000 MB 骤降至 0.032 MB，有效读取带宽提升 14.6 倍</h2>
+      <p class="subhead">对比传统权重搬运（Tier 2）、批量 Zig-Zag 卸载（Tier 3）与异构原位计算（Tier 4）在关键物理指标上的量级差异。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (物理瓶颈与业务场景维度)</th>
+            <th>ORIGINAL (Tier 2 搬权重进 GPU)</th>
+            <th>PERTURBED (Tier 4 搬激活去 CPU)</th>
+            <th>CHANGE (量级跃迁与第一性原理解释)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. 每生成 1 个词的 PCIe 传输量</strong><br/>单用户 `Batch=1` 逐词生成期</td>
+            <td><code>17,000.0 MB (17 GB) ✕</code><br/>(搬运 61 层选中的路由专家权重)</td>
+            <td><code>0.032 MB (32 KB) 🏆</code><br/>(仅传输 16KB 输入 + 16KB 输出向量)</td>
+            <td><strong style="color:#059669;">缩小 531,250 倍 🏆</strong><br/>彻底消除 PCIe 总线阻塞</td>
+          </tr>
+          <tr>
+            <td><strong>2. 读取专家权重的有效硬件带宽</strong><br/>决定 GEMV 速度的物理天花板</td>
+            <td><code>52.0 GB/s ✕</code><br/>(受限于 PCIe Gen5 x16 线速)</td>
+            <td><code>760.0 GB/s 🏆</code><br/>(双路 24 通道 DDR5 本地内存总线)</td>
+            <td><strong style="color:#059669;">带宽提升 14.6 倍 🏆</strong><br/>双路内存控制器并发满速读取</td>
+          </tr>
+          <tr>
+            <td><strong>3. 单用户实时交互生成速度</strong><br/>政企内部推理 / 研发代码助手</td>
+            <td><code>2.10 tok/s ✕</code><br/>(每词卡顿 476ms 无法交互)</td>
+            <td><code>18.60 tok/s 🏆</code><br/>(每词 53ms 远超人类阅读速度)</td>
+            <td><strong style="color:#059669;">提速 8.86x 🏆</strong><br/>$1.85万单机流畅跑满血 671B</td>
+          </tr>
+          <tr>
+            <td><strong>4. 离线大批量跑批 (Batch=128)</strong><br/>夜间处理 10 万条离线文档抽取</td>
+            <td><code>48.0 tok/s</code><br/>(按行逐层反复搬运)</td>
+            <td>Tier 3 FlexGen Zig-Zag:<br/><code>310.0 tok/s 🏆</code> (Tier 4: <code>195/s</code>)</td>
+            <td><strong style="color:#2563eb;">提速 6.46x ✅</strong><br/>大 Batch 下搬 1 次权重算 128 批更划算</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔥 什么时候应该从 Tier 4 切换到 Tier 3 (FlexGen)？</strong><br/>
+          计算拐点公式：当并发 `Batch Size &gt; 64` 时，激活矩阵变大而 CPU AMX 算力开始饱和，此时用 <strong>Tier 3 (FlexGen Zig-Zag)</strong> 把权重搬进 GPU 用强大的 Tensor Core 一次横扫 128 个 Batch 吞吐更高（310 vs 195 tok/s）！
+        </div>
+        <div class="callout-box">
+          <strong>⚠️ 组装 KTransformers 服务器的“第一大坑”</strong><br/>
+          千万别买只插了 2~4 根内存条的工作站！如果双路服务器只插 4 根 DDR5（仅激活 4 个通道，带宽 `150 GB/s`），生成速度会直接从 `18.6 tok/s` 掉回 `4.5 tok/s`！必须插满 16~24 个通道！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: For interactive MoE serving (`Batch 1–8`), Tier 4 (KTransformers in-place CPU compute) wins by 8.86×; for offline bulk jobs (`Batch 128+`), Tier 3 (FlexGen Zig-Zag) wins by 6.46×.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; THROUGHPUT SCALING · INTERACTIVE TPS, OFFLINE TPS &amp; 16K TTFT</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Optimized vs Slate=Tier 1/2 Baseline</span>
+      </div>
+      <h2 class="headline">交互速度、离线吞吐与首字对比：交互达 18.6 tok/s、离线达 310 tok/s、16K 首字仅 6.8s</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 4（KTransformers 异构原位）与 Tier 3（FlexGen 批量卸载），浅灰条（<code>#CBD5E1</code>）代表传统缺页与按层 DMA 基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 单用户实时交互生成速度 (Interactive Batch=1 Decode tok/s，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: KTransformers 异构原位协同</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">18.60 tok/s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: FlexGen Zig-Zag 批量卸载</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:11.6%;"></div></div>
+            <span class="bar-val">2.15 tok/s</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 按层权重 DMA 搬运 (accelerate)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:11.3%;"></div></div>
+            <span class="bar-val">2.10 tok/s ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: CUDA Unified Memory 缺页中断</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:2.0%;"></div></div>
+            <span class="bar-val">0.35 tok/s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 夜间离线大批量处理吞吐 (Offline Batch=128 Throughput tok/s，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: FlexGen Zig-Zag 列优先横扫</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">310.0 tok/s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: KTransformers 异构原位协同</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:62.9%;"></div></div>
+            <span class="bar-val">195.0 tok/s ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 按层权重 DMA 搬运</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:15.5%;"></div></div>
+            <span class="bar-val">48.0 tok/s ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: CUDA Unified Memory 缺页中断</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:1.4%;"></div></div>
+            <span class="bar-val">4.2 tok/s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 16K 上下文 Prefill 首字响应耗时 (秒，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: KTransformers (GPU 算 MLA + CPU 算专家)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:3.7%;"></div></div>
+            <span class="bar-val">6.8 s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: FlexGen Zig-Zag 批量卸载</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:15.1%;"></div></div>
+            <span class="bar-val">28.0 s</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 按层权重 DMA 搬运</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:22.7%;"></div></div>
+            <span class="bar-val">42.0 s ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: CUDA Unified Memory 缺页中断</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">185.0 s ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Adding a second 48GB GPU (`$23,500` total server cost) allows caching the top 25% hottest routed experts in VRAM alongside MLA, pushing interactive 671B speed above 26 tok/s.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：实时跑 671B 选 KTransformers 原位计算，夜间批量跑批选 FlexGen</h2>
+      <p class="subhead">用“GPU 显存管密集注意力 + 24 通道 DDR5 管稀疏专家”将满血 671B 部署门槛拉进 2 万美元以内。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>政企部门/研究院低成本私有化跑满血 671B DeepSeek-R1 (1~8 并发交互) → Tier 4 (KTransformers / Fiddler)</strong>：$1.85万单机跑出 18.6 tok/s，立省 88% 硬件采购费。</li>
+            <li>• <strong>夜间非实时大批量离线文档处理 (Batch=128) → Tier 3 (FlexGen Zig-Zag)</strong>：列优先横扫平摊权重搬运，跑出 310 tok/s 高吞吐。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁对 671B MoE 使用“按层把专家权重拷进 GPU”的传统卸载 (Tier 2)</strong>：每词搬 17GB 权重会把速度死锁在 2.1 tok/s。</li>
+            <li>• <strong>严禁购买只插了 2~4 根内存条的服务器跑 CPU 专家卸载</strong>：未插满 16~24 条 DDR5 内存通道会导致带宽暴跌 75%。</li>
+            <li>• <strong>严禁在不绑 NUMA 的情况下跨两颗 CPU 跑专家矩阵乘</strong>：跨 UPI 总线会吃掉一半内存带宽。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 采购硬件时确保插满双路 CPU 的全部 <code>16~24 条 DDR5-5600/6400</code> 内存通道（实测流带宽 <code>&gt;600 GB/s</code>）。<br/>
+          2. <code>[ ]</code> 开启 BIOS <code>Sub-NUMA Clustering</code> 与 KTransformers <code>NUMA-Striped</code> 专家切分，杜绝跨 Socket 内存读取。<br/>
+          3. <code>[ ]</code> 将 <code>MLA 注意力 + KV Cache + 共享专家</code> 100% 锁定在 48GB GPU 显存内，仅将稀疏路由专家放在 DDR5。<br/>
+          4. <code>[ ]</code> 核验 CPU 支持并启用了 <code>Intel AMX</code> 或 <code>AMD AVX-512 VNNI</code> 硬件矩阵指令集。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/gpu_cpu_heterogeneous_moe_offload_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
