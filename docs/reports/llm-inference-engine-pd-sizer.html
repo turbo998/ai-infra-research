@@ -1958,5 +1958,92 @@ function updateObsSizer() {
 }
 updateObsSizer();
 </script>
+
+  <!-- Round 22: Enterprise Agent Structured Output & Constrained Decoding Selection Sizer -->
+  <div id="constrained-decoding-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#a855f7;color:#faf5ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 22 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧩 企业级 Agent 结构化输出与语法约束解码计算器（Prompt 重试 vs. 词表扫描 vs. Outlines FSM vs. XGrammar + Jump-Forward）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/structured_output_constrained_decoding_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/structured-output-constrained-decoding-selection-faq.md" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/structured-output-constrained-decoding-selection-faq.en.md" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./structured-output-constrained-decoding-selection-cards.html" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">在线服务并发批次大小 (Continuous Batch Size):</label>
+        <select id="cfgBatchSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateCfgSizer()">
+          <option value="1" selected>BS = 1 (单并发交互基线 · 320-Token JSON)</option>
+          <option value="16">BS = 16 (中等并发 Agent 网关)</option>
+          <option value="64">BS = 64 (高并发工具调用池)</option>
+          <option value="128">BS = 128 (满载吞吐压测)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">目标语法复杂度:</label>
+        <select id="cfgTypeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateCfgSizer()">
+          <option value="json" selected>复杂嵌套 JSON Schema / 递归 SQL / AST (需 PDA + 跳词)</option>
+          <option value="regex">简单扁平枚举或短正则 (Flat Regex)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">结构化输出与约束解码档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">首轮语法合格率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">CPU 掩码 / 跳词比例</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前 Batch 等效 TPOT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">320-Token 耗时 / 万次成本</th>
+          </tr>
+        </thead>
+        <tbody id="cfgSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="cfgDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #a855f7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateCfgSizer() {
+  const bs = parseInt(document.getElementById('cfgBatchSelect').value, 10) || 1;
+  const tpotMap = {
+    1:   { t1: 13.11, t2: 28.00,  t3: 9.95,  t4: 6.10 },
+    16:  { t1: 14.80, t2: 64.20,  t3: 11.40, t4: 6.85 },
+    64:  { t1: 17.50, t2: 142.00, t3: 14.80, t4: 8.10 },
+    128: { t1: 21.20, t2: 265.00, t3: 19.60, t4: 9.45 }
+  };
+  const t = tpotMap[bs] || tpotMap[1];
+  const bestId = 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Prompt 软约束 + 失败解析重试循环', val: '84.5% (15.5% 报错 ✕)', mask: '0.00ms (+38% 重试浪费)', tpot: `${t.t1.toFixed(2)} ms ✕`, cost: '4,195.2 ms · $4.30 / 10k' },
+    { id: 't2', name: '🟨 Tier 2: 朴素运行时逐 Token 128k 词表正则扫描', val: '100.0% ✅', mask: '+18.50ms CPU 阻塞 ✕', tpot: `${t.t2.toFixed(2)} ms ✕`, cost: '8,960.0 ms · $9.18 / 10k' },
+    { id: 't3', name: '🟩 Tier 3: Outlines 预编译 FSM 位掩码 (同步查表)', val: '100.0% ✅', mask: '+0.45ms · 0% 跳词', tpot: `${t.t3.toFixed(2)} ms ${t.t3<=10?'✅':'⚠️'}`, cost: '3,184.0 ms · $3.26 (-24.2%)' },
+    { id: 't4', name: '🟪 Tier 4: XGrammar 异步掩码重叠 + Jump-Forward 跳词', val: '100.0% 🏆', mask: '0.00ms 暴露 · 跳过 35.8% 🏆', tpot: `${t.t4.toFixed(2)} ms 🏆 (快 1.56x)`, cost: '1,952.0 ms · $2.10 (-51.2% 🏆)' }
+  ];
+
+  document.getElementById('cfgSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(168,85,247,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#e9d5ff':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.val}</code></td>
+      <td style="padding:10px;"><code>${r.mask}</code></td>
+      <td style="padding:10px;"><code>${r.tpot}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#c084fc':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('cfgDecisionCallout').innerHTML =
+    `<strong>架构师选型建议 (BS=${bs} · 企业级 Agent 结构化输出模式)</strong>：全面开启 <strong>Tier 4 (XGrammar 异步位掩码 + Jump-Forward 跳词解码)</strong>，不仅实现 <code>100.0%</code> 零语法报错，更通过跳过 <code>35.8%</code> 唯一确定的固定 JSON 键名 Token 将等效 TPOT 压至 <code>${t.t4.toFixed(2)} ms</code>（单并发比 9.50ms 自由生成快 <code>1.56x</code>，BS=128 下比同步 FSM 快 <code>2.07x</code>），调用成本立省 <code>51.2%</code>！切记在 Schema 首字段定义 <code>thought_process</code>。`;
+}
+updateCfgSizer();
+</script>
 </body>
 </html>
