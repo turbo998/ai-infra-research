@@ -2495,5 +2495,98 @@ function updateVoiceSizer() {
 }
 updateVoiceSizer();
 </script>
+
+  <!-- Round 28: GPU Cluster Power Capping, Phase-Aware DVFS & Liquid Cooling TCO Sizer -->
+  <div id="power-cooling-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 28 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ GPU 集群功耗封顶、阶段感知 DVFS 与散热 TCO 选型计算器（700W 满血风冷 vs. 550W 封顶 vs. 阶段 DVFS vs. 40°C 冷板液冷）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/gpu_power_capping_dvfs_cooling_tco/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/gpu-power-capping-dvfs-liquid-cooling-tco-selection-faq.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/gpu-power-capping-dvfs-liquid-cooling-tco-selection-faq.en.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./gpu-power-capping-dvfs-liquid-cooling-tco-selection-cards.html" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">机房基础设施条件:</label>
+        <select id="pwFacilitySelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePowerCoolingSizer()">
+          <option value="dlc" selected>新建/高密智算中心 (支持 40°C 温水冷板液冷 + 机柜 BBU)</option>
+          <option value="air_pd">存量风冷/冷冻水机房 (支持 PD 分离或 NVML 阶段调频)</option>
+          <option value="air_static">存量传统风冷机房 (黑盒混部，需 5 分钟零侵入止血)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">GPU 功耗封顶档位灵敏度预览:</label>
+        <select id="pwCapSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePowerCoolingSizer()">
+          <option value="700">700W (1,980 MHz · 默认 TDP 立方陡峭区)</option>
+          <option value="600">600W (1,815 MHz · Prefill 推荐档)</option>
+          <option value="550" selected>550W (1,710 MHz · 混部静态封顶黄金甜点)</option>
+          <option value="450">450W (1,455 MHz · Decode 专属推荐档)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">集群控电与散热架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">混合吞吐 / 每焦耳能效</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">千卡机房总功率 (PUE)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">1.20 MW 最大装机 / 集群产出</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">3 年千卡总电费 ($0.10/kWh)</th>
+          </tr>
+        </thead>
+        <tbody id="pwSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="pwDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updatePowerCoolingSizer() {
+  const fac = document.getElementById('pwFacilitySelect').value || 'dlc';
+  const cap = parseInt(document.getElementById('pwCapSelect').value, 10) || 550;
+  const bestId = fac === 'dlc' ? 't4' : (fac === 'air_pd' ? 't3' : 't2');
+  const sweepInfo = {
+    700: '700W (1980MHz): Prefill 100.0% / Decode 100.0% · 能效 1.00x (位于 VF 立方陡峭区)',
+    600: '600W (1815MHz): Prefill 97.1% / Decode 99.6% · 能效 1.15x (Prefill 池推荐档)',
+    550: '550W (1710MHz): Prefill 94.2% / Decode 99.1% · 能效 1.23x (混部集群黄金甜点)',
+    450: '450W (1455MHz): Prefill 83.5% / Decode 97.8% · 能效 1.44x (Decode 池白捡 36% 节电)'
+  };
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 默认 700W 满血 + 传统风冷', perf: '100.0% · 1.00x', mw: '1.485 MW (PUE 1.48 ✕)', cap: '824 张 (-200张) · 产出 80.5% ✕', opex: '$3,902,544 ✕' },
+    { id: 't2', name: '🟨 Tier 2: 静态 nvidia-smi 550W 封顶 + 封闭风冷', perf: '96.6% · 1.23x ✅', mw: '1.115 MW (PUE 1.35 ✅)', cap: '1,024 张 (满编) · 产出 96.6% ✅', opex: '$2,930,208 (省 $972k)' },
+    { id: 't3', name: '🟦 Tier 3: 算子阶段感知 DVFS (650/440/350W)', perf: '99.0% · 1.41x ✅', mw: '0.942 MW (PUE 1.24 ✅)', cap: '1,024 张 (满编) · 产出 99.0% ✅', opex: '$2,475,571 (省 $1.43M)' },
+    { id: 't4', name: '🟩 Tier 4: 40°C 冷板液冷 DLC + 阶段 DVFS + 超配', perf: '99.5% · 1.56x 🏆', mw: '0.858 MW (PUE 1.11 🏆)', cap: '1,248 张 (+424张) · 产出 121.3% 🏆', opex: '$2,254,810 (省 $1.65M 🏆)' }
+  ];
+
+  document.getElementById('pwSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#34d399':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.perf}</code></td>
+      <td style="padding:10px;"><code>${r.mw}</code></td>
+      <td style="padding:10px;"><code>${r.cap}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.opex}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pwDecisionCallout').innerHTML =
+    `<strong>单卡封顶灵敏度 (${sweepInfo[cap]})</strong><br/>` +
+    (bestId === 't4'
+      ? `<strong>架构师选型建议</strong>：新建/高密集群首选 <strong>Tier 4 (40°C 冷板直接液冷 PUE 1.11 + 阶段感知 DVFS + 22% 动态配电超配)</strong>，千卡总功率降至 <code>0.858 MW (-42.2%)</code>，1.20 MW 配电多装 <code>+424 张 GPU</code>，3 年净省电费 <code>$1,647,734</code>！`
+      : (bestId === 't3'
+        ? `<strong>架构师选型建议</strong>：存量机房结合 PD 分离首选 <strong>Tier 3 (算子阶段感知动态 DVFS: Prefill 650W / Decode 440W / 通信 350W)</strong>，混合吞吐保持 <code>99.0%</code>，能效提升 <code>1.41x</code>，3 年省电费 <code>$1,426,973</code>！`
+        : `<strong>架构师选型建议</strong>：存量黑盒风冷集群急救首选 <strong>Tier 2 (静态 nvidia-smi -pl 550W 封顶)</strong>，5 分钟内砍掉 <code>21.4%</code> 单卡功耗，吞吐保留 <code>96.6%</code>，立即将千卡塞进 <code>1.115 MW</code> 配电红线内！`));
+}
+updatePowerCoolingSizer();
+</script>
 </body>
 </html>

@@ -2494,5 +2494,98 @@ function updateVoiceSizer() {
 }
 updateVoiceSizer();
 </script>
+
+  <!-- Round 28: GPU Cluster Power Capping, Phase-Aware DVFS & Liquid Cooling TCO Sizer -->
+  <div id="power-cooling-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#022c22;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 28 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ GPU Cluster Power Capping, Phase-Aware DVFS &amp; Liquid Cooling TCO Sizer (Uncapped 700W Air vs. 550W Cap vs. Phase DVFS vs. 40°C Cold-Plate DLC)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/gpu_power_capping_dvfs_cooling_tco/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/gpu-power-capping-dvfs-liquid-cooling-tco-selection-faq.en.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/gpu-power-capping-dvfs-liquid-cooling-tco-selection-faq.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./gpu-power-capping-dvfs-liquid-cooling-tco-selection-cards.html" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Datacenter Facility Profile:</label>
+        <select id="pwFacilitySelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePowerCoolingSizer()">
+          <option value="dlc" selected>High-Density / New Build (40°C Direct Liquid Cooling + Rack BBU)</option>
+          <option value="air_pd">Existing Facility with PD Disaggregation / NVML Phase Hooks</option>
+          <option value="air_static">Legacy Air Facility (Colocated Black-Box, 5-Min CLI Relief)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Per-GPU Power Cap Sensitivity Preview:</label>
+        <select id="pwCapSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePowerCoolingSizer()">
+          <option value="700">700W (1,980 MHz · Default TDP Cubic VF Zone)</option>
+          <option value="600">600W (1,815 MHz · Recommended Prefill Pool Cap)</option>
+          <option value="550" selected>550W (1,710 MHz · Mixed-Workload Static Sweet Spot)</option>
+          <option value="450">450W (1,455 MHz · Dedicated Decode Pool Cap)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Cluster Power &amp; Cooling Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Blended Speed / Tok/J</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">1,024-GPU Facility MW (PUE)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Max GPUs / Goodput in 1.2MW</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">3-Yr Power OPEX ($0.10/kWh)</th>
+          </tr>
+        </thead>
+        <tbody id="pwSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="pwDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updatePowerCoolingSizer() {
+  const fac = document.getElementById('pwFacilitySelect').value || 'dlc';
+  const cap = parseInt(document.getElementById('pwCapSelect').value, 10) || 550;
+  const bestId = fac === 'dlc' ? 't4' : (fac === 'air_pd' ? 't3' : 't2');
+  const sweepInfo = {
+    700: '700W (1980MHz): Prefill 100.0% / Decode 100.0% · 1.00x Tok/J (Steep cubic VF zone)',
+    600: '600W (1815MHz): Prefill 97.1% / Decode 99.6% · 1.15x Tok/J (Ideal Prefill pool cap)',
+    550: '550W (1710MHz): Prefill 94.2% / Decode 99.1% · 1.23x Tok/J (Static sweet spot)',
+    450: '450W (1455MHz): Prefill 83.5% / Decode 97.8% · 1.44x Tok/J (Ideal Decode pool cap)'
+  };
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Uncapped 700W + Legacy Air', perf: '100.0% · 1.00x', mw: '1.485 MW (PUE 1.48 ✕)', cap: '824 GPUs (-200) · 80.5% Goodput ✕', opex: '$3,902,544 ✕' },
+    { id: 't2', name: '🟨 Tier 2: Static nvidia-smi 550W Cap + Contained Air', perf: '96.6% · 1.23x ✅', mw: '1.115 MW (PUE 1.35 ✅)', cap: '1,024 GPUs · 96.6% Goodput ✅', opex: '$2,930,208 (Saves $972k)' },
+    { id: 't3', name: '🟦 Tier 3: Phase-Aware DVFS (650/440/350W)', perf: '99.0% · 1.41x ✅', mw: '0.942 MW (PUE 1.24 ✅)', cap: '1,024 GPUs · 99.0% Goodput ✅', opex: '$2,475,571 (Saves $1.43M)' },
+    { id: 't4', name: '🟩 Tier 4: 40°C Cold-Plate DLC + Phase DVFS + Oversub', perf: '99.5% · 1.56x 🏆', mw: '0.858 MW (PUE 1.11 🏆)', cap: '1,248 GPUs (+424) · 121.3% Goodput 🏆', opex: '$2,254,810 (Saves $1.65M 🏆)' }
+  ];
+
+  document.getElementById('pwSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#34d399':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.perf}</code></td>
+      <td style="padding:10px;"><code>${r.mw}</code></td>
+      <td style="padding:10px;"><code>${r.cap}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.opex}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pwDecisionCallout').innerHTML =
+    `<strong>Power Cap Sweep (${sweepInfo[cap]})</strong><br/>` +
+    (bestId === 't4'
+      ? `<strong>Architect Recommendation</strong>: Select <strong>Tier 4 (40°C Cold-Plate Direct Liquid Cooling PUE 1.11 + Phase DVFS + 22% Rack Oversubscription)</strong> to slash 1,024-GPU draw to <code>0.858 MW (-42.2%)</code>, fit <code>+424 extra GPUs</code> in 1.20 MW, and save <code>$1,647,734</code> over 3 years!`
+      : (bestId === 't3'
+        ? `<strong>Architect Recommendation</strong>: Select <strong>Tier 3 (Phase-Aware Dynamic DVFS: Prefill 650W / Decode 440W / Comm 350W)</strong> to retain <code>99.0%</code> speed at <code>1.41x</code> efficiency and save <code>$1,426,973</code> over 3 years!`
+        : `<strong>Architect Recommendation</strong>: Deploy <strong>Tier 2 (Static nvidia-smi -pl 550W Cap)</strong> via DaemonSet for immediate <code>-21.4%</code> GPU power reduction while retaining <code>96.6%</code> throughput and fitting all 1,024 GPUs inside <code>1.115 MW</code>!`));
+}
+updatePowerCoolingSizer();
+</script>
 </body>
 </html>

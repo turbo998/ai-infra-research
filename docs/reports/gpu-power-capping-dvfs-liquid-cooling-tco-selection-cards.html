@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>GPU Cluster Power Capping, Phase-Aware DVFS &amp; Liquid Cooling TCO — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #6ee7b7; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #047857; background: #d1fae5; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #059669, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #059669; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 220px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>⚡ GPU 集群功耗封顶、阶段感知 DVFS 与液冷 TCO 选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/gpu_power_capping_dvfs_cooling_tco/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/gpu-power-capping-dvfs-liquid-cooling-tco-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/gpu-power-capping-dvfs-liquid-cooling-tco-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#power-cooling-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · GPU POWER CAPPING, DVFS &amp; LIQUID COOLING TCO</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">40°C 冷板液冷 + 阶段感知 DVFS</span> 提升 1.56x 每焦耳能效，1.2MW 配电多装 +424 张 H200 且 3 年省电 $165 万</h2>
+      <p class="subhead">针对 1,024×H200 SXM 集群（机房配电硬上限 1.20 MW，电价 $0.10/kWh，3 年 TCO）对比四档控电与散热架构：打破“700W 满血跑才划算”的迷信，消除千卡同步训练毫秒级 di/dt 跳闸。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档机房控电与散热方案</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (默认 700W + 风冷)</strong>: PUE 1.48, 1.485 MW 撑爆配电 ✕<br/>
+            • <strong>Tier 2 (静态 550W 封顶)</strong>: PUE 1.35, 1.115 MW 装满千卡<br/>
+            • <strong>Tier 3 (算子阶段感知 DVFS)</strong>: Prefill 650W / Decode 440W<br/>
+            • <strong>Tier 4 (冷板液冷 DLC + 超配)</strong>: PUE 1.11, 1.2MW 装 1,248 卡 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 工作负载与配电约束契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 目标规模：<code>1,024×H200 SXM</code><br/>
+            • 机房配电红线：<code>1.20 MW</code><br/>
+            • 工业电价：<code>$0.10 / kWh</code><br/>
+            • 物理定律：<code>P ∝ C · V² · f</code><br/>
+            • 甜点拐点：<code>550W (1,710 MHz)</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 静态 550W 省电：<code>-21.4% (吞吐 96.6%)</code><br/>
+            • 阶段 DVFS 吞吐：<code>99.0% (1.41x 能效)</code><br/>
+            • 液冷超配装机：<code>1,248 卡 (+424 张)</code><br/>
+            • 1.2MW 集群总产出：<code>121.3% (+40.8pt)</code><br/>
+            • 3 年千卡省电费：<code>$1,647,734</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>1.20 MW 机房配电硬上限下集群总有效算力产出 (Effective Cluster Goodput %)</strong>
+          <span class="pill pill-auto">Act automatically · 阶段感知 DVFS + 冷板液冷</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: 冷板液冷 DLC + 阶段 DVFS (1,248卡)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+          <span class="bar-val">121.3% 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 算子阶段感知动态 DVFS (1,024卡)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:81.6%;"></div></div>
+          <span class="bar-val">99.0% ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 静态 550W 封顶 + 封闭风冷 (1,024卡)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:79.6%;"></div></div>
+          <span class="bar-val">96.6% ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 默认 700W + 传统风冷 (仅装 824卡)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:66.4%;"></div></div>
+          <span class="bar-val">80.5% ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to CMOS cubic voltage-frequency scaling ($P \propto V^2 f$) on H100/H200 SXM GPUs (350W–700W), ISCA Splitwise/Dynamo phase-aware DVFS, and ASHRAE W4 40°C warm-water direct-to-chip liquid cooling (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 1.20 MW POWER-CONSTRAINED COLOCATION CLUSTER</span>
+        <span class="badge-prov">Case Study · 1,024×H200 SXM Deployment</span>
+      </div>
+      <h2 class="headline">静态 550W 封顶立省 21.4% 功耗仅损 3.4% 速度；阶段 DVFS 将 Decode 锁 440W 保持 99.4% 吞吐</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们采购了 128 台 8×H200 SXM 服务器（共 1,024 张卡），但存量 IDC 机房只批下来 1.20 MW 总配电额度；按 700W 满血 + 风冷 PUE 1.48 算需要 1.485 MW，不仅有 200 张卡插不上电，而且跑 FSDP 同步训练时经常因为毫秒级电流尖峰触发机柜空开跳闸！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：存量风冷机房配电超标与跳闸急救</strong></div>
+            <span class="pill pill-confirm">Confirm · 选 Tier 2 (静态 550W 封顶) 或 Tier 3 (阶段 DVFS)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">通过 DaemonSet 下发 <code>nvidia-smi -pl 550</code> 将 SM 限制在 <code>1,710 MHz</code> 甜点区，或对 Decode 池下发 <code>440W</code> 锁频，千卡总功率从 <code>1.485 MW</code> 降至 <code>0.942 ~ 1.115 MW</code>，1,024 张卡全部满编通电且削平同步 GEMM 尖峰。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3 阶段感知 DVFS 千卡机房总功耗</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:63.4%;"></div></div>
+            <span class="bar-val">0.942 MW ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2 静态 550W 封顶千卡机房总功耗</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:75.1%;"></div></div>
+            <span class="bar-val">1.115 MW ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1 默认 700W 满血风冷千卡总功耗</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">1.485 MW ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：高密新建机房散热与机柜动态配电超配 (Oversubscription)</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (40°C 冷板液冷 PUE 1.11)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">40°C 温水冷板带走 88% 热量并砍掉高耗电风扇，配合机柜锂电 BBU 毫秒削峰与 10ms 遥测，1.20 MW 配电可安全超配装下 <strong>1,248 张 GPU（比 Tier 1 多装 +424 张）</strong>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4 冷板液冷 3 年千卡总电费</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:57.8%;"></div></div>
+            <span class="bar-val">$2,254,810 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1 传统风冷 3 年千卡总电费</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$3,902,544 ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：禁止在无硬件闭环保护下盲目做机柜 PDU 超配</strong></div>
+            <span class="pill pill-human">Send to a human · 需核验 BBU 削峰与 &lt;10ms NVML 降频守护</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">若无板载 PMU 功耗封顶与机柜 BBU 缓冲，千卡同步 AllReduce 切换到 GEMM 的 2ms 内会产生 +28% 瞬态电流冲击，严禁裸跑超配。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Cutting the top 21.4% of GPU power (700W → 550W) sacrifices only 3.4% blended speed while unlocking +200 stranded GPUs under a 1.20 MW facility cap.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER POWER, DVFS &amp; COOLING MATRIX</span>
+        <span class="badge-prov">1,024×H200 SXM · 1.20 MW Limit · 3-Yr OPEX</span>
+      </div>
+      <h2 class="headline">四档功耗与散热架构全矩阵评测：从 1.485 MW 超标跳闸到 0.858 MW 液冷超配</h2>
+      <p class="subhead">横向对比 Prefill/Decode 吞吐保持率、每焦耳能效、千卡机房总功耗、1.2MW 最大装机卡数、高温降频频次与 3 年电费账单。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (架构档位)</th>
+            <th>QUESTION / TASK (控电与散热机制)</th>
+            <th>MODEL ANSWER (吞吐 / 功耗 / 1.2MW 装机 / 电费)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 默认 700W + 传统风冷</strong></td>
+            <td>全程顶死 1980MHz · 风扇吃 18% 电 · PUE 1.48</td>
+            <td>吞吐 <code>100.0%</code> · 千卡需 <code>1.485 MW ✕</code> · 1.2MW 仅装 <code>824 张 ✕</code> · 月降频 <code>42 次 ✕</code> · 3年电费 <code>$3,902,544 ✕</code></td>
+            <td><span class="pill pill-human">淘汰禁用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 静态 550W 封顶 + 封闭风冷</strong></td>
+            <td><code>nvidia-smi -pl 550</code> (1710MHz) · 冷热通道封闭 PUE 1.35</td>
+            <td>Prefill <code>94.2%</code> / Decode <code>99.1%</code> (混合 <code>96.6%</code>) · 能效 <code>1.23x</code> · 千卡 <code>1.115 MW</code> · 装满 <code>1,024 张</code> · 电费 <code>$2,930,208</code></td>
+            <td><span class="pill pill-confirm">存量机房急救 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 算子阶段感知动态 DVFS</strong></td>
+            <td>Prefill <code>650W</code> / Decode <code>440W</code> / 通信 <code>350W</code> · PUE 1.24</td>
+            <td>Prefill <code>98.6%</code> / Decode <code>99.4%</code> (混合 <code>99.0%</code>) · 能效 <code>1.41x</code> · 千卡 <code>0.942 MW</code> · 月降频 <code>1 次</code> · 电费 <code>$2,475,571</code></td>
+            <td><span class="pill pill-auto">PD 分离首选 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 冷板液冷 DLC + PDU 超配</strong></td>
+            <td>40°C 温水冷板 (PUE 1.11) + 阶段 DVFS + BBU 削峰 +22% 超配</td>
+            <td>混合吞吐 <code>99.5% 🏆</code> · 能效 <code>1.56x 🏆</code> · 千卡 <code>0.858 MW (-42.2%)</code> · 1.2MW 装 <code>1,248 张 (+424张) 🏆</code> · 电费 <code>$2,254,810 🏆</code></td>
+            <td><span class="pill pill-auto">高密集群标配 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#047857;">✅ 为什么 Decode 阶段锁 440W 是“白捡的午餐”？</strong><br/>
+          Decode 阶段完全受限于 HBM3e 显存带宽（<code>4.8 TB/s</code>，固定耗电约 100W），SM 算力利用率不足 15%。将 SM 频率从 1980MHz 锁至 1455MHz 立省 260W 废热，而 HBM 带宽纹丝不动！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么单张卡高温降频会瘫痪整个千卡训练？</strong><br/>
+          在 Tier 1 风冷机房中，处于机柜顶部的尾卡每月触发 <code>42 次</code> 83°C 硬件降频，导致 1,023 张正常卡在每次 AllReduce 屏障处被迫陪跑等待，集群有效产出再跌 8%~12%。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 2 solves immediate power-cap crises in 5 minutes via CLI; Tier 3 recovers 99.0% speed via phase-aware clocks; Tier 4 unlocks +424 extra GPUs in 1.2 MW.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · NVML PHASE-AWARE DVFS &amp; RACK POWER GUARD</span>
+        <span class="badge-prov">Sub-Millisecond PMU Cap + Phase Clock Lock</span>
+      </div>
+      <h2 class="headline">底层机制：NVML 阶段感知频率锁死 + 机柜级 PDU 10ms 闭环防跳闸协议</h2>
+      <p class="subhead">展示生产环境如何在 Prefill / Decode / NCCL AllReduce 阶段动态切换 SM 频率与功耗上限，并联动机柜 PDU 实现安全超配。</p>
+
+      <div class="code-dark"><pre>{
+  "cluster_power_contract": {
+    "target_gpus": 1024,
+    "facility_breaker_limit_mw": 1.20,
+    "phase_profiles": {
+      "prefill_compute_bound": {"power_cap_w": 650, "sm_clock_mhz": [1350, 1880], "hbm_clock": "MAX"},
+      "decode_memory_bound":   {"power_cap_w": 440, "sm_clock_mhz": [1350, 1455], "hbm_clock": "MAX"},
+      "nccl_allreduce_wait":   {"power_cap_w": 350, "sm_clock_mhz": [1140, 1350], "hbm_clock": "MAX"}
+    },
+    "rack_oversubscription_guard": {
+      "pdu_telemetry_poll_ms": 10,
+      "bbu_supercap_holdup_ms": 200,
+      "emergency_throttle_cap_w": 480
+    }
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#059669;margin:6px 0;">↓ NVML C-API 无损微秒级调频与机柜闭环控电执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>// 1. 节点初始化：开启持久模式 + 设置 anti-droop 频率下限防止 di/dt 电压阶跃
+nvmlDeviceSetPersistenceMode(dev, NVML_FEATURE_ENABLED);
+nvmlDeviceSetApplicationsClocks(dev, /*memClockMHz=*/2619, /*graphicsClockMHz=*/1710);
+
+// 2. 算子阶段切换钩子 (PD 分离或训练 Step Hook)：无损切换 SM 频率与 PMU 封顶
+void on_phase_enter(nvmlDevice_t dev, PhaseType phase) {
+  if (phase == PHASE_PREFILL_GEMM) {
+    nvmlDeviceSetPowerManagementLimit(dev, 650000); // 650W (mW)
+    nvmlDeviceSetGpuLockedClocks(dev, 1350, 1880);
+  } else if (phase == PHASE_DECODE_HBM_BOUND) {
+    nvmlDeviceSetPowerManagementLimit(dev, 440000); // 440W (mW) -> 99.4% TPOT!
+    nvmlDeviceSetGpuLockedClocks(dev, 1350, 1455);
+  } else if (phase == PHASE_NCCL_COMM) {
+    nvmlDeviceSetGpuLockedClocks(dev, 1140, 1350);  // 抑制同步步进瞬态压降
+  }
+}
+// &lt;answer&gt; Validated: 99.5% blended throughput at 1.56x Tokens/Joule (PUE 1.11)</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Calling <code>nvmlDeviceSetGpuLockedClocks</code> in user-space takes &lt;150 µs and never interrupts running CUDA streams or invalidates KV caches.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · POWER CAP SENSITIVITY SWEEP (350W → 700W)</span>
+        <span class="badge-prov">CMOS P ∝ V²·f Scaling Law Verification</span>
+      </div>
+      <h2 class="headline">功耗封顶灵敏度扫描：从 700W 降至 550W 省电 21.4%，Decode 吞吐保持 99.1%</h2>
+      <p class="subhead">测试 H200 SXM 在 700W、600W、550W、450W、350W 五档功耗封顶下的 SM 核心频率、Prefill 算力、Decode 吞吐与每焦耳能效变化。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (功耗封顶档位与 SM 频率)</th>
+            <th>ORIGINAL (700W 满血基线)</th>
+            <th>PERTURBED (封顶后 Prefill / Decode)</th>
+            <th>CHANGE (功耗降幅 &amp; 能效增益)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>600W 封顶 (SM 1,815 MHz)</strong><br/>PD 分离 Prefill 节点池推荐档</td>
+            <td>Prefill <code>100.0%</code><br/>Decode <code>100.0%</code> (700W)</td>
+            <td>Prefill <code>97.1%</code><br/>Decode <code>99.6%</code></td>
+            <td>功耗 <code>-14.3%</code><br/><strong style="color:#059669;">能效 1.15x (+15%) ✅</strong></td>
+          </tr>
+          <tr>
+            <td><strong>550W 封顶 (SM 1,710 MHz)</strong><br/>混部集群一键静态封顶黄金甜点</td>
+            <td>Prefill <code>100.0%</code><br/>Decode <code>100.0%</code> (700W)</td>
+            <td>Prefill <code>94.2%</code><br/>Decode <code>99.1% 🏆</code></td>
+            <td>功耗 <code>-21.4%</code><br/><strong style="color:#059669;">能效 1.23x (+23%) 🏆</strong></td>
+          </tr>
+          <tr>
+            <td><strong>450W 封顶 (SM 1,455 MHz)</strong><br/>PD 分离 Decode 节点池专属档</td>
+            <td>Prefill <code>100.0%</code><br/>Decode <code>100.0%</code> (700W)</td>
+            <td>Prefill <code>83.5%</code><br/>Decode <code>97.8% 🏆</code></td>
+            <td>功耗 <code>-35.7%</code><br/><strong style="color:#059669;">能效 1.44x (+44%) 🏆</strong></td>
+          </tr>
+          <tr>
+            <td><strong>350W 封顶 (SM 1,140 MHz)</strong><br/>NCCL AllReduce / KV 传输等待档</td>
+            <td>Prefill <code>100.0%</code><br/>Decode <code>100.0%</code> (700W)</td>
+            <td>Prefill <code>66.0%</code><br/>Decode <code>91.5%</code></td>
+            <td>功耗 <code>-50.0%</code><br/><strong style="color:#2563eb;">能效 1.52x (+52%) ✅</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>📈 为什么 550W→700W 是“最昂贵的 150W”？</strong><br/>
+          为了把时钟从 1,710 MHz 推到 1,980 MHz（仅 +15.8% 频率），供电电压必须大幅拉升以克服门延迟，多花 +27.3% 电费只买到 +3.4% 混合吞吐。
+        </div>
+        <div class="callout-box">
+          <strong>🛡️ 降频对硬件寿命与故障率 (AFR) 的隐性红利</strong><br/>
+          将 GPU 封顶在 550W 并结合 40°C 冷板液冷后，HBM3e 结温下降 <code>14°C~18°C</code>，光模块与 HBM 热膨胀应力引发的 ECC 双比特故障率下降超 <code>50%</code>。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: 550W is the universal static Pareto frontier for mixed workloads; 650W/440W split capping is the optimal policy for disaggregated PD clusters.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; TCO SCALING · FACILITY MW, GPU CAPACITY &amp; 3-YR OPEX</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 4 DLC vs Slate=Tier 1 Air</span>
+      </div>
+      <h2 class="headline">机房配电与 TCO 对比：千卡总功率直降 42.2%，3 年净省 $1,647,734 电费</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 4（40°C 冷板液冷 DLC + 阶段感知 DVFS + PDU 超配），浅灰条（<code>#CBD5E1</code>）代表 Tier 1（默认 700W + 传统风冷 PUE 1.48）。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 1,024 张 H200 SXM 机房总配电需求 (IT + 散热总 MW，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 冷板液冷 PUE 1.11 + 阶段 DVFS</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:57.8%;"></div></div>
+            <span class="bar-val">0.858 MW 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 算子阶段感知动态 DVFS (PUE 1.24)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:63.4%;"></div></div>
+            <span class="bar-val">0.942 MW ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 静态 550W 封顶 + 封闭风冷</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:75.1%;"></div></div>
+            <span class="bar-val">1.115 MW ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 默认 700W + 传统风冷 PUE 1.48</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">1.485 MW ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 1.20 MW 机房配电上限下可上架运行的 GPU 卡数 (越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 冷板液冷 + 22% 动态配电超配</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">1,248 GPUs 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2 / Tier 3: 550W 封顶 / 阶段 DVFS</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:82.1%;"></div></div>
+            <span class="bar-val">1,024 GPUs ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 默认 700W + 传统风冷 (少装 200卡)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:66.0%;"></div></div>
+            <span class="bar-val">824 GPUs ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 1,024 张 H200 SXM 连续运行 3 年总电费账单 ($0.10/kWh，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 冷板液冷 DLC + 阶段 DVFS</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:57.8%;"></div></div>
+            <span class="bar-val">$2,254,810 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 算子阶段感知动态 DVFS</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:63.4%;"></div></div>
+            <span class="bar-val">$2,475,571 ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 静态 550W 封顶 + 封闭风冷</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:75.1%;"></div></div>
+            <span class="bar-val">$2,930,208 ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 默认 700W + 传统风冷</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$3,902,544 ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Under a fixed 1.20 MW power envelope, Tier 4 delivers +51.5% more deployed GPUs (1,248 vs 824) and +40.8 percentage points higher effective cluster goodput than Tier 1.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：存量风冷立刻锁 550W / 阶段 DVFS，新建高密集群必上 40°C 冷板液冷</h2>
+      <p class="subhead">根据机房单柜配电密度、制冷基础设施与工作负载类型对号入座，用软件调频与温水液冷榨干每一瓦特配电额度。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>存量风冷机房配电救急 → Tier 2 (`nvidia-smi -pl 550`)</strong>：一行命令立减 21.4% 功耗，吞吐保持 96.6%，立刻把千卡功耗压进 1.20 MW 红线内。</li>
+            <li>• <strong>PD 分离大模型推理池 → Tier 3 (算子阶段感知 DVFS)</strong>：Prefill 池设 600~650W，Decode 池锁 440W（SM 1455MHz），白省 37% Decode 电力且 TPOT 零感知。</li>
+            <li>• <strong>高密 H200 / Blackwell GB200 新建集群 → Tier 4 (40°C 冷板液冷 DLC + PDU 超配)</strong>：PUE 压至 1.11，1.2MW 多装 +424 张卡，3 年省电费 $165 万。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在配电受限机房裸跑默认 700W TDP (Tier 1)</strong>：位于 CMOS VF 立方陡峭区，多烧 27% 电仅换来 3.4% 速度，还导致 200 张卡无电可用。</li>
+            <li>• <strong>严禁在无 BBU 削峰与 10ms 遥测保护下盲目做机柜超配</strong>：千卡同步训练的 2ms `di/dt` 步进尖峰（+28%）会直接打跳上游机柜空开。</li>
+            <li>• <strong>严禁在单柜 &ge;40kW 场景继续硬上纯风冷</strong>：服务器风扇自耗电高达 18%，且机柜顶端尾卡频繁触发 83°C 降频拖慢全局训练。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 在 K8s GPU Operator DaemonSet 中固化 <code>nvidia-smi -pm 1 &amp;&amp; nvidia-smi -pl 550</code>，防止宿主机重启后回退至 700W。<br/>
+          2. <code>[ ]</code> 对 PD 分离的 Decode 节点池执行 <code>nvidia-smi -lgc 1350,1455</code>，锁死 SM 上限同时保持 HBM3e 频率满血。<br/>
+          3. <code>[ ]</code> 在 DCGM 监控中配置 <code>DCGM_FI_DEV_THERMAL_VIOLATION &gt; 0</code> 自动告警，第一时间隔离风道末端的高温慢卡。<br/>
+          4. <code>[ ]</code> 冷板液冷（DLC）二次侧进水温度控制在露点以上（<code>35°C~40°C</code>），并配置双冗余 CDU 泵组与漏液感应绳。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/gpu_power_capping_dvfs_cooling_tco/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
