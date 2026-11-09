@@ -2588,5 +2588,91 @@ function updatePowerCoolingSizer() {
 }
 updatePowerCoolingSizer();
 </script>
+
+  <!-- Round 29: AI Cluster Parallel Filesystem Selection Sizer -->
+  <div id="parallel-fs-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#06b6d4;color:#083344;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 29 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">💾 AI 智算集群分布式并行文件系统选型计算器（CephFS vs. Lustre vs. WEKA GDS vs. DeepSeek 3FS + USRBIO）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/ai_parallel_filesystem_3fs_lustre_weka_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-storage-3fs-lustre-weka-parallel-filesystem-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/ai-storage-3fs-lustre-weka-parallel-filesystem-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./ai-storage-3fs-lustre-weka-parallel-filesystem-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">活跃随机 Shuffle 数据集 / 客户端内存比例:</label>
+        <select id="pfsRatioSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateParallelFsSizer()">
+          <option value="0.5">0.5x 内存 (1 TB 小数据集，全命中缓存)</option>
+          <option value="2.0">2.0x 内存 (4 TB 数据集，轻度换页)</option>
+          <option value="10.0">10.0x 内存 (20 TB 数据集，LRU 锁争用)</option>
+          <option value="250.0" selected>250.0x 内存 (500 TB 真实全局 Shuffle 训练集)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">组织工程基因与采购模式:</label>
+        <select id="pfsTeamSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateParallelFsSizer()">
+          <option value="oss" selected>AI 原生大模型团队 / 智算云 (具备 RDMA 运维能力，追求极致线速与零授权税)</option>
+          <option value="ent">金融 / 车企 / 政企核心生产 (追求原厂 7×24 交钥匙 SLA 与 N+2 纠删码)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">并行文件系统架构档位 (180 全闪节点)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">当前数据集聚合读吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">64KB 随机读 IOPS</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">10TB Ckpt 恢复 / KVCache P99</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">客户端 CPU / 3 年总 TCO</th>
+          </tr>
+        </thead>
+        <tbody id="pfsSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="pfsDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #06b6d4;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateParallelFsSizer() {
+  const ratio = document.getElementById('pfsRatioSelect').value || '250.0';
+  const team = document.getElementById('pfsTeamSelect').value || 'oss';
+  const lustreMap = { '0.5': 3800.0, '2.0': 2950.0, '10.0': 2450.0, '250.0': 1680.0 };
+  const f3sMap = { '0.5': 6600.0, '2.0': 6600.0, '10.0': 6590.0, '250.0': 6580.0 };
+  const lBw = lustreMap[ratio] || 1680.0;
+  const fBw = f3sMap[ratio] || 6580.0;
+  const bestId = team === 'ent' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 通用 NAS / CephFS (TCP VFS + 主 OSD 读)', bw: '251.0 GB/s (3.5% 线速 ✕)', iops: '1.1 M IOPS ✕', lat: '44.5 s / P99 18.5 ms ✕', tco: '28 核 · $2,150,000' },
+    { id: 't2', name: '🟨 Tier 2: 传统超算 Lustre (LNet + OS Page Cache)', bw: `${lBw.toFixed(0)} GB/s (${(lBw/1000).toFixed(2)} TB/s)`, iops: '4.5 M IOPS', lat: '4.8 s / P99 4.20 ms', tco: '18 核 · $2,480,000' },
+    { id: 't3', name: '🟦 Tier 3: 商用全闪 WEKA / VAST (DPDK + GDS + N+2 EC)', bw: '5,850 GB/s (5.85 TB/s ✅)', iops: '26.5 M IOPS ✅', lat: '1.8 s / P99 0.65 ms ✅', tco: '4 核 · $3,680,000 (含授权)' },
+    { id: 't4', name: '🟩 Tier 4: 开源 DeepSeek 3FS (CRAQ + USRBIO + FDB)', bw: `${fBw.toFixed(0)} GB/s (${(fBw/1000).toFixed(2)} TB/s 🏆)`, iops: '33.0 M IOPS 🏆', lat: '1.5 s / P99 0.42 ms 🏆', tco: '2 核 · $2,200,000 (省 $1.48M 🏆)' }
+  ];
+
+  document.getElementById('pfsSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(6,182,212,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.iops}</code></td>
+      <td style="padding:10px;"><code>${r.lat}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.tco}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pfsDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${ratio}x 内存规模 · AI 原生自建模式)</strong>：首选 <strong>Tier 4 (开源 DeepSeek 3FS: CRAQ 三副本并发读 + USRBIO 零拷贝环)</strong>，绕过 OS Page Cache 锁抖动，跑出 <code>${(fBw/1000).toFixed(2)} TB/s</code> 聚合吞吐与 <code>33.0M IOPS</code>，10TB Checkpoint 仅需 <code>1.5s</code> 恢复，3 年省下 <code>$1,480,000</code> 软件授权费！`
+    : `<strong>架构师选型建议 (${ratio}x 内存规模 · 政企交钥匙模式)</strong>：首选 <strong>Tier 3 (商用全闪 WEKA / VAST Data + GPUDirect Storage)</strong>，提供 <code>5.85 TB/s</code> 吞吐、<code>N+2</code> 纠删码（85%+ 闪存利用率）与原厂 7×24 维保 SLA！`;
+}
+updateParallelFsSizer();
+</script>
 </body>
 </html>

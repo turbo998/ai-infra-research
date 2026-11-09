@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>AI Cluster Parallel Filesystem Selection (CephFS vs Lustre vs WEKA GDS vs DeepSeek 3FS) — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #67e8f9; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #0e7490; background: #cffafe; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #0891b2, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #0891b2; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 225px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>💾 AI 智算集群分布式并行文件系统选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/ai_parallel_filesystem_3fs_lustre_weka_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/ai-storage-3fs-lustre-weka-parallel-filesystem-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/ai-storage-3fs-lustre-weka-parallel-filesystem-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#parallel-fs-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · AI PARALLEL FILESYSTEM &amp; STORAGE ARCHITECTURE</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">DeepSeek 3FS (CRAQ + USRBIO)</span> 跑出 6.60 TB/s 聚合读吞吐，随机 IOPS 达 Lustre 的 7.33 倍且省 $148 万授权费</h2>
+      <p class="subhead">针对 180 台全闪存储节点（每台 16×NVMe + 2×200G RDMA，理论线速 7.2 TB/s）服务 1,024×H200 集群，评测 CephFS、Lustre、商用 WEKA/VAST GDS 与开源 DeepSeek 3FS。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档并行存储架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (CephFS TCP)</strong>: 251 GB/s, 1.1M IOPS ✕<br/>
+            • <strong>Tier 2 (Lustre RDMA)</strong>: 2.45 TB/s, Page Cache 锁抖动<br/>
+            • <strong>Tier 3 (WEKA/VAST GDS)</strong>: 5.85 TB/s, 商用交钥匙<br/>
+            • <strong>Tier 4 (DeepSeek 3FS)</strong>: 6.60 TB/s, 33M IOPS 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 存储集群硬件基线</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 存储节点：<code>180 台全闪节点</code><br/>
+            • 单节点配置：<code>16×Gen5 NVMe + 2×200G</code><br/>
+            • 理论网口线速：<code>7,200 GB/s (7.2 TB/s)</code><br/>
+            • 计算客户端：<code>1,024×H200 SXM</code><br/>
+            • Checkpoint 规模：<code>10.0 TB / 次</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 3FS 聚合读吞吐：<code>6,600 GB/s (91.7% 线速)</code><br/>
+            • 对比 CephFS 提速：<code>26.29x</code><br/>
+            • 对比 Lustre 随机 IOPS：<code>7.33x (33M vs 4.5M)</code><br/>
+            • 10TB Checkpoint 恢复：<code>1.5 s (写 2.4 s)</code><br/>
+            • 对比商用 SDS 3年省钱：<code>$1,480,000</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>180 节点全闪集群聚合随机读吞吐 (Aggregate Random Read GB/s，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 开源 3FS / 商用 WEKA GDS</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: DeepSeek 3FS (CRAQ + USRBIO)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:91.7%;"></div></div>
+          <span class="bar-val">6,600 GB/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 商用 WEKA / VAST (DPDK + GDS)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:81.3%;"></div></div>
+          <span class="bar-val">5,850 GB/s ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 传统超算 Lustre (LNet + Page Cache)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:34.0%;"></div></div>
+          <span class="bar-val">2,450 GB/s</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 企业级 NAS / CephFS (TCP VFS)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:3.5%;"></div></div>
+          <span class="bar-val">251 GB/s ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to DeepSeek 3FS (Fire-Flyer File System) 180-node NVMe + 2×200Gbps RDMA architecture, CRAQ apportioned read model, and GPUDirect Storage / USRBIO zero-copy rings (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 500 TB SHUFFLED MULTIMODAL TRAINING &amp; KVCACHE OFFLOADING</span>
+        <span class="badge-prov">Case Study · 1,024-GPU Training + KVCache Swap</span>
+      </div>
+      <h2 class="headline">CRAQ 链式均摊读释放 3 倍 NVMe IOPS；USRBIO 零拷贝环将 KVCache 换页 P99 压至 0.42ms</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们用 180 台全闪 NVMe 服务器搭了 Lustre 并行文件系统，跑顺序 dd 测试能到 3.8 TB/s；但一旦开始跑 500 TB 全局随机打散（Global Shuffle）的多模态预训练和 Mooncake KVCache 二级卸载，吞吐立刻腰斩到 1.68 TB/s，计算节点 CPU 被 kswapd 占满 18 个核，KVCache 换页毛刺高达 4.2ms！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：AI 原生大模型训练与 KVCache 二级池底座选型</strong></div>
+            <span class="pill pill-auto">Act automatically · 选 Tier 4 (DeepSeek 3FS + USRBIO)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">彻底废除命中率不足 2% 的 Linux Page Cache，采用 <code>O_DIRECT + io_uring + USRBIO</code> 共享内存信号量环与 <code>CRAQ</code> 全副本并发读，聚合吞吐稳定在 <code>6,600 GB/s</code>，KVCache P99 降至 <code>0.42 ms</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: DeepSeek 3FS 64KB 随机读 IOPS</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">33.0 M 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 传统 Lustre 64KB 随机读 IOPS</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:13.6%;"></div></div>
+            <span class="bar-val">4.5 M ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：金融/车企智驾追求交钥匙原厂维保与高磁盘有效率</strong></div>
+            <span class="pill pill-confirm">Confirm · 选 Tier 3 (商用 WEKA / VAST Data + GDS)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">自带分布式 <code>N+2 / N+4</code> 纠删码（磁盘空间有效率 85%+ vs 三副本 33.3%）、企业级快照与原厂 7×24 驻场维保，聚合读达 <code>5,850 GB/s</code>，10TB Checkpoint 仅 <code>1.8 s</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: WEKA / VAST 10TB Checkpoint 恢复</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:4.0%;"></div></div>
+            <span class="bar-val">1.8 s ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: CephFS 10TB Checkpoint 恢复</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">44.5 s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：禁止将通用 CephFS (TCP) 作为千卡训练主存储</strong></div>
+            <span class="pill pill-human">Send to a human · 仅限归档或轻量开发盘</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">Ceph RADOS 默认将所有读请求打向 Primary OSD（闲置 2/3 NVMe 副本），且内核 TCP 拷贝吃满 28 个客户端 CPU 核。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Eliminating OS Page Cache and unlocking all 3 replicas via CRAQ increases 64KB random read IOPS by 7.33× while cutting client CPU usage from 18 cores down to 2 cores.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER PARALLEL FILESYSTEM EVALUATION MATRIX</span>
+        <span class="badge-prov">180 All-NVMe Nodes · 1,024×H200 Clients</span>
+      </div>
+      <h2 class="headline">四档分布式并行文件系统全矩阵评测：从 251 GB/s 主从瓶颈到 6.60 TB/s 全线速直通</h2>
+      <p class="subhead">全面对比聚合读吞吐、64KB 随机读 IOPS、10TB Checkpoint 读写耗时、KVCache P99 延迟、客户端 CPU 消耗与 3 年 TCO。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (存储架构档位)</th>
+            <th>QUESTION / TASK (数据通路与复制机制)</th>
+            <th>MODEL ANSWER (吞吐 / IOPS / Ckpt / P99 / TCO)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 通用 NAS / CephFS (TCP)</strong></td>
+            <td>内核 TCP VFS + 主 OSD 串行读 + 主备 MDS</td>
+            <td>读 <code>251 GB/s ✕</code> · <code>1.1M IOPS ✕</code> · 10TB 加载 <code>44.5s ✕</code> · KVCache P99 <code>18.5ms ✕</code> · 占 <code>28 核</code> · 3年 <code>$2.15M</code></td>
+            <td><span class="pill pill-human">严禁做主盘 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 传统超算 Lustre / BeeGFS</strong></td>
+            <td>内核 LNet RDMA + OS Page Cache + 静态 OST</td>
+            <td>读 <code>2,450 GB/s</code> (500TB 随机读跌至 <code>1,680 GB/s ✕</code>) · <code>4.5M IOPS</code> · Ckpt <code>4.8s</code> · P99 <code>4.2ms</code> · 占 <code>18 核</code> · <code>$2.48M</code></td>
+            <td><span class="pill pill-confirm">需关 PageCache</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 商用全闪 WEKA / VAST GDS</strong></td>
+            <td>用户态 DPDK + GPUDirect Storage + N+2 纠删码</td>
+            <td>读 <code>5,850 GB/s ✅</code> · <code>26.5M IOPS ✅</code> · 10TB 加载 <code>1.8s (写 2.9s) ✅</code> · P99 <code>0.65ms ✅</code> · 占 <code>4 核</code> · 3年 <code>$3.68M</code></td>
+            <td><span class="pill pill-auto">政企交钥匙 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 开源 DeepSeek 3FS</strong></td>
+            <td>无缓存 O_DIRECT + CRAQ 全副本读 + USRBIO + FDB</td>
+            <td>读 <code>6,600 GB/s (91.7% 线速) 🏆</code> · <code>33.0M IOPS 🏆</code> · 10TB 加载 <code>1.5s (写 2.4s) 🏆</code> · P99 <code>0.42ms 🏆</code> · 占 <code>2 核</code> · <code>$2.20M 🏆</code></td>
+            <td><span class="pill pill-auto">AI 原生首选 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#0e7490;">✅ 为什么 3FS 选用 FoundationDB 管元数据？</strong><br/>
+          传统 Lustre MDT 是单命名空间锁瓶颈；3FS 将目录树与 Chunk 路由存入分布式事务 KV 数据库 <strong>FoundationDB（支持严格可串行化快照隔离 SSI）</strong>，元数据节点完全无状态且可水平扩展！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么三副本 (3FS) 需要搭配对象存储分层？</strong><br/>
+          3FS 三副本磁盘空间利用率为 <code>33.3%</code>，因此热盘只存“当前训练集 + 最近 3 个 Checkpoint + 在线 KVCache”，历史归档 Checkpoint 必须异步沉降到廉价 S3。
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: DeepSeek 3FS achieves 91.7% of raw network line rate (6.60 TB/s out of 7.20 TB/s) and saves $1.48M in 3-year software licensing compared to commercial SDS.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · 3FS USRBIO ZERO-COPY RING &amp; CRAQ PROTOCOL</span>
+        <span class="badge-prov">Shared-Memory Semaphore Ring + RDMA Write</span>
+      </div>
+      <h2 class="headline">底层机制：3FS USRBIO 共享内存异步信号量环 + CRAQ 全副本强一致读取流</h2>
+      <p class="subhead">展示客户端如何通过 <code>hf3fs_iov</code> 预注册 RDMA 内存池与 <code>hf3fs_ior</code> 异步环彻底绕过 FUSE 内核拷贝。</p>
+
+      <div class="code-dark"><pre>{
+  "storage_cluster_contract": {
+    "filesystem": "DeepSeek-3FS (Fire-Flyer File System)",
+    "chunk_size_bytes": 1048576,
+    "replication_protocol": "CRAQ (3-Replica Chain: Head -> Middle -> Tail, Apportioned Clean Reads)",
+    "metadata_backend": "FoundationDB (Strict Serializable Snapshot Isolation)",
+    "client_datapath": "USRBIO (RDMA-Pinned Shared Memory iov + Lockless Semaphore Ring ior)"
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#0891b2;margin:6px 0;">↓ USRBIO 零拷贝异步读取与 CRAQ 路由执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>// 1. 初始化阶段：分配大页共享内存并向 RDMA 网卡注册 Memory Region (零运行时 pin 开销)
+struct hf3fs_iov iov;
+hf3fs_iovcreate(&amp;iov, mount_point, /*size=*/1ULL &lt;&lt; 30, /*block_size=*/0, /*numa=*/0);
+struct hf3fs_ior ior;
+hf3fs_iorcreate(&amp;ior, mount_point, /*entries=*/1024, /*for_read=*/true, /*io_depth=*/0, /*numa=*/0);
+
+// 2. 批量压入 64KB 随机块读取请求 (KVCache 换页 / DataLoader 采样，零内核态阻塞)
+for (int i = 0; i &lt; batch_blocks; ++i) {
+  hf3fs_prep_io(&amp;ior, &amp;iov, /*read=*/true, iov.base + i * 65536, fd, offsets[i], 65536, user_data[i]);
+}
+hf3fs_submit_ios(&amp;ior); // 敲响共享内存信号量通知本机守护协程 -&gt; 就近挑选 CRAQ Clean 副本发起 RDMA Write
+
+// 3. 轮询完成环收集结果 (远端 NVMe 已通过 io_uring+O_DIRECT+RDMA 直接写妥数据)
+struct hf3fs_cqe cqes[64];
+int done = hf3fs_wait_for_ios(&amp;ior, cqes, 64, /*min_results=*/batch_blocks, /*timeout=*/NULL);
+// &lt;answer&gt; Validated: 6.60 TB/s aggregate throughput, 33.0M IOPS, 0.42 ms P99 latency</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Because the target buffer is pre-registered in <code>hf3fs_iov</code>, the storage server's RDMA NIC DMAs NVMe blocks directly into client memory with zero CPU intervention.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · OS PAGE CACHE THRASHING UNDER 500 TB SHUFFLE</span>
+        <span class="badge-prov">Working Set vs Client RAM Perturbation (0.5x → 250x)</span>
+      </div>
+      <h2 class="headline">鲁棒性测试：500TB 随机 Shuffle 下 Lustre 吞吐暴跌 55.8%，3FS 全程 6.58 TB/s 零退化</h2>
+      <p class="subhead">对比传统开启 OS Page Cache 的并行文件系统（Tier 2 Lustre）与无缓存直通架构（Tier 4 3FS）在不同数据集规模下的吞吐稳定性。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (活跃数据集与客户端内存比例)</th>
+            <th>ORIGINAL (Lustre + OS Page Cache)</th>
+            <th>PERTURBED (DeepSeek 3FS O_DIRECT)</th>
+            <th>CHANGE (3FS 吞吐优势与内核诊断)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>0.5× 客户端内存 (1 TB 小数据集)</strong><br/>全部装入 Linux Page Cache</td>
+            <td><code>3,800.0 GB/s</code><br/>(缓存命中率 ~98%)</td>
+            <td><code>6,600.0 GB/s</code><br/>(CRAQ 三副本并发直读)</td>
+            <td><strong style="color:#0891b2;">+73.7% (1.74x) ✅</strong><br/>无内核 VFS 内存拷贝瓶颈</td>
+          </tr>
+          <tr>
+            <td><strong>2.0× 客户端内存 (4 TB 数据集)</strong><br/>轻度缓存换页淘汰</td>
+            <td><code>2,950.0 GB/s</code><br/>(相比峰值跌 <code>-22.4%</code>)</td>
+            <td><code>6,600.0 GB/s</code><br/>(零抖动 <code>0.0%</code>)</td>
+            <td><strong style="color:#0891b2;">+123.7% (2.24x) ✅</strong><br/>Lustre 触发 kswapd 后台回收</td>
+          </tr>
+          <tr>
+            <td><strong>10.0× 客户端内存 (20 TB 数据集)</strong><br/>中度内核 LRU 链表锁争用</td>
+            <td><code>2,450.0 GB/s</code><br/>(相比峰值跌 <code>-35.5%</code>)</td>
+            <td><code>6,590.0 GB/s</code><br/>(稳定 <code>-0.15%</code>)</td>
+            <td><strong style="color:#059669;">+169.0% (2.69x) 🏆</strong><br/>64 线程争抢 folio_lruvec_lock</td>
+          </tr>
+          <tr>
+            <td><strong>250.0× 客户端内存 (500 TB 真实训练集)</strong><br/>全局 Shuffle + KVCache 随机换页</td>
+            <td><code>1,680.0 GB/s ✕</code><br/>(相比峰值暴跌 <code>-55.8% ✕</code>)</td>
+            <td><code>6,580.0 GB/s 🏆</code><br/>(稳定 <code>-0.30% 🏆</code>)</td>
+            <td><strong style="color:#059669;">+291.7% (3.92x) 🏆</strong><br/>Page Cache 命中率 &lt;0.4% 彻底失效</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔍 为什么 AI 负载会彻底击穿 OS Page Cache？</strong><br/>
+          大模型预训练每个 Epoch 都会对数亿条样本做全局随机排列（Global Shuffle），任何刚读进内存的 64KB 页在被第二次访问前早已被挤出内存，Page Cache 变成纯负资产！
+        </div>
+        <div class="callout-box">
+          <strong>⚡ 把省下来的客户端 DRAM 留给谁？</strong><br/>
+          关闭文件系统 Page Cache 后，每台计算节点腾出的数百 GB 主机内存可直接交由 <strong>Mooncake / LMCache</strong> 作为显式受控的 KVCache L2 固定内存池（Pinned Pool）！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Page-cache-free direct RDMA I/O (`O_DIRECT + USRBIO`) is immune to working-set size inflation, holding 6.58–6.60 TB/s from 1 TB to 500 TB.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; THROUGHPUT SCALING · IOPS, CHECKPOINT &amp; KVCACHE P99</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 4 3FS vs Slate=Tier 2 Lustre / Tier 1 Ceph</span>
+      </div>
+      <h2 class="headline">性能与 TCO 对比：64KB 随机读达 33M IOPS，10TB Checkpoint 恢复仅需 1.5 秒</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 AI 原生零拷贝架构（Tier 4 DeepSeek 3FS / Tier 3 WEKA GDS），浅灰条（<code>#CBD5E1</code>）代表传统内核态存储（Tier 2 Lustre / Tier 1 CephFS）。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 64KB 随机读 IOPS 对比 (Millions IOPS，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: DeepSeek 3FS (CRAQ 三副本均摊读)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">33.0 M 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 商用 WEKA / VAST (DPDK + GDS)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:80.3%;"></div></div>
+            <span class="bar-val">26.5 M ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 传统超算 Lustre (单主 OST + 锁)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:13.6%;"></div></div>
+            <span class="bar-val">4.5 M</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 通用 CephFS (Primary OSD 串行)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:3.3%;"></div></div>
+            <span class="bar-val">1.1 M ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 10 TB 分布式 Checkpoint 加载恢复耗时 (秒，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: DeepSeek 3FS (6.60 TB/s 并发拉取)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:3.4%;"></div></div>
+            <span class="bar-val">1.5 s 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 商用 WEKA / VAST (GPUDirect Storage)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:4.0%;"></div></div>
+            <span class="bar-val">1.8 s ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 传统超算 Lustre</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:10.8%;"></div></div>
+            <span class="bar-val">4.8 s</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 通用 CephFS over TCP</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">44.5 s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 在线推理 KVCache 64KB 块换页读取 P99 延迟 (ms，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: DeepSeek 3FS (USRBIO 零拷贝环)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:2.3%;"></div></div>
+            <span class="bar-val">0.42 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 商用 WEKA / VAST (GDS 直通)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:3.5%;"></div></div>
+            <span class="bar-val">0.65 ms ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 传统超算 Lustre (LRU 锁抖动)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:22.7%;"></div></div>
+            <span class="bar-val">4.20 ms ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 通用 CephFS over TCP</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">18.50 ms ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Restoring a 10 TB checkpoint in 1.5s (vs 44.5s on CephFS) saves ~12 GPU-hours of cluster idle wall-clock time on every single fault-recovery restart.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：大模型原生研发上 DeepSeek 3FS，政企交钥匙上 WEKA/VAST GDS</h2>
+      <p class="subhead">坚持“热层全闪并行文件系统（3FS/WEKA）+ 冷层纠删码对象存储（S3）”双层分级架构，兼顾 6.6 TB/s 极限带宽与 PB 级低成本归档。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>AI 原生大模型训练与 KVCache 卸载池 → Tier 4 (DeepSeek 3FS)</strong>：CRAQ 全副本并发读 + USRBIO 零拷贝环跑满 91.7% 线速（6.6 TB/s），P99 仅 0.42ms，3 年省 $148 万软件授权费。</li>
+            <li>• <strong>金融/车企/政企交钥匙生产集群 → Tier 3 (WEKA / VAST GDS)</strong>：开箱即用 GPUDirect Storage、N+2 纠删码（85%+ 空间有效率）、多租户硬隔离与 7×24 原厂维保。</li>
+            <li>• <strong>冷热分层生命周期架构</strong>：热盘仅保留最近 3 个 Checkpoint 与当前 Epoch 数据，历史归档异步沉降 S3。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁用通用 NAS / CephFS (Tier 1) 跑千卡主训练或 KVCache 卸载</strong>：Primary OSD 串行读瓶颈浪费 2/3 NVMe 带宽，18.5ms P99 直接拖垮在线推理。</li>
+            <li>• <strong>严禁在 500TB 随机 Shuffle 训练中开启 OS Page Cache</strong>：缓存命中率 &lt;0.4%，反而引发内核 LRU 自旋锁雪崩使吞吐暴跌 55.8%。</li>
+            <li>• <strong>严禁将 FoundationDB 元数据与大块数据混部在同一 SSD Namespace</strong>：10TB Checkpoint 突发写放大将严重阻塞全局 <code>open()/stat()</code>。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 挂载并行文件系统跑随机读训练或 KVCache 卸载时，强制开启 <code>O_DIRECT</code> 或集成 <code>hf3fs_usrbio / cuFile GDS</code>。<br/>
+          2. <code>[ ]</code> 为元数据集群（FoundationDB / MDS）配置独立低延迟企业级 NVMe 盘并开启跨机架三副本容灾。<br/>
+          3. <code>[ ]</code> 核验存储节点 PCIe 拓扑：确保每颗 CPU Socket 下的 8 块 NVMe SSD 直连同侧 200G/400G RDMA 网卡，零跨 NUMA 流量。<br/>
+          4. <code>[ ]</code> 选型验收实测 <code>fio (bs=64k, rw=randread, direct=1)</code> 与 <code>10TB 并发写 Checkpoint</code>，拒绝只看顺序大文件跑分。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/ai_parallel_filesystem_3fs_lustre_weka_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
