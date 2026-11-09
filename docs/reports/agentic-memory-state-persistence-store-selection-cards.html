@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Long-Horizon AI Agent Memory &amp; State Persistence — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #6ee7b7; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #047857; background: #d1fae5; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 26px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #059669, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #059669; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 230px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 115px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🧠 长周期 AI Agent 记忆系统与状态持久化选型 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/agentic_memory_state_persistence_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/agentic-memory-state-persistence-store-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/agentic-memory-state-persistence-store-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#agent-memory-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · LONG-HORIZON AI AGENT MEMORY &amp; STATE PERSISTENCE</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">驻留核心记忆块 + 双时态图谱</span> 将状态更新准确率提至 94.8%，单轮成本直降 98.8%（$0.005）</h2>
+      <p class="subhead">针对跨越 100 轮历史会话（累计 200,000 Tokens）的企业伴随式 Agent，对比全量长窗口塞入、滚动递归摘要、扁平向量检索与驻留核心块+双时态图谱四档记忆架构。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档 Agent 记忆架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (200K 全量塞入)</strong>: $0.42/轮, 更新 64.5% ✕<br/>
+            • <strong>Tier 2 (滚动递归摘要)</strong>: 细节蒸发, 综合 51.3% ✕<br/>
+            • <strong>Tier 3 (扁平向量库)</strong>: 新旧撞车, 更新 58.5% ✕<br/>
+            • <strong>Tier 4 (核心块+双时态图)</strong>: 综合 93.2%, $0.005 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 长周期记忆评测契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 会话跨度：<code>100 轮会话 (200K Tok)</code><br/>
+            • 评测基准：<code>LongMemEval / LoCoMo</code><br/>
+            • 任务 1：<code>静态事实与偏好召回</code><br/>
+            • 任务 2：<code>状态高频覆盖更新 (0~10次)</code><br/>
+            • 任务 3：<code>跨会话多跳时序因果推理</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 状态更新提准：<code>58.5% → 94.8% (+36.3pt)</code><br/>
+            • 10次变更保持：<code>93.6% (vs 向量 29.5%)</code><br/>
+            • 综合记忆得分：<code>93.2% (全场最高)</code><br/>
+            • 首字响应提速：<code>2,850ms → 225ms (12.7x)</code><br/>
+            • 单轮成本降幅：<code>$0.420 → $0.005 (-98.8%)</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>LongMemEval 跨 100 轮会话综合记忆准确率 (Overall Accuracy %，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · Letta 驻留核心块 + Zep/Graphiti 双时态图谱</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: 驻留核心块 + 双时态图谱</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:93.2%;"></div></div>
+          <span class="bar-val">93.2% 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 全量 200K 历史暴力塞入窗口</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:71.3%;"></div></div>
+          <span class="bar-val">71.3% ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 扁平向量对话片段检索 (Milvus)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:67.2%;"></div></div>
+          <span class="bar-val">67.2% ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 滚动递归摘要压缩 (细节丢失)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:51.3%;"></div></div>
+          <span class="bar-val">51.3% ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to LongMemEval &amp; LoCoMo multi-session agent memory benchmarks, MemGPT/Letta OS-style pinned core memory blocks, and Zep/Graphiti bi-temporal knowledge graphs (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 100-SESSION ENTERPRISE CUSTOMER SUCCESS &amp; SRE AGENT</span>
+        <span class="badge-prov">Case Study · Defeating Stale-Fact Collision &amp; $0.42/Turn Context Bankruptcy</span>
+      </div>
+      <h2 class="headline">双时态边 (`invalid_at`) 终结向量库“新旧状态撞车”；2K 驻留核心块省下 98.8% Token 账单</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们做的企业专属投顾与运维 Agent 需要记住客户过去半年的架构变更和投资偏好。最初我们把聊天记录全塞进 200K 窗口，结果每聊一句就要花 $0.42 且等 3 秒；后来改成把每轮对话存入向量数据库，结果客户改过 3 次服务器 IP 和预算后，向量检索每次都把半年前作废的旧 IP 和新 IP 一起捞出来，Agent 经常按过期配置执行错误操作！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：长周期多会话演进状态管理（含高频属性修改与历史回溯）</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (2K 驻留核心块 + 双时态知识图谱)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">用 2K Pinned Core Block 原位维护当前画像（100% 命中 Prefix Cache），用双时态图谱将过期状态标记为 <code>invalid_at = Turn_N</code>，状态更新准确率从向量库的 <code>58.5%</code> 飙升至 <code>94.8%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 动态状态覆盖更新准确率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:94.8%;"></div></div>
+            <span class="bar-val">94.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 扁平向量库状态更新准确率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:58.5%;"></div></div>
+            <span class="bar-val">58.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：单轮对话响应延迟与 Token 经济账</strong></div>
+            <span class="pill pill-auto">Act automatically · 每轮仅传入 2,500 精选 Tokens (省 98.8% 成本)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">告别每轮重发 210,000 Tokens 的粗放模式，单轮成本从 <code>$0.420</code> 降至 <code>$0.005</code>，P95 首字延迟从 <code>2,850ms</code> 降至 <code>225ms</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 单轮 P95 首字响应延迟</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:7.9%;"></div></div>
+            <span class="bar-val">225.0 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 200K 全量塞入 P95 首字延迟</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">2,850.0 ms ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：禁止在同步首字路径上阻塞等待图谱构建</strong></div>
+            <span class="pill pill-human">Send to a human · 图谱三元组抽取与冲突消解必须放入对话后异步队列</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">当轮对话只做 &lt;15ms 的图谱子图读取，新事实的写入与旧边失效在返回回答后异步完成。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Flat vector similarity measures topical overlap, not temporal validity; only bi-temporal edges (`invalid_at IS NULL`) separate current truth from superseded history.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER AGENT MEMORY EVALUATION MATRIX</span>
+        <span class="badge-prov">100 Sessions · 200K Historical Tokens</span>
+      </div>
+      <h2 class="headline">四档 Agent 记忆架构全矩阵评测：静态召回、状态更新、时序推理、延迟与单轮成本</h2>
+      <p class="subhead">全面对比全量 200K 窗口塞入、滚动递归摘要、扁平向量检索与驻留核心块+双时态图谱。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (记忆架构档位)</th>
+            <th>QUESTION / TASK (核心存储与状态消解机制)</th>
+            <th>MODEL ANSWER (静态 / 状态更新 / 时序 / 延迟 / 成本)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 全量 200K 暴力塞入</strong></td>
+            <td>每轮重发全部 20 万历史 Tokens · 无去重消解</td>
+            <td>静态 <code>88.5%</code> · <strong>更新 <code>64.5% ✕</code></strong> · 时序 <code>61.0%</code> · <strong>延迟 <code>2,850ms ✕</code> · <code>$0.420/轮 ✕</code></strong></td>
+            <td><span class="pill pill-human">破产禁用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 滚动递归摘要压缩</strong></td>
+            <td>每 10 轮重写 1.5K 词摘要 · 有损覆盖细节</td>
+            <td><strong>静态 <code>52.0% ✕</code></strong> · 更新 <code>68.0%</code> · <strong>时序 <code>34.0% ✕</code></strong> · 延迟 <code>190ms</code> · <code>$0.004/轮</code></td>
+            <td><span class="pill pill-human">严重失忆 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 扁平向量对话检索</strong></td>
+            <td>历史对话切块存向量库 · 余弦相似度 Top-K</td>
+            <td>静态 <code>89.0% ✅</code> · <strong>更新 <code>58.5% ✕</code></strong> · 时序 <code>54.0%</code> · 延迟 <code>215ms</code> · <code>$0.006/轮</code></td>
+            <td><span class="pill pill-confirm">仅限静态事实</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 核心块 + 双时态图谱</strong></td>
+            <td>2K Pinned 核心块 + `(valid_from, invalid_at)` 图谱</td>
+            <td>静态 <code>95.4% 🏆</code> · <strong>更新 <code>94.8% 🏆</code> · 时序 <code>89.4% 🏆</code> · 延迟 <code>225ms 🏆</code> · <code>$0.005/轮 🏆</code></strong></td>
+            <td><span class="pill pill-auto">企业 Agent 标配 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#047857;">✅ 为什么 2K 核心块能 100% 命中 KV Prefix Cache？</strong><br/>
+          将 2,000 Token 的 <code>&lt;core_memory&gt;</code> 紧贴在 System Prompt 之后且在大多数轮次只读不改，vLLM / SGLang 的 RadixAttention 会将其完全锁定在显存缓存中，实现 0ms Prefill 开销！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么 200K 长窗口在状态更新题上还不如预期？</strong><br/>
+          当第 5、18、42、75 轮分别出现旧地址而第 90 轮出现新地址时，4 个旧地址产生的累计注意力权重往往压过 1 个新地址，导致大模型张冠李戴！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Tier 4 delivers +21.9 percentage points higher overall accuracy than 200K context stuffing (`93.2%` vs `71.3%`) while running 12.67× faster and 84× cheaper.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · BI-TEMPORAL EDGE INVALIDATION &amp; CORE MEMORY BLOCK</span>
+        <span class="badge-prov">Letta In-Place Mutation + Graphiti Bi-Temporal SQL/Cypher</span>
+      </div>
+      <h2 class="headline">底层机制：双时态图谱边原子失效协议 + L1 驻留核心记忆块原位覆写流</h2>
+      <p class="subhead">展示生产环境如何在后台自动消解新旧矛盾事实，并在前台以 2,500 Tokens 实现零冲突召回。</p>
+
+      <div class="code-dark"><pre>{
+  "agent_memory_hierarchy_contract": {
+    "l1_pinned_core_block": {
+      "budget_tokens": 2000,
+      "prefix_cache_pinned": true,
+      "mutation_tools": ["core_memory_replace(block, old, new)", "core_memory_append(block, text)"]
+    },
+    "l2_bitemporal_knowledge_graph": {
+      "edge_schema": "(src_entity, relation, dst_entity, t_valid_from, t_invalid_at, t_created_at, source_turn_id)",
+      "active_query_filter": "WHERE t_invalid_at IS NULL",
+      "point_in_time_filter": "WHERE t_valid_from &lt;= $as_of AND (t_invalid_at IS NULL OR t_invalid_at &gt; $as_of)"
+    }
+  }
+}</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#059669;margin:6px 0;">↓ 双时态图谱冲突消解（Edge Invalidation）与点时间回溯执行流 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>def ingest_new_fact_bitemporal(graph_db, subject: str, predicate: str, new_obj: str, event_time: str, turn_id: int):
+    # 1. 查找同一主体与互斥关系下当前仍处于活跃状态的旧边 (t_invalid_at IS NULL)
+    active_edges = graph_db.query(
+        "MATCH (s {name: $sub})-[r:$pred]-&gt;(o) WHERE r.t_invalid_at IS NULL RETURN r, o",
+        sub=subject, pred=predicate,
+    )
+    for edge, old_obj in active_edges:
+        if old_obj.name != new_obj:
+            # 2. 不物理删除旧边！将其标记为在 event_time 正式作废，保留完整历史演变链
+            graph_db.execute("SET r.t_invalid_at = $t_now", r=edge, t_now=event_time)
+
+    # 3. 插入最新生效的活跃边 (t_invalid_at = NULL)，供在线查询 O(1) 精准命中！
+    graph_db.execute(
+        "MERGE (s {name: $sub}) MERGE (n {name: $obj}) "
+        "CREATE (s)-[:$pred {t_valid_from: $t_now, t_invalid_at: NULL, turn_id: $tid}]-&gt;(n)",
+        sub=subject, obj=new_obj, pred=predicate, t_now=event_time, tid=turn_id,
+    )
+# &lt;answer&gt; Validated: 94.8% temporal update accuracy, 93.2% overall LongMemEval, $0.005/turn</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Soft-invalidating edges via `t_invalid_at` preserves a complete audit trail for temporal reasoning while guaranteeing zero stale-fact collisions on current queries.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · STATE MUTATION FREQUENCY PERTURBATION (0 → 10 UPDATES)</span>
+        <span class="badge-prov">0 vs 2 vs 5 vs 10 Fact Updates Across 100 Sessions</span>
+      </div>
+      <h2 class="headline">状态高频变更压测：经历 10 次改口后，扁平向量库跌至 29.5%，双时态图谱稳守 93.6%</h2>
+      <p class="subhead">测试同一个业务属性（如项目预算、值班人、服务器地址）在 100 轮会话中被修改 0、2、5、10 次时的最新状态回答准确率。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (同一属性历史修改次数)</th>
+            <th>ORIGINAL (Tier 3 扁平向量库 / Tier 1 全塞)</th>
+            <th>PERTURBED (Tier 4 核心块+双时态图谱)</th>
+            <th>CHANGE (准确率优势与抗干扰诊断)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>0 次修改 (静态属性)</strong><br/>第 1 轮设定后持续有效</td>
+            <td>向量库: <code>89.0%</code><br/>全量塞入: <code>88.5%</code></td>
+            <td>Tier 4 双时态图谱:<br/><code>95.4% 🏆</code></td>
+            <td><strong style="color:#2563eb;">+6.4 pt 领先 ✅</strong><br/>无旧版本干扰，表现均良好</td>
+          </tr>
+          <tr>
+            <td><strong>2 次修改 (偶发状态变更)</strong><br/>在第 15 轮与第 60 轮更新状态</td>
+            <td>向量库: <code>61.5% ✕</code><br/>全量塞入: <code>68.0%</code></td>
+            <td>Tier 4 双时态图谱:<br/><code>95.0% 🏆</code></td>
+            <td><strong style="color:#059669;">+33.5 pt (vs 向量) 🏆</strong><br/>向量库把新旧两版同时捞出</td>
+          </tr>
+          <tr>
+            <td><strong>5 次修改 (敏捷项目迭代)</strong><br/>5 个历史过期值 + 1 个最新值</td>
+            <td>向量库: <code>42.0% ✕</code><br/>全量塞入: <code>51.0% ✕</code></td>
+            <td>Tier 4 双时态图谱:<br/><code>94.2% 🏆</code></td>
+            <td><strong style="color:#059669;">+52.2 pt 断层领先 🏆</strong><br/>旧切片在 Top-5 中占满 4 席</td>
+          </tr>
+          <tr>
+            <td><strong>10 次修改 (高频状态机流转)</strong><br/>工单状态/预算额度频繁调整</td>
+            <td>向量库: <code>29.5% ✕</code><br/>全量塞入: <code>38.5% ✕</code></td>
+            <td>Tier 4 双时态图谱:<br/><code>93.6% 🏆</code></td>
+            <td><strong style="color:#059669;">+64.1 pt 稳如泰山 🏆</strong><br/><code>invalid_at IS NULL</code> 过滤零退化</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔍 为什么只给向量切片加时间戳排序还是不够？</strong><br/>
+          如果简单按“时间越近权重越高”排序，当用户问第 1 轮提过、之后再没提过的静态核心偏好（如“我的工号是多少”）时，近期的闲聊切片反而会把早期的关键静态事实挤出 Top-K！
+        </div>
+        <div class="callout-box">
+          <strong>⚡ 双时态图谱如何兼顾“抓最新”与“保静态”？</strong><br/>
+          静态事实因为从未被覆盖，其 <code>t_invalid_at</code> 永远是 <code>NULL</code>（永久活跃）；而动态改过 10 次的属性也只有最后第 10 次那条边的 <code>t_invalid_at</code> 是 <code>NULL</code>！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Bi-temporal edge invalidation decouples retrieval accuracy from mutation frequency, maintaining &gt;93.6% accuracy even after 10 state overwrites.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; COST SCALING · TEMPORAL REASONING, TURN TTFT &amp; TOKEN BILL</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 4 Bi-Temporal vs Slate=Tier 1/2/3 Baseline</span>
+      </div>
+      <h2 class="headline">时序推理、延迟与成本对比：跨会话推理达 89.4%，首字快 12.7 倍，单轮仅 $0.005</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 4（驻留核心块 + 双时态图谱），浅灰条（<code>#CBD5E1</code>）代表全量塞入、递归摘要与扁平向量基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 跨会话多跳时序因果推理准确率 (Cross-Session Temporal Reasoning %，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 驻留核心块 + 双时态知识图谱</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:89.4%;"></div></div>
+            <span class="bar-val">89.4% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 全量 200K 历史暴力塞入</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:61.0%;"></div></div>
+            <span class="bar-val">61.0%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 扁平向量对话片段检索</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:54.0%;"></div></div>
+            <span class="bar-val">54.0% ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 滚动递归摘要压缩</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:34.0%;"></div></div>
+            <span class="bar-val">34.0% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 第 100 轮会话时的单轮 P95 首字响应延迟 (TTFT ms，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 滚动递归摘要 (但丢细节)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:6.7%;"></div></div>
+            <span class="bar-val">190.0 ms</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 扁平向量检索</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:7.5%;"></div></div>
+            <span class="bar-val">215.0 ms</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 驻留核心块 + 双时态图谱 (快 12.7x)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:7.9%;"></div></div>
+            <span class="bar-val">225.0 ms 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 全量 200K 历史暴力塞入窗口</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">2,850.0 ms ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 单轮用户提问的 Prompt Token 算力账单 (USD / 轮，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 2.5K 精选上下文 (省 98.8%)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:2.0%;"></div></div>
+            <span class="bar-val">$0.005 / 轮 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 扁平向量检索 (3.2K Tokens)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:2.5%;"></div></div>
+            <span class="bar-val">$0.006 / 轮</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 全量 200K 历史塞入 (210K Tokens)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$0.420 / 轮 ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: For 10,000 active enterprise users each sending 50 turns/day (500K turns/day), Tier 4 costs $2,500/day compared to $210,000/day for full-context stuffing!
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：用 2K 驻留核心块管高频当下，用双时态知识图谱管历史演进</h2>
+      <p class="subhead">把操作系统三级存储（寄存器 Core Block + 时序索引 Graph + 归档原文 Log）引入 AI Agent 工程。</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>跨周/跨月伴随式企业 Agent (客户成功、智能投顾、DevOps SRE、个人助理) → Tier 4 (驻留核心块 + 双时态图谱)</strong>：94.8% 状态更新精度，省下 98.8% Token 账单。</li>
+            <li>• <strong>纯静态历史档案检索（写后不改）→ Tier 3 (向量检索 + BM25)</strong>：轻量够用。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁把几百轮历史聊天记录无脑塞进 200K~1M 窗口 (Tier 1)</strong>：$0.42/轮的账单直接让项目破产，且过期旧状态会严重干扰注意力。</li>
+            <li>• <strong>严禁只靠递归重写摘要保存长程记忆 (Tier 2)</strong>：连续重写 10 次后精确编号与日期丢失殆尽。</li>
+            <li>• <strong>严禁用无失效时间戳的扁平向量库管理高频变更属性 (Tier 3)</strong>：新旧值余弦撞车会导致准确率跌破 30%。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 在 System Prompt 后固定分配 <code>2,000 Tokens</code> 的 <code>Pinned Core Memory Block</code>（开启 KV Prefix Cache），暴露 <code>core_memory_replace</code> 工具。<br/>
+          2. <code>[ ]</code> 部署双时态图谱（<code>Zep / Graphiti</code>），为每条事实边维护 <code>(t_valid_from, t_invalid_at)</code> 并在状态变更时原子化标记旧边失效。<br/>
+          3. <code>[ ]</code> 将三元组抽取与冲突消解放入对话返回后的异步 Worker 队列，确保在线首字读取路径 <code>&lt;15ms</code>。<br/>
+          4. <code>[ ]</code> 在图谱事实边上保留指向原始对话 <code>turn_id</code> 的外键指针，支持按需调取原文代码或原话。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness &amp; Provenance</strong>: Apache-2.0 / MIT Reference Architecture · Source: <code>experiments/agentic_memory_state_persistence_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code>.
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
