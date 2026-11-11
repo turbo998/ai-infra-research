@@ -3945,5 +3945,87 @@ function updateVideoDitUspSizer() {
 }
 updateVideoDitUspSizer();
 </script>
+
+  <!-- Round 45: GPU Kernel Execution Graph & Compilation Stack Sizer -->
+  <div id="cuda-graph-compile-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#7e22ce;color:#f3e8ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 45 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ 大模型 GPU 算子执行图与编译栈计算器（PyTorch Eager vs. 整图 CUDA Graphs vs. torch.compile 分段图 vs. Megakernel+PDL）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/cuda_graphs_torch_compile_megakernel_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/cuda-graphs-torch-compile-megakernel-execution-selection-faq.md" style="color:#c084fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/cuda-graphs-torch-compile-megakernel-execution-selection-faq.en.md" style="color:#c084fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./cuda-graphs-torch-compile-megakernel-execution-selection-cards.html" style="color:#c084fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">在线并发解码 Batch Size (BS):</label>
+        <select id="cgBatchSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateCudaGraphCompileSizer()">
+          <option value="1">BS = 1 ~ 4 (极低延迟单用户交互 / 投机解码)</option>
+          <option value="8" selected>BS = 8 (基准交互并发 · 70B FP8 TP=8)</option>
+          <option value="32">BS = 32 (中等并发混合 Chunked Prefill)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">架构优先级与场景类型:</label>
+        <select id="cgTargetSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateCudaGraphCompileSizer()">
+          <option value="ultra" selected>追求 &lt;6ms 极限 TPOT (实时语音 Agent / 思维链秒回)</option>
+          <option value="general">追求高通用性 + 释放 16.2GB/卡 KV Cache 显存 (vLLM V1 标配)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU 执行图与编译栈档位 (8×H100 70B FP8)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Decode TPOT / 单流吐字</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">每词算子数 / CPU 空泡</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">图捕获显存开销 (每卡)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">百万输出词算力成本</th>
+          </tr>
+        </thead>
+        <tbody id="cgSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="cgDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #7e22ce;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateCudaGraphCompileSizer() {
+  const bs = parseInt(document.getElementById('cgBatchSelect').value, 10) || 8;
+  const target = document.getElementById('cgTargetSelect').value || 'ultra';
+  const bestId = target === 'general' ? 't3' : 't4';
+  const mult = bs === 1 ? 0.88 : (bs === 32 ? 1.35 : 1.0);
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 原生 PyTorch Eager (逐算子发射 CPU 瓶颈)', tpot: `${(24.8*mult).toFixed(1)} ms (${(1000/(24.8*mult)).toFixed(1)} tok/s ✕)`, ops: '480 次 / 62.4% 空泡 ✕', vram: '0.0 GB', cost: '$24.80 / 1M ✕' },
+    { id: 't2', name: '🟨 Tier 2: 整图静态 CUDA Graphs (38 个固定 Batch 分桶)', tpot: `${(11.2*mult).toFixed(1)} ms (${(1000/(11.2*mult)).toFixed(1)} tok/s)`, ops: '480 次 / 14.5% 空泡', vram: '18.6 GB / 卡 (8卡占148.8GB ✕)', cost: '$11.20 / 1M' },
+    { id: 't3', name: '🟦 Tier 3: torch.compile (Inductor) + Piecewise 分段图', tpot: `${(8.1*mult).toFixed(1)} ms (${(1000/(8.1*mult)).toFixed(1)} tok/s ✅)`, ops: '165 次 / 4.8% 空泡 ✅', vram: '2.4 GB / 卡 (立省 16.2GB ✅)', cost: '$8.10 / 1M (-67.3% ✅)' },
+    { id: 't4', name: '🟩 Tier 4: Persistent Megakernel + Hopper/Blackwell PDL', tpot: `${(5.4*mult).toFixed(1)} ms (${(1000/(5.4*mult)).toFixed(1)} tok/s 🏆)`, ops: '16 次 / 0.9% 空泡 🏆', vram: '1.2 GB / 卡 🏆', cost: '$5.40 / 1M (-78.2% 🏆)' }
+  ];
+
+  document.getElementById('cgSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(126,34,206,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#d8b4fe':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.tpot}</code></td>
+      <td style="padding:10px;"><code>${r.ops}</code></td>
+      <td style="padding:10px;"><code>${r.vram}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('cgDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (极致低延迟语音/投机验证)</strong>：必选 <strong>Tier 4 (Persistent Megakernel 持久大内核 + Hopper/Blackwell 硬件 PDL 级联启动)</strong>，将每词启动压至 <code>16 次</code>、CPU 空泡压至 <code>0.9%</code>，单步延迟压至 <code>${(5.4*mult).toFixed(1)} ms</code>（比 Eager 快 <code>4.60x</code>）！`
+    : `<strong>架构师选型建议 (企业通用在线服务 vLLM V1 / SGLang)</strong>：首选 <strong>Tier 3 (torch.compile 算子融合 + Piecewise 分段 CUDA Graphs)</strong>，在提速 <code>3.06x</code> 的同时比旧版 38 桶整图省出 <code>16.2 GB/卡</code>（8 卡节点多出 <code>129.6 GB</code>）宝贵显存给 KV Cache！`;
+}
+updateCudaGraphCompileSizer();
+</script>
 </body>
 </html>
