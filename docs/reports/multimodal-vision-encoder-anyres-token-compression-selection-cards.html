@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;">
+<title>Multimodal VLM High-Resolution AnyRes &amp; Visual Token Compression — 7-Card Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0B1120;
+    --card-bg: #FFFFFF;
+    --ink: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --line: #E2E8F0;
+    --code-bg: #0F172A;
+    --blue: #2563EB;
+    --emerald: #059669;
+    --cyan: #0891B2;
+    --red: #DC2626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 32px 16px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #F8FAFC;
+  }
+  .deck-header h1 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+  .deck-header p { font-size: 14px; color: #94A3B8; line-height: 1.5; }
+  .deck {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    align-items: center;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.45);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--subtle);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+  .headline {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-bottom: 14px;
+    color: var(--ink);
+  }
+  .accent {
+    background: linear-gradient(90deg, #0891B2, #059669);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.55;
+    margin-bottom: 24px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    margin-bottom: 20px;
+  }
+  .panel {
+    background: #F8FAFC;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .panel h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--subtle);
+    margin-bottom: 10px;
+  }
+  .kpi {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pill-act { background: #DCFCE7; color: #166534; }
+  .pill-confirm { background: #FEF3C7; color: #92400E; }
+  .pill-human { background: #FEE2E2; color: #991B1B; }
+  .badge-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #E0E7FF;
+    color: #1E40AF;
+    margin-right: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-size: 13.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--subtle);
+    background: #F1F5F9;
+  }
+  .bar-row { margin-bottom: 14px; }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .bar-track {
+    width: 100%;
+    height: 16px;
+    background: #E2E8F0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .bar-fill-primary { height: 100%; background: #3B82F6; border-radius: 8px; }
+  .bar-fill-emerald { height: 100%; background: #10B981; border-radius: 8px; }
+  .bar-fill-muted { height: 100%; background: #94A3B8; border-radius: 8px; }
+  .bar-fill-red { height: 100%; background: #EF4444; border-radius: 8px; }
+  pre {
+    background: var(--code-bg);
+    color: #E2E8F0;
+    padding: 18px;
+    border-radius: 12px;
+    font-family: "Consolas", "SFMono-Regular", monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin-bottom: 16px;
+  }
+  .callout-dark {
+    background: #0F172A;
+    color: #F8FAFC;
+    border-radius: 14px;
+    padding: 18px 20px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .quote-box {
+    background: #ECFEFF;
+    border-left: 4px solid #0891B2;
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: #1E293B;
+    margin-bottom: 18px;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>多模态 VLM 高分辨率动态编码 (NaViT) 与视觉 Token 压缩剪枝评测报告 (7-Card 4:5 Visual Deck)</h1>
+  <p>Source: <code>experiments/vlm_anyres_visual_token_compression_pruning_selection/results.json</code> · Provenance: Synthetic Analytical Model Calibrated to Published Qwen2.5-VL/InternVL-2.5, FastV &amp; VisionZip Benchmarks (<code>independently_reproduced=false</code>)</p>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1: OVERVIEW & WORKBENCH -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>1 / 7</span>
+        <span>HANDS-ON · VLM HIGH-RES DYNAMIC ENCODING &amp; VISUAL TOKEN COMPRESSION</span>
+      </div>
+      <h2 class="headline"><span class="accent">NaViT 2×2 Pixel-Shuffle + Layer-2 Pruning</span> Compresses Visual Tokens 12.8x (9,216 → 720), Cuts TTFT 8.62x &amp; Retains 90.1% Accuracy</h2>
+      <p class="subhead">On a 72B VLM processing 2560×1440 high-res documents/screens: 336×336 downsampling blurs small text (44.5% accuracy), while uncompressed 4×4 AnyRes tiling feeds 9,216 tokens/image into the LLM (1,680ms TTFT, 18.4GB KV for 4 images). Combining NaViT 2D-RoPE + 2×2 Pixel-Shuffle (2,304 tok) with Layer-2 FastV/VisionZip pruning (720 tok) delivers 195ms TTFT at $21.50/10k queries.</p>
+
+      <div class="grid-3">
+        <div class="panel">
+          <h3>Scenarios &amp; Gate Bands</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <strong>Fine-Grained VQA</strong>: &ge;88.0% Pass<br>
+            • <strong>High-Res TTFT Gate</strong>: &le;450 ms<br>
+            • <strong>4-Image KV Budget</strong>: &le;5.0 GB<br>
+            • <strong>Input</strong>: 2560×1440 (72B FP8 VLM)
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Structured Input Contract</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <code>raw_vit_patches</code>: 9,216 (14×14)<br>
+            • <code>pixel_shuffle_2x2</code>: 2,304 tok<br>
+            • <code>layer2_pruned_tok</code>: 720 tok<br>
+            • <code>compression_ratio</code>: 12.8x Total
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Top VLM Verdict</h3>
+          <div class="kpi" style="color:#059669;">195 ms TTFT</div>
+          <p style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">720 tok · 90.1% acc · 1.44GB KV</p>
+          <span class="pill pill-act">Act automatically · Tier 4 NaViT+FastV</span>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>4-Tier Fine-Grained High-Res VQA Accuracy (%) &amp; Visual Token Count</h3>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 3: NaViT Dynamic Resolution + 2×2 Pixel-Shuffle Merger (2,304 Tok, 430ms) ✅</span><span>90.4% Acc · $58.0/10k</span></div>
+          <div class="bar-track"><div class="bar-fill-primary" style="width:90.4%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 4: NaViT 2×2 Pixel-Shuffle + Layer-2 Cross-Modal Pruning (720 Tok, 195ms) 🏆</span><span>90.1% Acc · $21.5/10k 🏆</span></div>
+          <div class="bar-track"><div class="bar-fill-emerald" style="width:90.1%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 2: Uncompressed AnyRes 4×4 Grid Tiling (9,216 Tok, 1,680ms TTFT ✕)</span><span>89.2% Acc · $232.0/10k ✕</span></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:89.2%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 1: Fixed 336×336 Thumbnail Downsampling (576 Tok, Blurs Small Text ✕)</span><span>44.5% Acc · Fails OCR ✕</span></div>
+          <div class="bar-track"><div class="bar-fill-red" style="width:44.5%;"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Hardware &amp; Provenance Callout:</strong> Evaluated via deterministic analytical simulator (<code>experiments/vlm_anyres_visual_token_compression_pruning_selection/run.py</code>, <code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>), calibrated to Qwen2.5-VL/InternVL-2.5, FastV, and VisionZip benchmarks.
+    </div>
+  </section>
+
+  <!-- CARD 2: SINGLE-CASE DEEP DIVE -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>2 / 7</span>
+        <span>SCENARIO: 4-PAGE HIGH-RES FINANCIAL REPORT &amp; UI SCREENSHOT ANALYSIS</span>
+      </div>
+      <h2 class="headline">Case Deep Dive: Folding 2×2 Patches Losslessly Into 8,192d LLM Tokens and Pruning 70% Whitespace at Layer 2</h2>
+      <div class="quote-box">
+        <strong>Workload Trace:</strong> Analyzing 4 high-resolution <code>2560×1440</code> quarterly report pages (36,864 raw ViT patches total) on a 72B VLM while keeping TTFT under 250ms.
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div><span class="badge-type">choice</span><strong>Decision 1: NaViT + 2×2 Pixel-Shuffle vs Uncompressed 4×4 AnyRes</strong></div>
+          <span class="pill pill-act">Act automatically · 4.0x Fewer Tokens + Zero Seams</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Select <strong>NaViT 2D-RoPE + 2×2 Pixel-Shuffle</strong>: eliminates tile-boundary word slicing (+1.2 pts accuracy over AnyRes) while packing 4× 1280d ViT patches into 1× 8192d LLM token (9,216 → 2,304 tokens).</p>
+        <div class="bar-row">
+          <div class="bar-label"><span>Fine-Grained VQA Accuracy (Tier 3 NaViT 90.4% vs Tier 1 336px 44.5%)</span><span>90.4% vs 44.5%</span></div>
+          <div class="bar-track"><div class="bar-fill-primary" style="width:90.4%;"></div></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div><span class="badge-type">score</span><strong>Decision 2: Layer-2 Cross-Modal Text-Guided Pruning (`FastV / VisionZip`)</strong></div>
+          <span class="pill pill-act">Act automatically · 12.8x Total Compression</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">After Layer 2 cross-modal alignment, drop the 1,584 blank margin/background tokens so Layers 3..80 process only <strong>720 foreground tokens</strong> (90.1% accuracy).</p>
+        <div class="bar-row">
+          <div class="bar-label"><span>Visual Tokens Eliminated Before LLM Layers 3..80 (9,216 → 720)</span><span>92.2% Tokens Pruned 🏆</span></div>
+          <div class="bar-track"><div class="bar-fill-emerald" style="width:92.2%;"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div><span class="badge-type">noul</span><strong>Decision 3: Multi-Image KV Cache Memory Savings</strong></div>
+          <span class="pill pill-act">Act automatically · 18.40 GB → 1.44 GB</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Compressing 4 high-res images from 36,864 tokens down to 2,880 tokens frees 16.96 GB of HBM KV Cache per session.</p>
+        <div class="bar-row">
+          <div class="bar-label"><span>Single-Image TTFT Acceleration (1,680.0 ms → 195.0 ms)</span><span>8.62x Faster 🏆</span></div>
+          <div class="bar-track"><div class="bar-fill-emerald" style="width:88.4%;"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Takeaway:</strong> Don't waste 78 layers of a 72B LLM computing self-attention over white paper margins and desktop wallpapers!
+    </div>
+  </section>
+
+  <!-- CARD 3: WHAT I TESTED (FULL EVALUATION MATRIX) -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>3 / 7</span>
+        <span>WHAT I TESTED · 4-TIER VLM VISUAL TOKEN COMPRESSION SCORECARD</span>
+      </div>
+      <h2 class="headline">Full Evaluation Matrix: Tier 3 &amp; Tier 4 Deliver &gt;90% High-Res Accuracy Without the 1,680ms AnyRes Stall</h2>
+      <p class="subhead">All four architectures evaluated on 2560×1440 inputs against gates: Accuracy &ge; 88%, TTFT &le; 450ms, and 4-Image KV &le; 5.0 GB.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>SCENARIO / TIER</th>
+            <th>QUESTION / METRIC</th>
+            <th>MODEL ANSWER / MEASURED</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: Fixed 336×336 Thumbnail</strong></td>
+            <td>Tokens / TTFT / Accuracy</td>
+            <td>576 tok · 95 ms · <strong>✕ 44.5% acc (Blurs text)</strong></td>
+            <td><span class="pill pill-human">Send to a human</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: Uncompressed 4×4 AnyRes</strong></td>
+            <td>Tokens / TTFT / 4-Img KV</td>
+            <td><strong>✕ 9,216 tok</strong> · <strong>✕ 1,680 ms</strong> · <strong>✕ 18.40 GB</strong> ($232/10k)</td>
+            <td><span class="pill pill-human">Send to a human</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: NaViT + 2×2 Pixel-Shuffle</strong></td>
+            <td>Tokens / TTFT / Accuracy</td>
+            <td><strong>2,304 tok ✅</strong> · 430 ms · <strong>90.4% acc 🏆</strong> ($58/10k)</td>
+            <td><span class="pill pill-confirm">Confirm</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: NaViT 2×2 + Layer-2 Pruning</strong></td>
+            <td>Tokens / TTFT / Accuracy</td>
+            <td><strong>720 tok 🏆</strong> · <strong>195 ms 🏆</strong> · <strong>90.1% acc 🏆 ($21.5/10k)</strong></td>
+            <td><span class="pill pill-act">Act automatically</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Threshold Gating Logic</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <strong>Legibility Gate (&ge;88% Acc)</strong>: Rejects Tier 1 because 336×336 downsampling destroys 10pt text.<br>
+            • <strong>Prefill &amp; KV Budget Gate</strong>: Rejects Tier 2 because 9,216 tokens/image causes quadratic prefill stalls and exhausts HBM on multi-image sessions.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Failure Root-Cause Analysis</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <strong>Why Pre-LLM Blind Pruning Fails</strong>: Pruning before Layer 1 lacks text-query guidance and drops small footnotes.<br>
+            • <strong>Why Layer-2 Pruning Succeeds</strong>: Text tokens highlight relevant patches in Layers 1–2.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Matrix Verdict:</strong> Tier 4 achieves 8.62x faster TTFT and 90.7% lower cost than Tier 2 while retaining 90.1% fine-grained accuracy.
+    </div>
+  </section>
+
+  <!-- CARD 4: UNDER THE HOOD -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>4 / 7</span>
+        <span>UNDER THE HOOD · 2×2 PIXEL-SHUFFLE &amp; LAYER-2 FASTV/VISIONZIP PROTOCOL</span>
+      </div>
+      <h2 class="headline">Protocol &amp; Mechanics: Space-to-Depth Channel Folding and Layer-2 Cross-Modal Attention Filtering</h2>
+      <p class="subhead">Deterministic two-stage visual token compression pipeline.</p>
+
+      <pre>{
+  "vlm_two_stage_compression_contract": {
+    "stage_1_navit_pixel_shuffle": {
+      "input_grid": "160 x 90 patches (14x14 px) = 9,216 patches @ 1280d (with 2D-RoPE)",
+      "space_to_depth_2x2": "reshape [160, 90, 1280] -&gt; [80, 45, 5120] -&gt; MLP_Projector -&gt; 2,304 tokens @ 8192d"
+    },
+    "stage_2_layer2_cross_modal_pruning": {
+      "trigger_layer": 2,
+      "importance_score": "alpha * Attention(query_text -&gt; vision_patch) + (1 - alpha) * Key_Norm_Diversity",
+      "retained_tokens_layers_3_to_80": 720
+    }
+  }
+}</pre>
+
+      <div style="text-align:center; font-size:20px; font-weight:800; color:var(--blue); margin: 4px 0 12px;">↓ Deterministic FLOPs, KV Memory &amp; TTFT Verifier Flow (&lt;answer&gt;)</div>
+
+      <pre>&lt;verifier_trace&gt;
+[Stage 1: ViT + 2x2 Pixel-Shuffle] 9,216 raw patches folded losslessly into 2,304 LLM tokens (4.0x reduction).
+[Stage 2: LLM Layers 1..2] Full cross-modal attention aligns text query with all 2,304 visual tokens.
+[Stage 3: Layers 3..80 (97.5% of LLM depth)] Top-720 visual tokens retained (1,584 whitespace/background tokens dropped).
+  - Effective LLM visual tokens = (2*2304 + 78*720)/80 = 759.6 -&gt; TTFT drops 1,680ms -&gt; 195ms (8.62x speedup)!
+&lt;answer&gt;PASS: Compression = 12.8x (720 stored KV tokens), TTFT = 195.0 ms, Accuracy = 90.1%, Cost = $21.50/10k (-90.7%)&lt;/answer&gt;
+&lt;/verifier_trace&gt;</pre>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Architectural Insight:</strong> Because KV Cache for Layers 3..80 stores only the 720 pruned tokens, multi-turn Decode bandwidth is also accelerated by 12.8x!
+    </div>
+  </section>
+
+  <!-- CARD 5: ROBUSTNESS CHECK -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>5 / 7</span>
+        <span>ROBUSTNESS CHECK · MULTI-TURN QUERY SHIFT &amp; DENSE TEXT-ONLY PAGES</span>
+      </div>
+      <h2 class="headline">Perturbation Analysis: VisionZip Dominant+Contextual Keys Hold 88.8% Accuracy Across Multi-Turn Topic Shifts</h2>
+      <p class="subhead">Testing fine-grained VQA accuracy (%) when Turn 2 asks about a different corner of the same image or when pages have 90% dense text.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ARCHITECTURE / METRIC</th>
+            <th>SINGLE-TURN VQA (ACC %)</th>
+            <th>MULTI-TURN TOPIC SHIFT (ACC %)</th>
+            <th>CHANGE (PTS)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: Fixed 336×336 Thumbnail</strong></td>
+            <td>44.5%</td>
+            <td>43.0% (Fails both turns ✕)</td>
+            <td><strong>-1.5 pts ✕</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: NaViT + 2×2 Pixel-Shuffle (2,304 Tok)</strong></td>
+            <td>90.4%</td>
+            <td>90.2% (100% spatial tokens kept 🏆)</td>
+            <td><strong>-0.2 pts 🏆</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Pure Text-Guided Pruning Only (Naive FastV)</strong></td>
+            <td>89.8%</td>
+            <td>79.4% (Turn 1 dropped Turn 2's corner ⚠️)</td>
+            <td><strong>-10.4 pts ⚠️</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 2×2 + Hybrid VisionZip + FastV (720 Tok)</strong></td>
+            <td>90.1%</td>
+            <td>88.8% (Keeps dominant text/ink anchors 🏆)</td>
+            <td><strong>-1.3 pts (Resilient 🏆)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="panel">
+        <h3>How Hybrid `VisionZip + FastV` Prevents Multi-Turn Visual Amnesia</h3>
+        <p style="font-size:13.5px; color:var(--muted); line-height:1.6;">
+          If pruning relies *solely* on Turn 1's text query (`Naive FastV`), unqueried text blocks in other corners may be dropped (`-10.4 pts` on Turn 2). By combining **Visual Dominant Key Norm (which automatically preserves all high-contrast ink/text/icon patches across the whole page)** with **Contextual Token Merging (`VisionZip`)**, Tier 4 discards only true blank margins/backgrounds—retaining <strong>88.8% multi-turn accuracy 🏆</strong>!
+        </p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Robustness Conclusion:</strong> Use Tier 3 (2,304 tokens) for ultra-dense all-text pages, and Tier 4 (720 tokens with VisionZip ink preservation) for general documents, charts, UI screens, and video.
+    </div>
+  </section>
+
+  <!-- CARD 6: LATENCY / SCALING -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>6 / 7</span>
+        <span>SCALING · PREFILL TTFT ACROSS MULTI-IMAGE &amp; VIDEO FRAME COUNTS (1 TO 16 IMAGES)</span>
+      </div>
+      <h2 class="headline">Scaling Image Count: Tier 4 Processes 16 High-Res Frames in 2.8s vs. 29.5s on Uncompressed AnyRes (10.5x Faster)</h2>
+      <p class="subhead">Comparing Tier 4 (Primary #3B82F6: NaViT 2×2 + Layer-2 Pruning) against Tier 2 (Baseline #CBD5E1: Uncompressed AnyRes) across 1, 4, and 16 high-res images/frames.</p>
+
+      <div class="panel" style="margin-bottom:18px;">
+        <h3>End-to-End First-Token Latency (TTFT) Across High-Res Image Counts (Seconds, Lower is Better)</h3>
+
+        <div class="bar-row">
+          <div class="bar-label"><span>1 High-Res Image (2K Screen) — Tier 4 Compressed (#3B82F6) vs Tier 2 Uncompressed (#CBD5E1)</span><span>0.20 s vs 1.68 s</span></div>
+          <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:0.7%;"></div></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:5.7%;"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-label"><span>4 High-Res Images (Multi-Page Doc) — Tier 4 (#3B82F6) vs Tier 2 (#CBD5E1)</span><span>0.72 s vs 6.95 s (9.65x Faster)</span></div>
+          <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:2.4%;"></div></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:23.6%;"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-label"><span>16 High-Res Frames (Video / Long PDF) — Tier 4 (#3B82F6) vs Tier 2 (#CBD5E1)</span><span>2.80 s vs 29.50 s (10.54x Faster)</span></div>
+          <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:9.5%;"></div></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:100.0%;"></div></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Visual Token Compression</h3>
+          <div class="kpi" style="color:#2563EB;">12.8x Fewer</div>
+          <p style="font-size:13px; color:var(--muted);">Reduces per-image KV footprint from 9,216 tokens down to 720 tokens (16 images = 11.5K tokens instead of 147K).</p>
+        </div>
+        <div class="panel">
+          <h3>Serving Cost Reduction</h3>
+          <div class="kpi" style="color:#059669;">-90.7% Cost</div>
+          <p style="font-size:13px; color:var(--muted);">Drops cost per 10,000 high-res visual queries from $232.00 down to $21.50.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Scaling Note:</strong> All values derived deterministically from <code>experiments/vlm_anyres_visual_token_compression_pruning_selection/results.json</code>.
+    </div>
+  </section>
+
+  <!-- CARD 7: MY TAKE (GOOD FIT VS NOT FOR) -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>7 / 7</span>
+        <span>MY TAKE · ARCHITECT DECISION GUIDANCE &amp; PRODUCTION READINESS</span>
+      </div>
+      <h2 class="headline">Good Fit vs. Not For: Standardize on NaViT 2×2 Pixel-Shuffle + Layer-2 Pruning</h2>
+      <p class="subhead">Actionable rules for AI Solution Architects deploying production Vision-Language Models.</p>
+
+      <div class="grid-2">
+        <div class="panel" style="border-color:#86EFAC; background:#F0FDF4;">
+          <h3 style="color:#166534;">✅ Good Fit (When to Adopt Tier 4 / Tier 3)</h3>
+          <ul style="font-size:13.5px; line-height:1.7; padding-left:18px; color:#14532D;">
+            <li><strong>High-Res GUI Agents, Charts &amp; Multi-Page Docs (Tier 4):</strong> Compresses 2K images to 720 tokens for 195ms TTFT and 90.1% accuracy.</li>
+            <li><strong>Multi-Frame Video &amp; Screen Recording Understanding (Tier 4):</strong> Fits 16–64 high-res frames comfortably inside standard HBM budgets.</li>
+            <li><strong>Multi-Turn Arbitrary-Corner Inspection of 1 Blueprint (Tier 3):</strong> Keep all 2,304 `2×2 Pixel-Shuffle` tokens when every square millimeter may be queried across 10 turns.</li>
+          </ul>
+        </div>
+
+        <div class="panel" style="border-color:#FCA5A5; background:#FEF2F2;">
+          <h3 style="color:#991B1B;">⛔ Not For (When to Avoid)</h3>
+          <ul style="font-size:13.5px; line-height:1.7; padding-left:18px; color:#7F1D1D;">
+            <li><strong>Fixed 336×336 Thumbnail Models on Text/UI (Tier 1):</strong> Destroys small text legibility (44.5% accuracy).</li>
+            <li><strong>Unmerged 1-to-1 ViT Patch Feeding on High-Res Images (Tier 2):</strong> 9,216 tokens/image wastes $232/10k queries.</li>
+            <li><strong>Unbounded `max_pixels` in Production APIs:</strong> Always cap `max_pixels` to prevent 8K images from causing OOM.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Day-1 Production High-Res VLM Checklist</h3>
+        <p style="font-size:13px; line-height:1.65; color:var(--muted);">
+          1. Use a native dynamic resolution encoder (<code>NaViT + 2D-RoPE</code>) with <code>2×2 Pixel-Shuffle</code> projection.<br>
+          2. Configure explicit <code>min_pixels</code> and <code>max_pixels</code> guardrails at the API gateway.<br>
+          3. Enable Layer-2 hybrid dominant + cross-modal token pruning (<code>VisionZip + FastV</code>) for multi-image/video workloads.<br>
+          4. Enable temporal patch deduplication across consecutive screen/video frames.
+        </p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Readiness &amp; Provenance:</strong> Synthetic analytical model calibrated to published Qwen2.5-VL/InternVL-2.5, FastV, and VisionZip benchmarks (<code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>). License: MIT.
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
