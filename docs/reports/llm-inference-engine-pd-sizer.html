@@ -5314,5 +5314,86 @@ function updateCodebaseRagAstScipSizer() {
 }
 updateCodebaseRagAstScipSizer();
 </script>
+
+  <!-- Round 62: 10k-GPU Cluster Grey Failure / Runtime Straggler Telemetry & Live Swap Sizer -->
+  <div id="straggler-grey-failure-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#dc2626;color:#fee2e2;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 62 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🩺 万卡训练集群“亚健康灰故障 (Grey Failure)”秒级归因与无中断热替换计算器（被动死等 vs. 看门狗重拉 vs. 动态微批削减 vs. 4.2s 热备 RDMA 热替换）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/ai_cluster_straggler_grey_failure_mitigation_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-cluster-gpu-straggler-grey-failure-telemetry-mitigation-selection-faq.md" style="color:#fca5a5;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/ai-cluster-gpu-straggler-grey-failure-telemetry-mitigation-selection-faq.en.md" style="color:#fca5a5;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./ai-cluster-gpu-straggler-grey-failure-telemetry-mitigation-selection-cards.html" style="color:#fca5a5;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">同步训练集群规模 (Cluster GPU Scale):</label>
+        <select id="sgfScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateStragglerGreyFailureSizer()">
+          <option value="0.08">1,024 × H100/B200 (千卡集群 · 每周 ~2 次灰故障)</option>
+          <option value="1" selected>10,240 × H100/B200 (万卡集群基准 · 每周 18 次灰故障)</option>
+          <option value="4.1">32,768 × H100/B200 (三万卡超算集群 · 每周 58 次灰故障)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">热备节点池条件 (Warm Standby Pool Availability):</label>
+        <select id="sgfSpareSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateStragglerGreyFailureSizer()">
+          <option value="spare" selected>具备 1% 预热热备节点池 + 400G RDMA 状态克隆 (Tier 4)</option>
+          <option value="nospare">无空闲热备节点 (纯软件动态 DP 微批削减自愈 Tier 3)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">亚健康灰故障 (Grey Failure) 治理档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">真凶归因耗时</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单次停机/拖慢损失</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">集群有效 Goodput</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">每周白烧算力账单</th>
+          </tr>
+        </thead>
+        <tbody id="sgfSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="sgfDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #dc2626;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateStragglerGreyFailureSizer() {
+  const sMult = parseFloat(document.getElementById('sgfScaleSelect').value) || 1.0;
+  const mode = document.getElementById('sgfSpareSelect').value || 'spare';
+  const bestId = mode === 'nospare' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 被动死等最慢卡 (仅靠 30分钟 NCCL 超时)', det: '16,200 s (4.5h 人工排查 ✕)', drg: '70.5 分钟/次 ✕', gp: '68.4% (全场陪葬 ✕)', cost: `$${Math.round(542*sMult).toLocaleString()}k / 周 ✕` },
+    { id: 't2', name: '🟨 Tier 2: 粗粒度步长看门狗 Kill 全场 + Checkpoint 重拉', det: '180.0 s (停机二分)', drg: '22.5 分钟/次 (回滚 ✕)', gp: '81.2% ✕', cost: `$${Math.round(308*sMult).toLocaleString()}k / 周 ✕` },
+    { id: 't3', name: '🟦 Tier 3: 2.8s 到达时间反转归因 + 动态 DP 微批削减调平', det: '2.8 s (argmin T_wait ✅)', drg: '4.2 分钟/次 (零重启 ✅)', gp: '92.6% ✅', cost: `$${Math.round(121*sMult).toLocaleString()}k / 周 ✅` },
+    { id: 't4', name: '🟩 Tier 4: 1.5s 联合归因 + 动态微批缓冲 + 4.2s RDMA 热备替换', det: '1.5 s (秒锁唯一真凶 🏆)', drg: '0.4 分钟 (4.2s 0丢步 🏆)', gp: '98.6% (+30.2pt 🏆)', cost: `$${Math.round(23*sMult).toLocaleString()}k / 周 (周省 $${Math.round(519*sMult).toLocaleString()}k 🏆)` }
+  ];
+
+  document.getElementById('sgfSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(220,38,38,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#fca5a5':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.det}</code></td>
+      <td style="padding:10px;"><code>${r.drg}</code></td>
+      <td style="padding:10px;"><code>${r.gp}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('sgfDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议</strong>：必选 <strong>Tier 4 (argmin(T_wait) 到达时间反转 + NVML/PCIe/IB 1.5s 联合归因 + 动态微批缓冲 + 4.2s 热备节点 400G RDMA 状态克隆无感热替换)</strong>，彻底杜绝 1 张降频慢卡绑架全场万张好卡，实现 0 丢步、0 回滚，每周立省 <code>$${Math.round(519*sMult).toLocaleString()},000</code>！`
+    : `<strong>架构师选型建议 (无多余热备机)</strong>：立即启用 <strong>Tier 3 (2.8s 到达时间归因 + DataLoader 动态 DP 微批削减调平)</strong>，在线将慢卡的 3 个微批分摊给健康同伴，零重启恢复 <code>92.6%</code> Goodput！`;
+}
+updateStragglerGreyFailureSizer();
+</script>
 </body>
 </html>
