@@ -1,0 +1,89 @@
+{
+  "experiment_id": "agentic_mcp_tool_execution_gateway_selection",
+  "date": "2026-11-12",
+  "round": 52,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "Executable Code Actions Elicit Better LLM Agents (CodeAct Paper, ICML: Programmatic Control Flow vs JSON ReAct)",
+      "Model Context Protocol (MCP) Deferred Tool Loading (tool_search_tool) & Dynamic Schema Expansion Benchmarks",
+      "vLLM / SGLang Agentic Prefix-Cache Pinning Across External Tool I/O Waits"
+    ]
+  },
+  "workload": {
+    "enterprise_mcp_catalog": "25 Enterprise MCP Servers (500 Total Tools = 65,000 Tokens of Raw JSON Schema)",
+    "workflow_profile": "Multi-System Triage Workflow Requiring 12 Dependent/Parallel Tool Calls (e.g. Fetch Alerts -> Query Logs -> Inspect PRs -> Update Ticket)",
+    "raw_api_payload_per_call_kb": 18.0,
+    "external_api_rtt_ms": 420.0
+  },
+  "tiers": [
+    {
+      "id": "tier1_full_500_schema_serial_react_raw_json",
+      "name": "Tier 1: 全量 500 工具 Schema 硬塞 (65K 词) + 串行 ReAct 乒乓 + 原始 JSON 回灌",
+      "name_en": "Tier 1: Full 500-Tool Schema Stuffing (65K Tok) + Serial ReAct + Raw JSON Dump",
+      "tool_discovery_mode": "Injects all 500 MCP tool JSON schemas into system prompt on every turn (65,000 tokens base)",
+      "execution_and_payload_mode": "Serial 1-by-1 ReAct loop (13 LLM turns) + dumps unfiltered 18KB REST JSON responses into context",
+      "total_tokens_per_task": 210000,
+      "llm_roundtrips_per_task": 13,
+      "e2e_task_latency_s": 38.5,
+      "workflow_success_rate_pct": 61.5,
+      "kv_prefix_hit_rate_pct": 38.0,
+      "cost_per_1k_tasks_usd": 420.0,
+      "recommended_for": "Toy agents with <=5 tools and tiny responses; catastrophic at enterprise scale (500 schemas confuse tool selection and 13 serial turns burn 210K tokens/task).",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_vector_top15_retrieval_parallel_json_calls",
+      "name": "Tier 2: 静态向量 Top-15 工具预检索 + 并行 JSON Function Calling (仍回灌原始大包)",
+      "name_en": "Tier 2: Static Vector Top-15 Tool Retrieval + Parallel JSON Tool Calls",
+      "tool_discovery_mode": "Pre-filters Top-15 tools via initial user prompt embedding (misses mid-task cross-domain tools)",
+      "execution_and_payload_mode": "Parallel JSON tool calls (5 LLM turns), but still returns full unfiltered API JSON arrays to LLM",
+      "total_tokens_per_task": 68000,
+      "llm_roundtrips_per_task": 5,
+      "e2e_task_latency_s": 16.4,
+      "workflow_success_rate_pct": 78.4,
+      "kv_prefix_hit_rate_pct": 62.0,
+      "cost_per_1k_tasks_usd": 136.0,
+      "recommended_for": "Simple single-step parallel lookups where the initial prompt explicitly names all required tools.",
+      "status": "warn"
+    },
+    {
+      "id": "tier3_deferred_tool_search_kv_pinned_async_gateway",
+      "name": "Tier 3: 按需延迟工具发现 (Deferred Tool Search) + 会话粘性 KV 驻留异步网关",
+      "name_en": "Tier 3: Deferred Tool Discovery (tool_search) + Session-Sticky KV-Pinned Gateway",
+      "tool_discovery_mode": "Exposes 800-token catalog index + dynamic tool_search expansion (loads only exact 4–6 needed schemas)",
+      "execution_and_payload_mode": "Parallel JSON calls + Sticky KV-Pinned Routing (holds KV Cache in VRAM/DRAM during 420ms API wait)",
+      "total_tokens_per_task": 24500,
+      "llm_roundtrips_per_task": 4,
+      "e2e_task_latency_s": 8.2,
+      "workflow_success_rate_pct": 88.6,
+      "kv_prefix_hit_rate_pct": 96.5,
+      "cost_per_1k_tasks_usd": 49.0,
+      "recommended_for": "Standard interactive MCP agents requiring explicit per-call human-in-the-loop confirmation.",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_programmatic_codeact_sandbox_loop_output_projection",
+      "name": "Tier 4: 延迟发现 + 程序化工具编排 (CodeAct 沙箱循环) + 响应字段投影裁剪",
+      "name_en": "Tier 4: Deferred Discovery + Programmatic Tool Calling (CodeAct Sandbox) + Output Projection",
+      "tool_discovery_mode": "Deferred tool_search loads typed SDK stubs on demand (98.5% schema token reduction)",
+      "execution_and_payload_mode": "LLM emits 1 Python/TS script executing all 12 MCP calls, loops, & JMESPath filtering inside Wasm/MicroVM sandbox (2 LLM turns total!)",
+      "total_tokens_per_task": 9200,
+      "llm_roundtrips_per_task": 2,
+      "e2e_task_latency_s": 3.8,
+      "workflow_success_rate_pct": 94.2,
+      "kv_prefix_hit_rate_pct": 98.4,
+      "cost_per_1k_tasks_usd": 18.5,
+      "recommended_for": "Production enterprise SRE, data analysis, and DevOps agents executing multi-step loops, pagination, and cross-system joins (10.1x faster, -95.6% cost).",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_token_reduction_ratio": 22.83,
+    "tier4_vs_tier1_latency_speedup_ratio": 10.13,
+    "tier4_vs_tier1_accuracy_gain_pts": 32.7,
+    "tier4_cost_reduction_vs_tier1_pct": 95.6
+  }
+}
