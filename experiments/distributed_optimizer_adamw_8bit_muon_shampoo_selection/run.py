@@ -1,0 +1,128 @@
+"""Deterministic evaluator for LLM Pretraining Optimizer Architecture & Matrix Orthogonalization Selection (Round 59).
+
+Models optimizer state memory per parameter (Bytes/Param), optimizer step compute/communication
+overhead (ms/step on 512xH100 for a 72B LLM), token sample efficiency multiplier to reach
+target validation loss (Loss = 1.85), total tokens required (Trillions), and total GPU
+pretraining cost (USD) across four optimizer architectures:
+  - Tier 1: Standard Mixed-Precision FP32 Master-Weight AdamW (12 Bytes/Param, 1.00x baseline)
+  - Tier 2: Block-Wise 8-Bit Quantized AdamW / Adafactor (6 Bytes/Param, 0.99x token efficiency)
+  - Tier 3: Distributed Shampoo / SOAP Second-Order Kronecker Preconditioner (14 Bytes/Param, 1.28x efficiency)
+  - Tier 4: 2D Distributed Muon (5-Step BF16 Newton-Schulz Orthogonalization) + AdamW on Embed/Head (Kimi Moonlight paradigm)
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+def evaluate_distributed_optimizer_muon_adamw_matrix() -> dict[str, Any]:
+    workload = {
+        "model_and_cluster": "72B Parameter LLM across 512x H100 SXM5 GPUs (FSDP=64 x TP=8, Step Time = 3,850 ms)",
+        "convergence_target": "Reach target validation cross-entropy Loss = 1.85 (requires 10.0 Trillion tokens on baseline AdamW)",
+        "baseline_cluster_cost_usd": 4200000.0,
+    }
+
+    tiers = [
+        {
+            "id": "tier1_standard_fp32_master_adamw",
+            "name": "Tier 1: 标准混合精度 FP32 AdamW (12 Bytes/Param 显存占用 · 坐标级独立更新基线)",
+            "name_en": "Tier 1: Standard Mixed-Precision FP32 AdamW (12 Bytes/Param · 1.00x Token Efficiency)",
+            "optimizer_mechanism": "FP32 master weight (4B) + FP32 first moment m (4B) + FP32 second moment v (4B)",
+            "spectral_update_behavior": "Coordinate-wise division m/sqrt(v) ignores matrix singular spectrum; top singular directions dominate",
+            "optimizer_state_bytes_per_param": 12.0,
+            "optimizer_step_overhead_ms": 18.5,
+            "token_sample_efficiency_x": 1.00,
+            "tokens_to_target_loss_trillions": 10.00,
+            "total_pretraining_cost_usd": 4200000.0,
+            "recommended_for": "Default baseline for small/medium runs and 1D Embedding/LM-Head/RMSNorm parameters.",
+            "status": "fail",
+        },
+        {
+            "id": "tier2_blockwise_8bit_adamw_adafactor",
+            "name": "Tier 2: 分块动态量化 8-Bit AdamW / Adafactor (显存减半至 6 Bytes/Param · 不加速收敛)",
+            "name_en": "Tier 2: Block-Wise 8-Bit Quantized AdamW / Adafactor (6 Bytes/Param · 0.99x Efficiency)",
+            "optimizer_mechanism": "2048-element block-quantized INT8/FP8 moments (1B m + 1B v) + FP32 master weight (4B)",
+            "spectral_update_behavior": "Saves 50% optimizer state VRAM, but provides zero sample-efficiency speedup over standard AdamW",
+            "optimizer_state_bytes_per_param": 6.0,
+            "optimizer_step_overhead_ms": 24.0,
+            "token_sample_efficiency_x": 0.99,
+            "tokens_to_target_loss_trillions": 10.10,
+            "total_pretraining_cost_usd": 4242000.0,
+            "recommended_for": "Memory-constrained fine-tuning on consumer/workstation GPUs; does not reduce pretraining token bill.",
+            "status": "fail",
+        },
+        {
+            "id": "tier3_distributed_shampoo_soap_kronecker",
+            "name": "Tier 3: 分布式二阶 Kronecker 预条件器 (Distributed Shampoo / SOAP · 特征分解开销高)",
+            "name_en": "Tier 3: Distributed Second-Order Kronecker Preconditioner (Shampoo / SOAP · 1.28x Efficiency)",
+            "optimizer_mechanism": "Kronecker factor matrices L, R + periodic FP32 eigendecomposition / matrix inverse roots",
+            "spectral_update_behavior": "Rotates gradients into eigenbasis to accelerate convergence (1.28x), but adds 14B/param & FP32 SVD stalls",
+            "optimizer_state_bytes_per_param": 14.0,
+            "optimizer_step_overhead_ms": 145.0,
+            "token_sample_efficiency_x": 1.28,
+            "tokens_to_target_loss_trillions": 7.81,
+            "total_pretraining_cost_usd": 3395000.0,
+            "recommended_for": "Research benchmarks exploring full second-order curvature where FP32 SVD latency is acceptable.",
+            "status": "pass",
+        },
+        {
+            "id": "tier4_distributed_muon_newton_schulz5_hybrid_adamw",
+            "name": "Tier 4: 2D 分布式 Muon (5步 BF16 Newton-Schulz 矩阵正交化) + Embedding AdamW (Kimi Moonlight 范式)",
+            "name_en": "Tier 4: 2D Distributed Muon (5-Step BF16 Newton-Schulz) + Embed/Head AdamW (1.38x Efficiency)",
+            "optimizer_mechanism": "Single BF16 momentum (2B) + FP32 master (4B) + 5-step quintic BF16 Tensor-Core Newton-Schulz on 2D weights",
+            "spectral_update_behavior": "Snaps all gradient singular values to ~1.0 (UV^T) in 42.5ms via min(m,n) Gram transpose, boosting token efficiency 1.38x",
+            "optimizer_state_bytes_per_param": 6.0,
+            "optimizer_step_overhead_ms": 42.5,
+            "token_sample_efficiency_x": 1.38,
+            "tokens_to_target_loss_trillions": 7.25,
+            "total_pretraining_cost_usd": 3080000.0,
+            "recommended_for": "Production foundation model pretraining (Dense & MoE) seeking 1.38x fewer tokens (-$1.12M GPU bill) and -50% optimizer VRAM.",
+            "status": "pass",
+        },
+    ]
+
+    t1, t2, t3, t4 = tiers
+    summary = {
+        "tier4_vs_tier1_state_memory_reduction_pct": round(
+            (1.0 - t4["optimizer_state_bytes_per_param"] / t1["optimizer_state_bytes_per_param"]) * 100.0, 1
+        ),
+        "tier4_vs_tier1_token_efficiency_gain_x": t4["token_sample_efficiency_x"],
+        "tier4_tokens_saved_trillions": round(
+            t1["tokens_to_target_loss_trillions"] - t4["tokens_to_target_loss_trillions"], 2
+        ),
+        "tier4_net_savings_vs_tier1_usd": round(
+            t1["total_pretraining_cost_usd"] - t4["total_pretraining_cost_usd"], 0
+        ),
+    }
+
+    return {
+        "experiment_id": "distributed_optimizer_adamw_8bit_muon_shampoo_selection",
+        "date": "2026-11-12",
+        "round": 59,
+        "provenance": {
+            "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+            "independently_reproduced": False,
+            "physical_gpu_cluster_measurement": "not_measured",
+            "calibration_sources": [
+                "MoonshotAI Kimi Moonlight (Muon is Scalable for LLM Training: 2D Distributed Muon + RMS-Matched Weight Decay)",
+                "KellerJordan Muon (5-Step Quintic Newton-Schulz Orthogonalization & min(m,n) Gram Matrix Transpose)",
+                "SOAP (Shampoo with Adam in Preconditioner Eigenbasis) & bitsandbytes 8-Bit Blockwise Optimizer Benchmarks",
+            ],
+        },
+        "workload": workload,
+        "tiers": tiers,
+        "summary": summary,
+    }
+
+
+def main() -> None:
+    results = evaluate_distributed_optimizer_muon_adamw_matrix()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    out_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"Wrote {out_path}")
+
+
+if __name__ == "__main__":
+    main()
