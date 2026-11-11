@@ -5716,5 +5716,86 @@ function updatePrefixCacheRadixRouterSizer() {
 }
 updatePrefixCacheRadixRouterSizer();
 </script>
+
+  <!-- Round 67: Discrete Diffusion LLM (Mercury / LLaDA / Block Diffusion BD3-LM) Sizer -->
+  <div id="diffusion-llm-mercury-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#d97706;color:#fef3c7;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 67 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ 扩散大语言模型 (Diffusion LLM: Mercury / LLaDA / BD3-LM) 并行生成计算器（标准自回归 AR vs. EAGLE-3 投机 vs. 无缓存 LLaDA vs. 分块扩散 Block Diffusion）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/diffusion_llm_mercury_llada_parallel_decoding_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/diffusion-llm-mercury-llada-parallel-token-generation-selection-faq.md" style="color:#fcd34d;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/diffusion-llm-mercury-llada-parallel-token-generation-selection-faq.en.md" style="color:#fcd34d;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./diffusion-llm-mercury-llada-parallel-token-generation-selection-cards.html" style="color:#fcd34d;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">单次目标生成长度 (Output Generation Length):</label>
+        <select id="dllmLenSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateDiffusionLlmMercurySizer()">
+          <option value="0.25">128 Tokens (单块代码补全 / JSON 对象)</option>
+          <option value="1" selected>512 Tokens (整函数重写 / 4块标准基准)</option>
+          <option value="2">1,024 Tokens (整文件 Diff Apply 重构)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">模型权重约束 (Checkpoint Constraint):</label>
+        <select id="dllmModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateDiffusionLlmMercurySizer()">
+          <option value="diffusion" selected>可部署分块扩散模型 (Mercury Coder / BD3-LM / LLaDA-Block)</option>
+          <option value="stock_ar">必须直接加载未重训的现有自回归模型权重 (Stock Llama/DeepSeek)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">文本/代码生成架构范式 (1×H100 8B)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">生成速度 / 总耗时</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">HBM 权重读取次数</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Tensor Core 利用率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">代码准确率 / 成本</th>
+          </tr>
+        </thead>
+        <tbody id="dllmSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="dllmDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #d97706;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateDiffusionLlmMercurySizer() {
+  const lMult = parseFloat(document.getElementById('dllmLenSelect').value) || 1.0;
+  const mode = document.getElementById('dllmModeSelect').value || 'diffusion';
+  const bestId = mode === 'stock_ar' ? 't2' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 标准自回归 (AR) 逐词串行解码 (1词/步)', spd: `112.0 tok/s · ${(4.57*lMult).toFixed(2)} s ✕`, rd: `${Math.round(512*lMult)} 次 (带宽墙 ✕)`, tc: '1.8% (98.2%空转 ✕)', cost: '83.5% · $0.89/1M ✕' },
+    { id: 't2', name: '🟦 Tier 2: 自回归 + EAGLE-3 投机树验证 (现有 AR 首选)', spd: `285.0 tok/s · ${(1.80*lMult).toFixed(2)} s ✅`, rd: `${Math.round(180*lMult)} 次 ✅`, tc: '5.4%', cost: '83.5% · $0.35/1M ✅' },
+    { id: 't3', name: '🟨 Tier 3: 全序列无缓存掩码扩散 (原版 LLaDA / MDLM)', spd: `195.0 tok/s · ${(2.62*lMult).toFixed(2)} s ✕`, rd: '32 次 (每步重算4K ✕)', tc: '68.0% (重算浪费)', cost: '82.8% · $0.51/1M ✕' },
+    { id: 't4', name: '🟩 Tier 4: 分块半自回归扩散 + 跨块 KV Cache + 动态早停 (Mercury)', spd: `1,180.0 tok/s (10.5x) · ${(0.43*lMult).toFixed(2)} s 🏆`, rd: `${Math.round(28*lMult)} 次 (少读18.3x 🏆)`, tc: '42.5% (吃满GEMM 🏆)', cost: '84.4% · $0.12/1M (-86.5% 🏆)' }
+  ];
+
+  document.getElementById('dllmSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(217,119,6,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#fcd34d':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.spd}</code></td>
+      <td style="padding:10px;"><code>${r.rd}</code></td>
+      <td style="padding:10px;"><code>${r.tc}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dllmDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (极速 IDE 代码补全/改写与结构化 JSON)</strong>：必选 <strong>Tier 4 (Block Diffusion BD3-LM / Mercury Coder 范式：块间因果 KV Cache + 块内 128 词双向并行去噪 + 置信度动态早停)</strong>，将 HBM 权重搬运次数压缩 <code>18.3 倍</code>，单卡速度冲上 <code>1,180.0 tok/s (${(0.43*lMult).toFixed(2)} s 完成)</code>，成本直降 <code>-86.5%</code>！`
+    : `<strong>架构师选型建议 (直接服务现有未重训 AR 权重)</strong>：启用 <strong>Tier 2 (自回归 + EAGLE-3 投机解码 + Piecewise CUDA Graphs)</strong>，零损提速 <code>2.54x (285.0 tok/s)</code>！`;
+}
+updateDiffusionLlmMercurySizer();
+</script>
 </body>
 </html>
