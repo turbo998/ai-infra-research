@@ -1,0 +1,84 @@
+{
+  "experiment_id": "pretraining_data_curation_dedup_synthetic_rephrasing_selection",
+  "date": "2026-11-12",
+  "round": 58,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "HuggingFace FineWeb & FineWeb-Edu (15T Token Deduplication & Educational Classifier Ablations)",
+      "NVIDIA NeMo Curator (RAPIDS cuDF/cuGraph GPU-Accelerated MinHash LSH) & Nemotron-CC Synthetic Rephrasing",
+      "DataComp-LM (DCLM) & Dolma Pretraining Data Curation Benchmarks"
+    ]
+  },
+  "workload": {
+    "raw_corpus_scale": "100 TB Raw Web + Enterprise Corpus (50 Trillion Raw Tokens -> 5 Trillion Target Pretraining Tokens)",
+    "downstream_eval_target": "8B Foundation Model trained for 1T tokens (Baseline GPU pretraining compute budget = $4,000,000)",
+    "eval_benchmarks": "Macro-average of MMLU (Knowledge), GSM8K (Math Reasoning), and HumanEval (Code)"
+  },
+  "tiers": [
+    {
+      "id": "tier1_heuristic_rules_exact_hash_dedup",
+      "name": "Tier 1: 传统规则清洗 + URL/SHA256 精确去重 (C4/OSCAR 基线 -> 38.5% 近似重复垃圾)",
+      "name_en": "Tier 1: Heuristic Rules + Exact URL/SHA256 Dedup (38.5% Residual Near-Duplicates)",
+      "dedup_and_filter_stack": "Regex bad-word/length rules + exact document SHA256 hash",
+      "token_quality_strategy": "No semantic classifier; misses template boilerplate and SEO spin-articles",
+      "curation_wallclock_hours": 96.0,
+      "residual_duplicate_token_pct": 38.5,
+      "downstream_8b_benchmark_score_pct": 56.4,
+      "effective_unique_high_iq_token_yield_x": 0.62,
+      "net_pretraining_plus_curation_cost_usd": 4018000.0,
+      "recommended_for": "Fast initial raw text ingestion only; unsuitable as final pretraining mix due to 38.5% wasted FLOPs on duplicates.",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_cpu_spark_minhash_lsh_kenlm_perplexity",
+      "name": "Tier 2: CPU Spark 全局 MinHash LSH 去重 + Wikipedia KenLM 困惑度过滤 (误杀代码与数学)",
+      "name_en": "Tier 2: CPU Spark MinHash LSH Fuzzy Dedup + Wikipedia KenLM Perplexity Filter",
+      "dedup_and_filter_stack": "CPU Spark 128-perm MinHash LSH all-pairs shuffle + 5-gram KenLM perplexity cutoff",
+      "token_quality_strategy": "Removes near-duplicates, but KenLM Wikipedia perplexity discards valid Python code & LaTeX math",
+      "curation_wallclock_hours": 444.0,
+      "residual_duplicate_token_pct": 2.8,
+      "downstream_8b_benchmark_score_pct": 64.8,
+      "effective_unique_high_iq_token_yield_x": 1.0,
+      "net_pretraining_plus_curation_cost_usd": 3585000.0,
+      "recommended_for": "CPU-only general prose corpora; too slow (18.5 days) at 50T scale and harmful to code/math reasoning.",
+      "status": "fail"
+    },
+    {
+      "id": "tier3_gpu_nemo_curator_cudf_fineweb_edu_classifier",
+      "name": "Tier 3: GPU 加速 NeMo Curator (cuDF MinHash + 后缀数组) + FineWeb-Edu 教育价值分类器",
+      "name_en": "Tier 3: GPU NeMo Curator (cuDF MinHash + Suffix Array) + FineWeb-Edu Classifier",
+      "dedup_and_filter_stack": "RAPIDS cuDF/cuGraph GPU MinHash LSH + Exact Substring Suffix Array + FastText/DeBERTa-v3 0-5 Scorer",
+      "token_quality_strategy": "Scores reasoning & educational step-by-step density; discards bottom 90% low-score text",
+      "curation_wallclock_hours": 28.0,
+      "residual_duplicate_token_pct": 0.6,
+      "downstream_8b_benchmark_score_pct": 73.6,
+      "effective_unique_high_iq_token_yield_x": 1.45,
+      "net_pretraining_plus_curation_cost_usd": 2642000.0,
+      "recommended_for": "High-speed open-web curation when raw corpus is abundant (can afford to drop 90% of documents).",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_gpu_curator_plus_nemotron_cc_synthetic_rephrasing",
+      "name": "Tier 4: GPU NeMo Curator + 质量分桶合成改写 (Nemotron-CC 范式: 3B FP8 将中等脏语料改写为教材)",
+      "name_en": "Tier 4: GPU NeMo Curator + Quality-Bucketed Synthetic Rephrasing (Nemotron-CC Paradigm)",
+      "dedup_and_filter_stack": "GPU cuDF MinHash + 5-Bucket Classifier + vLLM 3B-FP8 Synthetic Rephraser on Middle-Quality Bucket",
+      "token_quality_strategy": "Rewrites noisy but fact-rich medium-score docs into structured textbook/Q&A tokens instead of discarding",
+      "curation_wallclock_hours": 36.0,
+      "residual_duplicate_token_pct": 0.4,
+      "downstream_8b_benchmark_score_pct": 79.8,
+      "effective_unique_high_iq_token_yield_x": 2.8,
+      "net_pretraining_plus_curation_cost_usd": 2080000.0,
+      "recommended_for": "Frontier & enterprise domain pretraining needing maximum reasoning accuracy (+23.4 pts) and 2.8x high-IQ token yield under data scarcity.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier3_vs_tier2_dedup_speedup_ratio": 15.86,
+    "tier4_vs_tier1_accuracy_gain_pts": 23.4,
+    "tier4_vs_tier3_token_yield_ratio": 1.93,
+    "tier4_net_savings_vs_tier1_usd": 1938000.0
+  }
+}
