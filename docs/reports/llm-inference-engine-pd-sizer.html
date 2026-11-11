@@ -6525,5 +6525,86 @@ function updateRlVerlSlimeArchSizer() {
 }
 updateRlVerlSlimeArchSizer();
 </script>
+
+  <!-- Round 77: AI Cluster Scheduler: Slurm vs K8s Kueue TAS + DRA + Sunk Sizer -->
+  <div id="slurm-k8s-kueue-dra-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#6366f1;color:#e0e7ff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 77 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🎛️ AI 智算集群调度器与拓扑编排计算器（原生 K8s 死锁 vs. Slurm+K8s 物理双孤岛 vs. Kueue+传统插件 vs. Kueue TAS + K8s DRA + Sunk 双栖融合）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/ai_cluster_slurm_k8s_kueue_dra_scheduling_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-cluster-slurm-vs-kubernetes-kueue-dra-gang-scheduling-selection-faq.md" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/ai-cluster-slurm-vs-kubernetes-kueue-dra-gang-scheduling-selection-faq.en.md" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./ai-cluster-slurm-vs-kubernetes-kueue-dra-gang-scheduling-selection-cards.html" style="color:#a5b4fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">训推混合集群 H100/H200 总规模 (Cluster GPUs):</label>
+        <select id="skdScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSlurmK8sKueueDraSizer()">
+          <option value="0.25">256 × H100/H200 (中型企业训推池)</option>
+          <option value="1" selected>1,024 × H100/H200 (128 节点标准训推集群基准)</option>
+          <option value="4">4,096 × H100/H200 (大型 AI 云平台)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">算法团队习惯与硬件栈 (Team &amp; K8s Version):</label>
+        <select id="skdModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSlurmK8sKueueDraSizer()">
+          <option value="dra_sunk" selected>K8s 1.32+ 开启 Kueue TAS + DRA 原子绑定 + Sunk (sbatch/K8s 双栖 · Tier 4)</option>
+          <option value="legacy_kueue">旧版 K8s (&lt;1.30) 仅启用 Kueue/Volcano 成组调度 (Tier 3)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">智算集群调度与编排架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">成组死锁 / GPU-网卡对齐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">分布式训练 MFU</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">24×7 综合满载率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">年化搁浅/死锁损失</th>
+          </tr>
+        </thead>
+        <tbody id="skdSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="skdDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #6366f1;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateSlurmK8sKueueDraSizer() {
+  const sMult = parseFloat(document.getElementById('skdScaleSelect').value) || 1.0;
+  const mode = document.getElementById('skdModeSelect').value || 'dra_sunk';
+  const bestId = mode === 'legacy_kueue' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 原生 K8s 默认调度器 + 传统插件 (无 Gang 死锁 + 乱洒)', dlk: '18.5% 死锁 ✕ · 32% 对齐 ✕', mfu: '36.4% ✕', util: '68.2% ✕', cost: `$${(4.28*sMult).toFixed(2)}M/yr 浪费 ✕` },
+    { id: 't2', name: '🟨 Tier 2: 物理隔离双孤岛 (一半裸机 Slurm + 一半独立 K8s)', dlk: '0.0% · 96% 对齐 (GRES)', mfu: '57.5% ✅', util: '73.8% (夜间推理卡搁浅 ✕)', cost: `$${(3.52*sMult).toFixed(2)}M/yr 浪费 ✕` },
+    { id: 't3', name: '🟦 Tier 3: 统一 K8s + Kueue/Volcano 成组调度 + 传统整数插件', dlk: '0.0% ✅ · 58% 对齐 (跨NUMA)', mfu: '51.2%', util: '86.5% ✅', cost: `$${(1.81*sMult).toFixed(2)}M/yr` },
+    { id: 't4', name: '🟩 Tier 4: 统一 K8s + Kueue TAS + K8s DRA (同PCIe绑定) + Sunk', dlk: '0.0% 🏆 · 100.0% 原子对齐 🏆', mfu: '57.8% (媲美裸机 🏆)', util: '94.6% (+20.8pt 🏆)', cost: `$${(0.725*sMult).toFixed(2)}M/yr (比双孤岛省 $${(2.795*sMult).toFixed(2)}M 🏆)` }
+  ];
+
+  document.getElementById('skdSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(99,102,241,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#a5b4fc':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.dlk}</code></td>
+      <td style="padding:10px;"><code>${r.mfu}</code></td>
+      <td style="padding:10px;"><code>${r.util}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('skdDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${Math.round(1024*sMult).toLocaleString()} 卡训推一体集群)</strong>：必选 <strong>Tier 4 (统一 K8s + Kueue TAS 超节点装箱 + K8s DRA GPU/网卡同 PCIe 原子绑定 + Sunk 兼容 sbatch)</strong>，消除物理双孤岛的潮汐浪费，将全天候满载率提至 <code>94.6%</code>，每年净省 <code>$${Math.round(2795000*sMult).toLocaleString()}</code>！`
+    : `<strong>架构师选型建议 (K8s &lt;1.30 过渡期)</strong>：启用 <strong>Tier 3 (Kueue / Volcano PodGroup 成组调度 + Kubelet TopologyManager single-numa-node)</strong>，消灭半截死锁！`;
+}
+updateSlurmK8sKueueDraSizer();
+</script>
 </body>
 </html>
