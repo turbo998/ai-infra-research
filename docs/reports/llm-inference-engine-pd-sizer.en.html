@@ -4591,5 +4591,86 @@ function updateAgenticMcpGatewaySizer() {
 }
 updateAgenticMcpGatewaySizer();
 </script>
+
+  <!-- Round 53: 128K-1M Long-Context KV Cache Quantization & Dynamic Sparse Attention Sizer -->
+  <div id="long-context-kv-quant-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0891b2;color:#cffafe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 53 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">📏 128K–1M Long-Context KV Cache Quantization &amp; Dynamic Sparsity Sizer (Uncompressed BF16 vs. H2O Eviction vs. Calibrated FP8/KIVI vs. FP8 + Quest Dynamic Sparse)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/long_context_kv_cache_compression_quantization_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/long-context-kv-cache-compression-quantization-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/long-context-kv-cache-compression-quantization-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./long-context-kv-cache-compression-quantization-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Target Context Window Length:</label>
+        <select id="lckvLenSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLongContextKvQuantSizer()">
+          <option value="0.25">32K Tokens (Standard Document QA)</option>
+          <option value="1" selected>128K Tokens (Multi-Turn Repo / Contract QA Baseline)</option>
+          <option value="4">512K Tokens (Full Codebase / Legal Archive)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Multi-Turn Query-Shift Requirement:</label>
+        <select id="lckvModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLongContextKvQuantSizer()">
+          <option value="multiturn" selected>Multi-Turn Arbitrary Follow-Up (&gt;95% RULER Needle Recall)</option>
+          <option value="standard">32K–64K Standard Serving (Drop-In FP8 KV Only)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">KV Cache Compression &amp; Sparsity Tier (8×H100 70B)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Active HBM Read / Stored KV</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Decode Speed (tok/s)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Multi-Turn RULER Recall</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Max Sessions / Cost per 1M</th>
+          </tr>
+        </thead>
+        <tbody id="lckvSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="lckvDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0891b2;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateLongContextKvQuantSizer() {
+  const lMult = parseFloat(document.getElementById('lckvLenSelect').value) || 1.0;
+  const mode = document.getElementById('lckvModeSelect').value || 'multiturn';
+  const bestId = (mode === 'standard' && lMult <= 0.25) ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Uncompressed BF16 Full KV Cache', bw: `${(40*lMult).toFixed(1)} GB / Stored ${(40*lMult).toFixed(1)} GB ✕`, spd: `${(18.5/lMult).toFixed(1)} tok/s ✕`, acc: '96.2%', cost: `${Math.max(1,Math.floor(14/lMult))} sess · $${(30.8*lMult).toFixed(2)}/1M ✕` },
+    { id: 't2', name: '🟨 Tier 2: Permanent Eviction H2O / SnapKV (Drops 75%)', bw: `${(10*lMult).toFixed(1)} GB / Stored ${(10*lMult).toFixed(1)} GB`, spd: `${(68.0/lMult).toFixed(1)} tok/s`, acc: '58.4% (-37.8pt Amnesia ✕)', cost: `${Math.max(4,Math.floor(56/lMult))} sess · Fails SLA ✕` },
+    { id: 't3', name: '🟦 Tier 3: Calibrated FP8 E4M3 / Asymmetric KIVI (100% Kept)', bw: `${(20*lMult).toFixed(1)} GB / Stored ${(20*lMult).toFixed(1)} GB ✅`, spd: `${(36.4/lMult).toFixed(1)} tok/s ✅`, acc: '95.8% (Lossless Grade ✅)', cost: `${Math.max(2,Math.floor(28/lMult))} sess · $${(15.6*lMult).toFixed(2)}/1M ✅` },
+    { id: 't4', name: '🟩 Tier 4: Calibrated FP8 KV + Quest Dynamic Page-Sparse', bw: `${(2.5*lMult).toFixed(2)} GB (-16x) / Stored ${(14*lMult).toFixed(1)} GB 🏆`, spd: `${(108.0/lMult).toFixed(1)} tok/s (5.84x Faster 🏆)`, acc: '95.6% (Zero Amnesia 🏆)', cost: `${Math.max(4,Math.floor(40/lMult))} sess · $${(5.04*lMult).toFixed(2)}/1M (-83.6% 🏆)` }
+  ];
+
+  document.getElementById('lckvSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(8,145,178,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.spd}</code></td>
+      <td style="padding:10px;"><code>${r.acc}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('lckvDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>Architect Recommendation (128K–1M Multi-Turn Long Context)</strong>: Standardize on <strong>Tier 4 (Calibrated FP8 KV + Quest [K_min, K_max] Page-Bounding-Box Dynamic Sparse Attention)</strong> to retain 100% of tokens (` + '`95.6%` multi-turn recall) while cutting per-step HBM bandwidth reads by `16.0x` and boosting Decode speed by `5.84x`!'
+    : `<strong>Architect Recommendation (32K Standard Long Context)</strong>: Enable <strong>Tier 3 (Calibrated FP8 E4M3 KV Cache)</strong> to halve KV memory and double concurrency with zero accuracy loss!`;
+}
+updateLongContextKvQuantSizer();
+</script>
 </body>
 </html>

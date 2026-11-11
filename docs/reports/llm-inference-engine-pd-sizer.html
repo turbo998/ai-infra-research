@@ -4592,5 +4592,86 @@ function updateAgenticMcpGatewaySizer() {
 }
 updateAgenticMcpGatewaySizer();
 </script>
+
+  <!-- Round 53: 128K-1M Long-Context KV Cache Quantization & Dynamic Sparse Attention Sizer -->
+  <div id="long-context-kv-quant-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0891b2;color:#cffafe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 53 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">📏 超长上下文 (128K~1M) KV Cache 量化与动态稀疏检索计算器（BF16 全量 vs. H2O 永久删除 vs. 校准 FP8/KIVI vs. FP8 + Quest 动态边界框稀疏）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/long_context_kv_cache_compression_quantization_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/long-context-kv-cache-compression-quantization-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/long-context-kv-cache-compression-quantization-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./long-context-kv-cache-compression-quantization-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">目标上下文窗口长度 (Context Window Length):</label>
+        <select id="lckvLenSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLongContextKvQuantSizer()">
+          <option value="0.25">32K Tokens (常规长文档问答)</option>
+          <option value="1" selected>128K Tokens (代码库/财报多轮深度问答, 基准测试)</option>
+          <option value="4">512K Tokens (全仓代码/超长卷宗分析)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">会话轮次与检索精度要求 (Multi-Turn Requirement):</label>
+        <select id="lckvModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateLongContextKvQuantSizer()">
+          <option value="multiturn" selected>多轮任意细节追问 (要求 &gt;95% RULER 大海捞针零失忆)</option>
+          <option value="standard">32K~64K 标准在线服务 (仅开箱即用 FP8 量化)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">KV Cache 量化与稀疏检索架构档位 (8×H100 70B)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">每步实际读 HBM / 存显存</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单流吐字速度</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">多轮大海捞针召回率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">并发会话 / 百万词成本</th>
+          </tr>
+        </thead>
+        <tbody id="lckvSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="lckvDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0891b2;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateLongContextKvQuantSizer() {
+  const lMult = parseFloat(document.getElementById('lckvLenSelect').value) || 1.0;
+  const mode = document.getElementById('lckvModeSelect').value || 'multiturn';
+  const bestId = (mode === 'standard' && lMult <= 0.25) ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 原生未压缩 BF16 全量 KV Cache', bw: `${(40*lMult).toFixed(1)} GB / 存 ${(40*lMult).toFixed(1)} GB ✕`, spd: `${(18.5/lMult).toFixed(1)} tok/s ✕`, acc: '96.2%', cost: `${Math.max(1,Math.floor(14/lMult))} 会话 · $${(30.8*lMult).toFixed(2)}/1M ✕` },
+    { id: 't2', name: '🟨 Tier 2: 静态永久丢弃 H2O / SnapKV (删 75% 词)', bw: `${(10*lMult).toFixed(1)} GB / 存 ${(10*lMult).toFixed(1)} GB`, spd: `${(68.0/lMult).toFixed(1)} tok/s`, acc: '58.4% (多轮失忆 -37.8pt ✕)', cost: `${Math.max(4,Math.floor(56/lMult))} 会话 · 质量不可用 ✕` },
+    { id: 't3', name: '🟦 Tier 3: 校准 FP8 E4M3 / 非对称 KIVI 量化 (100% 保留)', bw: `${(20*lMult).toFixed(1)} GB / 存 ${(20*lMult).toFixed(1)} GB ✅`, spd: `${(36.4/lMult).toFixed(1)} tok/s ✅`, acc: '95.8% (无损级 ✅)', cost: `${Math.max(2,Math.floor(28/lMult))} 会话 · $${(15.6*lMult).toFixed(2)}/1M ✅` },
+    { id: 't4', name: '🟩 Tier 4: 校准 FP8 KV + Quest 页面边界框动态稀疏检索', bw: `${(2.5*lMult).toFixed(2)} GB (-16x) / 存 ${(14*lMult).toFixed(1)} GB 🏆`, spd: `${(108.0/lMult).toFixed(1)} tok/s (快5.84x 🏆)`, acc: '95.6% (零多轮失忆 🏆)', cost: `${Math.max(4,Math.floor(40/lMult))} 会话 · $${(5.04*lMult).toFixed(2)}/1M (-83.6% 🏆)` }
+  ];
+
+  document.getElementById('lckvSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(8,145,178,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.spd}</code></td>
+      <td style="padding:10px;"><code>${r.acc}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('lckvDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (128K~1M 多轮长上下文)</strong>：必选 <strong>Tier 4 (校准 FP8 KV 全量保留 + Quest 页面边界框 [K_min, K_max] 动态稀疏检索)</strong>，1 个词都不删（多轮召回高达 <code>95.6%</code>），每步仅从 HBM 读取最相关的 Top-12.5% 页面（少读 <code>16 倍</code> 显存），吐字速度飙升 <code>5.84x</code>！`
+    : `<strong>架构师选型建议 (32K 常规长上下文)</strong>：默认开启 <strong>Tier 3 (预校准 FP8 E4M3 KV 量化)</strong>，一行参数直接翻倍显存容量与吞吐！`;
+}
+updateLongContextKvQuantSizer();
+</script>
 </body>
 </html>
