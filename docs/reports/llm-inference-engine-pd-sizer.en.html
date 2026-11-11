@@ -4026,5 +4026,86 @@ function updateCudaGraphCompileSizer() {
 }
 updateCudaGraphCompileSizer();
 </script>
+
+  <!-- Round 46: Large-Scale MoE DeepEP & GPU-Initiated RDMA (IBGDA) Sizer -->
+  <div id="moe-deepep-ibgda-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#059669;color:#d1fae5;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 46 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚀 Large-Scale MoE DeepEP &amp; GPU-Initiated RDMA (IBGDA) Sizer (Standard NCCL vs. NVSHMEM vs. DeepEP NVLink→RDMA vs. Pure-IBGDA + 0-SM Hook + EPLB)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/moe_deepep_ibgda_alltoall_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/moe-deepep-ibgda-nvshmem-alltoall-engine-selection-faq.en.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/moe-deepep-ibgda-nvshmem-alltoall-engine-selection-faq.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./moe-deepep-ibgda-nvshmem-alltoall-engine-selection-cards.html" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Disaggregated Instance Pool Role:</label>
+        <select id="depRoleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateMoeDeepepIbgdaSizer()">
+          <option value="decode" selected>Interactive Decode Pool (128 tokens/GPU · Latency-Bound)</option>
+          <option value="prefill">Prefill Pool / Pre-Training (4,096 tokens/GPU · Bandwidth-Bound)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Expert Parallelism Scale (EP World Size):</label>
+        <select id="depEpSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateMoeDeepepIbgdaSizer()">
+          <option value="0.75">EP = 32 (4 Nodes × 8×H800/H100)</option>
+          <option value="1" selected>EP = 64 (8 Nodes × 8×H800/H100, Baseline)</option>
+          <option value="1.35">EP = 144 (18-Node Large-Scale Expert Pool)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">MoE Cross-Node All-to-All Engine Tier (671B 58L)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Decode Layer Comm / TPOT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Prefill 400G BusBW</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Comm SMs / Expert Skew</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Throughput / Cost per 1B</th>
+          </tr>
+        </thead>
+        <tbody id="depSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="depDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #059669;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateMoeDeepepIbgdaSizer() {
+  const role = document.getElementById('depRoleSelect').value || 'decode';
+  const epMult = parseFloat(document.getElementById('depEpSelect').value) || 1.0;
+  const bestId = role === 'prefill' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Standard NCCL All-to-All (Host CPU Proxy)', lat: `${(385*epMult).toFixed(0)} µs / ${(28.4*epMult).toFixed(1)} ms ✕`, bw: '18.5 GB/s (37.0% ✕)', sm: '24 SMs / 38.0% Skew ✕', cost: '45.1 tok/s · $1,480/1B ✕' },
+    { id: 't2', name: '🟨 Tier 2: Baseline NVSHMEM Symmetric (No IBGDA/Overlap)', lat: `${(210*epMult).toFixed(0)} µs / ${(17.8*epMult).toFixed(1)} ms`, bw: '29.4 GB/s (58.8%)', sm: '16 SMs / 34.0% Skew', cost: '71.9 tok/s · $928/1B' },
+    { id: 't3', name: '🟦 Tier 3: DeepEP High-Throughput (NVLink→RDMA Coalesced)', lat: `${(112*epMult).toFixed(0)} µs / ${(11.4*epMult).toFixed(1)} ms`, bw: '46.2 GB/s (92.4% ✅)', sm: '8 SMs / 18.5% Skew ✅', cost: '112.3 tok/s · $594/1B ✅' },
+    { id: 't4', name: '🟩 Tier 4: DeepEP Pure-IBGDA + 0-SM Hook Overlap + EPLB', lat: `${(64*epMult).toFixed(0)} µs / ${(6.9*epMult).toFixed(1)} ms 🏆`, bw: '47.5 GB/s (95.0% 🏆)', sm: '0 SMs (Overlap) / 4.2% 🏆', cost: '185.5 tok/s · $360/1B (-75.7% 🏆)' }
+  ];
+
+  document.getElementById('depSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(5,150,105,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.lat}</code></td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.sm}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('depDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>Architect Recommendation (Interactive Decode Pool)</strong>: Standardize on <strong>Tier 4 (DeepEP Low-Latency Pure-IBGDA + Two-Microbatch 0-SM Hook Overlap + EPLB Hot-Expert Replication)</strong> to cut per-layer All-to-All to <code>${(64*epMult).toFixed(0)} µs</code>, reclaim all <code>24 GPU SMs</code>, and reach <code>${(6.9*epMult).toFixed(1)} ms</code> TPOT (<code>-75.7%</code> cost)!`
+    : `<strong>Architect Recommendation (Prefill Pool / Pre-Training)</strong>: Deploy <strong>Tier 3 (DeepEP High-Throughput NVLink→RDMA Coalesced Forwarding)</strong> to aggregate tokens over 900 GB/s intra-node NVLink first and saturate 400G RDMA NICs at <code>46.2 GB/s (92.4% line rate)</code>!`;
+}
+updateMoeDeepepIbgdaSizer();
+</script>
 </body>
 </html>
