@@ -4270,5 +4270,85 @@ function updateDocIntelligenceSizer() {
 }
 updateDocIntelligenceSizer();
 </script>
+
+  <!-- Round 49: Heterogeneous GPU Cluster (NVIDIA H100 + AMD MI300X) & Compiler Stack Sizer -->
+  <div id="hetero-gpu-rocm-cuda-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0284c7;color:#e0f2fe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 49 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🔧 跨异构 GPU 集群（NVIDIA H100 + AMD MI300X）编译栈与 PD 分离计算器（HIPIFY vs. ONNX/XLA vs. Triton+AITER vs. 异构 PD 分离）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/heterogeneous_gpu_rocm_cuda_triton_stack_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/heterogeneous-gpu-rocm-cuda-triton-tilelang-stack-selection-faq.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/heterogeneous-gpu-rocm-cuda-triton-tilelang-stack-selection-faq.en.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./heterogeneous-gpu-rocm-cuda-triton-tilelang-stack-selection-cards.html" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">智算中心硬件资源构成 (Cluster Fleet Composition):</label>
+        <select id="hgpuFleetSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateHeteroGpuRocmCudaSizer()">
+          <option value="mixed" selected>混合异构集群：NVIDIA H100 (80GB) + AMD MI300X (192GB)</option>
+          <option value="amd">纯 AMD Instinct MI300X / MI325X (192GB/256GB) 同构集群</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">服务模型规模 (Model Scale):</label>
+        <select id="hgpuModelSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateHeteroGpuRocmCudaSizer()">
+          <option value="1" selected>70B FP8 (TP=8 · 32K 长上下文基准测试)</option>
+          <option value="0.22">405B / 671B FP8 超大模型 (单台 8×MI300X 1.53TB 装得下！)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">异构编译栈与部署架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">HBM 带宽利用率 / 吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Decode P99 TPOT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单节点 32K 并发会话数</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">每百万 Token 成本</th>
+          </tr>
+        </thead>
+        <tbody id="hgpuSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="hgpuDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0284c7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateHeteroGpuRocmCudaSizer() {
+  const fleet = document.getElementById('hgpuFleetSelect').value || 'mixed';
+  const mMult = parseFloat(document.getElementById('hgpuModelSelect').value) || 1.0;
+  const bestId = fleet === 'amd' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 朴素 HIPIFY 源码硬转 (Warp32 + 8-XCD 缓存颠簸)', bw: `41.5% / ${Math.round(1120*mMult).toLocaleString()} tok/s ✕`, tpot: '26.5 ms ✕', sess: '148 个会话', cost: `$${(5.36/mMult).toFixed(2)} / 1M ✕` },
+    { id: 't2', name: '🟨 Tier 2: 静态 ONNX / OpenXLA 导出 (无分页 KV 与融合算子)', bw: `54.0% / ${Math.round(1480*mMult).toLocaleString()} tok/s`, tpot: '21.0 ms', sess: '64 个会话 ✕', cost: `$${(4.05/mMult).toFixed(2)} / 1M` },
+    { id: 't3', name: '🟦 Tier 3: Triton / TileLang + AMD AITER (Wave64 + 8-XCD 亲和)', bw: `82.4% / ${Math.round(2850*mMult).toLocaleString()} tok/s ✅`, tpot: '11.8 ms ✅', sess: '196 个会话 ✅', cost: `$${(2.11/mMult).toFixed(2)} / 1M (-60.6% ✅)` },
+    { id: 't4', name: '🟩 Tier 4: 跨厂商异构 PD 分离 (H100 Prefill + MI300X Decode)', bw: `89.6% / ${Math.round(3840*mMult).toLocaleString()} tok/s 🏆`, tpot: '7.4 ms 🏆', sess: '260 个会话 (2.7x 🏆)', cost: `$${(1.48/mMult).toFixed(2)} / 1M (-72.4% 🏆)` }
+  ];
+
+  document.getElementById('hgpuSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(2,132,199,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#7dd3fc':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><code>${r.tpot}</code></td>
+      <td style="padding:10px;"><code>${r.sess}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('hgpuDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (N卡+A卡混合异构机房)</strong>：必选 <strong>Tier 4 (跨厂商异构 PD 分离：H100 跑算力型 Prefill + MI300X 192GB 跑带宽/容量型 Decode + Mooncake 400G RoCEv2 传 KV)</strong>，把两种芯片各自固定在最擅长的屋脊线上，吞吐提升 <code>3.43x</code>，单节点承载 <code>260 个</code> 32K 会话，成本直降 <code>72.4%</code>！`
+    : `<strong>架构师选型建议 (纯 AMD MI300X/MI325X 同构集群)</strong>：必选 <strong>Tier 3 (vLLM/SGLang + Triton/TileLang + AMD AITER 8-XCD 亲和调优)</strong>，消除 8 颗小芯片跨 Die 缓存颠簸，零硬件改动将吞吐拉升 <code>2.54x</code>！`;
+}
+updateHeteroGpuRocmCudaSizer();
+</script>
 </body>
 </html>
