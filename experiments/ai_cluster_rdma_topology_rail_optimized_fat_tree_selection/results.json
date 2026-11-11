@@ -1,0 +1,88 @@
+{
+  "experiment_id": "ai_cluster_rdma_topology_rail_optimized_fat_tree_selection",
+  "date": "2026-11-12",
+  "round": 75,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "NVIDIA DGX SuperPOD Rail-Optimized Topology & NCCL PXN (PCIe x NVLink Cross-Rail Proxy) Architecture",
+      "3-Tier Clos Fat-Tree vs. 2-Tier Rail-Only / Slimmed Spine Optical Transceiver & Hop Latency Models",
+      "3D MEMS Optical Circuit Switching (OCS) & Dragonfly+ AI Cluster Interconnect Benchmarks"
+    ]
+  },
+  "workload": {
+    "cluster_scale": "4,096 GPUs (512 Nodes x 8 GPUs/node x 8 400Gbps RDMA NICs = 400 GB/s unidirectional line rate per node)",
+    "pxn_mechanism": "NCCL PXN (PCIe x NVLink): GPU 0 on Node A routes via 900 GB/s intra-node NVSwitch to GPU 3/NIC 3 on Node A, reaching GPU 3 on Node B in 1 Rail-Switch hop",
+    "ocs_dragonfly_advantage": "Eliminates active Core electrical switches & DSP optical transceivers via 3D MEMS OCS / Dragonfly+ direct optical groups"
+  },
+  "tiers": [
+    {
+      "id": "tier1_2to1_oversubscribed_traditional_cloud_spine_leaf",
+      "name": "Tier 1: 2:1 超订传统云数据中心 Spine-Leaf 拓扑 (ECMP 哈希碰撞 + 上行拥塞 -> 集合通信带宽跌至 154 GB/s)",
+      "name_en": "Tier 1: 2:1 Oversubscribed Traditional Cloud Spine-Leaf (154.0 GB/s Collective BW · 34.2% MFU)",
+      "fabric_topology_and_routing": "8 NICs per node into local ToR with 2:1 uplink oversubscription to Spine switches",
+      "cross_rail_and_collective_path": "Cross-rack AllReduce & MoE All-to-All saturate 50% uplink bisection bandwidth and trigger PFC pauses",
+      "effective_node_collective_bw_gbps": 154.0,
+      "typical_collective_hop_latency_us": 14.5,
+      "optical_transceiver_count": 6144,
+      "network_power_mw": 0.68,
+      "cluster_training_mfu_pct": 34.2,
+      "network_capex_usd": 9200000.0,
+      "recommended_for": "General CPU cloud storage/web traffic only; wastes $14M+/yr of GPU time if used for synchronous LLM training.",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_standard_1to1_nonblocking_3tier_clos_fat_tree",
+      "name": "Tier 2: 标准 1:1 全无阻塞三层胖树 (3-Tier Clos Fat-Tree · 节点对齐接入 · 5 跳延迟 3.8us · 12,288 个光模块)",
+      "name_en": "Tier 2: Standard 1:1 Non-Blocking 3-Tier Clos Fat-Tree (336.0 GB/s BW · 12,288 Optics · $18.4M CAPEX)",
+      "fabric_topology_and_routing": "All 8 NICs of a node plug into the same Leaf switch; requires full 3-tier Core/Spine/Leaf hierarchy at 4,096 Ports",
+      "cross_rail_and_collective_path": "Every inter-rack flow traverses Leaf -> Spine -> Core -> Spine -> Leaf (5 switch hops, 3.8us latency)",
+      "effective_node_collective_bw_gbps": 336.0,
+      "typical_collective_hop_latency_us": 3.8,
+      "optical_transceiver_count": 12288,
+      "network_power_mw": 1.42,
+      "cluster_training_mfu_pct": 52.8,
+      "network_capex_usd": 18400000.0,
+      "recommended_for": "Legacy non-NVSwitch clusters where GPUs inside a node cannot proxy traffic for each other.",
+      "status": "fail"
+    },
+    {
+      "id": "tier3_rail_optimized_fat_tree_plus_nccl_pxn_nvswitch",
+      "name": "Tier 3: 轨优化胖树 (Rail-Optimized Fat-Tree) + NCCL PXN 机内 NVSwitch 跨轨代理 (1跳直达 · 省 $5.8M 光模块)",
+      "name_en": "Tier 3: Rail-Optimized Fat-Tree + NCCL PXN NVSwitch Proxy (369.6 GB/s · 1.1us · $12.6M CAPEX)",
+      "fabric_topology_and_routing": "NIC i of 64 nodes connects to Rail-Leaf Switch i; 78% of DP/PP/EP traffic stays within 1-hop Rail switches",
+      "cross_rail_and_collective_path": "NCCL PXN hops over 900 GB/s intra-node NVSwitch to target rail's local NIC, turning 5-hop Core routes into 1 Rail hop!",
+      "effective_node_collective_bw_gbps": 369.6,
+      "typical_collective_hop_latency_us": 1.1,
+      "optical_transceiver_count": 8192,
+      "network_power_mw": 0.96,
+      "cluster_training_mfu_pct": 56.9,
+      "network_capex_usd": 12600000.0,
+      "recommended_for": "Industry-standard production 1K-16K GPU clusters (DGX SuperPOD / RoCEv2 Rail-Optimized pods).",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_rail_optimized_high_radix_plus_ocs_dragonfly_dynamic_spine",
+      "name": "Tier 4: 轨优化高基数交换 + 3D MEMS 光电路交换 (OCS) / Dragonfly+ 动态光脊拓扑 (383.2 GB/s · 省电 46.5%)",
+      "name_en": "Tier 4: Rail-Optimized High-Radix + 3D MEMS OCS / Dragonfly+ Dynamic Spine (383.2 GB/s · 0.76MW · $10.6M)",
+      "fabric_topology_and_routing": "High-radix Rail-Leaf switches interconnected via passive 3D MEMS Optical Circuit Switches (OCS) / Dragonfly+ groups",
+      "cross_rail_and_collective_path": "Eliminates Core O-E-O optical transceivers, reconfigures job-aware topology in 15ms, and achieves 95.8% line rate",
+      "effective_node_collective_bw_gbps": 383.2,
+      "typical_collective_hop_latency_us": 0.85,
+      "optical_transceiver_count": 6656,
+      "network_power_mw": 0.76,
+      "cluster_training_mfu_pct": 58.4,
+      "network_capex_usd": 10600000.0,
+      "recommended_for": "Next-gen 4K-32K GPU AI Factories optimizing CAPEX (-$7.8M), optics power (-46.5%), and optical fault healing.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_bw_gain_x": 2.49,
+    "tier4_vs_tier2_capex_savings_usd": 7800000.0,
+    "tier4_vs_tier2_power_reduction_pct": 46.5,
+    "tier3_vs_tier2_capex_savings_usd": 5800000.0
+  }
+}
