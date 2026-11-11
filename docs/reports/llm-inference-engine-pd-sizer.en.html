@@ -5633,5 +5633,85 @@ function updateMultiAgentOrchestrationSizer() {
 }
 updateMultiAgentOrchestrationSizer();
 </script>
+
+  <!-- Round 66: Cluster-Wide Prefix Cache, Dynamo KV Router & SLRU Eviction Sizer -->
+  <div id="prefix-cache-radix-router-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0891b2;color:#cffafe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 66 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧭 Cluster-Wide Prefix Cache, Dynamo Load-Decayed KV Router &amp; SLRU Eviction Sizer (Stateless Round-Robin vs. Sticky Hash vs. Radix+Pure LRU vs. Dynamo Decay+SLRU)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/prefix_cache_radix_kv_routing_eviction_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/llm-inference-prefix-cache-radix-kv-routing-eviction-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/llm-inference-prefix-cache-radix-kv-routing-eviction-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./llm-inference-prefix-cache-radix-kv-routing-eviction-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Serving Cluster Scale (8×H100 Replicas):</label>
+        <select id="pcrScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePrefixCacheRadixRouterSizer()">
+          <option value="0.25">4 × 8×H100 Replicas (32 GPUs)</option>
+          <option value="1" selected>16 × 8×H100 Replicas (128 GPUs Baseline)</option>
+          <option value="2">32 × 8×H100 Replicas (256 GPUs Large Fleet)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Traffic Skew &amp; Batch Scan Mix:</label>
+        <select id="pcrMixSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePrefixCacheRadixRouterSizer()">
+          <option value="mixed" selected>Multi-Tenant Mix: Viral Shared Prefixes (Zipf) + 1,000-Doc Batch Scans</option>
+          <option value="clean">Interactive Only: Uniform Multi-Turn Sessions (Zero Batch Scans)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Cluster Prefix Cache &amp; Routing Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Cluster KV Hit Rate</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Burst P99 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Batch Scan Drop</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">SLO Goodput / Annual Cost</th>
+          </tr>
+        </thead>
+        <tbody id="pcrSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="pcrDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0891b2;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updatePrefixCacheRadixRouterSizer() {
+  const sMult = parseFloat(document.getElementById('pcrScaleSelect').value) || 1.0;
+  const mix = document.getElementById('pcrMixSelect').value || 'mixed';
+  const bestId = (mix === 'clean' && sMult <= 0.25) ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Stateless Round-Robin Gateway + Local Block APC', hit: '18.4% (1/N Dilution ✕)', p99: '1,420.0 ms ✕', drp: '-42.0% ✕', gp: `${Math.round(88*sMult)} req/s · $${(3.18*sMult).toFixed(2)}M/yr ✕` },
+    { id: 't2', name: '🟨 Tier 2: Naive Sticky Prefix-Hash Without Queue Decay', hit: '76.5%', p99: '2,760.0 ms (Hotspot Queue ✕)', drp: '-35.0% ✕', gp: `${Math.round(64*sMult)} req/s · $${(3.65*sMult).toFixed(2)}M/yr ✕` },
+    { id: 't3', name: '🟦 Tier 3: SGLang RadixAttention + Global KV Directory + Pure LRU', hit: '79.2% ✅', p99: '385.0 ms ✅', drp: '-28.5% (Scan Vulnerable)', gp: `${Math.round(215*sMult)} req/s · $${(2.12*sMult).toFixed(2)}M/yr ✅` },
+    { id: 't4', name: '🟩 Tier 4: Dynamo Rational Load-Decayed Router + Radix + SLRU', hit: '86.8% 🏆', p99: '163.0 ms (16.93x Faster 🏆)', drp: '-1.8% (Scan Immune 🏆)', gp: `${Math.round(301*sMult)} req/s (3.42x) · $${(1.70*sMult).toFixed(2)}M/yr (Saves $${(1.48*sMult).toFixed(2)}M 🏆)` }
+  ];
+
+  document.getElementById('pcrSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(8,145,178,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.hit}</code></td>
+      <td style="padding:10px;"><code>${r.p99}</code></td>
+      <td style="padding:10px;"><code>${r.drp}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.gp}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pcrDecisionCallout').innerHTML =
+    `<strong>Architect Recommendation (${Math.round(16*sMult)} × 8×H100 Replicas)</strong>: Standardize on <strong>Tier 4 (NVIDIA Dynamo Rational Overlap-Decay Router + SGLang RadixAttention + 20%/80% Segmented LRU)</strong> to spill viral prefixes across replicas and trap 1-hit batch scans in the 20% Probationary ring—slashing P99 TTFT by <code>16.93x (163.0 ms)</code> and saving <code>$${(1.48*sMult).toFixed(2)}M/yr</code>!`;
+}
+updatePrefixCacheRadixRouterSizer();
+</script>
 </body>
 </html>

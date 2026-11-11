@@ -5636,5 +5636,85 @@ function updateMultiAgentOrchestrationSizer() {
 }
 updateMultiAgentOrchestrationSizer();
 </script>
+
+  <!-- Round 66: Cluster-Wide Prefix Cache, Dynamo KV Router & SLRU Eviction Sizer -->
+  <div id="prefix-cache-radix-router-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0891b2;color:#cffafe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 66 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧭 推理集群全局 Prefix Cache 树、Dynamo 衰减路由与 SLRU 淘汰计算器（无状态轮询 vs. 朴素粘性哈希 vs. Radix+纯LRU vs. Dynamo 衰减路由+SLRU）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/prefix_cache_radix_kv_routing_eviction_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/llm-inference-prefix-cache-radix-kv-routing-eviction-selection-faq.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/llm-inference-prefix-cache-radix-kv-routing-eviction-selection-faq.en.md" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./llm-inference-prefix-cache-radix-kv-routing-eviction-selection-cards.html" style="color:#67e8f9;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群 8×H100 推理副本规模 (Serving Replicas):</label>
+        <select id="pcrScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePrefixCacheRadixRouterSizer()">
+          <option value="0.25">4 台 8×H100 副本 (32 GPUs 中型池)</option>
+          <option value="1" selected>16 台 8×H100 副本 (128 GPUs 生产基准)</option>
+          <option value="2">32 台 8×H100 副本 (256 GPUs 大规模池)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">流量偏斜与批处理混跑特征 (Traffic Profile):</label>
+        <select id="pcrMixSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePrefixCacheRadixRouterSizer()">
+          <option value="mixed" selected>多租户混部：爆款共享前缀 (Zipf) + 一次性离线批处理大扫描</option>
+          <option value="clean">纯交互流量：均匀多轮会话 (无批处理扫描干扰)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">全局 Prefix Cache 路由与淘汰档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">集群有效命中率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">突发首字 P99 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">批处理污染掉点</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">达标吞吐 / 年成本</th>
+          </tr>
+        </thead>
+        <tbody id="pcrSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="pcrDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0891b2;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updatePrefixCacheRadixRouterSizer() {
+  const sMult = parseFloat(document.getElementById('pcrScaleSelect').value) || 1.0;
+  const mix = document.getElementById('pcrMixSelect').value || 'mixed';
+  const bestId = (mix === 'clean' && sMult <= 0.25) ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 无状态 Round-Robin 轮询网关 + 节点内独立 APC', hit: '18.4% (1/N 稀释 ✕)', p99: '1,420.0 ms ✕', drp: '-42.0% ✕', gp: `${Math.round(88*sMult)} req/s · $${(3.18*sMult).toFixed(2)}M/yr ✕` },
+    { id: 't2', name: '🟨 Tier 2: 朴素粘性哈希路由 (无队列衰减 · 单节点塞爆)', hit: '76.5%', p99: '2,760.0 ms (排队雪崩 ✕)', drp: '-35.0% ✕', gp: `${Math.round(64*sMult)} req/s · $${(3.65*sMult).toFixed(2)}M/yr ✕` },
+    { id: 't3', name: '🟦 Tier 3: SGLang RadixAttention + 全局 KV 目录 + 纯 LRU', hit: '79.2% ✅', p99: '385.0 ms ✅', drp: '-28.5% (怕批量冲刷)', gp: `${Math.round(215*sMult)} req/s · $${(2.12*sMult).toFixed(2)}M/yr ✅` },
+    { id: 't4', name: '🟩 Tier 4: Dynamo 有理负载衰减路由 + RadixAttention + 双段 SLRU', hit: '86.8% 🏆', p99: '163.0 ms (快 16.9x 🏆)', drp: '-1.8% (试用池隔离 🏆)', gp: `${Math.round(301*sMult)} req/s (3.42x) · $${(1.70*sMult).toFixed(2)}M/yr (省$${(1.48*sMult).toFixed(2)}M 🏆)` }
+  ];
+
+  document.getElementById('pcrSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(8,145,178,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#67e8f9':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.hit}</code></td>
+      <td style="padding:10px;"><code>${r.p99}</code></td>
+      <td style="padding:10px;"><code>${r.drp}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.gp}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pcrDecisionCallout').innerHTML =
+    `<strong>架构师选型建议 (${Math.round(16*sMult)} 台 8×H100 副本)</strong>：必选 <strong>Tier 4 (NVIDIA Dynamo 有理负载衰减路由 + SGLang RadixAttention 基数树 + 20%/80% 双段式 SLRU 防扫描淘汰)</strong>，在热门前缀过载时自动溢出复制，并将一次性批处理锁在 20% 试用池内，将 P99 TTFT 从 2,760ms 压至 <code>163.0 ms (-16.93x)</code>，每年净省 <code>$${(1.48*sMult).toFixed(2)}M</code>！`;
+}
+updatePrefixCacheRadixRouterSizer();
+</script>
 </body>
 </html>
