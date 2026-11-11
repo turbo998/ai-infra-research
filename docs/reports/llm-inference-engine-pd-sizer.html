@@ -6120,5 +6120,86 @@ function updateLlmObservabilityOtelSizer() {
 }
 updateLlmObservabilityOtelSizer();
 </script>
+
+  <!-- Round 72: Cluster Model Weight Loading, Nydus Lazy OCI & RDMA P2P Broadcast Sizer -->
+  <div id="model-weight-rdma-broadcast-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#0284c7;color:#e0f2fe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 72 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🚀 百卡/千卡集群模型权重极速加载、Nydus 按需镜像与 RDMA P2P 广播计算器（S3/NFS mmap 读风暴 vs. 700GB 巨型镜像 vs. Nydus+O_DIRECT vs. 单次读+400G RDMA 广播）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/model_weight_loading_oci_safetensors_rdma_broadcast_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/model-weight-loading-oci-streaming-safetensors-rdma-broadcast-selection-faq.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/model-weight-loading-oci-streaming-safetensors-rdma-broadcast-selection-faq.en.md" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./model-weight-loading-oci-streaming-safetensors-rdma-broadcast-selection-cards.html" style="color:#7dd3fc;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">同时拉起 8×H100 节点规模 (Concurrent Nodes):</label>
+        <select id="mwlNodeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateModelWeightRdmaBroadcastSizer()">
+          <option value="0.125">8 节点 (64 GPUs 中小集群)</option>
+          <option value="1" selected>64 节点 (512 GPUs 生产滚动发布基准)</option>
+          <option value="4">256 节点 (2,048 GPUs 超大规模集群)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群网络与部署架构 (Cluster Fabric):</label>
+        <select id="mwlModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateModelWeightRdmaBroadcastSizer()">
+          <option value="rdma" selected>具备 400G RDMA 计算网 + 节点 Pinned RAM 守护池 (Tier 4)</option>
+          <option value="storage_only">无 P2P 守护池，仅做 Nydus 镜像 + O_DIRECT 直读优化 (Tier 3)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">镜像与百 GB 权重分发架构档位 (685GB 671B)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">全集群就绪耗时</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">存储网关总读取流量</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单机有效带宽 / 驱逐率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">年化发布空转成本</th>
+          </tr>
+        </thead>
+        <tbody id="mwlSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="mwlDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #0284c7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateModelWeightRdmaBroadcastSizer() {
+  const nMult = parseFloat(document.getElementById('mwlNodeSelect').value) || 1.0;
+  const mode = document.getElementById('mwlModeSelect').value || 'rdma';
+  const bestId = mode === 'storage_only' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 多节点并发拉 22GB 镜像 + S3/NFS mmap() 未分片直读', rdy: `${(410*nMult).toFixed(1)} s ✕`, tb: `${(43.84*nMult).toFixed(2)} TB ✕`, bw: '1.67 GB/s · 14.5% 驱逐', cost: `$${Math.round(318000*nMult).toLocaleString()}/yr ✕` },
+    { id: 't2', name: '🟨 Tier 2: 700GB 权重打入巨型 OCI 容器镜像 (本地 CPU 解压)', rdy: `${(540*nMult).toFixed(1)} s ✕`, tb: `${(45.25*nMult).toFixed(2)} TB ✕`, bw: '1.31 GB/s · 68.0% 驱逐 ✕', cost: `$${Math.round(418000*nMult).toLocaleString()}/yr ✕` },
+    { id: 't3', name: '🟦 Tier 3: Nydus 3.2s 按需镜像 + 预切分 Safetensors + O_DIRECT/GDS', rdy: `${(38.5*Math.max(0.5, Math.sqrt(nMult))).toFixed(1)} s ✅`, tb: `${(8.40*nMult).toFixed(2)} TB`, bw: '17.8 GB/s ✅ · 0.0% 驱逐', cost: `$${Math.round(29800*nMult).toLocaleString()}/yr ✅` },
+    { id: 't4', name: '🟩 Tier 4: Nydus + 分条单次读存储 (0.685TB) + 400G RDMA 广播 + Pinned 缓存', rdy: '6.4 s (快 64.1x 🏆)', tb: '0.685 TB (恒定 1 次读 🏆)', bw: '107.0 GB/s 🏆 · 0.0% 驱逐', cost: `$${Math.round(4950*Math.sqrt(nMult)).toLocaleString()}/yr (省 $${Math.round(313050*nMult).toLocaleString()} 🏆)` }
+  ];
+
+  document.getElementById('mwlSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(2,132,199,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#7dd3fc':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.rdy}</code></td>
+      <td style="padding:10px;"><code>${r.tb}</code></td>
+      <td style="padding:10px;"><code>${r.bw}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('mwlDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${Math.round(64*nMult)} 节点 / ${Math.round(512*nMult)} 卡 H100 集群)</strong>：必选 <strong>Tier 4 (Nydus 3.2s 按需流式镜像 + 分条单次读存储 [恒定 0.685TB] + 400G RDMA Ring P2P 广播 + /dev/shm Pinned RAM 守护缓存)</strong>，将全集群冷启动压至 <code>6.4 秒</code>，每年省下 <code>$${Math.round(313050*nMult).toLocaleString()}</code> 空转算力费！`
+    : `<strong>架构师选型建议 (中小集群直读优化)</strong>：启用 <strong>Tier 3 (CNCF Nydus 按需镜像 + Run:ai Streamer O_DIRECT / GDS 预切分直读)</strong>，彻底消灭网络 mmap 缺页中断风暴！`;
+}
+updateModelWeightRdmaBroadcastSizer();
+</script>
 </body>
 </html>

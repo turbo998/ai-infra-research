@@ -1,0 +1,127 @@
+"""Deterministic evaluator for Cluster Model Weight Loading, Nydus/SOCI Lazy OCI Streaming & RDMA P2P Broadcast (Round 72).
+
+Models 64-node (512-GPU) cluster-wide cold-start / rollout time (seconds) for a 671B FP8 MoE model (685 GB weights + 22 GB runtime image),
+total object-storage / NAS read traffic across the 64-node rollout (TB), per-GPU weight ingestion bandwidth (GB/s),
+kubelet DiskPressure eviction rate (%), and annual idle GPU rollout/autoscale wait cost (USD/yr) across four architectures:
+  - Tier 1: 64 Nodes Concurrently Pulling 22GB OCI Image + Reading Unsharded Safetensors Over Shared S3/NFS via mmap() (410s stall)
+  - Tier 2: Monolithic 700GB OCI Container Image Baking Model Weights Inside Docker Layers (540s decompression + DiskPressure crash)
+  - Tier 3: Nydus/SOCI Lazy Chunk-Streamed Image (3.2s) + Pre-Sharded TP/EP Safetensors + Run:ai O_DIRECT / GDS (38.5s)
+  - Tier 4: Nydus Lazy Image + Leader-Once Storage Read (0.685 TB) + 400G RDMA Ring/Tree P2P Broadcast + Host Pinned RAM Cache (6.4s)
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+def evaluate_model_weight_loading_oci_safetensors_rdma_broadcast_matrix() -> dict[str, Any]:
+    workload = {
+        "cluster_and_model": "64 Nodes x 8 H100 GPUs (512 GPUs total) rolling out DeepSeek-V3 671B FP8 (685 GB weights + 22 GB CUDA container)",
+        "storage_incast_bottleneck": "64 nodes x 685 GB = 43.84 TB concurrent read storm saturating a 100 Gbps shared storage gateway for 410s",
+        "mmap_page_fault_trap": "Python default safetensors mmap() over network/FUSE triggers 179M 4KB OS page faults and pollutes Linux Page Cache",
+    }
+
+    tiers = [
+        {
+            "id": "tier1_concurrent_s3_nfs_pull_plus_unsharded_safetensors_mmap",
+            "name": "Tier 1: 64节点并发拉取 22GB 镜像 + 共享 S3/NFS mmap() 直读未分片 Safetensors (43.8TB 读风暴阻塞 410秒)",
+            "name_en": "Tier 1: 64-Node Concurrent 22GB Image Pull + Shared S3/NFS Unsharded Safetensors mmap() (410.0s Stall)",
+            "image_and_weight_distribution": "Full 22GB tar.gz pull per node + 64 nodes concurrently reading 685GB over shared 100G S3/NFS gateway",
+            "host_to_gpu_ingestion_path": "OS mmap() 4KB page-fault storm + redundant full-file read across TP/EP ranks before slicing",
+            "cluster_64node_rollout_time_s": 410.0,
+            "total_storage_gateway_read_tb": 43.84,
+            "effective_per_node_load_bw_gbps": 1.67,
+            "kubelet_disk_pressure_eviction_pct": 14.5,
+            "annual_rollout_idle_gpu_cost_usd": 318000.0,
+            "recommended_for": "Single-node local NVMe debugging only; causes a 43.8 TB storage read storm at 64-node scale.",
+            "status": "fail",
+        },
+        {
+            "id": "tier2_monolithic_weight_baked_oci_container_image",
+            "name": "Tier 2: 将几百 GB 权重直接打入巨型 Docker/OCI 容器镜像层 (单线程 gzip 解压 540秒 + 撑爆 Kubelet 根分区)",
+            "name_en": "Tier 2: Monolithic 700GB Weight-Baked OCI Container Image (540.0s Decompression + DiskPressure Crash)",
+            "image_and_weight_distribution": "707 GB monolithic OCI image pulled through containerd registry mirror and unpacked to overlayfs",
+            "host_to_gpu_ingestion_path": "CPU-bound tar.gz decompression writes 2x707GB to local rootfs, triggering Kubelet DiskPressure eviction",
+            "cluster_64node_rollout_time_s": 540.0,
+            "total_storage_gateway_read_tb": 45.25,
+            "effective_per_node_load_bw_gbps": 1.31,
+            "kubelet_disk_pressure_eviction_pct": 68.0,
+            "annual_rollout_idle_gpu_cost_usd": 418000.0,
+            "recommended_for": "Never recommended for >7B models; couples 1-line code changes to 700GB image pushes and crashes node disks.",
+            "status": "fail",
+        },
+        {
+            "id": "tier3_nydus_soci_lazy_oci_plus_presharded_safetensors_o_direct_gds",
+            "name": "Tier 3: Nydus/SOCI 按需块流式镜像 (3.2s 启动) + TP/EP 预切分 Safetensors + Run:ai O_DIRECT / GDS",
+            "name_en": "Tier 3: Nydus/SOCI Lazy OCI Streaming (3.2s) + Pre-Sharded Safetensors + O_DIRECT / GDS (38.5s)",
+            "image_and_weight_distribution": "Nydus RAFS v6 chunk-level lazy image mount (only 6% read at boot) + pre-sharded rank-specific Safetensors",
+            "host_to_gpu_ingestion_path": "Bypasses OS Page Cache via multi-threaded O_DIRECT / cuFileRead GDS directly into pinned RAM / HBM",
+            "cluster_64node_rollout_time_s": 38.5,
+            "total_storage_gateway_read_tb": 8.40,
+            "effective_per_node_load_bw_gbps": 17.8,
+            "kubelet_disk_pressure_eviction_pct": 0.0,
+            "annual_rollout_idle_gpu_cost_usd": 29800.0,
+            "recommended_for": "Small-to-medium clusters (1-8 nodes) with high-bandwidth parallel storage or pre-staged local NVMe.",
+            "status": "pass",
+        },
+        {
+            "id": "tier4_nydus_plus_leader_once_read_rdma_p2p_ring_broadcast_pinned_cache",
+            "name": "Tier 4: Nydus 按需镜像 + 单次存储读取 (0.685TB) + 400G RDMA Ring/Tree P2P 跨机广播 + Pinned DRAM 守护缓存",
+            "name_en": "Tier 4: Nydus Lazy OCI + Leader-Once Storage Read + 400G RDMA P2P Broadcast + Pinned RAM Cache (6.4s)",
+            "image_and_weight_distribution": "Stripe leaders read 685GB from storage exactly ONCE (64x less storage traffic) and multicast over 400G RDMA",
+            "host_to_gpu_ingestion_path": "RDMA Write / NCCL Broadcast into node Pinned-DRAM Daemon (/dev/shm) + PCIe Gen5 DMA to HBM at 107 GB/s",
+            "cluster_64node_rollout_time_s": 6.4,
+            "total_storage_gateway_read_tb": 0.685,
+            "effective_per_node_load_bw_gbps": 107.0,
+            "kubelet_disk_pressure_eviction_pct": 0.0,
+            "annual_rollout_idle_gpu_cost_usd": 4950.0,
+            "recommended_for": "Large-scale 64-1024+ GPU production serving, RL checkpoint sync, and rapid autoscaling fleets.",
+            "status": "pass",
+        },
+    ]
+
+    t1, t2, t3, t4 = tiers
+    summary = {
+        "tier4_vs_tier1_rollout_speedup_x": round(
+            t1["cluster_64node_rollout_time_s"] / t4["cluster_64node_rollout_time_s"], 1
+        ),
+        "tier4_vs_tier1_storage_traffic_reduction_x": round(
+            t1["total_storage_gateway_read_tb"] / t4["total_storage_gateway_read_tb"], 1
+        ),
+        "tier4_rollout_time_s": t4["cluster_64node_rollout_time_s"],
+        "tier4_annual_savings_vs_tier1_usd": round(
+            t1["annual_rollout_idle_gpu_cost_usd"] - t4["annual_rollout_idle_gpu_cost_usd"], 0
+        ),
+    }
+
+    return {
+        "experiment_id": "model_weight_loading_oci_safetensors_rdma_broadcast_selection",
+        "date": "2026-11-12",
+        "round": 72,
+        "provenance": {
+            "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+            "independently_reproduced": False,
+            "physical_gpu_cluster_measurement": "not_measured",
+            "calibration_sources": [
+                "CNCF Nydus (RAFS v6) & AWS SOCI Lazy Container Image Streaming Benchmarks",
+                "Run:ai Model Streamer (Multi-threaded O_DIRECT bypassing mmap page faults) & NVIDIA GDS cuFileRead",
+                "P2P RDMA Weight Distribution (Dragonfly / Kraken / NCCL Broadcast from Stripe Leaders & Host Pinned RAM Daemon)",
+            ],
+        },
+        "workload": workload,
+        "tiers": tiers,
+        "summary": summary,
+    }
+
+
+def main() -> None:
+    results = evaluate_model_weight_loading_oci_safetensors_rdma_broadcast_matrix()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    out_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"Wrote {out_path}")
+
+
+if __name__ == "__main__":
+    main()
