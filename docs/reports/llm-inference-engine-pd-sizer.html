@@ -4430,5 +4430,86 @@ function updateCptForgettingSizer() {
 }
 updateCptForgettingSizer();
 </script>
+
+  <!-- Round 51: AI Cluster Day-0 Burn-In, Acceptance & Straggler Isolation Sizer -->
+  <div id="cluster-burnin-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#059669;color:#d1fae5;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 51 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🏗️ AI 智算集群交付验收 (Day-0 Burn-In) 与慢节点二分定位计算器（基础冒烟 vs. DCGM L4 vs. 滑窗二分 vs. 48h 方波烤机 + 90s 门禁）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/ai_cluster_burnin_acceptance_dcgm_validation_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/ai-cluster-burn-in-acceptance-dcgm-nccl-validation-selection-faq.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/ai-cluster-burn-in-acceptance-dcgm-nccl-validation-selection-faq.en.md" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./ai-cluster-burn-in-acceptance-dcgm-nccl-validation-selection-cards.html" style="color:#34d399;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">新建/扩容智算集群规模 (Cluster GPU Scale):</label>
+        <select id="cbScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateClusterBurninSizer()">
+          <option value="0.25">256 × H100/H200 GPUs (32 节点中型集群)</option>
+          <option value="1" selected>1,024 × H100/H200 GPUs (128 节点千卡液冷集群, 基准)</option>
+          <option value="4">4,096 × H100/B200 GPUs (512 节点大型智算中心)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">当前所处工程阶段 (Lifecycle Phase):</label>
+        <select id="cbPhaseSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateClusterBurninSizer()">
+          <option value="day0" selected>Day-0 集群交付签收 + Day-1 全自动无感免疫 (全生命周期)</option>
+          <option value="triage">线上突发慢节点快速抓贼 &amp; 网络单项排查</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">交付验收与慢节点定位架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">早夭隐患检出率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单次慢节点定位耗时</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">首月崩溃 / 集群有效 MFU</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">首月空转算力浪费</th>
+          </tr>
+        </thead>
+        <tbody id="cbSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="cbDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #059669;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateClusterBurninSizer() {
+  const sMult = parseFloat(document.getElementById('cbScaleSelect').value) || 1.0;
+  const phase = document.getElementById('cbPhaseSelect').value || 'day0';
+  const bestId = phase === 'triage' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 基础 nvidia-smi + 5分钟单机冒烟脚本', catch: '22.0% (漏检78% ✕)', loc: '1,110.0 分钟 (18.5h ✕)', mfu: `${(14.2*sMult).toFixed(1)} 次 / 34.8% MFU ✕`, waste: `$${Math.round(412000*sMult).toLocaleString()}/mo ✕` },
+    { id: 't2', name: '🟨 Tier 2: 单节点 DCGM Level-4 诊断 (20分钟单机压测)', catch: '58.5% (漏检跨柜光与热)', loc: '252.0 分钟 (4.2h)', mfu: `${(6.4*sMult).toFixed(1)} 次 / 44.5% MFU`, waste: `$${Math.round(185000*sMult).toLocaleString()}/mo` },
+    { id: 't3', name: '🟦 Tier 3: 分层 nccl-tests + 错位滑窗/O(log N) 二分定位', catch: '86.0% ✅', loc: '4.5 分钟 (快 246x ✅)', mfu: `${(1.8*sMult).toFixed(1)} 次 / 52.4% MFU ✅`, waste: `$${Math.round(54000*sMult).toLocaleString()}/mo ✅` },
+    { id: 't4', name: '🟩 Tier 4: 48h 700W 方波热冲击烤机 + 90s Pre-Flight 门禁', catch: '99.2% (交付前清零 🏆)', loc: '1.2 分钟自动换机 🏆', mfu: `${(0.2*sMult).toFixed(1)} 次 / 58.6% MFU 🏆`, waste: `$${Math.round(24000*sMult).toLocaleString()}/mo (省$${Math.round(388000*sMult).toLocaleString()} 🏆)` }
+  ];
+
+  document.getElementById('cbSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(5,150,105,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.catch}</code></td>
+      <td style="padding:10px;"><code>${r.loc}</code></td>
+      <td style="padding:10px;"><code>${r.mfu}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.waste}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('cbDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (Day-0 签字验收 + Day-1 生产运营)</strong>：必选 <strong>Tier 4 (48h 700W 方波热冲击 SuperBench + Pre-FEC BER 门禁 + 每次作业前 90s Pre-Flight 自动换机)</strong>，在付尾款前清零 <code>99.2%</code> 早夭隐患，首月直接挽回 <code>$${Math.round(388000*sMult).toLocaleString()}</code> 算力损失！`
+    : `<strong>架构师选型建议 (线上突发慢节点抓贼)</strong>：立即运行 <strong>Tier 3 (两轮错位滑窗两两配对 + O(log N) 通信域二分脚本)</strong>，在 <code>4.5 分钟</code> 内精准锁定慢卡或故障交换机端口！`;
+}
+updateClusterBurninSizer();
+</script>
 </body>
 </html>
