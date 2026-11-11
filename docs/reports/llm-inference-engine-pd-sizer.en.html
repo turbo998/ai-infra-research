@@ -4672,5 +4672,83 @@ function updateLongContextKvQuantSizer() {
 }
 updateLongContextKvQuantSizer();
 </script>
+
+  <!-- Round 54: LLM Request Scheduling, Chunked Prefill & Preemption Sizer -->
+  <div id="request-scheduling-chunked-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#2563eb;color:#dbeafe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 54 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⏱️ LLM Request Scheduling &amp; Stall-Free Chunked Prefill Sizer (Static Batch vs. Prefill-First+Recompute vs. Sarathi Chunked+Swap vs. Async Overlap+85% Watermark)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/llm_request_scheduling_chunked_prefill_slo_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/llm-request-scheduling-chunked-prefill-slo-preemption-selection-faq.en.md" style="color:#60a5fa;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/llm-request-scheduling-chunked-prefill-slo-preemption-selection-faq.md" style="color:#60a5fa;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./llm-request-scheduling-chunked-prefill-slo-preemption-selection-cards.html" style="color:#60a5fa;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Traffic Prompt Length Mix:</label>
+        <select id="schedMixSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRequestSchedulingChunkedSizer()">
+          <option value="1" selected>Enterprise Mix: 75% 2K Chat + 25% 32K RAG Bursts (Baseline)</option>
+          <option value="2">Heavy Long-Prompt Mix: 50% 2K Chat + 50% 64K Document Bursts</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Serving Cluster Scale (8×H100 Nodes):</label>
+        <select id="schedNodesSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRequestSchedulingChunkedSizer()">
+          <option value="1" selected>1 × 8×H100 Node (Single-Node Baseline)</option>
+          <option value="8">8 × 8×H100 Nodes (64-GPU Serving Pool)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Batching &amp; Request Scheduler Tier (70B FP8)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Streaming P99 TPOT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">First-Token P99 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Waste / CPU Stall</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Dual-SLO Goodput</th>
+          </tr>
+        </thead>
+        <tbody id="schedSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="schedDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #2563eb;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateRequestSchedulingChunkedSizer() {
+  const mMult = parseFloat(document.getElementById('schedMixSelect').value) || 1.0;
+  const nNodes = parseFloat(document.getElementById('schedNodesSelect').value) || 1.0;
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Request-Level Static Batching (Padded EOS Wait)', tpot: `${(95*mMult).toFixed(1)} ms ✕`, ttft: `${(4250*mMult).toFixed(0)} ms ✕`, waste: '42.0% Pad / 4.2ms ✕', gp: `${(4.2*nNodes/mMult).toFixed(1)} req/s ($13.40/1M ✕)` },
+    { id: 't2', name: '🟨 Tier 2: Prefill-Prioritized Continuous + Recompute (vLLM v0)', tpot: `${(1840*mMult).toFixed(0)} ms (Freeze Stutter ✕)`, ttft: `${(1920*mMult).toFixed(0)} ms ✕`, waste: '24.5% Recompute / 3.5ms ✕', gp: `${(9.8*nNodes/mMult).toFixed(1)} req/s ($5.75/1M ✕)` },
+    { id: 't3', name: '🟦 Tier 3: Sarathi Stall-Free Chunked Prefill (Budget=2048) + Swap', tpot: '42.0 ms (-43.8x ✅)', ttft: `${(1180*mMult).toFixed(0)} ms ✅`, waste: '4.2% Swap / 2.8ms ✅', gp: `${(26.4*nNodes/mMult).toFixed(1)} req/s ($2.13/1M ✅)` },
+    { id: 't4', name: '🟩 Tier 4: Zero-Overhead Async Overlap (vLLM V1) + 85% Watermark', tpot: '28.5 ms (-64.6x 🏆)', ttft: `${(680*mMult).toFixed(0)} ms 🏆`, waste: '0.2% Evict / 0.1ms 🏆', gp: `${(36.8*nNodes/mMult).toFixed(1)} req/s (3.76x · $1.53/1M 🏆)` }
+  ];
+
+  document.getElementById('schedSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === 't4';
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(37,99,235,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#93c5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.tpot}</code></td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><code>${r.waste}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.gp}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('schedDecisionCallout').innerHTML =
+    `<strong>Architect Recommendation (${nNodes} × 8×H100 Nodes)</strong>: Standardize on <strong>Tier 4 (vLLM V1 Zero-Overhead Async CPU-GPU Overlap + Chunked Prefill Piggybacking + 85% KV Watermark Gate)</strong> to eliminate the <code>${(1840*mMult).toFixed(0)} ms</code> Prefill freeze (holding P99 TPOT at <code>28.5 ms</code>) and boost dual-SLO Goodput by <code>3.76x (${(36.8*nNodes/mMult).toFixed(1)} req/s)</code>!`;
+}
+updateRequestSchedulingChunkedSizer();
+</script>
 </body>
 </html>

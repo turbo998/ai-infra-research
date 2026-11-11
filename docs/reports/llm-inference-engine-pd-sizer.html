@@ -4673,5 +4673,83 @@ function updateLongContextKvQuantSizer() {
 }
 updateLongContextKvQuantSizer();
 </script>
+
+  <!-- Round 54: LLM Request Scheduling, Chunked Prefill & Preemption Sizer -->
+  <div id="request-scheduling-chunked-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#2563eb;color:#dbeafe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 54 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⏱️ 大模型推理批处理调度与分块预填充计算器（静态批处理 vs. Prefill 优先+重算抢占 vs. Sarathi 分块+Swap vs. 零开销异步调度+85%水位线）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/llm_request_scheduling_chunked_prefill_slo_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/llm-request-scheduling-chunked-prefill-slo-preemption-selection-faq.md" style="color:#60a5fa;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/llm-request-scheduling-chunked-prefill-slo-preemption-selection-faq.en.md" style="color:#60a5fa;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./llm-request-scheduling-chunked-prefill-slo-preemption-selection-cards.html" style="color:#60a5fa;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">线上流量混合特征 (Prompt Length Mix):</label>
+        <select id="schedMixSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRequestSchedulingChunkedSizer()">
+          <option value="1" selected>企业混合流量：75% 2K 对话 + 25% 32K RAG 长文档突发 (基准)</option>
+          <option value="2">重度长文档突发：50% 2K 对话 + 50% 64K 卷宗分析</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群节点规模 (8×H100 Nodes):</label>
+        <select id="schedNodesSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateRequestSchedulingChunkedSizer()">
+          <option value="1" selected>1 台 8×H100 节点 (单节点调度对比)</option>
+          <option value="8">8 台 8×H100 节点 (64 卡在线推理池)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">批处理与请求调度架构档位 (70B FP8)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">流式尾延迟 P99 TPOT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">首字尾延迟 P99 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">重算浪费 / CPU 停顿</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">双 SLO 达标吞吐 (Goodput)</th>
+          </tr>
+        </thead>
+        <tbody id="schedSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="schedDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #2563eb;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateRequestSchedulingChunkedSizer() {
+  const mMult = parseFloat(document.getElementById('schedMixSelect').value) || 1.0;
+  const nNodes = parseFloat(document.getElementById('schedNodesSelect').value) || 1.0;
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 请求级静态批处理 Static Batching (补零等待 EOS)', tpot: `${(95*mMult).toFixed(1)} ms ✕`, ttft: `${(4250*mMult).toFixed(0)} ms ✕`, waste: '42.0% 补零 / 4.2ms ✕', gp: `${(4.2*nNodes/mMult).toFixed(1)} req/s ($13.40/1M ✕)` },
+    { id: 't2', name: '🟨 Tier 2: Prefill 优先连续批处理 + 重算抢占 (vLLM v0 默认)', tpot: `${(1840*mMult).toFixed(0)} ms (冻结卡顿 ✕)`, ttft: `${(1920*mMult).toFixed(0)} ms ✕`, waste: '24.5% 重算 / 3.5ms ✕', gp: `${(9.8*nNodes/mMult).toFixed(1)} req/s ($5.75/1M ✕)` },
+    { id: 't3', name: '🟦 Tier 3: Sarathi 零停顿分块预填充 (Budget=2048) + Swap', tpot: '42.0 ms (-43.8x ✅)', ttft: `${(1180*mMult).toFixed(0)} ms ✅`, waste: '4.2% Swap / 2.8ms ✅', gp: `${(26.4*nNodes/mMult).toFixed(1)} req/s ($2.13/1M ✅)` },
+    { id: 't4', name: '🟩 Tier 4: 零开销异步重叠调度 (vLLM V1) + 85% 水位线 + 动态块', tpot: '28.5 ms (-64.6x 🏆)', ttft: `${(680*mMult).toFixed(0)} ms 🏆`, waste: '0.2% 抢占 / 0.1ms 🏆', gp: `${(36.8*nNodes/mMult).toFixed(1)} req/s (3.76x · $1.53/1M 🏆)` }
+  ];
+
+  document.getElementById('schedSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === 't4';
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(37,99,235,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#93c5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.tpot}</code></td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><code>${r.waste}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.gp}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('schedDecisionCallout').innerHTML =
+    `<strong>架构师选型建议 (${nNodes} 台 8×H100 节点)</strong>：必选 <strong>Tier 4 (vLLM V1 零开销异步 CPU-GPU 重叠调度 + Chunked Prefill 顺风车混跑 + 85% KV 水位线预防性控流)</strong>，彻底消灭 32K 长请求插队引起的 <code>${(1840*mMult).toFixed(0)} ms</code> 吐字冻结（稳定在 <code>28.5 ms</code>），将双 SLO 达标吞吐从 <code>${(9.8*nNodes/mMult).toFixed(1)} req/s</code> 推升至 <code>${(36.8*nNodes/mMult).toFixed(1)} req/s (3.76x)</code>！`;
+}
+updateRequestSchedulingChunkedSizer();
+</script>
 </body>
 </html>

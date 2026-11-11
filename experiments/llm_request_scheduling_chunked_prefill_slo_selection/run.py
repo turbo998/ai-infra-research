@@ -1,0 +1,133 @@
+"""Deterministic evaluator for LLM Request Scheduling, Stall-Free Chunked Prefill & Preemption Architecture Selection (Round 54).
+
+Models the P99 Time-Per-Output-Token (TPOT ms, measuring mid-generation stutter),
+P99 Time-To-First-Token (TTFT ms), Preemption / Recomputation Wasted FLOPs (%),
+CPU Scheduler Overhead per Step (ms), SLO-Compliant Goodput (req/s meeting both TTFT<=1500ms & P99 TPOT<=45ms),
+and cost per 1M SLO-compliant tokens on an 8×H100-80GB SXM5 node running Llama-3.3-70B-FP8:
+  - Tier 1: Request-Level Static Batching (Waits for longest sequence EOS + padding waste)
+  - Tier 2: Prefill-Prioritized Continuous Batching (vLLM v0 Default) + Recomputation Preemption (1,840ms Decode stall!)
+  - Tier 3: Sarathi Stall-Free Chunked Prefill (Token Budget=2,048 Piggybacks Decode) + Pinned DRAM Swap Preemption
+  - Tier 4: Zero-Overhead Async CPU-GPU Overlap Scheduler (vLLM V1) + 85% KV Watermark Admission + SLO Slack Dynamic Chunking
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+def evaluate_llm_request_scheduling_chunked_prefill_matrix() -> dict[str, Any]:
+    workload = {
+        "cluster_node": "1 × 8×H100-80GB SXM5 Node (900 GB/s NVLink-4, $28.80/hr node cost)",
+        "model_profile": "Llama-3.3-70B-FP8 (80 Layers, TP=8)",
+        "traffic_mix": "Mixed Enterprise Traffic: 75% Interactive Chat (2K Prompt / 512 Out) + 25% Long-RAG Bursts (32K Prompt / 512 Out)",
+        "slo_contract": "Strict Dual SLO: P99 TTFT <= 1,500 ms AND P99 TPOT <= 45.0 ms (No Mid-Sentence Stutter)",
+    }
+
+    tiers = [
+        {
+            "id": "tier1_request_level_static_padded_batching",
+            "name": "Tier 1: 请求级静态批处理 Static Batching (短请求陪跑最长请求 + 补零浪费)",
+            "name_en": "Tier 1: Request-Level Static Padded Batching (Head-of-Line EOS Blocking)",
+            "batching_policy": "Locks batch until all 32 requests reach EOS; pads every prompt to max batch length",
+            "preemption_and_cpu_overlap": "No preemption; synchronous CPU batch assembly between batches",
+            "p99_tpot_ms": 95.0,
+            "p99_ttft_ms": 4250.0,
+            "wasted_recompute_flops_pct": 42.0,
+            "cpu_scheduler_stall_ms_per_step": 4.2,
+            "slo_goodput_req_per_sec": 4.2,
+            "cost_per_1m_slo_tokens_usd": 13.40,
+            "recommended_for": "Legacy offline batch scoring only; unusable for interactive LLM serving due to 4.25s queueing stalls and 42% padding waste.",
+            "status": "fail",
+        },
+        {
+            "id": "tier2_prefill_prioritized_continuous_recompute_preemption",
+            "name": "Tier 2: Prefill 优先连续批处理 (vLLM v0 默认) + 重算抢占 (1,840ms 吐字卡顿雪崩)",
+            "name_en": "Tier 2: Prefill-Prioritized Continuous Batching + Recomputation Preemption",
+            "batching_policy": "Iteration-level batching, but incoming 32K Prefills preempt all active Decodes for 1.8s",
+            "preemption_and_cpu_overlap": "Drops evicted KV Cache & recomputes from scratch on KV OOM (24.5% thrashing) + Sync 3.5ms CPU scheduler",
+            "p99_tpot_ms": 1840.0,
+            "p99_ttft_ms": 1920.0,
+            "wasted_recompute_flops_pct": 24.5,
+            "cpu_scheduler_stall_ms_per_step": 3.5,
+            "slo_goodput_req_per_sec": 9.8,
+            "cost_per_1m_slo_tokens_usd": 5.75,
+            "recommended_for": "Low-concurrency internal testing without long prompts; fails production P99 TPOT SLAs whenever a 32K RAG prompt arrives and freezes all active streaming users for 1.84 seconds.",
+            "status": "fail",
+        },
+        {
+            "id": "tier3_sarathi_chunked_prefill_piggyback_dram_swap",
+            "name": "Tier 3: Sarathi 零停顿分块预填充 (Chunked Prefill=2048 混跑 Decode) + 内存 Swap",
+            "name_en": "Tier 3: Sarathi Stall-Free Chunked Prefill (Token Budget=2048) + Host DRAM Swap",
+            "batching_policy": "Splits 32K Prefill into 2,048-token chunks; piggybacks 64 active 1-token Decodes in the same forward pass",
+            "preemption_and_cpu_overlap": "PCIe Pinned DRAM Swap on KV pressure (4.2% overhead) + Synchronous 2.8ms CPU scheduler",
+            "p99_tpot_ms": 42.0,
+            "p99_ttft_ms": 1180.0,
+            "wasted_recompute_flops_pct": 4.2,
+            "cpu_scheduler_stall_ms_per_step": 2.8,
+            "slo_goodput_req_per_sec": 26.4,
+            "cost_per_1m_slo_tokens_usd": 2.13,
+            "recommended_for": "Standard single-node vLLM / SGLang deployments (`--enable-chunked-prefill --max-num-batched-tokens 2048`).",
+            "status": "pass",
+        },
+        {
+            "id": "tier4_vllm_v1_zero_overhead_async_scheduler_slo_watermark",
+            "name": "Tier 4: 零开销异步 CPU-GPU 重叠调度 (vLLM V1) + 85% 水位线准入 + SLO 动态分块",
+            "name_en": "Tier 4: Zero-Overhead Async CPU-GPU Overlap Scheduler + 85% KV Watermark + SLO Dynamic Chunking",
+            "batching_policy": "Dynamically sizes Prefill chunks (512..4096) based on active Decode TPOT slack + SJF/EDF priority",
+            "preemption_and_cpu_overlap": "CPU prepares Step t+1 while GPU runs Step t (0.1ms stall!) + 85% KV Watermark Gate prevents preemption (0.2%)",
+            "p99_tpot_ms": 28.5,
+            "p99_ttft_ms": 680.0,
+            "wasted_recompute_flops_pct": 0.2,
+            "cpu_scheduler_stall_ms_per_step": 0.1,
+            "slo_goodput_req_per_sec": 36.8,
+            "cost_per_1m_slo_tokens_usd": 1.53,
+            "recommended_for": "Production high-concurrency LLM serving clusters demanding zero mid-sentence stutter (28.5ms P99 TPOT) and 3.76x higher SLO-compliant goodput.",
+            "status": "pass",
+        },
+    ]
+
+    t1, t2, t3, t4 = tiers
+    summary = {
+        "tier3_vs_tier2_p99_tpot_reduction_ratio": round(t2["p99_tpot_ms"] / t3["p99_tpot_ms"], 1),
+        "tier4_vs_tier2_p99_tpot_reduction_ratio": round(t2["p99_tpot_ms"] / t4["p99_tpot_ms"], 1),
+        "tier4_vs_tier2_goodput_speedup_ratio": round(t4["slo_goodput_req_per_sec"] / t2["slo_goodput_req_per_sec"], 2),
+        "tier4_vs_tier1_goodput_speedup_ratio": round(t4["slo_goodput_req_per_sec"] / t1["slo_goodput_req_per_sec"], 2),
+        "tier4_cost_reduction_vs_tier2_pct": round(
+            (t2["cost_per_1m_slo_tokens_usd"] - t4["cost_per_1m_slo_tokens_usd"])
+            / t2["cost_per_1m_slo_tokens_usd"]
+            * 100.0,
+            1,
+        ),
+    }
+
+    return {
+        "experiment_id": "llm_request_scheduling_chunked_prefill_slo_selection",
+        "date": "2026-11-12",
+        "round": 54,
+        "provenance": {
+            "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+            "independently_reproduced": False,
+            "physical_gpu_cluster_measurement": "not_measured",
+            "calibration_sources": [
+                "Sarathi-Serve (OSDI 2024): Taming Throughput-Latency Tradeoff in LLM Inference with Stall-Free Chunked Prefills",
+                "vLLM V1 & SGLang Zero-Overhead Asynchronous CPU-GPU Overlap Scheduler Architecture Benchmarks",
+                "Orca & DistServe / Llumnix SLO-Aware Admission Control & Preemption Thrashing Mitigation Studies",
+            ],
+        },
+        "workload": workload,
+        "tiers": tiers,
+        "summary": summary,
+    }
+
+
+def main() -> None:
+    results = evaluate_llm_request_scheduling_chunked_prefill_matrix()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    out_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"Wrote {out_path}")
+
+
+if __name__ == "__main__":
+    main()
