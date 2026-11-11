@@ -6282,5 +6282,86 @@ function updateVectorDbBillionScaleSizer() {
 }
 updateVectorDbBillionScaleSizer();
 </script>
+
+  <!-- Round 74: Multi-Tenant LLM Fair Queuing (VTC Virtual Token Counter) & Rate Limiting Sizer -->
+  <div id="multi-tenant-vtc-fair-queue-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#7c3aed;color:#ede9fe;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 74 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚖️ 多租户大模型公平队列 (VTC 虚拟令牌计数) 与弹性借用限流计算器（FCFS 饿死 vs. RPM 按次轮询 vs. 标准 VTC+静态限流 vs. 分层 VTC+弹性借用）</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/multi_tenant_llm_vtc_fair_queuing_rate_limiting_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/multi-tenant-llm-fair-queuing-vtc-token-rate-limiting-selection-faq.md" style="color:#c4b5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/multi-tenant-llm-fair-queuing-vtc-token-rate-limiting-selection-faq.en.md" style="color:#c4b5fd;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./multi-tenant-llm-fair-queuing-vtc-token-rate-limiting-selection-cards.html" style="color:#c4b5fd;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">共享推理平台 H100 规模 (Shared Cluster GPUs):</label>
+        <select id="vtcScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateMultiTenantVtcFairQueueSizer()">
+          <option value="0.25">16 × H100 80GB (部门级多租户网关)</option>
+          <option value="1" selected>64 × H100 80GB (集团级 20 部门混部平台基准)</option>
+          <option value="4">256 × H100 80GB (AI 云多租户 MaaS 平台)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">算力复用策略 (Idle Capacity Policy):</label>
+        <select id="vtcModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateMultiTenantVtcFairQueueSizer()">
+          <option value="borrow" selected>闲时 100% 弹性借用给批量任务 + 忙时 512 词分块 18ms 抢占 (Tier 4)</option>
+          <option value="hardcap">严格静态 TPM 硬上限隔离 (不借用闲置算力 · Tier 3)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">多租户调度与限流架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">交互 P99 TTFT</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Jain 公平指数</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU 利用率 / 有效吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">年化等效集群成本</th>
+          </tr>
+        </thead>
+        <tbody id="vtcSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="vtcDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #7c3aed;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateMultiTenantVtcFairQueueSizer() {
+  const sMult = parseFloat(document.getElementById('vtcScaleSelect').value) || 1.0;
+  const mode = document.getElementById('vtcModeSelect').value || 'borrow';
+  const bestId = mode === 'hardcap' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 全局 FCFS 先来先服务队列 (64K 批量洪水独占)', ttft: '4,850.0 ms (饿死 ✕)', fair: '0.38 ✕', util: `88.5% · ${Math.round(42*sMult)}k tok/s ✕`, cost: `$${(1.78*sMult).toFixed(2)}M/yr ✕` },
+    { id: 't2', name: '🟨 Tier 2: 按请求数轮询 Round-Robin / RPM (忽视 105x 大小差距)', ttft: '1,620.0 ms ✕', fair: '0.56 ✕', util: `84.0% · ${Math.round(68*sMult)}k tok/s`, cost: `$${(1.52*sMult).toFixed(2)}M/yr` },
+    { id: 't3', name: '🟦 Tier 3: 标准 VTC 虚拟令牌公平队列 + 静态 TPM 硬上限', ttft: '285.0 ms ✅', fair: '0.96 ✅', util: `71.5% (28.5%空转) · ${Math.round(112*sMult)}k tok/s`, cost: `$${(1.395*sMult).toFixed(2)}M/yr ✅` },
+    { id: 't4', name: '🟩 Tier 4: SLO 分层 VTC + 弹性空闲借用 + 512词分块 18ms 抢占', ttft: '210.0 ms (快 23.1x 🏆)', fair: '0.99 🏆', util: `94.8% (+23.3pt 🏆) · ${Math.round(158*sMult)}k tok/s`, cost: `$${(1.01*sMult).toFixed(2)}M/yr (省 $${Math.round(385*sMult)}k 🏆)` }
+  ];
+
+  document.getElementById('vtcSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(124,58,237,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#c4b5fd':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.ttft}</code></td>
+      <td style="padding:10px;"><code>${r.fair}</code></td>
+      <td style="padding:10px;"><code>${r.util}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('vtcDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${Math.round(64*sMult)} 卡多租户共享集群)</strong>：必选 <strong>Tier 4 (OSDI VTC 异构加权令牌记账 [0.05*Cache + 1.0*In + 2.5*Out] + 唤醒对齐 + 弹性空闲借用 + 512词分块 18ms 抢占)</strong>，在稳守 <code>210ms</code> 交互 TTFT 的同时将集群满载率拉升至 <code>94.8%</code>，每年净省 <code>$${Math.round(385000*sMult).toLocaleString()}</code>！`
+    : `<strong>架构师选型建议 (强隔离静态配额)</strong>：部署 <strong>Tier 3 (标准 VTC 虚拟令牌队列 + 唤醒计数器抬升)</strong>，杜绝大请求饿死小请求！`;
+}
+updateMultiTenantVtcFairQueueSizer();
+</script>
 </body>
 </html>
