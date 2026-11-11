@@ -5955,5 +5955,86 @@ function updateVlmVisualTokenCompressionSizer() {
 }
 updateVlmVisualTokenCompressionSizer();
 </script>
+
+  <!-- Round 70: GPU HBM Fragmentation, CUDA VMM (expandable_segments) & vAttention Sizer -->
+  <div id="gpu-vmm-expandable-segments-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#10b981;color:#d1fae5;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 70 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🧩 GPU Memory Fragmentation, CUDA VMM (`expandable_segments`) &amp; `vAttention` Page-Table Sizer (empty_cache Stalls vs. Fixed-Block OOM vs. VMM 2MB Slabs vs. vAttention+RL Sleep)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/gpu_vmm_expandable_segments_vattention_defrag_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/gpu-memory-oversubscription-vmm-expandable-segments-defrag-selection-faq.en.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/gpu-memory-oversubscription-vmm-expandable-segments-defrag-selection-faq.md" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./gpu-memory-oversubscription-vmm-expandable-segments-defrag-selection-cards.html" style="color:#6ee7b7;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Cluster Scale (H100 80GB GPUs):</label>
+        <select id="vmmGpuSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGpuVmmDefragSizer()">
+          <option value="0.25">16 × H100 80GB GPUs</option>
+          <option value="1" selected>64 × H100 80GB GPUs (Baseline Cluster)</option>
+          <option value="4">256 × H100 80GB GPUs (Large Fleet)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Primary Workload Profile:</label>
+        <select id="vmmModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateGpuVmmDefragSizer()">
+          <option value="rl_serve" selected>Dynamic Training + vAttention Serving + Colocated RL Sleep/Wake (Tier 4)</option>
+          <option value="pytorch_only">Standard Dynamic-Shape PyTorch Training Only (1-Line Env Var Tier 3)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">GPU Memory &amp; Page-Table Architecture (80GB H100)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Fragmented HBM</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Usable HBM Ceiling</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Sync Stall / Step</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Throughput / Annual Cost</th>
+          </tr>
+        </thead>
+        <tbody id="vmmSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="vmmDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #10b981;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateGpuVmmDefragSizer() {
+  const gMult = parseFloat(document.getElementById('vmmGpuSelect').value) || 1.0;
+  const mode = document.getElementById('vmmModeSelect').value || 'rl_serve';
+  const bestId = mode === 'pytorch_only' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Default Allocator + Per-Step empty_cache() (Global cudaFree Sync)', frag: '8.5% (6.8 GB)', use: '73.2 GB / 80 GB', stl: '145.0 ms/step (Stall ✕)', cost: `0.72x · $${(1.94*gMult).toFixed(2)}M/yr ✕` },
+    { id: 't2', name: '🟨 Tier 2: Standard PyTorch Caching Allocator Fixed Blocks (1:1 Lock)', frag: '18.5% (14.8 GB ✕)', use: '65.2 GB (Premature OOM ✕)', stl: '12.0 ms/step', cost: `1.00x · $${(1.40*gMult).toFixed(2)}M/yr` },
+    { id: 't3', name: '🟦 Tier 3: CUDA VMM Expandable Segments (expandable_segments:True)', frag: '3.2% (5.8x Lower ✅)', use: '77.4 GB (+12.2 GB ✅)', stl: '0.4 ms/step (15µs map ✅)', cost: `1.18x · $${(1.186*gMult).toFixed(2)}M/yr ✅` },
+    { id: 't4', name: '🟩 Tier 4: VMM + vAttention MMU Contiguous KV + RL Graph-Safe Sleep', frag: '1.2% (15.4x Lower 🏆)', use: '79.0 GB (+13.8 GB 🏆)', stl: '0.1 ms/step 🏆', cost: `1.32x 🏆 · $${(1.06*gMult).toFixed(2)}M/yr (Saves $${Math.round(340*gMult)}k 🏆)` }
+  ];
+
+  document.getElementById('vmmSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(16,185,129,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#6ee7b7':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.frag}</code></td>
+      <td style="padding:10px;"><code>${r.use}</code></td>
+      <td style="padding:10px;"><code>${r.stl}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('vmmDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>Architect Recommendation (${Math.round(64*gMult)} × H100 80GB Cluster)</strong>: Standardize on <strong>Tier 4 (CUDA VMM expandable_segments + vAttention MMU Contiguous KV Cache + RL CuMemAllocator Graph-Safe Sleep/Wake)</strong> to reclaim <code>+13.8 GB/GPU</code>, boost throughput to <code>1.32x</code>, and save <code>$${Math.round(340*gMult).toLocaleString()},000/yr</code>!`
+    : `<strong>Architect Recommendation (General Dynamic-Shape PyTorch Training)</strong>: Enable <code>export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True</code> (<strong>Tier 3</strong>) to cut fragmentation from 18.5% to <code>3.2%</code> and reclaim <code>+12.2 GB/GPU</code> with zero code changes!`;
+}
+updateGpuVmmDefragSizer();
+</script>
 </body>
 </html>
