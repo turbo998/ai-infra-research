@@ -5150,5 +5150,86 @@ function updateDistributedOptimizerMuonSizer() {
 }
 updateDistributedOptimizerMuonSizer();
 </script>
+
+  <!-- Round 60: LLM Pipeline Parallelism (1F1B vs Zero-Bubble ZB-V vs DeepSeek DualPipe) Sizer -->
+  <div id="pipeline-parallelism-dualpipe-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#db2777;color:#fce7f3;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 60 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">🔀 LLM Pipeline Parallelism (`PP`) Bubble Elimination &amp; Bidirectional Overlap Sizer (GPipe vs. 1F1B vs. Zero-Bubble ZB-V vs. DeepSeek-V3 DualPipe)</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/llm_pipeline_parallelism_zero_bubble_dualpipe_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/llm-pipeline-parallelism-1f1b-interleaved-zero-bubble-dualpipe-selection-faq.en.md" style="color:#f472b6;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/llm-pipeline-parallelism-1f1b-interleaved-zero-bubble-dualpipe-selection-faq.md" style="color:#f472b6;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./llm-pipeline-parallelism-1f1b-interleaved-zero-bubble-dualpipe-selection-cards.html" style="color:#f472b6;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Model Architecture &amp; Cross-Node Comm Profile:</label>
+        <select id="ppArchSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePipelineParallelismDualpipeSizer()">
+          <option value="moe" selected>Cross-Node Large MoE (DeepSeek-V3 671B · PP=16 × EP=64 Heavy All-to-All)</option>
+          <option value="dense">Pure Dense LLM (Llama-405B / 70B · PP=16 Without Cross-Node Expert All-to-All)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Pretraining Token Volume:</label>
+        <select id="ppTokSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updatePipelineParallelismDualpipeSizer()">
+          <option value="0.5">5 Trillion Tokens (Mid-Scale Run)</option>
+          <option value="1" selected>10 Trillion Tokens (Frontier Baseline)</option>
+          <option value="1.5">15 Trillion Tokens (Full DeepSeek-V3 Scale)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Pipeline Parallelism Schedule (PP=16, M=32)</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Bubble % / Exposed Comm</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Peak Activation HBM</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Effective Cluster MFU</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Pretraining GPU Cost</th>
+          </tr>
+        </thead>
+        <tbody id="ppSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="ppDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #db2777;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updatePipelineParallelismDualpipeSizer() {
+  const arch = document.getElementById('ppArchSelect').value || 'moe';
+  const tMult = parseFloat(document.getElementById('ppTokSelect').value) || 1.0;
+  const bestId = arch === 'dense' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: Naive GPipe All-Forward-Then-All-Backward', bub: '31.9% Bubble · 18.5% Comm ✕', mem: '64.0 GB/GPU (OOM ✕)', mfu: '34.2% ✕', cost: `$${(5.84*tMult).toFixed(2)}M ✕` },
+    { id: 't2', name: '🟨 Tier 2: Standard 1F1B Unidirectional Pipeline (Megatron)', bub: '21.5% Bubble · 13.3% Comm ✕', mem: '32.0 GB/GPU (P=16 Cap ✅)', mfu: '41.5% ✕', cost: `$${(4.815*tMult).toFixed(2)}M ✕` },
+    { id: 't3', name: '🟦 Tier 3: Zero-Bubble ZB-V (V-Shape Folded + B/W Backward Split)', bub: '1.8% Bubble 🏆 · 8.4% Comm', mem: '32.0 GB/GPU (Balanced 🏆)', mfu: '54.8% (Best for Dense ✅)', cost: `$${(3.645*tMult).toFixed(2)}M ✅` },
+    { id: 't4', name: '🟩 Tier 4: DeepSeek-V3 DualPipe Bidirectional + 100% Comm Overlap', bub: '2.4% Bubble 🏆 · 0.8% Comm 🏆', mem: '34.0 GB/GPU ✅', mfu: '58.4% (1.41x vs 1F1B 🏆)', cost: `$${(3.42*tMult).toFixed(2)}M (Saves $${(1.395*tMult).toFixed(2)}M 🏆)` }
+  ];
+
+  document.getElementById('ppSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(219,39,119,0.22);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#f472b6':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bub}</code></td>
+      <td style="padding:10px;"><code>${r.mem}</code></td>
+      <td style="padding:10px;"><code>${r.mfu}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ppDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>Architect Recommendation (Cross-Node Large MoE Pretraining)</strong>: Standardize on <strong>Tier 4 (DeepSeek-V3 DualPipe Bidirectional Pipeline + B/W Split)</strong> to overlap Stream-A cross-node All-to-All RDMA with Stream-B W/MLP compute—cutting total stalls by <code>10.88x (34.8% → 3.2%)</code> and saving <code>$${(1.395*tMult).toFixed(2)}M</code>!`
+    : `<strong>Architect Recommendation (Pure Dense LLM Pretraining)</strong>: Deploy <strong>Tier 3 (Zero-Bubble ZB-V Folded Placement + Deferred W Split)</strong> to cut pipeline bubbles to <code>1.8%</code> with balanced <code>32.0 GB</code> activation memory!`;
+}
+updatePipelineParallelismDualpipeSizer();
+</script>
 </body>
 </html>
