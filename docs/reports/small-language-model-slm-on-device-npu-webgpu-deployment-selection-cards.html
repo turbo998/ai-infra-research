@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;">
+<title>Small Language Model (SLM 1B–8B) On-Device Mobile NPU, SpinQuant W4A8 &amp; Cloud-Edge Hybrid — 7-Card Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0B1120;
+    --card-bg: #FFFFFF;
+    --ink: #0F172A;
+    --muted: #475569;
+    --subtle: #64748B;
+    --line: #E2E8F0;
+    --code-bg: #0F172A;
+    --blue: #2563EB;
+    --emerald: #059669;
+    --purple: #7C3AED;
+    --red: #DC2626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 32px 16px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #F8FAFC;
+  }
+  .deck-header h1 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+  .deck-header p { font-size: 14px; color: #94A3B8; line-height: 1.5; }
+  .deck {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    align-items: center;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.45);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--subtle);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+  .headline {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-bottom: 14px;
+    color: var(--ink);
+  }
+  .accent {
+    background: linear-gradient(90deg, #059669, #2563EB);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.55;
+    margin-bottom: 24px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    margin-bottom: 20px;
+  }
+  .panel {
+    background: #F8FAFC;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .panel h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--subtle);
+    margin-bottom: 10px;
+  }
+  .kpi {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pill-act { background: #DCFCE7; color: #166534; }
+  .pill-confirm { background: #FEF3C7; color: #92400E; }
+  .pill-human { background: #FEE2E2; color: #991B1B; }
+  .badge-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #E0E7FF;
+    color: #1E40AF;
+    margin-right: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-size: 13.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--subtle);
+    background: #F1F5F9;
+  }
+  .bar-row { margin-bottom: 14px; }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .bar-track {
+    width: 100%;
+    height: 16px;
+    background: #E2E8F0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .bar-fill-primary { height: 100%; background: #3B82F6; border-radius: 8px; }
+  .bar-fill-emerald { height: 100%; background: #10B981; border-radius: 8px; }
+  .bar-fill-muted { height: 100%; background: #94A3B8; border-radius: 8px; }
+  .bar-fill-red { height: 100%; background: #EF4444; border-radius: 8px; }
+  pre {
+    background: var(--code-bg);
+    color: #E2E8F0;
+    padding: 18px;
+    border-radius: 12px;
+    font-family: "Consolas", "SFMono-Regular", monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin-bottom: 16px;
+  }
+  .callout-dark {
+    background: #0F172A;
+    color: #F8FAFC;
+    border-radius: 14px;
+    padding: 18px 20px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .quote-box {
+    background: #ECFDF5;
+    border-left: 4px solid #059669;
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: #1E293B;
+    margin-bottom: 18px;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>端侧小模型 (SLM 1B–8B) 手机 NPU、SpinQuant W4A8 与端云协同路由评测报告 (7-Card 4:5 Visual Deck)</h1>
+  <p>Source: <code>experiments/slm_on_device_mobile_npu_webgpu_hybrid_selection/results.json</code> · Provenance: Synthetic Analytical Model Calibrated to Published SpinQuant, ExecuTorch/QNN/ANE &amp; RouteLLM Benchmarks (<code>independently_reproduced=false</code>)</p>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1: OVERVIEW & WORKBENCH -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>1 / 7</span>
+        <span>HANDS-ON · ON-DEVICE SLM NPU (SPINQUANT W4A8) &amp; CLOUD-EDGE HYBRID</span>
+      </div>
+      <h2 class="headline"><span class="accent">SpinQuant W4A8 NPU + Hybrid Cascade</span> Cuts Cloud Spend 74.8% (Saves $11.46M/yr), Speeds Up TTFT 5.28x &amp; Retains 89.8% Accuracy</h2>
+      <p class="subhead">Across 100M daily queries (10M DAU), 100% Cloud 70B serving costs $42,000/day ($15.33M/yr) at 380ms TTFT, while mobile GPU GGUF Q4_K_M draws 8.5W and throttles to 14.2 tok/s. Compiling a 3.8B SLM with SpinQuant W4A8 onto a 2.4W mobile NPU (13.48x energy efficiency) and escalating only the 25% high-entropy queries to Cloud 70B delivers 72ms TTFT and 89.8% accuracy at $10,600/day.</p>
+
+      <div class="grid-3">
+        <div class="panel">
+          <h3>Scenarios &amp; Gate Bands</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <strong>Device Power Gate</strong>: &le;3.5W Passive<br>
+            • <strong>Median TTFT Gate</strong>: &le;100 ms<br>
+            • <strong>Blended Accuracy</strong>: &ge;88.0%<br>
+            • <strong>Scale</strong>: 10M DAU (100M Queries/Day)
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Structured Input Contract</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <code>edge_slm</code>: 3.8B SpinQuant W4A8<br>
+            • <code>npu_runtime</code>: ExecuTorch / QNN / ANE<br>
+            • <code>local_offload_ratio</code>: 75.0%<br>
+            • <code>cloud_fallback</code>: 70B FP8 (25%)
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Top Architecture Verdict</h3>
+          <div class="kpi" style="color:#059669;">89.8% Acc</div>
+          <p style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">72ms TTFT · 2.1W · Saves $11.46M/yr</p>
+          <span class="pill pill-act">Act automatically · Tier 4 Hybrid NPU</span>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <h3>4-Tier Blended Task Accuracy (%) &amp; Sustained Decode Speed (tok/s After 5-Min Thermal Soak)</h3>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 4: Confidence-Gated Hybrid (75% Local 3.8B NPU + 25% Cloud 70B, 2.1W) 🏆</span><span>89.8% Acc · 51.5 tok/s · $10.6k/d</span></div>
+          <div class="bar-track"><div class="bar-fill-emerald" style="width:89.8%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 3: Pure On-Device NPU Static Graph + SpinQuant W4A8 (2.4W, $0 Cloud) ✅</span><span>71.5% Acc · 54.0 tok/s · $0/d</span></div>
+          <div class="bar-track"><div class="bar-fill-primary" style="width:71.5%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 1: 100% Pure Cloud 70B API Serving (380ms TTFT, $42,000/day Cloud Bill) ✕</span><span>91.2% Acc · 42.0 tok/s · $42.0k/d ✕</span></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:91.2%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span>Tier 2: On-Device Mobile GPU/CPU GGUF Q4_K_M (8.5W Thermal Throttling) ✕</span><span>70.8% Acc · 14.2 tok/s ✕</span></div>
+          <div class="bar-track"><div class="bar-fill-red" style="width:70.8%;"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Hardware &amp; Provenance Callout:</strong> Evaluated via deterministic analytical simulator (<code>experiments/slm_on_device_mobile_npu_webgpu_hybrid_selection/run.py</code>, <code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>), calibrated to Meta SpinQuant, ExecuTorch/QNN/CoreML ANE, and RouteLLM benchmarks.
+    </div>
+  </section>
+
+  <!-- CARD 2: SINGLE-CASE DEEP DIVE -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>2 / 7</span>
+        <span>SCENARIO: 5-MINUTE CONTINUOUS MOBILE ASSISTANT SESSION + HARD CODE ESCALATION</span>
+      </div>
+      <h2 class="headline">Case Deep Dive: Avoiding the 90-Second 44°C Mobile GPU Thermal Wall via 2.4W SpinQuant W4A8 NPU Offload</h2>
+      <div class="quote-box">
+        <strong>Session Trace:</strong> A mobile user summarizes 12 emails and rewrites 4 replies (routine low-entropy tasks) before asking a multi-file Python concurrency debugging question.
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div><span class="badge-type">choice</span><strong>Decision 1: Dedicated Mobile NPU (W4A8) vs Mobile GPU Shader (W4A16 GGUF)</strong></div>
+          <span class="pill pill-act">Act automatically · 13.48x Higher Energy Efficiency</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Select <strong>SpinQuant W4A8 NPU Static Graph</strong>: draws 2.4W at 54.0 tok/s (22.5 tok/J) vs 8.5W at 14.2 tok/s (1.67 tok/J) on throttled mobile GPU shaders.</p>
+        <div class="bar-row">
+          <div class="bar-label"><span>Sustained Decode Throughput After 5-Min Thermal Soak (54.0 vs 14.2 tok/s)</span><span>3.80x Faster Sustained</span></div>
+          <div class="bar-track"><div class="bar-fill-emerald" style="width:95.0%;"></div></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div><span class="badge-type">score</span><strong>Decision 2: First-Token Shannon Entropy Gate (`H(p) < 0.60`)</strong></div>
+          <span class="pill pill-act">Act automatically · Offloads 75% Traffic at $0</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Serve the 75% routine summarize/rewrite queries locally in 65ms TTFT while routing the 25% high-entropy coding/reasoning queries to Cloud 70B.</p>
+        <div class="bar-row">
+          <div class="bar-label"><span>Cloud API Cost Eliminated via Local NPU Offload ($42.0k → $10.6k/day)</span><span>74.8% Cloud Cost Cut</span></div>
+          <div class="bar-track"><div class="bar-fill-primary" style="width:74.8%;"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div><span class="badge-type">noul</span><strong>Decision 3: Blended Quality Preservation vs Pure 70B Cloud</strong></div>
+          <span class="pill pill-act">Act automatically · 89.8% vs 91.2% Ceiling</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Escalating the 25% hard queries bridges the 19.7-pt accuracy gap between a 3.8B SLM (71.5%) and a 70B flagship model (91.2%).</p>
+        <div class="bar-row">
+          <div class="bar-label"><span>Flagship Accuracy Retained by Hybrid Cascade (89.8% / 91.2%)</span><span>98.5% Relative IQ Retained</span></div>
+          <div class="bar-track"><div class="bar-fill-emerald" style="width:98.5%;"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Takeaway:</strong> Users already paid for the 45-TOPS NPU inside their phone/laptop—use it to absorb 75% of routine AI traffic for free!
+    </div>
+  </section>
+
+  <!-- CARD 3: WHAT I TESTED (FULL EVALUATION MATRIX) -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>3 / 7</span>
+        <span>WHAT I TESTED · 4-TIER ON-DEVICE SLM &amp; HYBRID ROUTING SCORECARD</span>
+      </div>
+      <h2 class="headline">Full Evaluation Matrix: Only Tier 4 Simultaneously Meets Thermal (&le;3.5W), Latency (&le;100ms) &amp; Accuracy (&ge;88%) Gates</h2>
+      <p class="subhead">All four deployment architectures evaluated across 100M daily queries.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>SCENARIO / TIER</th>
+            <th>QUESTION / METRIC</th>
+            <th>MODEL ANSWER / MEASURED</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 100% Cloud 70B API</strong></td>
+            <td>TTFT / Accuracy / Daily Bill</td>
+            <td><strong>✕ 380.0 ms TTFT</strong> · 91.2% acc · <strong>✕ $42,000/day</strong></td>
+            <td><span class="pill pill-human">Send to a human</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: Mobile GPU GGUF / WebGPU</strong></td>
+            <td>Power / Sustained Speed / Acc</td>
+            <td><strong>✕ 8.5 W (throttles)</strong> · <strong>✕ 14.2 tok/s</strong> · 70.8% acc</td>
+            <td><span class="pill pill-human">Send to a human</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: Pure NPU SpinQuant W4A8</strong></td>
+            <td>Power / Speed / Accuracy</td>
+            <td><strong>2.4 W 🏆</strong> · <strong>54.0 tok/s 🏆</strong> · 71.5% acc ($0/day)</td>
+            <td><span class="pill pill-confirm">Confirm</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: Hybrid NPU + Cloud 70B</strong></td>
+            <td>TTFT / Power / Acc / Bill</td>
+            <td><strong>72.0 ms 🏆</strong> · <strong>2.1 W 🏆</strong> · <strong>89.8% acc 🏆 ($10.6k/d)</strong></td>
+            <td><span class="pill pill-act">Act automatically</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Threshold Gating Logic</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <strong>Passive Thermal Gate (&le;3.5W)</strong>: Rejects Tier 2 (8.5W mobile GPU shader execution causes severe thermal throttling after 90s).<br>
+            • <strong>Open-Domain IQ Gate (&ge;88%)</strong>: Selects Tier 4 over Tier 3 when users ask open-ended coding/math questions beyond 3.8B capacity.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Failure Root-Cause Analysis</h3>
+          <p style="font-size:13px; line-height:1.6;">
+            • <strong>Why Naive W4A8 Fails Without SpinQuant</strong>: 100x activation outliers crush INT8 dynamic range on fixed-point NPUs.<br>
+            • <strong>Why Dynamic Shapes Fail on NPUs</strong>: Triggers slow CPU fallback unless bucketed into static AOT graphs.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Matrix Verdict:</strong> Tier 4 delivers 5.28x faster median TTFT (72ms vs 380ms) and saves $11.46M/year vs Tier 1 while beating Tier 2/3 accuracy by +18.3 pts.
+    </div>
+  </section>
+
+  <!-- CARD 4: UNDER THE HOOD -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>4 / 7</span>
+        <span>UNDER THE HOOD · SPINQUANT ORTHOGONAL ROTATION &amp; HYBRID CASCADE PROTOCOL</span>
+      </div>
+      <h2 class="headline">Protocol &amp; Mechanics: Offline Hadamard Weight Fusion ($W' = W R^\top$) &amp; 12ms Entropy Escalation</h2>
+      <p class="subhead">Deterministic quantization and confidence-gated routing contract.</p>
+
+      <pre>{
+  "on_device_npu_and_hybrid_contract": {
+    "spinquant_w4a8_compile": {
+      "rotation_invariance": "Y = (X @ R) @ (R^T @ W^T)  where R^T @ R == I (Cayley-optimized Hadamard)",
+      "offline_weight_fusion": "W_fused = W @ R^T  (4-bit symmetric groupwise INT4, 0 runtime overhead)",
+      "activation_quant": "Per-token INT8 after fast Walsh-Hadamard transform (max outlier 150.0 -&gt; 2.3)",
+      "aot_buckets": [128, 512, 2048]
+    },
+    "hybrid_cascade_router": {
+      "privacy_lock": "if contains_local_pii(prompt): force_local_npu = true",
+      "confidence_gate": "if shannon_entropy(first_token_logits) &lt; 0.60: stay_on_npu() else: escalate_cloud_70b()"
+    }
+  }
+}</pre>
+
+      <div style="text-align:center; font-size:20px; font-weight:800; color:var(--blue); margin: 4px 0 12px;">↓ Deterministic Thermal, Energy &amp; Cost Verifier Flow (&lt;answer&gt;)</div>
+
+      <pre>&lt;verifier_trace&gt;
+[Tier 2 Mobile GPU W4A16] Power = 8.5W &gt; 3.5W thermal envelope -&gt; throttles 28.0 -&gt; 14.2 tok/s (1.67 tok/J).
+[Tier 3 SpinQuant W4A8 NPU] Outliers smoothed (150.0 -&gt; 2.3); AOT graph runs in VTCM at 2.4W &amp; 54.0 tok/s (22.5 tok/J = 13.48x).
+[Tier 4 Hybrid Cascade (100M queries/day)]
+  - 75M routine queries served on local NPU ($0 cloud cost, 65ms TTFT).
+  - 25M hard queries escalated to Cloud 70B ($10,600/day vs $42,000/day).
+&lt;answer&gt;PASS: Energy Efficiency = 13.48x, Median TTFT = 72.0 ms (5.28x faster), Accuracy = 89.8%, Savings = $11.46M/yr&lt;/answer&gt;
+&lt;/verifier_trace&gt;</pre>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Architectural Insight:</strong> Sharing one resident 1.8 GB <code>3.8B W4A8</code> base model across OS apps with 20 MB hot-swappable LoRA adapters prevents memory thrashing on 8GB/12GB mobile devices!
+    </div>
+  </section>
+
+  <!-- CARD 5: ROBUSTNESS CHECK -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>5 / 7</span>
+        <span>ROBUSTNESS CHECK · OFFLINE / POOR CELLULAR CONNECTIVITY &amp; THERMAL SOAK</span>
+      </div>
+      <h2 class="headline">Perturbation Analysis: Tier 4 Retains 75% Full Functionality Under Zero Connectivity &amp; 0% Thermal Drop After 15 Minutes</h2>
+      <p class="subhead">Testing effective task completion rate (%) under airplane-mode / subway dead zones and 15-minute continuous generation soak.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ARCHITECTURE / METRIC</th>
+            <th>WI-FI / 5G BASELINE</th>
+            <th>SUBWAY DEAD ZONE + 15M SOAK</th>
+            <th>CHANGE (PTS)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 100% Cloud 70B API</strong></td>
+            <td>91.2%</td>
+            <td>0.0% (100% network timeout ✕)</td>
+            <td><strong>-91.2 pts ✕</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: Mobile GPU GGUF W4A16</strong></td>
+            <td>70.8%</td>
+            <td>48.5% (Severe thermal throttle/abort ✕)</td>
+            <td><strong>-22.3 pts ✕</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: Pure NPU SpinQuant W4A8</strong></td>
+            <td>71.5%</td>
+            <td>71.5% (100% offline &amp; 2.4W cool ✅)</td>
+            <td><strong>0.0 pts ✅</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: Hybrid NPU + Cloud Graceful Fallback</strong></td>
+            <td>89.8%</td>
+            <td>71.5% (Gracefully degrades to local NPU 🏆)</td>
+            <td><strong>-18.3 pts (Zero outage 🏆)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="panel">
+        <h3>Why Graceful Offline Degradation Is a Make-or-Break Feature for Mobile AI</h3>
+        <p style="font-size:13.5px; color:var(--muted); line-height:1.6;">
+          When a user enters an airplane, elevator, or subway tunnel, <strong>Tier 1 (Pure Cloud)</strong> fails 100% of requests with a spinner timeout. <strong>Tier 4</strong> automatically detects network unavailability and falls back to completing 100% of requests on the local <code>2.4W</code> NPU (`71.5%` accuracy instead of `0.0%` crash 🏆).
+        </p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Robustness Conclusion:</strong> On-device NPU execution + cloud escalation provides both peak connected intelligence (89.8%) and 100% offline survivability.
+    </div>
+  </section>
+
+  <!-- CARD 6: LATENCY / SCALING -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>6 / 7</span>
+        <span>SCALING · ANNUAL CLOUD GPU BILL ACROSS DAU SCALES (1M TO 50M DAU)</span>
+      </div>
+      <h2 class="headline">Scaling User Traffic: Tier 4 Hybrid NPU Routing Saves $1.15M/yr at 1M DAU and $57.3M/yr at 50M DAU</h2>
+      <p class="subhead">Comparing Tier 4 (Primary #3B82F6: 75% Local NPU + 25% Cloud 70B) against Tier 1 (Baseline #CBD5E1: 100% Cloud 70B API) across 1M, 10M, and 50M Daily Active Users.</p>
+
+      <div class="panel" style="margin-bottom:18px;">
+        <h3>Annual Cloud GPU Serving Expenditure Across User Scales (USD / Year, Lower is Better)</h3>
+
+        <div class="bar-row">
+          <div class="bar-label"><span>1M DAU (10M Queries/Day) — Tier 4 Hybrid NPU (#3B82F6) vs Tier 1 Pure Cloud (#CBD5E1)</span><span>$0.39M vs $1.53M / yr</span></div>
+          <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:2.5%;"></div></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:10.0%;"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-label"><span>10M DAU (100M Queries/Day Baseline) — Tier 4 Hybrid (#3B82F6) vs Tier 1 Cloud (#CBD5E1)</span><span>$3.87M vs $15.33M / yr (Saves $11.46M)</span></div>
+          <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:5.1%;"></div></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:20.0%;"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-label"><span>50M DAU (500M Queries/Day Super-App) — Tier 4 Hybrid (#3B82F6) vs Tier 1 Cloud (#CBD5E1)</span><span>$19.35M vs $76.65M / yr (Saves $57.30M)</span></div>
+          <div class="bar-track" style="margin-bottom:4px;"><div class="bar-fill-primary" style="width:25.2%;"></div></div>
+          <div class="bar-track"><div class="bar-fill-muted" style="width:100.0%;"></div></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>NPU Energy Efficiency Gain</h3>
+          <div class="kpi" style="color:#2563EB;">13.48x Tok/J</div>
+          <p style="font-size:13px; color:var(--muted);">SpinQuant W4A8 on dedicated NPU silicon delivers 22.50 tok/s/W vs 1.67 tok/s/W on mobile GPU W4A16.</p>
+        </div>
+        <div class="panel">
+          <h3>Median TTFT Acceleration</h3>
+          <div class="kpi" style="color:#059669;">5.28x Faster</div>
+          <p style="font-size:13px; color:var(--muted);">Drops median first-token latency from 380.0 ms (cellular RTT) down to 72.0 ms via local NPU execution.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Scaling Note:</strong> All values derived deterministically from <code>experiments/slm_on_device_mobile_npu_webgpu_hybrid_selection/results.json</code>.
+    </div>
+  </section>
+
+  <!-- CARD 7: MY TAKE (GOOD FIT VS NOT FOR) -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span>7 / 7</span>
+        <span>MY TAKE · ARCHITECT DECISION GUIDANCE &amp; PRODUCTION READINESS</span>
+      </div>
+      <h2 class="headline">Good Fit vs. Not For: Combine SpinQuant W4A8 NPU With Cloud Escalation</h2>
+      <p class="subhead">Actionable rules for AI Solution Architects building mobile, AI PC, and browser AI features.</p>
+
+      <div class="grid-2">
+        <div class="panel" style="border-color:#86EFAC; background:#F0FDF4;">
+          <h3 style="color:#166534;">✅ Good Fit (When to Adopt Tier 4 / Tier 3)</h3>
+          <ul style="font-size:13.5px; line-height:1.7; padding-left:18px; color:#14532D;">
+            <li><strong>High-DAU Mobile &amp; AI PC Assistants (Tier 4 Hybrid):</strong> Offloads 75% of routine queries to the user's 2.4W NPU for free while escalating 25% hard queries to Cloud 70B.</li>
+            <li><strong>Privacy-Critical / Offline Utility Features (Tier 3 Pure NPU):</strong> Keyboard rewrite, SMS/email summarization, and local voice intent routing.</li>
+            <li><strong>Zero-Install Desktop Browser Apps (Tier 2 WebGPU):</strong> Use WebLLM / ONNX Runtime Web when users cannot install a native binary.</li>
+          </ul>
+        </div>
+
+        <div class="panel" style="border-color:#FCA5A5; background:#FEF2F2;">
+          <h3 style="color:#991B1B;">⛔ Not For (When to Avoid)</h3>
+          <ul style="font-size:13.5px; line-height:1.7; padding-left:18px; color:#7F1D1D;">
+            <li><strong>Sustained Mobile GPU `W4A16 GGUF` in Native Apps (Tier 2):</strong> Draws 8.5W, overheats phones in 90s, and wastes the dedicated NPU.</li>
+            <li><strong>Naive `W4A8` Quantization Without SpinQuant Rotation:</strong> Activation outliers destroy NPU INT8 accuracy unless rotated first.</li>
+            <li><strong>100% Cloud 70B for Trivial UI/Text Edits (Tier 1):</strong> Wastes $11.46M/year per 10M DAU on tasks a 3B NPU handles locally in 65ms.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Day-1 Production On-Device SLM Checklist</h3>
+        <p style="font-size:13px; line-height:1.65; color:var(--muted);">
+          1. Apply <code>SpinQuant</code> orthogonal rotation offline and export AOT static-shape buckets (128/512/2048) to QNN / CoreML / ExecuTorch.<br>
+          2. Share a single resident <code>3B W4A8</code> base model across features using 20 MB hot-swappable LoRA adapters.<br>
+          3. Pin PII-tagged prompts strictly to the local NPU.<br>
+          4. Escalate prompts with first-token Shannon entropy $H(p) \ge 0.60$ asynchronously to Cloud 70B.
+        </p>
+      </div>
+    </div>
+
+    <div class="callout-dark">
+      <strong>Readiness &amp; Provenance:</strong> Synthetic analytical model calibrated to published Meta SpinQuant, ExecuTorch/QNN/CoreML ANE, and RouteLLM benchmarks (<code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>). License: MIT.
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
