@@ -1,0 +1,88 @@
+{
+  "experiment_id": "vector_database_billion_scale_diskann_cagra_selection",
+  "date": "2026-11-12",
+  "round": 73,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "Microsoft DiskANN / Vamana (Sub-5ms Billion-Scale ANNS on a Single Node with NVMe SSDs)",
+      "NVIDIA cuVS CAGRA (GPU-Native Graph Index Construction & Warp-Split Search Benchmarks)",
+      "RaBitQ (Quantizing High-Dimensional Vectors with a Theoretical Error Bound for Approximate Nearest Neighbor Search)"
+    ]
+  },
+  "workload": {
+    "corpus_scale": "1,000,000,000 (1 Billion) 1024-dim Embeddings (Enterprise RAG chunks, ColQwen2 visual patches & code symbols)",
+    "raw_data_footprint": "2,048 GB in FP16 (4,096 GB in FP32) + ~600 GB HNSW M=32 graph edges = 2,650 GB total DRAM if kept in memory",
+    "key_mechanisms": "DiskANN 4KB sector co-location (vector + neighbors in 1 SSD read), RaBitQ training-free 1-bit bounds, NVIDIA cuVS CAGRA"
+  },
+  "tiers": [
+    {
+      "id": "tier1_in_memory_uncompressed_hnsw_dram_cluster",
+      "name": "Tier 1: 全内存未压缩 HNSW 集群 (2,650 GB 纯 DRAM 内存怪兽 · 月烧 $38,400 · 建索引耗时 18.5 小时)",
+      "name_en": "Tier 1: In-Memory Uncompressed HNSW Cluster (2,650 GB DRAM · $38,400/mo · 18.5h Build)",
+      "index_and_storage_layout": "All 1B FP16 vectors (2,048 GB) + HNSW multi-layer graph (602 GB) pinned in server DRAM across 11x 256GB nodes",
+      "search_and_build_path": "Pointer-chasing across DRAM graph layers; CPU-bound sequential graph insertion takes 18.5 hours per rebuild",
+      "cluster_dram_required_gb": 2650.0,
+      "recall_at_10_pct": 96.5,
+      "p95_search_latency_ms": 2.4,
+      "cluster_peak_qps": 4200,
+      "index_build_time_hours": 18.5,
+      "monthly_cluster_cost_usd": 38400.0,
+      "recommended_for": "Small collections (<20M vectors) only; at 1B scale, DRAM cost ($460k/yr) and 18.5h rebuilds are prohibitive.",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_in_memory_ivf_pq_64byte_no_rerank",
+      "name": "Tier 2: 纯内存 IVF-PQ 强有损乘积量化 (64B 码本无重排 · 虽省内存但 Recall@10 暴跌至 68.4%)",
+      "name_en": "Tier 2: Aggressive In-Memory IVF-PQ 64B Without Rerank (Recall@10 Collapses to 68.4%)",
+      "index_and_storage_layout": "Compresses 2,048B vector into 64B PQ codes (32x compression -> 88 GB RAM); discards full-precision vectors",
+      "search_and_build_path": "Scans inverted lists using asymmetric distance computation (ADC) on lossy K-means centroids; suffers severe OOD drift",
+      "cluster_dram_required_gb": 88.0,
+      "recall_at_10_pct": 68.4,
+      "p95_search_latency_ms": 3.1,
+      "cluster_peak_qps": 6800,
+      "index_build_time_hours": 6.4,
+      "monthly_cluster_cost_usd": 2400.0,
+      "recommended_for": "Coarse deduplication only; -28.1pt recall loss causes severe RAG hallucination on domain terms and IDs.",
+      "status": "fail"
+    },
+    {
+      "id": "tier3_nvme_ssd_vamana_diskann_io_uring",
+      "name": "Tier 3: NVMe 原生图索引 DiskANN / Vamana (96GB 内存 + 4KB 扇区向量/邻居同块打包 + io_uring 4.2ms)",
+      "name_en": "Tier 3: NVMe SSD-Resident Vamana / DiskANN (96 GB RAM · 95.2% Recall · 4.2ms P95 · $5,200/mo)",
+      "index_and_storage_layout": "64B PQ guide in DRAM (96 GB) + 4KB NVMe sector packing [Full FP16 Vector + 64 Vamana Neighbor IDs] in 1 SSD page",
+      "search_and_build_path": "In-RAM PQ beam navigation + 6-hop parallel io_uring NVMe reads for exact on-the-fly full-precision reranking",
+      "cluster_dram_required_gb": 96.0,
+      "recall_at_10_pct": 95.2,
+      "p95_search_latency_ms": 4.2,
+      "cluster_peak_qps": 5400,
+      "index_build_time_hours": 5.2,
+      "monthly_cluster_cost_usd": 5200.0,
+      "recommended_for": "Cost-optimal billion-scale enterprise RAG and document search with <5ms P95 SLA on commodity NVMe nodes.",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_gpu_cuvs_cagra_plus_rabitq_and_nvme_hybrid",
+      "name": "Tier 4: GPU cuVS CAGRA + 免训练 RaBitQ 1-Bit 无偏量化 + NVMe DiskANN 冷热分层 (96.8% 召回 · 1.4ms)",
+      "name_en": "Tier 4: GPU cuVS CAGRA + Training-Free RaBitQ + NVMe DiskANN Hybrid (96.8% Recall · 1.4ms · 18.5k QPS)",
+      "index_and_storage_layout": "RaBitQ 1-bit/2-bit randomized JL codes (zero codebook drift) + GPU CAGRA fixed-degree graph for hot tier + NVMe DiskANN",
+      "search_and_build_path": "GPU warp-parallel CAGRA graph traversal + RaBitQ lower-bound pruning + async NVMe exact top-K verification",
+      "cluster_dram_required_gb": 112.0,
+      "recall_at_10_pct": 96.8,
+      "p95_search_latency_ms": 1.4,
+      "cluster_peak_qps": 18500,
+      "index_build_time_hours": 1.2,
+      "monthly_cluster_cost_usd": 4600.0,
+      "recommended_for": "High-QPS billion-scale search, real-time streaming ingestion (zero PQ retraining), and multimodal patch retrieval.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_dram_reduction_ratio": 23.7,
+    "tier4_vs_tier1_build_speedup_x": 15.4,
+    "tier4_vs_tier2_recall_gain_pts": 28.4,
+    "tier4_annual_savings_vs_tier1_usd": 405600.0
+  }
+}
