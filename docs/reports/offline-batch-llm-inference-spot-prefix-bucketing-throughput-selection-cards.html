@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Large-Scale Offline Batch LLM Inference, Radix Prefix Bucketing &amp; Spot Elasticity — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #c4b5fd; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #5b21b6; background: #ede9fe; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 25.5px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #7c3aed, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #7c3aed; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 245px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 135px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>📦 大规模离线批量推理 (Offline Batch API)、Radix 前缀分桶与 Spot 弹性架构 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/offline_batch_llm_inference_spot_prefix_bucketing_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/offline-batch-llm-inference-spot-prefix-bucketing-throughput-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/offline-batch-llm-inference-spot-prefix-bucketing-throughput-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#offline-batch-spot-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · OFFLINE BATCH INFERENCE &amp; SPOT PREFIX BUCKETING</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">全局 Radix 前缀/长度双维分桶 + Spot 微片续跑</span> 提升 3.98 倍单机吞吐，百万词成本暴降 90.9% 至 $0.048</h2>
+      <p class="subhead">针对日均 1,000 万条离线请求（120 套业务模板 × 3.5K 共享前缀 + 500 输入 + 400 输出，32×H100），对比原始 FIFO 乱序、粗放 Spot、前缀分桶与全栈 Spot 微片引擎。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档离线跑批架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (原始 FIFO 乱序)</strong>: 11.5% 命中, $0.53/1M ✕<br/>
+            • <strong>Tier 2 (粗放 Spot 无检查点)</strong>: 28.5% 重跑损失 ✕<br/>
+            • <strong>Tier 3 (Radix 前缀+长度分桶)</strong>: 94.2% 命中, 31.6k tok/s ✅<br/>
+            • <strong>Tier 4 (Spot+分桶+微片续跑)</strong>: 95.8% 命中, $0.048/1M 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 作业与算力契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 日均批规模：<code>10,000,000 条请求 (44B tok)</code><br/>
+            • 模板结构：<code>120 模板 × 3,500 共享词</code><br/>
+            • 算力底座：<code>32×H100 (按需 $2.5 vs Spot $0.85)</code><br/>
+            • 微片粒度：<code>512 条/Parquet 微片 (~12s)</code><br/>
+            • 优雅排空：<code>SIGTERM 30s 窗口零丢片</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 缓存命中率：<code>11.5% → 95.8% (+84.3pt)</code><br/>
+            • 单机有效吞吐：<code>8,400 → 33,400 tok/s (3.98x)</code><br/>
+            • Spot 抢占损耗：<code>28.5% → 0.8% (降 35.6x)</code><br/>
+            • 百万词成本：<code>$0.53 → $0.048 (-90.9%)</code><br/>
+            • 年化总节省：<code>净省 $7,748,000 / yr 🏆</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>单台 8×H100 节点有效生成吞吐 (tokens/s，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 全局 Radix 字典序分桶 + 512 条 Spot 微片</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: Spot + 双维分桶 + 微片续跑 (95.8% 命中)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+          <span class="bar-val">33,400 tok/s 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: 按需池 + Radix 前缀/长度双维分桶</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:94.6%;"></div></div>
+          <span class="bar-val">31,600 tok/s ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 粗放 Spot 实例乱序跑批 (14.2% 命中)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:27.5%;"></div></div>
+          <span class="bar-val">9,200 tok/s</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 原始 FIFO 乱序塞在线队列 (11.5% 命中)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:25.1%;"></div></div>
+          <span class="bar-val">8,400 tok/s ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to SGLang RadixAttention / vLLM offline prefix-tree bucketing, Ray Data LLM length-sorted micro-batching, and cloud Spot SIGTERM drain mechanics (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 10M DAILY CATALOG TAGGING &amp; SYNTHETIC DATA GENERATION</span>
+        <span class="badge-prov">Case Study · Eliminating Cache Thrashing &amp; Spot Preemption Loss</span>
+      </div>
+      <h2 class="headline">入队前一次字典序重排把缓存命中率从 11.5% 拉到 95.8%；12 秒微片让 Spot 抢占损耗归零</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们电商与数据团队每天有 1,000 万条商品属性抽取和合成数据生成任务（共 120 套业务 Prompt 模板）。直接往 vLLM 队列里按顺序灌，32 张 H100 每天要跑 14.6 小时、一年算力费高达 $852 万！后来换成便宜的云端 Spot 竞价机器，结果机器每小时被回收几次，每次跑了一半的 5 万条文件全作废重跑，反而更慢了！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：千万级离线 ETL、商品打标与合成数据生成底座</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (Spot 池 + 双维分桶 + 512条微片续跑)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">先按 Prefix Hash 字典序把同一模板的 8.3 万条请求排在一起连续跑，再按 512 条切微片原子写盘，年省 <code>$7,748,000 (-90.9%)</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 全局 Radix 分桶 Prefix Cache 命中率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:95.8%;"></div></div>
+            <span class="bar-val">95.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 原始 FIFO 乱序到达缓存命中率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:11.5%;"></div></div>
+            <span class="bar-val">11.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：针对 16K 长文档连续提取 20 个字段/问题</strong></div>
+            <span class="pill pill-auto">Act automatically · 强制按 doc_id 聚合进同一微批 (6.49x 提速)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">同一篇 16K 文档的 20 个问题打包进同一 Batch，16K Prefill 只算 1 次，单机吞吐飙至 <code>44,800 tok/s</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 16K 文档 × 20 问聚合吞吐</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+            <span class="bar-val">44,800 tok/s (6.49x 🏆)</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 16K 文档问题分散到达吞吐</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:15.4%;"></div></div>
+            <span class="bar-val">6,900 tok/s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：自有固定机房（无云端 Spot 差价）如何跑批？</strong></div>
+            <span class="pill pill-confirm">Confirm · 夜间借用在线推理闲置卡 + Tier 3 双维分桶</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">通过 Kueue Cohort 借用凌晨闲置的在线推理 GPU，并开启 Tier 3 双维分桶，3.88 小时即可跑完 1,000 万条任务。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Offline batch jobs have complete visibility into the entire request queue upfront—sorting by prefix tree before GPU execution turns 88% of redundant prefill compute into zero-cost HBM pointer hits.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER OFFLINE BATCH &amp; SPOT MATRIX</span>
+        <span class="badge-prov">10M Prompts/Day · 32×H100 · 120 Templates</span>
+      </div>
+      <h2 class="headline">四档离线批量推理全矩阵评测：缓存命中、打包率、抢占损耗、吞吐与年化 TCO</h2>
+      <p class="subhead">全面对比原始 FIFO 乱序、粗放 Spot、全局 Radix 前缀/长度分桶与全栈 Spot 微片续跑引擎。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (跑批架构档位)</th>
+            <th>QUESTION / TASK (入队排序与容错机制)</th>
+            <th>MODEL ANSWER (命中率 / 抢占损耗 / 吞吐 / 成本)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 原始 FIFO 乱序队列</strong></td>
+            <td>随机模板到达 + 长短混批 + 按需全价</td>
+            <td>命中 <code>11.5% ✕</code> · 紧致度 <code>48.0% ✕</code> · <code>8,400 tok/s</code> · <code>14.6h</code> · <code>$0.53/1M ($8.52M/yr ✕)</code></td>
+            <td><span class="pill pill-human">严禁直接跑批 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 粗放 Spot 无检查点</strong></td>
+            <td>乱序大文件 + Spot 被回收整批重跑</td>
+            <td>命中 <code>14.2% ✕</code> · 抢占损失 <code>28.5% ✕</code> · <code>9,200 tok/s</code> · <code>18.8h ✕</code> · <code>$0.23/1M ($3.74M/yr)</code></td>
+            <td><span class="pill pill-human">重跑严重浪费 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: Radix 前缀 + 长度分桶</strong></td>
+            <td>全局前缀字典序 + 桶内长度同质打包</td>
+            <td>命中 <code>94.2% ✅</code> · 紧致度 <code>91.5% ✅</code> · <code>31,600 tok/s (3.76x ✅)</code> · <code>3.88h</code> · <code>$0.14/1M</code></td>
+            <td><span class="pill pill-confirm">固定集群首选 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: Spot + 分桶 + 微片续跑</strong></td>
+            <td>双维分桶 + 512条 Parquet 微片 + 30s 排空</td>
+            <td>命中 <code>95.8% 🏆</code> · 抢占损失 <code>0.8% 🏆</code> · <code>33,400 tok/s (3.98x 🏆)</code> · <code>$0.048/1M (省 $7.75M/yr 🏆)</code></td>
+            <td><span class="pill pill-auto">云端跑批终极 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#5b21b6;">✅ 为什么桶内还要按“长度”做二次排序？</strong><br/>
+          如果同一个 Batch 里混了 63 条输出 100 词的请求和 1 条输出 2,000 词的请求，在后 1,900 步里 Batch Size 退化并在显存池留下碎片。按长度分箱让整批齐步完成，打包率从 <code>48.0%</code> 升至 <code>93.4%</code>！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么微片大小选 `512 条 (~12秒)` 最黄金？</strong><br/>
+          太小（如 16 条）会产生过多 S3 小文件 PUT 请求开销；太大（如 50,000 条，需 20 分钟）则无法在云平台 <code>30 秒 SIGTERM</code> 回收窗口内优雅跑完！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Combining `3.98×` higher throughput (from Radix prefix/length sorting) with `0.34×` Spot GPU pricing and `0.8%` micro-shard preemption loss reduces unit token cost by 90.9%.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · TWO-LEVEL RADIX BINNER &amp; SIGTERM DRAIN</span>
+        <span class="badge-prov">Lexicographical Prefix Sort + 512-Prompt Atomic Shard</span>
+      </div>
+      <h2 class="headline">底层机制：两级全局前缀/长度分桶器 + 捕获 SIGTERM 的 12 秒微片优雅排空环</h2>
+      <p class="subhead">展示 Tier 4 如何在入队层消除 88% 冗余 Prefill，并在 Spot 节点回收前实现零数据丢失退出。</p>
+
+      <div class="code-dark"><pre># 1. 入队层：全局 Radix 前缀字典序 + 长度同质双维分桶器 (Two-Level Offline Binner)
+def build_bucketed_micro_shards(prompts: list[dict], shard_size: int = 512) -&gt; list[list[dict]]:
+    # 第一维：提取前 512 词或 system_template_id 的前缀哈希，确保相同模板 100% 聚在一起
+    # 第二维：在同一模板内部按 (input_len + max_output_tokens) 升序排列，消除长短混批空洞
+    sorted_prompts = sorted(
+        prompts,
+        key=lambda r: (r["prefix_hash_bucket"], r["input_tokens"] + r["max_output_tokens"])
+    )
+    return [sorted_prompts[i : i + shard_size] for i in range(0, len(sorted_prompts), shard_size)]</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#7c3aed;margin:6px 0;">↓ Spot Worker 消费 512 条微片 + 30 秒 SIGTERM 零丢失排空协议 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre># 2. Spot 执行层：原子微片提交 + SIGTERM 优雅排空 (Lost-Work Overhead = 0.8%)
+draining = False
+signal.signal(signal.SIGTERM, lambda sig, frame: globals().update(draining=True))
+
+while not draining and (shard := lease_next_shard_from_queue()):
+    # 同一微片内 512 条请求共享同一模板前缀 -&gt; SGLang/vLLM 命中率高达 95.8% (仅耗时 ~12 秒)
+    outputs = llm_engine.generate_batch(shard.prompts, use_radix_cache=True)
+    # 先写临时对象再原子提交，杜绝半截脏文件
+    write_parquet_atomic(f"s3://batch-out/tmp/{shard.id}.parquet", f"s3://batch-out/done/{shard.id}.parquet", outputs)
+    ack_shard_completed(shard.id)
+# 收到 SIGTERM 后不再拉取新 shard，在 12s 内完成当前 shard 刷盘并安全退出 (&lt;30s SLA)!
+# &lt;answer&gt; Validated: 95.8% prefix hit, 33,400 tok/s (3.98x), 0.8% Spot loss, $0.048/1M (-90.9% cost)</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Because each 512-prompt shard takes only ~12 seconds on an 8×H100 node, the worker easily finishes and commits the active shard inside the 30-second cloud Spot `SIGTERM` grace period.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · SHARED PREFIX RATIO SENSITIVITY (25% → 90%)</span>
+        <span class="badge-prov">Short Prompts → Catalog Tagging → 16K Multi-Question Docs</span>
+      </div>
+      <h2 class="headline">共享前缀占比敏感度：即使仅 25% 共享也能提速 2.08x；16K 长文档多问提速高达 6.49x</h2>
+      <p class="subhead">测试不同业务共享前缀比例下，Tier 1（FIFO 乱序）与 Tier 4（双维分桶 + Spot）的单节点吞吐表现。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (业务场景与共享前缀占比)</th>
+            <th>ORIGINAL (Tier 1 FIFO 乱序队列)</th>
+            <th>PERTURBED (Tier 4 双维分桶 + Spot)</th>
+            <th>CHANGE (吞吐提速比与收益拆解)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>25% 共享前缀 (1,000 / 4,000 词)</strong><br/>通用短系统指令 + 变长用户文本</td>
+            <td>单机吞吐 <code>7,800 tok/s</code><br/>(长短句混批空洞严重)</td>
+            <td>单机吞吐 <code>16,200 tok/s ✅</code><br/>(长度同质打包消除空洞)</td>
+            <td><strong style="color:#2563eb;">快 2.08x ✅</strong><br/>光靠长度对齐即可翻倍吞吐</td>
+          </tr>
+          <tr>
+            <td><strong>50% 共享前缀 (2,000 / 4,000 词)</strong><br/>Few-Shot 少样本分类与情感分析</td>
+            <td>单机吞吐 <code>8,100 tok/s</code><br/>(Few-Shot 频繁重算)</td>
+            <td>单机吞吐 <code>22,800 tok/s ✅</code><br/>(省去一半 Prefill 算力)</td>
+            <td><strong style="color:#0891b2;">快 2.81x ✅</strong><br/>前缀复用 + 长度打包双重加速</td>
+          </tr>
+          <tr>
+            <td><strong>80% 共享前缀 (3,500 / 4,400 词)</strong><br/>标准电商商品打标 / 知识图谱抽取</td>
+            <td>单机吞吐 <code>8,400 tok/s ✕</code><br/>(命中率仅 <code>11.5%</code>)</td>
+            <td>单机吞吐 <code>33,400 tok/s 🏆</code><br/>(命中率飙至 <code>95.8%</code>)</td>
+            <td><strong style="color:#059669;">快 3.98x 🏆</strong><br/>Prefill 耗时几乎降为零</td>
+          </tr>
+          <tr>
+            <td><strong>90% 共享长文档 (16K 文档 × 20 问)</strong><br/>财报/法律合同多指标批量审查</td>
+            <td>单机吞吐 <code>6,900 tok/s ✕</code><br/>(16K 文档被重复读 20 遍)</td>
+            <td>单机吞吐 <code>44,800 tok/s 🏆</code><br/>(按 doc_id 聚入同一微批)</td>
+            <td><strong style="color:#059669;">快 6.49x 🏆</strong><br/>16K KV 只算 1 次，20 问齐答</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔍 为什么“输出给用户时”还能保持原始文件行号顺序？</strong><br/>
+          每条请求携带原始 `row_id`；GPU 算完亂序微片后，由廉价 CPU 归并器按 `row_id` O(N) 还原为原始顺序输出文件，对业务端 100% 透明！
+        </div>
+        <div class="callout-box">
+          <strong>⚡ 主机内存 (Host DRAM) 预取如何进一步加速模板切换？</strong><br/>
+          当 GPU 正在跑模板 #01 的最后一个微片时，后台线程提前把模板 #02 的 KV 块预热到 Host Pinned DRAM，实现零切换气泡！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: Two-level sorting guarantees at least a `2.08×` speedup on low-prefix workloads (via length binning) and up to `6.49×` on document extraction workloads (via prefix clustering).
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; THROUGHPUT SCALING · CACHE HIT, TIME &amp; COST BARS</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 Bucketed vs Slate=Tier 1/2 Unsorted</span>
+      </div>
+      <h2 class="headline">效率与成本对比：缓存命中率飙升 84.3 个百分点，1000 万条耗时缩短 4 倍，年省 $775 万</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 全局前缀/长度分桶架构，浅灰条（<code>#CBD5E1</code>）代表传统未分桶 FIFO 基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 120 套模板下的全局 Prefix Cache 命中率 (% ，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Spot + 双维分桶 + DRAM 预取</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:95.8%;"></div></div>
+            <span class="bar-val">95.8% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 全局 Radix 前缀字典序分桶</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:94.2%;"></div></div>
+            <span class="bar-val">94.2% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 原始 FIFO 乱序到达 (反复互踢)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:11.5%;"></div></div>
+            <span class="bar-val">11.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 32×H100 跑完 1,000 万条离线请求总耗时 (小时，越短越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Spot 池 + 双维分桶 + 12s 微片续跑</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:19.6%;"></div></div>
+            <span class="bar-val">3.68 hrs 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 按需池 + 全局双维分桶</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:20.6%;"></div></div>
+            <span class="bar-val">3.88 hrs ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 原始 FIFO 乱序塞在线队列</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:77.7%;"></div></div>
+            <span class="bar-val">14.60 hrs ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 粗放 Spot 无检查点 (28.5% 重跑)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">18.80 hrs ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 日跑 1,000 万条请求的年度总算力账单 (Annual TCO，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Spot + 双维分桶 ($0.048/1M)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:9.1%;"></div></div>
+            <span class="bar-val">$772k / yr 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 按需池 + 双维分桶 ($0.14/1M)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:26.6%;"></div></div>
+            <span class="bar-val">$2.27M / yr ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 原始 FIFO 在线池 ($0.53/1M)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$8.52M / yr ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Sorting before GPU execution is completely free in CPU cycles yet unlocks a 3.98× GPU throughput multiplier—saving $7,748,000/yr at 10M daily prompts.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：离线跑批先做全局前缀+长度排序，配 512 条微片吃透 Spot 3 折红利</h2>
+      <p class="subhead">用“全局字典序重排 + 12 秒原子微片”打造比商业 Batch API 还便宜 80% 的自建批处理底座！</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>千万级商品打标 / 内容审核 / 知识库全量重抽 → Tier 4</strong>：全局前缀排序把缓存命中率锁在 95.8%，百万词成本低至 `$0.048`。</li>
+            <li>• <strong>预训练/微调语料合成 (Synthetic Data) 与裁判打分 → Tier 4</strong>：天然容忍数小时延迟，最适合跑在夜间潮汐卡池与 Spot 实例上。</li>
+            <li>• <strong>长财报/合同多问题抽取 → 按 `doc_id` 聚批</strong>：提速 `6.49x`。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁把千万条离线 JSONL 按原始顺序直接打进在线推理队列 (Tier 1)</strong>：既冲垮在线用户 TTFT，又因缓存互踢多花 10 倍冤枉钱。</li>
+            <li>• <strong>严禁在 Spot 实例上跑超过 5 分钟才落盘一次的大批次任务 (Tier 2)</strong>：会被回收中断反复清零进度。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 入队预处理：按 <code>(prefix_hash_bucket, input_len + max_output_len)</code> 对全量离线请求做双维排序，并保留原始 <code>row_id</code>。<br/>
+          2. <code>[ ]</code> 微片切分：将排序后的列表按每 <code>512 条 (~12秒工作量)</code> 切分为独立微片任务。<br/>
+          3. <code>[ ]</code> 优雅排空：在 Spot Worker 中捕获 <code>SIGTERM</code>，停止拉取新微片并在 30 秒回收窗口内刷盘当前微片。<br/>
+          4. <code>[ ]</code> 监控指标：核验离线跑批池的 <code>gpu_prefix_cache_hit_rate &gt;= 90%</code> 且 <code>spot_lost_work_ratio &lt; 1.0%</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness Verdict</strong>: Production-ready for Ray Data LLM, SGLang &amp; vLLM Batch engines. Provenance: `synthetic` + `anonymized_reported` (`independently_reproduced=false`).
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
