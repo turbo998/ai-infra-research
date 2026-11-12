@@ -7575,5 +7575,91 @@ function updateRagContextualLateSizer() {
 }
 updateRagContextualLateSizer();
 </script>
+
+  <!-- Round 90: Hybrid GPU+CPU MoE Inference (KTransformers, Intel AMX & NUMA) Sizer -->
+  <div id="hybrid-gpu-cpu-moe-ktransformers-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#a855f7;color:#f8fafc;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 90 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ 大模型 GPU+CPU 异构混合 MoE 推理（KTransformers）、Intel AMX 矩阵加速与双路 NUMA 绑定计算器</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/hybrid_gpu_cpu_moe_inference_ktransformers_amx_numa_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/hybrid-gpu-cpu-moe-inference-ktransformers-amx-numa-selection-faq.md" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/hybrid-gpu-cpu-moe-inference-ktransformers-amx-numa-selection-faq.en.md" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./hybrid-gpu-cpu-moe-inference-ktransformers-amx-numa-selection-cards.html" style="color:#d8b4fe;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">并发 Batch 规模 (DeepSeek-R1/V3 671B):</label>
+        <select id="ktBatchSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateKTransformersSizer()">
+          <option value="1" selected>Batch = 1 (单用户极速深度推理 / 代码生成)</option>
+          <option value="4">Batch = 4 (研发小组并发共享 · 62.5 tok/s)</option>
+          <option value="8">Batch = 8 (部门级 20~30 人共享 · 84.0 tok/s)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">宿主机 CPU 架构与预算策略:</label>
+        <select id="ktModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateKTransformersSizer()">
+          <option value="amx_s4" selected>双路第四/五代 Xeon (支持 Intel AMX) + 1×48GB GPU ($22k 推荐 S4)</option>
+          <option value="avx_s3">双路 AMD EPYC (支持 AVX-512) + 1×48GB GPU ($22k 推荐 S3)</option>
+          <option value="gpu_s5">高并发公有云 API (Batch ≥ 32，采购 $180k 8×H800 纯 GPU S5)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">671B MoE 部署与异构卸载方案</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">每 Token PCIe 流量 / UPI 阻塞</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">4K Prefill 吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Decode 吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">整机硬件 CapEx</th>
+          </tr>
+        </thead>
+        <tbody id="ktSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="ktDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #a855f7;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateKTransformersSizer() {
+  const b = parseInt(document.getElementById('ktBatchSelect').value, 10) || 1;
+  const mode = document.getElementById('ktModeSelect').value || 'amx_s4';
+  const bestId = mode === 'avx_s3' ? 's3' : (mode === 'gpu_s5' ? 's5' : 's4');
+  const bScale = b === 1 ? 1.0 : (b === 4 ? 2.33 : 3.13);
+
+  const rows = [
+    { id: 's1', name: '🟥 S1: 朴素按需 PCIe 专家权重换入 (Accelerate / Zero-Inference)', pcie: '16,500 MB/tok ✕ · 42.0% UPI', pre: '14.5 tok/s ✕', dec: '1.9 tok/s (卡死 515ms/词 ✕)', cost: '$22,000' },
+    { id: 's2', name: '🟥 S2: 默认混合 CPU-MoE (无 NUMA 条带绑定 · 默认 llama.cpp)', pcie: '1.75 MB/tok · 48.5% UPI 阻塞 ✕', pre: '48.0 tok/s', dec: `${(5.4 * (b===1?1:(b===4?2.07:2.5))).toFixed(1)} tok/s ✕`, cost: '$22,000' },
+    { id: 's3', name: '🟦 S3: KTransformers AVX-512 + 50/50 子专家 NUMA 绑定 + CUDA Graph', pcie: '1.75 MB/tok · 1.8% UPI ✅', pre: '164.0 tok/s ✅', dec: `${(16.8 * bScale).toFixed(1)} tok/s (快 8.8x ✅)`, cost: '$22,000 (-87.8% ✅)' },
+    { id: 's4', name: '🟩 S4: KTransformers Intel AMX 2D Tile + NUMA + GPU Top-16 热专家缓存', pcie: '1.42 MB/tok (省 9,428x 🏆) · 0.9% UPI', pre: '285.0 tok/s (快 3.1x 🏆)', dec: `${(26.8 * bScale).toFixed(1)} tok/s (快 14.1x 🏆)`, cost: '$22,000 (立省 $158k 🏆)' },
+    { id: 's5', name: '🟨 S5: 纯 GPU 8×H800 / H100 640GB 节点 (全量 HBM 常驻)', pcie: '0.0 MB/tok · 0.0% UPI', pre: '2,450.0 tok/s', dec: `${(58.0 * (b===1?1:b*0.85)).toFixed(1)} tok/s`, cost: '$180,000 (贵 8.18x)' }
+  ];
+
+  document.getElementById('ktSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(168,85,247,0.18);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#e9d5ff':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.pcie}</code></td>
+      <td style="padding:10px;"><code>${r.pre}</code></td>
+      <td style="padding:10px;"><code>${r.dec}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ktDecisionCallout').innerHTML = bestId === 's4'
+    ? `<strong>架构师选型建议 (满血 671B 私有化工作站 · Batch=${b})</strong>：必选 <strong>S4 (KTransformers Intel AMX 二维矩阵核 + 50/50 子专家 NUMA 绑定 + GPU Top-16 热门专家缓存 + 单次 CUDA Graph)</strong>，把 PCIe 传输从 <code>16.5 GB/tok</code> 砸穿至 <code>1.42 MB/tok (少传 9,428 倍)</code>，有效内存带宽拉满至 <code>692 GB/s</code>，以 <code>$22,000</code> 硬件成本实现 <code>${(26.8*bScale).toFixed(1)} tok/s</code> 生成与 <code>285.0 tok/s</code> Prefill，净省 <code>$158,000 (-87.8%)</code>！`
+    : (bestId === 's3'
+      ? `<strong>架构师选型建议 (AMD EPYC 平台)</strong>：选用 <strong>S3 (KTransformers 50/50 子专家 NUMA 绑定 + AVX-512 + CUDA Graph)</strong>，消除跨插槽 UPI 争用！`
+      : `<strong>架构师选型建议 (Batch ≥ 32 高并发公有云集群)</strong>：当并发大于 32 时全部 256 个专家均被激活，应选用 <strong>S5 (8×H800 纯 GPU 节点)</strong>。`);
+}
+updateKTransformersSizer();
+</script>
 </body>
 </html>
