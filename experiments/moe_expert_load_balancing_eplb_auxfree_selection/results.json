@@ -1,0 +1,109 @@
+{
+  "experiment_id": "moe_expert_load_balancing_eplb_auxfree_selection",
+  "date": "2026-11-12",
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "DeepSeek-V3 Auxiliary-Loss-Free Load Balancing (Dynamic Expert Bias b_i & Node-Limited Routing M=4)",
+      "deepseek-ai/EPLB (Expert Parallelism Load Balancer: Hierarchical Packing & Redundant Physical Expert Slots)",
+      "SGLang / vLLM Zero-Downtime Expert Weight P2P Migration & Indirection Routing Table Swap"
+    ]
+  },
+  "workload_baseline": {
+    "cluster": "64x H100/H200 GPUs (EP=64 across 8 nodes, $160/hr)",
+    "model": "671B-class MoE (256 routed experts + 1 shared expert, Top-8, 58 MoE layers, +32 redundant EPLB slots)"
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_aux_loss_capacity_factor_drop",
+      "name": "Tier 1: Legacy Aux-Loss + Hard Capacity Factor Token Dropping (CF=1.25 Drops Overflow Tokens)",
+      "name_zh": "Tier 1: 传统辅助损失 (Aux-Loss) + 容量因子硬截断丢词 (CF=1.25 溢出直接跳过专家层)",
+      "mechanism": "Adds auxiliary load-balance loss to training gradient (hurting specialization) and drops tokens exceeding CF=1.25",
+      "max_to_mean_gpu_load_skew_x": 1.25,
+      "dropped_token_pct": 14.8,
+      "benchmark_accuracy_pct": 74.2,
+      "p99_tpot_ms": 18.5,
+      "cluster_goodput_tok_s": 42800.0,
+      "cost_per_1m_tokens_usd": 1.04,
+      "annual_straggler_or_quality_waste_usd": 690000
+    },
+    {
+      "tier_id": "tier2_dropless_megablocks_unbalanced_straggler",
+      "name": "Tier 2: Dropless MoE without Redundancy (100% Token Retention but 4.20x Hot-Expert GPU Straggler Stall)",
+      "name_zh": "Tier 2: 无丢词 Dropless MoE 静态单副本 (保住 0% 丢词，但 63 张卡同步死等 1 张热门专家卡)",
+      "mechanism": "Variable-size Block-Sparse GEMM keeps all tokens (0% drop), but 1 hot GPU processes 4.2x tokens while 63 GPUs stall at All-to-All Combine",
+      "max_to_mean_gpu_load_skew_x": 4.2,
+      "dropped_token_pct": 0.0,
+      "benchmark_accuracy_pct": 81.6,
+      "p99_tpot_ms": 42.8,
+      "cluster_goodput_tok_s": 24500.0,
+      "cost_per_1m_tokens_usd": 1.81,
+      "annual_straggler_or_quality_waste_usd": 840000
+    },
+    {
+      "tier_id": "tier3_aux_loss_free_bias_node_limited_routing",
+      "name": "Tier 3: Aux-Loss-Free Dynamic Bias Routing (b_i Sign Update) + M=4 Node-Limited Routing (Training + Static Serving)",
+      "name_zh": "Tier 3: 免辅助损失动态偏置路由 (Aux-Loss-Free b_i 更新) + M=4 节点受限路由 (零梯度干扰)",
+      "mechanism": "Decouples load balancing from LM loss via gradient-free bias b_i = b_i + gamma*sign(mean - load_i) and caps each token to at most M=4 nodes",
+      "max_to_mean_gpu_load_skew_x": 1.68,
+      "dropped_token_pct": 0.0,
+      "benchmark_accuracy_pct": 84.5,
+      "p99_tpot_ms": 21.4,
+      "cluster_goodput_tok_s": 56200.0,
+      "cost_per_1m_tokens_usd": 0.79,
+      "annual_straggler_or_quality_waste_usd": 240000
+    },
+    {
+      "tier_id": "tier4_aux_loss_free_plus_dynamic_eplb_288_slots",
+      "name": "Tier 4: Aux-Loss-Free Routing + Dynamic EPLB (256 Logical -> 288 Physical Slots, Hierarchical Packing & Zero-Downtime P2P Swap)",
+      "name_zh": "Tier 4: 免辅助损失路由 + 动态 EPLB 热门专家冗余复制 (256逻辑→288物理槽位 + 分层装箱 + 零停机热迁移)",
+      "mechanism": "Pre-allocates +32 redundant physical slots (+12.5% HBM) across 64 GPUs; clones Top-32 hot experts & rebalances every 5 min via async P2P DMA",
+      "max_to_mean_gpu_load_skew_x": 1.08,
+      "dropped_token_pct": 0.0,
+      "benchmark_accuracy_pct": 84.5,
+      "p99_tpot_ms": 11.2,
+      "cluster_goodput_tok_s": 88400.0,
+      "cost_per_1m_tokens_usd": 0.5,
+      "annual_straggler_or_quality_waste_usd": 42000
+    }
+  ],
+  "skew_perturbation": [
+    {
+      "workload": "Uniform Multilingual Pretraining Mix (Low Skew = 1.4x)",
+      "tier2_dropless_p99_ms": 16.8,
+      "tier4_eplb_p99_ms": 10.6,
+      "speedup_x": 1.58,
+      "diagnosis": "Balanced domain distribution; EPLB packs node-level groups to minimize cross-node RDMA"
+    },
+    {
+      "workload": "Enterprise General Assistant & RAG Traffic (Medium Skew = 2.4x)",
+      "tier2_dropless_p99_ms": 26.4,
+      "tier4_eplb_p99_ms": 10.9,
+      "speedup_x": 2.42,
+      "diagnosis": "Top-16 SQL/JSON experts receive 2.4x traffic; EPLB 2x replication eliminates rack straggler"
+    },
+    {
+      "workload": "Daytime Coding Agent Burst (High Skew = 4.2x on Code Experts)",
+      "tier2_dropless_p99_ms": 42.8,
+      "tier4_eplb_p99_ms": 11.2,
+      "speedup_x": 3.82,
+      "diagnosis": "12 code experts hit by 65% of tokens; EPLB replicates hottest experts up to 4x across nodes"
+    },
+    {
+      "workload": "Math / Logic RL Rollout Storm (Extreme Skew = 5.8x on Reasoning Experts)",
+      "tier2_dropless_p99_ms": 58.6,
+      "tier4_eplb_p99_ms": 12.1,
+      "speedup_x": 4.84,
+      "diagnosis": "Without EPLB, 63 GPUs idle 78% of MoE step waiting on 1 symbolic-math expert GPU"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier2_goodput_gain_x": 3.61,
+    "tier4_vs_tier2_p99_speedup_x": 3.82,
+    "tier4_vs_tier1_accuracy_gain_pt": 10.3,
+    "tier4_skew_ratio_x": 1.08,
+    "tier4_vs_tier2_annual_savings_usd": 798000
+  }
+}

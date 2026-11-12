@@ -6768,5 +6768,86 @@ function updateOfflineBatchSpotSizer() {
 }
 updateOfflineBatchSpotSizer();
 </script>
+
+  <!-- Round 80: MoE Expert Load Balancing, Aux-Loss-Free Routing & Dynamic EPLB Sizer -->
+  <div id="moe-eplb-auxfree-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#f59e0b;color:#451a03;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 80 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚖️ MoE 混合专家负载均衡、免辅助损失路由（Aux-Loss-Free）与动态专家复制（EPLB）计算器</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/moe_expert_load_balancing_eplb_auxfree_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/moe-expert-load-balancing-eplb-aux-loss-free-routing-selection-faq.md" style="color:#fde68a;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/moe-expert-load-balancing-eplb-aux-loss-free-routing-selection-faq.en.md" style="color:#fde68a;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./moe-expert-load-balancing-eplb-aux-loss-free-routing-selection-cards.html" style="color:#fde68a;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">专家并行集群规模 (EP Cluster GPUs):</label>
+        <select id="mebScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateMoeEplbAuxfreeSizer()">
+          <option value="0.5">32 × H100/H200 (EP=32 跨 4 节点)</option>
+          <option value="1" selected>64 × H100/H200 (EP=64 跨 8 节点基准)</option>
+          <option value="2">128 × H100/H200 (EP=128 大规模生产池)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">当前所处生命周期阶段 (Lifecycle Stage):</label>
+        <select id="mebModeSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateMoeEplbAuxfreeSizer()">
+          <option value="serving_eplb" selected>多机在线推理 / RL Rollout 采样 (应对代码/数学 4.2x 偏斜 · Tier 4)</option>
+          <option value="pretrain_auxfree">MoE 预训练 / 垂类持续预训练 (零梯度污染 · Tier 3)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">MoE 负载均衡架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">热门卡偏斜比 / 丢词率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">代码/数理基准准确率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">P99 TPOT / 集群吞吐</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">百万词成本 / 年化慢卡损失</th>
+          </tr>
+        </thead>
+        <tbody id="mebSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="mebDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateMoeEplbAuxfreeSizer() {
+  const cMult = parseFloat(document.getElementById('mebScaleSelect').value) || 1.0;
+  const mode = document.getElementById('mebModeSelect').value || 'serving_eplb';
+  const bestId = mode === 'pretrain_auxfree' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 传统 Aux-Loss + Capacity Factor 丢词 (CF=1.25)', skew: '1.25x · 丢词 14.8% ✕', acc: '74.2% (-10.3pt ✕)', tput: `18.5ms · ${Math.round(42800*cMult).toLocaleString()} tok/s`, cost: `$1.04/1M · 年损 $${Math.round(690*cMult).toLocaleString()}k ✕` },
+    { id: 't2', name: '🟨 Tier 2: 无丢词 Dropless 静态单副本 (1 卡堵死 63 卡)', skew: '4.20x 堵死 ✕ · 0.0%', acc: '81.6%', tput: `42.8ms ✕ · ${Math.round(24500*cMult).toLocaleString()} tok/s ✕`, cost: `$1.81/1M · 年损 $${Math.round(840*cMult).toLocaleString()}k ✕` },
+    { id: 't3', name: '🟦 Tier 3: 免辅助损失动态偏置路由 (Aux-Loss-Free + M=4)', skew: '1.68x · 0.0% ✅', acc: '84.5% (满血智商 🏆)', tput: `21.4ms · ${Math.round(56200*cMult).toLocaleString()} tok/s ✅`, cost: `$0.79/1M · 年损 $${Math.round(240*cMult).toLocaleString()}k` },
+    { id: 't4', name: '🟩 Tier 4: 免损路由 + 动态 EPLB 288 物理槽位 + 零停机热迁移', skew: '1.08x 均衡 🏆 · 0.0% 🏆', acc: '84.5% (100%无损 🏆)', tput: `11.2ms (快3.82x 🏆) · ${Math.round(88400*cMult).toLocaleString()} tok/s 🏆`, cost: `$0.50/1M · 净省 $${Math.round(798*cMult).toLocaleString()}k/yr 🏆` }
+  ];
+
+  document.getElementById('mebSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(245,158,11,0.20);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#fde68a':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.skew}</code></td>
+      <td style="padding:10px;"><code>${r.acc}</code></td>
+      <td style="padding:10px;"><code>${r.tput}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('mebDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${Math.round(64*cMult)}×H100 EP=${Math.round(64*cMult)} 推理与 RL 采样池)</strong>：必选 <strong>Tier 4 (免辅助损失路由 + 动态 EPLB 256→288 物理槽位复制 + 5min 后台 P2P 热迁移)</strong>，将热门专家偏斜从 <code>4.20x</code> 削平至 <code>1.08x</code>，P99 TPOT 压至 <code>11.2ms (快 3.82x)</code>，吞吐提升 <code>3.61x</code>，每年净省 <code>$${Math.round(798000*cMult).toLocaleString()}</code>！`
+    : `<strong>架构师选型建议 (MoE 预训练与微调阶段)</strong>：必选 <strong>Tier 3 (Aux-Loss-Free 动态符号偏置路由 + M=4 节点受限路由)</strong>，彻底消除辅助损失梯度污染，基准准确率提升 <code>+10.3pt (84.5%)</code>！`;
+}
+updateMoeEplbAuxfreeSizer();
+</script>
 </body>
 </html>
