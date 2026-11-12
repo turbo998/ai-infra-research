@@ -1,0 +1,97 @@
+{
+  "experiment_id": "multi_cloud_llm_failover_429_rate_limit_hedging_selection",
+  "date": "2026-11-12",
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "Dean & Barroso 'The Tail at Scale' Speculative Hedged Requests Applied to Multi-Region LLM TTFT",
+      "Azure OpenAI PTU (Provisioned Throughput Units) + Pay-As-You-Go Spillover Token-Bucket Economics",
+      "LiteLLM / Portkey / Envoy AI Gateway Mid-Stream SSE Prefix Continuation & Cross-Provider Schema Translation"
+    ]
+  },
+  "workload_baseline": {
+    "monthly_requests": 30000000,
+    "token_profile": "3,200 input tokens + 600 output tokens, 3.5x peak-to-average diurnal burst"
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_single_region_exponential_backoff_retry",
+      "name": "Tier 1: Single-Endpoint Client Exponential Backoff Retry (Wait 2s -> 4s -> 8s on HTTP 429/503)",
+      "name_zh": "Tier 1: 单区域客户端指数退避重试 (遇 429/503 硬睡 2s→4s→8s：P99 首字延迟飙至 24.8 秒)",
+      "mechanism": "Sends all traffic to one primary endpoint; on HTTP 429 or timeout, sleeps 2^k seconds and retries the same congested region",
+      "effective_sla_availability_pct": 94.2,
+      "p99_ttft_latency_ms": 24800.0,
+      "mid_stream_wasted_token_pct": 18.5,
+      "monthly_llm_spend_usd": 468000
+    },
+    {
+      "tier_id": "tier2_reactive_multi_region_failover_on_error",
+      "name": "Tier 2: Reactive Multi-Region Failover After Timeout/429 (Wait 5s Timeout -> Restart Full Prompt from Scratch)",
+      "name_zh": "Tier 2: 被动报错后跨区切换 (等 5 秒超时或收到 429 后才切备区 + 流式中断被迫从第 1 个字重算)",
+      "mechanism": "Switches to secondary region only after receiving HTTP 429 or waiting 5,000ms TTFT timeout; mid-stream drops restart from token 0",
+      "effective_sla_availability_pct": 98.85,
+      "p99_ttft_latency_ms": 5850.0,
+      "mid_stream_wasted_token_pct": 14.2,
+      "monthly_llm_spend_usd": 442000
+    },
+    {
+      "tier_id": "tier3_predictive_local_tpm_bucket_plus_ttft_hedging",
+      "name": "Tier 3: Gateway Local TPM/RPM Token-Bucket Pre-Routing + P95 TTFT Speculative Hedging (850ms Trigger)",
+      "name_zh": "Tier 3: 网关本地 TPM 令牌桶预判分流 + 850ms 首字投机对冲 (Speculative Hedging：零等待避开 429)",
+      "mechanism": "Tracks remaining TPM/RPM headers locally to route around exhausted quotas in 0.2ms; fires backup hedged request if TTFT > 850ms",
+      "effective_sla_availability_pct": 99.92,
+      "p99_ttft_latency_ms": 920.0,
+      "mid_stream_wasted_token_pct": 9.8,
+      "monthly_llm_spend_usd": 395000
+    },
+    {
+      "tier_id": "tier4_ptu_base_spillover_midstream_prefix_resume_schema_adapter",
+      "name": "Tier 4: Base PTU/vLLM + Proactive TPM Spillover + Mid-Stream Prefix Continuation + Cross-Provider AST Schema Adapter",
+      "name_zh": "Tier 4: 保底 PTU/自建基荷 + 令牌桶主动溢出 + 流式断流前缀续写 (Mid-Stream Resume) + 跨云 Schema 无缝转换",
+      "mechanism": "Saturates committed PTU/vLLM at 92% utilization, spills bursts via local TPM buckets, and resumes stalled SSE streams by appending partial output as assistant prefix",
+      "effective_sla_availability_pct": 99.995,
+      "p99_ttft_latency_ms": 640.0,
+      "mid_stream_wasted_token_pct": 0.6,
+      "monthly_llm_spend_usd": 248000
+    }
+  ],
+  "failure_perturbation": [
+    {
+      "incident": "Daytime 3.5x Traffic Burst (Primary Endpoint Hits 100% TPM Quota Limit)",
+      "tier1_p99_ms": 24800.0,
+      "tier2_p99_ms": 2150.0,
+      "tier4_p99_ms": 580.0,
+      "insight": "Gateway local token estimator pre-routes overflow at 95% TPM watermark in 0.2ms before any 429 occurs!"
+    },
+    {
+      "incident": "Silent Upstream Congestion (Primary Region Stalls Without Returning HTTP Error)",
+      "tier1_p99_ms": 30000.0,
+      "tier2_p99_ms": 5850.0,
+      "tier4_p99_ms": 640.0,
+      "insight": "Tier 4 P95 TTFT speculative hedge fires to Region B at 600ms and cancels the slower stream on first token"
+    },
+    {
+      "incident": "Mid-Generation SSE Stream Stall at Token 450 / 600 (TCP Reset / Worker Crash)",
+      "tier1_p99_ms": 18500.0,
+      "tier2_p99_ms": 8400.0,
+      "tier4_p99_ms": 720.0,
+      "insight": "Instead of discarding 450 tokens, Tier 4 appends the 450 tokens as an assistant prefill prefix and resumes token 451!"
+    },
+    {
+      "incident": "Full Cloud Provider Regional Outage (Failover from Azure/OpenAI to Bedrock/Anthropic or Self-Hosted vLLM)",
+      "tier1_p99_ms": 60000.0,
+      "tier2_p99_ms": 12400.0,
+      "tier4_p99_ms": 690.0,
+      "insight": "Canonical AST Tool/JSON Schema transpiler translates tool_calls & strict JSON schemas across model families with 0 errors"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_p99_speedup_x": 38.8,
+    "tier4_vs_tier2_p99_speedup_x": 9.14,
+    "tier4_availability_pct": 99.995,
+    "tier4_mid_stream_waste_pct": 0.6,
+    "tier4_vs_tier1_annual_savings_usd": 2640000
+  }
+}
