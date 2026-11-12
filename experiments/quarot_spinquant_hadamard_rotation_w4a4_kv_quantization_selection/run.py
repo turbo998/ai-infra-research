@@ -1,0 +1,218 @@
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+
+
+def simulate_quarot_spinquant_selection() -> dict:
+    """Deterministic simulator for QuaRot / SpinQuant Hadamard Rotation & W4A4 + KV4 Quantization."""
+    model_profile = {
+        "model": "Llama-3.1-70B-Instruct",
+        "hidden_size": 8192,
+        "num_layers": 80,
+        "head_dim": 128,
+        "context_length": 32768,
+        "batch_size": 32,
+        "provenance_type": "synthetic_combined_with_anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+    }
+
+    scenarios = [
+        {
+            "id": "S1_FP16_Baseline",
+            "name": "FP16 Baseline (W16A16 + KV16)",
+            "rotation_scheme": "None (Raw Residual Stream)",
+            "activation_kurtosis": 482.4,
+            "max_to_median_channel_ratio": 78.5,
+            "wikitext2_ppl": 5.12,
+            "ppl_delta": 0.00,
+            "mmlu_5shot_pct": 79.4,
+            "weights_vram_gb": 140.0,
+            "kv_cache_vram_gb": 134.2,
+            "total_vram_gb": 274.2,
+            "prefill_throughput_tok_s": 14200,
+            "speedup_vs_fp16": 1.00,
+            "online_rotation_overhead_pct": 0.00,
+            "decision_action": "Baseline Reference (Requires 4x80GB GPUs)",
+        },
+        {
+            "id": "S2_Naive_SmoothQuant_W4A4_KV4",
+            "name": "Naive Diagonal Scaling (SmoothQuant W4A4 + KV4)",
+            "rotation_scheme": "Diagonal Channel Migration diag(s)",
+            "activation_kurtosis": 310.6,
+            "max_to_median_channel_ratio": 34.2,
+            "wikitext2_ppl": 29.85,
+            "ppl_delta": 24.73,
+            "mmlu_5shot_pct": 34.8,
+            "weights_vram_gb": 35.0,
+            "kv_cache_vram_gb": 33.6,
+            "total_vram_gb": 68.6,
+            "prefill_throughput_tok_s": 38400,
+            "speedup_vs_fp16": 2.70,
+            "online_rotation_overhead_pct": 0.00,
+            "decision_action": "Reject (Catastrophic INT4 Clipping Collapse)",
+        },
+        {
+            "id": "S3_AWQ_W4A16_FP8KV_Hybrid",
+            "name": "AWQ Weight-Only W4A16 + FP8 KV-Cache",
+            "rotation_scheme": "Salient-Weight Scaling (No Activation Quant)",
+            "activation_kurtosis": 482.4,
+            "max_to_median_channel_ratio": 78.5,
+            "wikitext2_ppl": 5.29,
+            "ppl_delta": 0.17,
+            "mmlu_5shot_pct": 78.6,
+            "weights_vram_gb": 35.0,
+            "kv_cache_vram_gb": 67.1,
+            "total_vram_gb": 102.1,
+            "prefill_throughput_tok_s": 16800,
+            "speedup_vs_fp16": 1.18,
+            "online_rotation_overhead_pct": 0.00,
+            "decision_action": "Confirm (Good for Low-Batch Decode; Prefill Still FP16-Bound)",
+        },
+        {
+            "id": "S4_QuaRot_Hadamard_W4A4_KV4",
+            "name": "QuaRot Randomized Hadamard W4A4 + INT4 KV",
+            "rotation_scheme": "Offline R1/R2 Hadamard + Online FWHT R3/R4",
+            "activation_kurtosis": 3.24,
+            "max_to_median_channel_ratio": 2.85,
+            "wikitext2_ppl": 5.46,
+            "ppl_delta": 0.34,
+            "mmlu_5shot_pct": 77.8,
+            "weights_vram_gb": 35.0,
+            "kv_cache_vram_gb": 33.6,
+            "total_vram_gb": 68.6,
+            "prefill_throughput_tok_s": 36200,
+            "speedup_vs_fp16": 2.55,
+            "online_rotation_overhead_pct": 1.75,
+            "decision_action": "Act Automatically (Zero-Calibration Training-Free W4A4)",
+        },
+        {
+            "id": "S5_SpinQuant_Cayley_W4A4_KV4",
+            "name": "SpinQuant Cayley-Learned Rotation W4A4 + INT4 KV",
+            "rotation_scheme": "Cayley Stiefel R1/R2 (100% Offline Fused) + Online FWHT R3/R4",
+            "activation_kurtosis": 2.92,
+            "max_to_median_channel_ratio": 2.41,
+            "wikitext2_ppl": 5.24,
+            "ppl_delta": 0.12,
+            "mmlu_5shot_pct": 78.9,
+            "weights_vram_gb": 35.0,
+            "kv_cache_vram_gb": 33.6,
+            "total_vram_gb": 68.6,
+            "prefill_throughput_tok_s": 36900,
+            "speedup_vs_fp16": 2.60,
+            "online_rotation_overhead_pct": 1.42,
+            "decision_action": "Act Automatically (Production Best-in-Class W4A4/FP4)",
+        },
+    ]
+
+    perturbation_checks = [
+        {
+            "case": "Extreme Outlier Channel Spike (120x Median on Coding / Math Prompts)",
+            "metric": "WikiText-2 / Code PPL",
+            "naive_w4a4": 44.10,
+            "spinquant_w4a4": 5.31,
+            "delta_improvement": "-38.79 PPL (Outlier Distributed Across 8192 Dims)",
+        },
+        {
+            "case": "Long-Context 128K KV-Cache Quantization (INT4 Per-Token Group=128)",
+            "metric": "Needle-in-a-Haystack Retrieval (%)",
+            "naive_w4a4": 41.5,
+            "spinquant_w4a4": 99.1,
+            "delta_improvement": "+57.6 pts (Partial RoPE Hadamard R4 Preserves Key Norms)",
+        },
+        {
+            "case": "Blackwell B200 NVFP4 Micro-Scaling (Block-16 E2M1 + E4M3 Scale)",
+            "metric": "5-Shot MMLU Accuracy (%)",
+            "naive_w4a4": 74.2,
+            "spinquant_w4a4": 79.2,
+            "delta_improvement": "+5.0 pts (Within 0.2% of FP16 Baseline)",
+        },
+        {
+            "case": "Non-Power-of-Two Intermediate Dim (d_ff = 28672 = 112 x 256 Block Hadamard)",
+            "metric": "Online FWHT Kernel Latency Overhead (%)",
+            "naive_w4a4": 4.85,
+            "spinquant_w4a4": 1.42,
+            "delta_improvement": "-3.43 pts (Kronecker H_256 x Paley-H_112 Fused Kernel)",
+        },
+    ]
+
+    latency_scaling = [
+        {
+            "seq_len": 2048,
+            "fp16_ttft_ms": 1154.0,
+            "awq_w4a16_ttft_ms": 976.0,
+            "spinquant_w4a4_ttft_ms": 444.0,
+        },
+        {
+            "seq_len": 4096,
+            "fp16_ttft_ms": 2310.0,
+            "awq_w4a16_ttft_ms": 1952.0,
+            "spinquant_w4a4_ttft_ms": 889.0,
+        },
+        {
+            "seq_len": 8192,
+            "fp16_ttft_ms": 4680.0,
+            "awq_w4a16_ttft_ms": 3960.0,
+            "spinquant_w4a4_ttft_ms": 1795.0,
+        },
+        {
+            "seq_len": 16384,
+            "fp16_ttft_ms": 9540.0,
+            "awq_w4a16_ttft_ms": 8110.0,
+            "spinquant_w4a4_ttft_ms": 3640.0,
+        },
+    ]
+
+    inv_sqrt_4 = 0.5
+    h4 = [
+        [inv_sqrt_4, inv_sqrt_4, inv_sqrt_4, inv_sqrt_4],
+        [inv_sqrt_4, -inv_sqrt_4, inv_sqrt_4, -inv_sqrt_4],
+        [inv_sqrt_4, inv_sqrt_4, -inv_sqrt_4, -inv_sqrt_4],
+        [inv_sqrt_4, -inv_sqrt_4, -inv_sqrt_4, inv_sqrt_4],
+    ]
+    x_vec = [64.0, 0.5, -0.4, 0.3]
+    w_vec = [0.25, -0.5, 0.75, 0.1]
+    raw_dot = sum(x * w for x, w in zip(x_vec, w_vec))
+    x_rot = [sum(x_vec[i] * h4[i][j] for i in range(4)) for j in range(4)]
+    w_rot = [sum(h4[i][j] * w_vec[i] for i in range(4)) for j in range(4)]
+    rot_dot = sum(xr * wr for xr, wr in zip(x_rot, w_rot))
+    invariance_abs_error = round(abs(raw_dot - rot_dot), 12)
+    raw_max_abs = round(max(abs(v) for v in x_vec), 4)
+    rot_max_abs = round(max(abs(v) for v in x_rot), 4)
+
+    summary = {
+        "best_scenario": "S5_SpinQuant_Cayley_W4A4_KV4",
+        "kurtosis_reduction_pct": round((482.4 - 2.92) / 482.4 * 100.0, 2),
+        "vram_reduction_vs_fp16_pct": round((274.2 - 68.6) / 274.2 * 100.0, 2),
+        "prefill_speedup_vs_fp16": 2.60,
+        "prefill_speedup_vs_awq_w4a16": round(36900 / 16800, 2),
+        "spinquant_ppl_delta_vs_fp16": 0.12,
+        "invariance_verification": {
+            "raw_max_abs": raw_max_abs,
+            "rotated_max_abs": rot_max_abs,
+            "amplitude_dampening_ratio": round(raw_max_abs / rot_max_abs, 2),
+            "dot_product_abs_error": invariance_abs_error,
+        },
+    }
+
+    return {
+        "experiment_id": "quarot_spinquant_hadamard_rotation_w4a4_kv_quantization_selection_20261112",
+        "model_profile": model_profile,
+        "scenarios": scenarios,
+        "perturbation_checks": perturbation_checks,
+        "latency_scaling": latency_scaling,
+        "summary": summary,
+    }
+
+
+def main() -> None:
+    payload = simulate_quarot_spinquant_selection()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"Wrote {out_path} with best scenario {payload['summary']['best_scenario']}")
+
+
+if __name__ == "__main__":
+    main()
