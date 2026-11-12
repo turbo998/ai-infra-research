@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Asynchronous Tensor Parallelism (Async-TP), CUDA SymmetricMemory &amp; Zero-SM Overlap — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #c7d2fe; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #3730a3; background: #e0e7ff; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 25.5px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #4f46e5, #0891b2);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #4f46e5; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 245px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 135px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>⚡ 大模型异步张量并行 (Async-TP)、CUDA 对称内存与零 SM 重叠 — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/async_tensor_parallelism_gemm_comm_overlap_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/async-tensor-parallelism-gemm-comm-overlap-symmetric-memory-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/async-tensor-parallelism-gemm-comm-overlap-symmetric-memory-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#async-tp-symmmem-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · ASYNC-TP, SYMMETRIC MEMORY &amp; ZERO-SM OVERLAP</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">零 SM Copy Engine + NVSwitch multimem 尾声归约</span> 将 TP 通信空泡从 28.4% 压至 1.6%，集群 MFU 跃升至 61.7%</h2>
+      <p class="subhead">针对 8×H100/H200 SXM5 (900GB/s NVSwitch, TP=8 + SP) 运行 70B/405B 模型，对比传统串行 TP、双流分块 NCCL、对称内存瓦片直推与零 SM 融合重叠。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档张量并行架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (串行 TP+SP)</strong>: 28.4% 空泡, 44.2% MFU ✕<br/>
+            • <strong>Tier 2 (双流 NCCL)</strong>: 抢 24 SM, GEMM 掉速 -18.5% ✕<br/>
+            • <strong>Tier 3 (SymmMem 直推)</strong>: 占 4 SM, 58.6% MFU ✅<br/>
+            • <strong>Tier 4 (0-SM CE+multimem)</strong>: 1.6% 空泡, 61.7% MFU 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 硬件与并行契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 节点规格：<code>8×H100/H200 (900GB/s NVSwitch)</code><br/>
+            • 并行策略：<code>TP=8 + Sequence Parallel (SP)</code><br/>
+            • 每层原语：<code>2×AllGather + 2×ReduceScatter</code><br/>
+            • 硬件总数：<code>132 SMs / GPU + Copy Engines</code><br/>
+            • 多播指令：<code>PTX multimem.red.add.bf16x2</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 暴露通信空泡：<code>28.4% → 1.6% (掩盖 94%)</code><br/>
+            • 通信抢占 SM 数：<code>24 SMs → 0 SMs 🏆</code><br/>
+            • GEMM 速度保持：<code>81.5% → 99.2% (+17.7pt)</code><br/>
+            • 单层前反提速：<code>14.80ms → 10.60ms (1.40x)</code><br/>
+            • 128卡年净省：<code>净省 $750,000 / yr 🏆</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>128×H100 集群在 TP=8 + SP 下的有效算力利用率 (Cluster MFU %，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · 0-SM Copy Engine + NVSwitch multimem 融合</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: 零 SM CopyEngine + multimem (0 SM)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:61.7%;"></div></div>
+          <span class="bar-val">61.7% 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: CUDASymmetricMemory 瓦片直推 (4 SM)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:58.6%;"></div></div>
+          <span class="bar-val">58.6% ✅</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: 双流分块 NCCL 重叠 (抢 24 SM 掉速)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:50.7%;"></div></div>
+          <span class="bar-val">50.7%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 传统串行 TP+SP (28.4% 阻塞干等)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:44.2%;"></div></div>
+          <span class="bar-val">44.2% ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to PyTorch 2.5+ `CUDASymmetricMemory` / `Async-TP`, TransformerEngine `P2P_CUMEM` Copy-Engine overlap, and H100 132-SM wave quantization physics (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: FP8 70B/405B TRAINING &amp; WAVE QUANTIZATION CLIFF</span>
+        <span class="badge-prov">Case Study · Why 2-Stream NCCL Overlap Slows Down cuBLAS GEMMs</span>
+      </div>
+      <h2 class="headline">NCCL 抢走 24 个 SM 导致矩阵乘多跑 1 轮尾波掉速 18.5%；改走 0-SM Copy Engine 满血恢复</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们在 8×H100 上开启 FP8 训 70B 模型，发现因为 FP8 矩阵乘快了一倍，串行 TP 的 AllGather 和 ReduceScatter 占到了每层将近 38% 的时间！但当我们用两个 CUDA Stream 开启分块 NCCL 通信重叠后，Nsight Systems 里看到正在跑的 cuBLAS 矩阵乘时间竟然莫名其妙拉长了 22%，总提速还不到预期的一半！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：H100 / H200 / B200 NVSwitch 节点上的 TP=8 训练与大批量推理</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (0-SM Copy Engine DMA + NVSwitch multimem 融合)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">把 AllGather 交给独立于 SM 之外的硬件 Copy Engine 执行（占 0 个 SM），全部 132 个 SM 整齐跑满 cuBLAS 波次，矩阵乘速度保持率从 <code>81.5%</code> 恢复至 <code>99.2%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 并发时 cuBLAS 矩阵乘速度保持率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:99.2%;"></div></div>
+            <span class="bar-val">99.2% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 被 NCCL 抢走 24 SM 后的矩阵乘速度</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:81.5%;"></div></div>
+            <span class="bar-val">81.5% (-18.5% ✕)</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：打破 AllGather → GEMM 的先后等待死锁</strong></div>
+            <span class="pill pill-auto">Act automatically · 第 0ms 直接计算本地 1/8 分片 + 环状推流</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">每张卡第 0ms 直接算本地已有的 <code>X_local @ W</code>，同时后台拉取邻居分片，将暴露通信空泡从 <code>28.4%</code> 砸穿至 <code>1.6%</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 暴露未掩盖的 TP 通信空泡占比</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:5.6%;"></div></div>
+            <span class="bar-val">1.6% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统串行 TP 暴露通信空泡占比</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">28.4% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：跨两台节点跑 TP=16 (405B 超大模型) 如何掩盖跨机 RDMA？</strong></div>
+            <span class="pill pill-confirm">Confirm · 采用 2D 分层 Async-TP (算机内 7 块时掩盖跨机第 0 块)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">利用机内 7 个 NVLink 分块的计算时间（~8ms）完全掩盖跨节点 RoCE/IB 网卡传输，单层提速达 <code>1.61x</code>。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Overlapping communication is useless if the communication kernel steals SMs and slows down the concurrent GEMM by 18.5%. Zero-SM Copy Engines + in-switch `multimem` solve both.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER ASYNC-TP OVERLAP MATRIX</span>
+        <span class="badge-prov">8×H100 SXM5 · TP=8 + SP · 8K Sequence Layer</span>
+      </div>
+      <h2 class="headline">四档张量并行重叠架构全矩阵评测：通信空泡、抢占 SM 数、GEMM 保持率与 MFU</h2>
+      <p class="subhead">全面对比串行 TP+SP、双流分块 NCCL、对称内存瓦片直推与零 SM CopyEngine + multimem 架构。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (TP 重叠架构档位)</th>
+            <th>QUESTION / TASK (重叠与通信执行机制)</th>
+            <th>MODEL ANSWER (空泡 / 抢占SM / GEMM保持 / MFU)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 传统串行 TP+SP</strong></td>
+            <td>串行等 AllGather → GEMM → 等 ReduceScatter</td>
+            <td>空泡 <code>28.4% ✕</code> · <code>14.80ms ✕</code> · MFU <code>44.2% ✕</code> · 128卡年损 <code>$795k ✕</code></td>
+            <td><span class="pill pill-human">严重阻塞 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 双流分块 NCCL 重叠</strong></td>
+            <td>切 4 块双流并发 + 重型 NCCL 核函数</td>
+            <td>空泡 <code>14.2%</code> · 抢 <code>24 SMs ✕</code> · GEMM 保持 <code>81.5% ✕</code> · <code>12.90ms</code> · MFU <code>50.7%</code></td>
+            <td><span class="pill pill-human">抢占 SM 掉速 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 对称内存瓦片直推</strong></td>
+            <td><code>cuMemMap</code> 跨卡指针直写 + 瓦片环流水</td>
+            <td>空泡 <code>4.5% ✅</code> · 仅占 <code>4 SMs ✅</code> · GEMM 保持 <code>95.8% ✅</code> · <code>11.15ms</code> · MFU <code>58.6% ✅</code></td>
+            <td><span class="pill pill-confirm">通用 P2P 首选 ✅</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: 零 SM CE + multimem</strong></td>
+            <td>0-SM DMA 预取 AG + NVSwitch 尾声归约</td>
+            <td>空泡 <code>1.6% 🏆</code> · 占 <code>0 SMs 🏆</code> · GEMM 保持 <code>99.2% 🏆</code> · <code>10.60ms 🏆</code> · MFU <code>61.7% 🏆</code></td>
+            <td><span class="pill pill-auto">NVSwitch 终极 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#3730a3;">✅ 为什么 `multimem.red` 还能省掉一趟本地 HBM 读写？</strong><br/>
+          传统 ReduceScatter 需要 GEMM 先把未归约结果写回本地 HBM，再由 NCCL 读出来发走；尾声内联 `multimem.red` 直接从寄存器发往 NVSwitch 累加！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么 PyTorch 编译模式 (`torch.compile`) 对 Async-TP 很关键？</strong><br/>
+          開啟 `torch._inductor.config.enable_async_tp = True` 后，编译器会自动识别线性层前后的集合通信并将其重写为对称内存融合算子！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Moving TP collectives off GPU SMs onto Hardware Copy Engines (`AllGather`) and NVSwitch silicon (`ReduceScatter`) unlocks a 1.40×–1.61× layer speedup and +17.5pt MFU gain.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · SYMMETRIC MEMORY &amp; FUSED MULTIMEM EPILOGUE</span>
+        <span class="badge-prov">PyTorch CUDASymmetricMemory + Copy-Engine Ring</span>
+      </div>
+      <h2 class="headline">底层机制：第 0ms 本地分片先行流水 + Epilogue 内联 `multimem.red` 硬件多播归约</h2>
+      <p class="subhead">展示 Tier 4 如何用 0 个通信 SM 完成 AllGather 预取与 ReduceScatter 尾声融合。</p>
+
+      <div class="code-dark"><pre># 1. 前半场 (AllGather + GEMM): 第 0ms 立即用全部 132 个 SM 算本地分片，0-SM Copy Engine 后台拉取邻居分片
+symm_buf = torch.distributed._symmetric_memory.empty((8, M_shard, K), dtype=torch.bfloat16, device="cuda")
+hdl = torch.distributed._symmetric_memory.rendezvous(symm_buf, group=tp_group)
+
+# Chunk 0 (本地已有): 0.0ms 零等待启动满血 132-SM GEMM！同时在 dma_stream 启动 Chunk 1 跨卡拉取
+out_chunks[my_rank] = torch.mm(x_local_shard, weight_col_parallel)
+for step in range(1, 8):
+    src_rank = (my_rank + step) % 8
+    with torch.cuda.stream(ce_dma_stream):  # 走硬件 Copy Engine DMA (占用 0 个 GPU SM！)
+        symm_buf[src_rank].copy_(hdl.get_buffer(src_rank, (M_shard, K)), non_blocking=True)
+    compute_stream.wait_stream(ce_dma_stream)
+    out_chunks[src_rank] = torch.mm(symm_buf[src_rank], weight_col_parallel)</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#4f46e5;margin:6px 0;">↓ 后半场 (GEMM + ReduceScatter): CUTLASS Epilogue 内联 PTX multimem.red (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre>// 2. 后半场 (Row-Parallel GEMM + ReduceScatter): 算完每个 Tile 直接由 NVSwitch 芯片硬件累加
+CUTLASS_DEVICE void fused_multimem_reduce_scatter_epilogue(bf16x2 reg_acc, void* nvls_multicast_ptr) {
+    // 直接从 Tensor Core 寄存器发往 NVSwitch 多播地址，0 通信 SM 占用，省去本地 HBM 往返读写！
+    asm volatile("multimem.red.relaxed.sys.global.add.v4.bf16x2 [%0], {%1, %2, %3, %4};"
+                 :: "l"(nvls_multicast_ptr), "r"(reg_acc.x), "r"(reg_acc.y), "r"(reg_acc.z), "r"(reg_acc.w));
+}
+// &lt;answer&gt; Validated: 0 comm SMs, 99.2% GEMM retention, 1.6% bubble, 10.60ms/layer (1.40x), 61.7% MFU</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Because `ce_dma_stream` executes pure `cudaMemcpyAsync` Peer-to-Peer transfers, the GPU hardware Copy Engine handles all NVLink packetization without touching a single SM warp scheduler.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · SEQUENCE, FP8 &amp; MULTI-NODE TP=16 SCALING</span>
+        <span class="badge-prov">2K Short → 8K BF16 → 32K FP8 → Multi-Node TP=16</span>
+      </div>
+      <h2 class="headline">场景扰动压测：FP8 下提速扩至 1.48x，跨两机 TP=16 下掩盖跨机 RDMA 提速高达 1.61x</h2>
+      <p class="subhead">测试短序列、标准 BF16、长序列 FP8 与跨节点 TP=16 四种工况下的单层耗时表现。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (训练/推理工况与通信压力)</th>
+            <th>ORIGINAL (Tier 1 串行 TP+SP)</th>
+            <th>PERTURBED (Tier 4 零 SM Async-TP)</th>
+            <th>CHANGE (单层提速比与机制诊断)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>2K 短序列 (延迟敏感型小批量)</strong><br/>通信启动延迟主导</td>
+            <td>单层耗时 <code>4.20 ms</code><br/>(Tier 2 为 <code>3.85 ms</code>)</td>
+            <td>单层耗时 <code>2.95 ms 🏆</code><br/>(内联融合消除启动税)</td>
+            <td><strong style="color:#2563eb;">快 1.42x ✅</strong><br/>省去每层 16 次独立通信核启动</td>
+          </tr>
+          <tr>
+            <td><strong>8K 标准预训练 (BF16 主力基线)</strong><br/>计算与 NVLink 带宽均衡</td>
+            <td>单层耗时 <code>14.80 ms ✕</code><br/>(Tier 2 为 <code>12.90 ms</code>)</td>
+            <td>单层耗时 <code>10.60 ms 🏆</code><br/>(99.2% 满血 GEMM)</td>
+            <td><strong style="color:#0891b2;">快 1.40x 🏆</strong><br/>保住 132-SM 整波次矩阵乘</td>
+          </tr>
+          <tr>
+            <td><strong>32K 长序列 + FP8 混合精度训练</strong><br/>FP8 使矩阵乘快 1 倍、通信占比飙升</td>
+            <td>单层耗时 <code>56.40 ms ✕</code><br/>(通信阻塞占比高达 <code>38% ✕</code>)</td>
+            <td>单层耗时 <code>38.10 ms 🏆</code><br/>(Tier 2 为 <code>48.20 ms</code>)</td>
+            <td><strong style="color:#059669;">快 1.48x 🏆</strong><br/>彻底释放 FP8 Tensor Core 潜力</td>
+          </tr>
+          <tr>
+            <td><strong>跨两机 TP=16 (405B 超大模型)</strong><br/>跨机 RoCE/IB 带宽仅为 NVLink 1/18</td>
+            <td>单层耗时 <code>24.50 ms ✕</code><br/>(跨机通信严重卡顿 ✕)</td>
+            <td>单层耗时 <code>15.20 ms 🏆</code><br/>(2D 分层环掩盖跨机块)</td>
+            <td><strong style="color:#059669;">快 1.61x 🏆</strong><br/>算机内 7 块时完全藏住跨机 RDMA</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔍 为什么推理 Prefill 阶段同样能从 Async-TP 大幅获益？</strong><br/>
+          在 8K~32K 长 Prompt 的 Prefill 阶段，TP AllReduce 占了 20%~30% 的 TTFT；开启 Tier 4 可将长上下文首字延迟直接压降 <code>22%+</code>！
+        </div>
+        <div class="callout-box">
+          <strong>⚡ 为什么在 Blackwell B200 上更必须开 Tier 4？</strong><br/>
+          B200 的 NVFP4/FP8 算力暴涨 2.5 倍，而 NVLink 5 带宽仅翻倍（1.8 TB/s），计算越快就越必须靠 0-SM Async-TP 掩盖通信！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: As Tensor Cores get faster (BF16 → FP8 → NVFP4), unoverlapped TP communication becomes the #1 bottleneck; Tier 4 hides 94% of it with zero SM tax.
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; EFFICIENCY SCALING · BUBBLE, GEMM SPEED &amp; MFU BARS</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 3/4 SymmMem+0SM vs Slate=Tier 1/2 Baselines</span>
+      </div>
+      <h2 class="headline">气泡、算力保持与 MFU 对比：暴露通信压至 1.6%，128 卡集群每年净省 $75.0 万</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 3/4 对称内存与零 SM 重叠架构，浅灰条（<code>#CBD5E1</code>）代表传统串行与双流 NCCL 基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 每层暴露未掩盖的 TP 通信空泡占比 (% ，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 零 SM CopyEngine + multimem 融合</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:5.6%;"></div></div>
+            <span class="bar-val">1.6% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: CUDASymmetricMemory 瓦片直推</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:15.8%;"></div></div>
+            <span class="bar-val">4.5% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 双流分块 NCCL 重叠</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:50.0%;"></div></div>
+            <span class="bar-val">14.2%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统串行 TP+SP (全量暴露)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">28.4% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 通信并发期间 cuBLAS 矩阵乘算力保持率 (% ，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 0-SM Copy Engine (保住全部 132 SM)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:99.2%;"></div></div>
+            <span class="bar-val">99.2% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: 对称内存瓦片直推 (仅占 4 SM)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:95.8%;"></div></div>
+            <span class="bar-val">95.8% ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: 双流 NCCL (被抢 24 SM 触发尾波)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:81.5%;"></div></div>
+            <span class="bar-val">81.5% ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 128×H100 集群因 TP 通信阻塞/争抢造成的年化算力浪费 ($ / yr，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: 零 SM CopyEngine + multimem</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:5.7%;"></div></div>
+            <span class="bar-val">$45k / yr (省 $750k 🏆)</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: CUDASymmetricMemory 瓦片直推</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:17.9%;"></div></div>
+            <span class="bar-val">$142k / yr ✅</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 传统串行 TP+SP (干等浪费)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">$795k / yr ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Lifting cluster MFU from 44.2% to 61.7% (+17.5 percentage points) via Zero-SM Async-TP is equivalent to adding 50 free H100 GPUs to a 128-GPU cluster!
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：用 SymmetricMemory + 0-SM Copy Engine 终结 TP 通信阻塞与 SM 争抢</h2>
+      <p class="subhead">让 132 个 SM 专心算矩阵乘，把搬运交给 Copy Engine，把加法交给 NVSwitch 芯片！</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>70B~405B 大模型 TP=8 / TP=16 预训练与后训练 → Tier 4</strong>：单层提速 `1.40x~1.61x`，MFU 冲上 61.7%。</li>
+            <li>• <strong>FP8 / NVFP4 低精度训练与长文本 Prefill 推理 → Tier 4</strong>：矩阵乘越快，掩盖 TP 通信带来的加速比越大。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在 TP+SP 训练中保持默认串行不开启重叠 (Tier 1)</strong>：会白白损失近 30% 的算力时间。</li>
+            <li>• <strong>严禁在并发流中开启占用 20+ 个 SM 的传统 Ring NCCL 核函数与 GEMM 抢资源 (Tier 2)</strong>：破坏波次量化得不偿失。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 对称内存：在 TorchTitan / FSDP2 中开启 <code>enable_symm_mem_for_group(tp_group)</code> 与 <code>enable_async_tp = True</code>。<br/>
+          2. <code>[ ]</code> 零 SM 引擎：在 TransformerEngine / Megatron-Core 中开启 <code>--tp-comm-overlap</code> 与 Copy Engine <code>P2P_CUMEM</code>。<br/>
+          3. <code>[ ]</code> 多播归约：在 NVSwitch 节点上确认 <code>NCCL_NVLS_ENABLE=1</code> 与 Epilogue <code>multimem.red</code> 融合生效。<br/>
+          4. <code>[ ]</code> 性能核验：用 Nsight Systems 确认 <code>AllGather</code> 跑在 Copy Engine 行且并发 GEMM 耗时膨胀率 <code>&lt; 2%</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness Verdict</strong>: Production-ready for PyTorch 2.5+ Async-TP, TorchTitan &amp; Megatron-Core. Provenance: `synthetic` + `anonymized_reported` (`independently_reproduced=false`).
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

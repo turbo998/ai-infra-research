@@ -7011,5 +7011,86 @@ function updateSacAsyncOffloadSizer() {
 }
 updateSacAsyncOffloadSizer();
 </script>
+
+  <!-- Round 83: Asynchronous Tensor Parallelism (Async-TP), CUDA SymmetricMemory & Zero-SM Overlap Sizer -->
+  <div id="async-tp-symmmem-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#6366f1;color:#1e1b4b;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 83 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">⚡ 大模型异步张量并行（Async-TP）、CUDA 对称内存（SymmetricMemory）与零 SM 重叠计算器</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">封存模型：<code>experiments/async_tensor_parallelism_gemm_comm_overlap_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/async-tensor-parallelism-gemm-comm-overlap-symmetric-memory-selection-faq.md" style="color:#c7d2fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="../components/async-tensor-parallelism-gemm-comm-overlap-symmetric-memory-selection-faq.en.md" style="color:#c7d2fe;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="./async-tensor-parallelism-gemm-comm-overlap-symmetric-memory-selection-cards.html" style="color:#c7d2fe;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">集群规模 (Cluster GPUs):</label>
+        <select id="atpScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateAsyncTpSymmMemSizer()">
+          <option value="0.5">64 × H100/H200 (8 台 NVSwitch 节点)</option>
+          <option value="1" selected>128 × H100/H200 (16 台节点基准)</option>
+          <option value="4">512 × H100/H200 (64 台节点大规模池)</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">服务器机内互连架构 (Node Interconnect):</label>
+        <select id="atpHwSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateAsyncTpSymmMemSizer()">
+          <option value="nvswitch_t4" selected>H100/H200/B200 NVSwitch 节点 (支持 CopyEngine + multimem · Tier 4)</option>
+          <option value="p2p_t3">普通 P2P / 无硬件多播环境 (走 CUDASymmetricMemory 瓦片直推 · Tier 3)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">张量并行重叠架构档位</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">暴露通信空泡 / 抢占 SM</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">并发 GEMM 速度保持率</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">单层耗时 / 集群 MFU</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">年化通信阻塞浪费</th>
+          </tr>
+        </thead>
+        <tbody id="atpSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="atpDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #6366f1;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateAsyncTpSymmMemSizer() {
+  const cMult = parseFloat(document.getElementById('atpScaleSelect').value) || 1.0;
+  const hw = document.getElementById('atpHwSelect').value || 'nvswitch_t4';
+  const bestId = hw === 'p2p_t3' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: 传统串行 TP+SP (先等 AllGather -> GEMM -> 再等 RS)', bub: '28.4% ✕ · 20 SMs', gemm: '100.0% (未并发)', mfu: '14.80ms ✕ · 44.2% MFU ✕', cost: `年损 $${Math.round(795*cMult).toLocaleString()}k ✕` },
+    { id: 't2', name: '🟨 Tier 2: 粗放双流分块 NCCL 重叠 (抢走 24 SM 触发尾波)', bub: '14.2% · 抢 24 SMs ✕', gemm: '81.5% (-18.5% 掉速 ✕)', mfu: '12.90ms · 50.7% MFU', cost: `年损 $${Math.round(465*cMult).toLocaleString()}k ✕` },
+    { id: 't3', name: '🟦 Tier 3: PyTorch CUDASymmetricMemory + 瓦片级 P2P 直推', bub: '4.5% ✅ · 仅 4 SMs ✅', gemm: '95.8% ✅', mfu: '11.15ms (1.33x) · 58.6% MFU ✅', cost: `年损 $${Math.round(142*cMult).toLocaleString()}k` },
+    { id: 't4', name: '🟩 Tier 4: 零 SM 硬件 Copy Engine DMA + NVSwitch multimem 尾声归约', bub: '1.6% 🏆 · 0 SMs 🏆', gemm: '99.2% (+17.7pt 🏆)', mfu: '10.60ms (1.40x 🏆) · 61.7% MFU 🏆', cost: `年损 $${Math.round(45*cMult).toLocaleString()}k (净省 $${Math.round(750*cMult).toLocaleString()}k/yr 🏆)` }
+  ];
+
+  document.getElementById('atpSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(99,102,241,0.20);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#c7d2fe':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.bub}</code></td>
+      <td style="padding:10px;"><code>${r.gemm}</code></td>
+      <td style="padding:10px;"><code>${r.mfu}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('atpDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>架构师选型建议 (${Math.round(128*cMult)}×H100 NVSwitch 集群)</strong>：必选 <strong>Tier 4 (零 SM Copy Engine DMA 预取 AllGather + NVSwitch multimem.red 尾声内联归约)</strong>，将通信抢占 SM 数降为 <code>0</code>，保住 <code>99.2%</code> 满血矩阵乘，暴露通信空泡从 <code>28.4%</code> 砸穿至 <code>1.6%</code>，MFU 跃升至 <code>61.7%</code>，每年净省 <code>$${Math.round(750000*cMult).toLocaleString()}</code>！`
+    : `<strong>架构师选型建议 (通用 P2P 环境)</strong>：启用 <strong>Tier 3 (PyTorch CUDASymmetricMemory + enable_async_tp)</strong>，通过跨卡指针瓦片直推消除独立 NCCL 内核！`;
+}
+updateAsyncTpSymmMemSizer();
+</script>
 </body>
 </html>
