@@ -6927,5 +6927,86 @@ function updateLongContextMinferenceQuestSizer() {
 }
 updateLongContextMinferenceQuestSizer();
 </script>
+
+  <!-- Round 82: LLM Training Activation Checkpointing, Selective Op Recompute (SAC) & Async Host Offload Sizer -->
+  <div id="sac-async-offload-sizer" style="max-width:1180px;margin:28px auto 0;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:22px;color:#f8fafc;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <span style="background:#14b8a6;color:#042f2e;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">ROUND 82 INTERACTIVE SIZER</span>
+        <h2 style="font-size:19px;margin:6px 0 2px;color:#f8fafc;">♻️ LLM Training Activation Checkpointing, Selective Recompute (SAC) &amp; Async Offload Sizer</h2>
+        <p style="font-size:12.5px;color:#94a3b8;margin:0;">Sealed Model: <code>experiments/activation_checkpointing_selective_recompute_offload_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="../components/activation-checkpointing-selective-recompute-host-offload-selection-faq.en.md" style="color:#99f6e4;font-size:12.5px;font-weight:700;text-decoration:none;">📘 English FAQ</a>
+        <a href="../components/activation-checkpointing-selective-recompute-host-offload-selection-faq.md" style="color:#99f6e4;font-size:12.5px;font-weight:700;text-decoration:none;">📘 中文 FAQ</a>
+        <a href="./activation-checkpointing-selective-recompute-host-offload-selection-cards.html" style="color:#99f6e4;font-size:12.5px;font-weight:700;text-decoration:none;">🃏 7-Card Report</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Training Cluster Scale:</label>
+        <select id="saoScaleSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSacAsyncOffloadSizer()">
+          <option value="0.5">64 × H100 80GB</option>
+          <option value="1" selected>128 × H100 80GB (70B 32K Baseline)</option>
+          <option value="4">512 × H100 80GB</option>
+        </select>
+      </div>
+      <div style="background:#0f172a;padding:12px;border-radius:10px;border:1px solid #334155;">
+        <label style="font-size:12px;color:#cbd5e1;font-weight:700;">Training Context Length:</label>
+        <select id="saoSeqSelect" style="width:100%;margin-top:8px;padding:6px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;" onchange="updateSacAsyncOffloadSizer()">
+          <option value="32k_long" selected>32K ~ 128K Long-Context Training (Tier 4 Recommended)</option>
+          <option value="8k_short">4K ~ 16K Standard Context Training (Tier 3 Pure SAC)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0f172a;color:#cbd5e1;text-align:left;">
+            <th style="padding:10px;border-bottom:1px solid #334155;">Activation Optimization Tier</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Activation / Total HBM</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Recompute FLOP Tax</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Goodput MFU / Throughput</th>
+            <th style="padding:10px;border-bottom:1px solid #334155;">Cost per 1B / Annual Waste</th>
+          </tr>
+        </thead>
+        <tbody id="saoSizerTbody"></tbody>
+      </table>
+    </div>
+    <div id="saoDecisionCallout" style="margin-top:12px;padding:12px;background:#0f172a;border-left:4px solid #14b8a6;border-radius:6px;font-size:13px;color:#e2e8f0;"></div>
+  </div>
+
+<script>
+function updateSacAsyncOffloadSizer() {
+  const gMult = parseFloat(document.getElementById('saoScaleSelect').value) || 1.0;
+  const seq = document.getElementById('saoSeqSelect').value || '32k_long';
+  const bestId = seq === '8k_short' ? 't3' : 't4';
+
+  const rows = [
+    { id: 't1', name: '🟥 Tier 1: No Checkpointing (Retain All 34bsh Layer Tensors)', mem: '118.4 GB · 146.8 GB Total (OOM ✕)', flop: '0.0% (Crash)', mfu: '0.0% OOM ✕', cost: `OOM · $${(1.42*gMult).toFixed(2)}M/yr Penalty ✕` },
+    { id: 't2', name: '🟨 Tier 2: Full Layer Checkpointing (Recompute All GEMMs)', mem: '14.2 GB · 42.6 GB Total', flop: '+33.3% (1 Extra Fwd ✕)', mfu: `43.2% ✕ · ${Math.round(148500*gMult).toLocaleString()} tok/s`, cost: `$598.40/1B · $${Math.round(698*gMult).toLocaleString()}k/yr Waste ✕` },
+    { id: 't3', name: '🟦 Tier 3: Selective Op Checkpointing (PyTorch SAC: Keep GEMMs)', mem: '34.8 GB (-70.6%) · 63.2 GB ✅', flop: '+2.8% (11.9x Lower 🏆)', mfu: `54.6% ✅ · ${Math.round(187700*gMult).toLocaleString()} tok/s`, cost: `$473.40/1B · $${Math.round(142*gMult).toLocaleString()}k/yr` },
+    { id: 't4', name: '🟩 Tier 4: SAC + Zero-SM Async PCIe Gen5 Pinned DRAM Offload', mem: '10.4 GB (-91.2% 🏆) · 38.8 GB 🏆', flop: '+2.8% 🏆', mfu: `56.8% (+13.6pt 🏆) · ${Math.round(195200*gMult).toLocaleString()} tok/s`, cost: `$455.20/1B · Saves $${Math.round(612*gMult).toLocaleString()}k/yr 🏆` }
+  ];
+
+  document.getElementById('saoSizerTbody').innerHTML = rows.map(r => {
+    const isBest = r.id === bestId;
+    return `<tr style="border-bottom:1px solid #334155;${isBest?'background:rgba(20,184,166,0.20);':''}">
+      <td style="padding:10px;font-weight:700;color:${isBest?'#99f6e4':'#f8fafc'};">${isBest?'🏆 ':''}${r.name}</td>
+      <td style="padding:10px;"><code>${r.mem}</code></td>
+      <td style="padding:10px;"><code>${r.flop}</code></td>
+      <td style="padding:10px;"><code>${r.mfu}</code></td>
+      <td style="padding:10px;"><strong style="color:${isBest?'#34d399':'#cbd5e1'};">${r.cost}</strong></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('saoDecisionCallout').innerHTML = bestId === 't4'
+    ? `<strong>Architect Recommendation (${Math.round(128*gMult)}×H100 Long-Context Cluster)</strong>: Standardize on <strong>Tier 4 (PyTorch SAC + Zero-SM Copy-Engine Async PCIe Pinned DRAM Offload)</strong> to slash activation HBM by <code>91.2% (118.4GB → 10.4GB)</code>, cut recompute overhead from <code>+33.3%</code> to <code>+2.8%</code>, accelerate training <code>1.31x (56.8% Goodput MFU)</code>, and save <code>$${Math.round(612000*gMult).toLocaleString()}/yr</code>!`
+    : `<strong>Architect Recommendation (&le;16K Context)</strong>: Enable <strong>Tier 3 (PyTorch SAC)</strong> to save <code>70.6%</code> activation memory for just <code>+2.8%</code> FLOPs!`;
+}
+updateSacAsyncOffloadSizer();
+</script>
 </body>
 </html>
