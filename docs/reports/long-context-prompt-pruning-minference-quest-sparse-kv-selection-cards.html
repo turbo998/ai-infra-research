@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+<title>Long-Context Prompt Pruning, MInference Sparse Prefill &amp; Quest Dynamic KV Selection — 7-Card 4:5 Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card-bg: #f8fafc;
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #e2e8f0;
+    --blue: #3B82F6;
+    --slate: #CBD5E1;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0F172A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 28px 16px 60px;
+  }
+  .deck-header {
+    max-width: 900px;
+    margin: 0 auto 24px;
+    color: #f8fafc;
+  }
+  .deck-header h1 { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+  .deck-header p { font-size: 13.5px; color: #94a3b8; line-height: 1.5; }
+  .deck-nav {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .deck-nav a {
+    color: #fbcfe8; background: #1e293b; border: 1px solid #334155;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; text-decoration: none; font-weight: 600;
+  }
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 32px;
+  }
+  .card {
+    width: 900px;
+    min-height: 1125px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    border: 1px solid #cbd5e1;
+  }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .badge-Step {
+    font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+    color: #9d174d; background: #fce7f3; padding: 4px 12px; border-radius: 999px;
+  }
+  .badge-prov {
+    font-size: 11.5px; font-weight: 700; color: #475569; background: #e2e8f0;
+    padding: 4px 10px; border-radius: 6px;
+  }
+  .headline {
+    font-size: 25.5px; font-weight: 850; line-height: 1.25; color: var(--ink); margin-bottom: 10px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #db2777, #2563eb);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subhead {
+    font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px;
+  }
+  .workbench-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px;
+  }
+  .wb-col {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  }
+  .wb-col h4 { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 10px; text-transform: uppercase; }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .pill-auto { background: #dcfce7; color: #166534; }
+  .pill-confirm { background: #fef3c7; color: #92400e; }
+  .pill-human { background: #fee2e2; color: #991b1b; }
+  .pill-type { background: #e0e7ff; color: #1e40af; }
+  .quote-box {
+    background: #f1f5f9; border-left: 4px solid #db2777; padding: 12px 16px;
+    border-radius: 8px; font-size: 13px; color: #1e293b; margin-bottom: 16px; line-height: 1.5;
+  }
+  .decision-stack { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+  .dec-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  }
+  .dec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12.5px; }
+  .bar-label { width: 245px; font-weight: 600; color: #334155; }
+  .bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+  .bar-fill-pri { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-fill-base { height: 100%; background: var(--slate); border-radius: 6px; }
+  .bar-val { width: 135px; text-align: right; font-weight: 800; font-size: 12.5px; color: #0f172a; }
+  table.matrix {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px;
+  }
+  table.matrix th {
+    background: #0f172a; color: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  table.matrix td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: #1e293b; vertical-align: top;
+  }
+  .code-dark {
+    background: var(--code-bg); color: #e2e8f0; padding: 16px; border-radius: 12px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5;
+    overflow-x: auto; margin-bottom: 14px;
+  }
+  .callout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .callout-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.5;
+  }
+  .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .fit-good { background: #ecfdf5; border: 2px solid #10b981; border-radius: 14px; padding: 18px; }
+  .fit-bad { background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 18px; }
+  .fit-good h3 { color: #065f46; font-size: 16px; margin-bottom: 10px; }
+  .fit-bad h3 { color: #991b1b; font-size: 16px; margin-bottom: 10px; }
+  .fit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+  .footer-dark {
+    background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px 18px;
+    font-size: 12px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>🔍 超长上下文词元剪枝、预填充稀疏 (MInference) 与动态 KV 检索 (Quest) — 7-Card 4:5 视觉评测报告</h1>
+  <p>封存数据源：<code>experiments/long_context_prompt_pruning_minference_quest_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="deck-nav">
+    <a href="../components/long-context-prompt-pruning-minference-quest-sparse-kv-selection-faq.md">📘 中文 FAQ</a>
+    <a href="../components/long-context-prompt-pruning-minference-quest-sparse-kv-selection-faq.en.md">📘 English FAQ</a>
+    <a href="./llm-inference-engine-pd-sizer.html#long-context-minference-quest-sizer">🧮 交互式工作台</a>
+  </div>
+</div>
+
+<div class="deck">
+
+  <!-- CARD 1 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">1 / 7 · HANDS-ON · LONG-CONTEXT MINFERENCE SPARSE PREFILL &amp; QUEST KV SELECTION</span>
+        <span class="badge-prov">synthetic + anonymized_reported · independently_reproduced=false</span>
+      </div>
+      <h2 class="headline"><span class="accent">MInference 稀疏预填 + Quest 页面包络检索</span> 提速 8.13 倍 TTFT 与 4.74 倍 TPOT，5 轮追问召回率稳守 98.9%</h2>
+      <p class="subhead">针对 8×H100 SXM5 ($24/hr) 运行 70B TP=8 处理 128K 上下文 × 5 轮跨章节连续追问，对比全量稠密、输入端删词、永久性 KV 驱逐与动态包络检索。</p>
+
+      <div class="workbench-grid">
+        <div class="wb-col">
+          <h4>1. 四档长上下文加速架构</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • <strong>Tier 1 (全量 128K 稠密)</strong>: 14.8s TTFT, 46.5ms ✕<br/>
+            • <strong>Tier 2 (LLMLingua-2 删词)</strong>: 召回跌至 71.4% ✕<br/>
+            • <strong>Tier 3 (H2O/SnapKV 驱逐)</strong>: 多轮失忆 64.8% ✕<br/>
+            • <strong>Tier 4 (MInference+Quest)</strong>: 1.82s, 98.9% 召回 🏆
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>2. 会话与硬件契约</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 节点规格：<code>8×H100 80GB SXM5 ($24/hr)</code><br/>
+            • 上下文长度：<code>128,000 Tokens (41.9GB KV)</code><br/>
+            • 多轮负载：<code>5 轮跨章节换话题连续追问</code><br/>
+            • 预填充稀疏：<code>MInference 垂直-斜线 (跳 88%)</code><br/>
+            • 解码期预算：<code>Quest 每步选 256 页 (4,096 词)</code>
+          </p>
+        </div>
+        <div class="wb-col">
+          <h4>3. 核心量化评测结论</h4>
+          <p style="font-size:12px;line-height:1.55;color:#334155;">
+            • 128K TTFT 提速：<code>14.80s → 1.82s (8.13x)</code><br/>
+            • Decode TPOT 提速：<code>46.5ms → 9.8ms (4.74x)</code><br/>
+            • 多轮召回率对比：<code>64.8% → 98.9% (+34.1pt)</code><br/>
+            • 单节点吞吐提升：<code>68 → 485 会话/hr (7.13x)</code><br/>
+            • 50万会话年净省：<code>净省 $1,517,300 / yr 🏆</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <div class="dec-header">
+          <strong>单台 8×H100 节点每小时完成 128K 5 轮会话吞吐 (sessions/hr，越高越好)</strong>
+          <span class="pill pill-auto">Act automatically · MInference 稀疏预填 + Quest 页面包络非破坏检索</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 4: MInference + Quest (98.9% 召回 🏆)</span>
+          <div class="bar-track"><div class="bar-fill-pri" style="width:100.0%;"></div></div>
+          <span class="bar-val">485.0 / hr 🏆</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 2: LLMLingua-2 硬删词 (71.4% 召回 ✕)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:60.8%;"></div></div>
+          <span class="bar-val">295.0 / hr ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 3: H2O/SnapKV 永久驱逐 (64.8% 召回 ✕)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:29.3%;"></div></div>
+          <span class="bar-val">142.0 / hr ✕</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Tier 1: 全量 128K 稠密推理 (14.8s TTFT ✕)</span>
+          <div class="bar-track"><div class="bar-fill-base" style="width:14.0%;"></div></div>
+          <span class="bar-val">68.0 / hr ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Provenance &amp; Hardware Note</strong>: Calibrated to MInference 1.0 dynamic Vertical-Slash prefill kernels, Quest `[K_min, K_max]` page-envelope bounding box selection, and H2O/SnapKV multi-turn eviction behavior (`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`).
+    </div>
+  </section>
+
+  <!-- CARD 2 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">2 / 7 · SCENARIO: 128K MULTI-TURN LEGAL CONTRACT &amp; MONOREPO ANALYSIS</span>
+        <span class="badge-prov">Case Study · Defeating Multi-Turn Amnesia in KV Compression</span>
+      </div>
+      <h2 class="headline">永久删 KV 导致用户换话题追问时失忆（64.8%）；Quest“全存但每步只读 4K”守住 98.9%</h2>
+      <div class="quote-box">
+        <strong>客户场景痛点</strong>：“我们给律所和研发做 128K 合同与整仓代码问答。全量跑一次 Prefill 要等 15 秒、生成每个字要 46ms。后来上了网上传得很火的 SnapKV/H2O 压缩 85% KV，结果客户第 1 句问完营收、第 2 句追问附件里的违约金条款时，模型直接失忆瞎编——因为附件的 KV 在第 1 轮结束时被当成低注意力垃圾永久删掉了！”
+      </div>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">choice</span> <strong>决策 1：多轮长文档问答、整仓 Coding Agent 与财报审计</strong></div>
+            <span class="pill pill-auto">Act automatically · 必选 Tier 4 (MInference 稀疏预填 + Quest 动态页面包络检索)</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">绝不永久删除任何 KV 页，而是为每页建 <code>[K_min, K_max]</code> 包络框，每步按当前 Query 动态挑 Top-256 页（4K 词）进 SM，兼得 9.8ms 极速与 98.9% 多轮无损召回。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Quest 非破坏检索 5 轮追问召回率</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:98.9%;"></div></div>
+            <span class="bar-val">98.9% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: H2O/SnapKV 永久驱逐 5 轮召回率</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:64.8%;"></div></div>
+            <span class="bar-val">64.8% (失忆 ✕)</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">score</span> <strong>决策 2：攻克 128K~256K 首词等待 (TTFT) 的 $O(N^2)$ 算力墙</strong></div>
+            <span class="pill pill-auto">Act automatically · 启用 MInference Vertical-Slash 动态稀疏内核</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;margin-bottom:8px;">利用最后 64 个 Query 探测垂直锚点列与斜线索引，跳过 88% 近零内积块，128K TTFT 从 <code>14.80s</code> 压至 <code>1.82s (快 8.13x)</code>。</p>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: MInference 128K Prefill TTFT</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:12.3%;"></div></div>
+            <span class="bar-val">1.82 s (快 8.13x 🏆)</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1/3: 全量稠密 128K Prefill TTFT</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">14.80 s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <div class="dec-header">
+            <div><span class="pill pill-type">noul</span> <strong>决策 3：什么时候可以用 Tier 2 (LLMLingua-2 输入端删词)？</strong></div>
+            <span class="pill pill-confirm">Confirm · 仅限调外部高价黑盒商业 API 做单轮粗略大意总结</span>
+          </div>
+          <p style="font-size:12.5px;color:#334155;">当无法控制服务端 GPU 内核、且只做单轮非精确文章摘要时，可在客户端用 LLMLingua 省 Token 费。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scenario Takeaway</strong>: Permanent KV eviction assumes the first query knows everything future queries will ask. Non-destructive page selection (`Quest`) re-evaluates importance on every single query token.
+    </div>
+  </section>
+
+  <!-- CARD 3 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">3 / 7 · WHAT I TESTED · 4-TIER 128K LONG-CONTEXT MATRIX</span>
+        <span class="badge-prov">8×H100 SXM5 · 70B TP=8 · 128K × 5 Multi-Turn Questions</span>
+      </div>
+      <h2 class="headline">四档超长上下文架构全矩阵评测：TTFT、TPOT、5 轮大海捞针召回率与会话成本</h2>
+      <p class="subhead">全面对比全量 128K 稠密、输入端硬删词、永久性 KV 驱逐与 MInference + Quest 动态稀疏引擎。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>SCENARIO (长上下文架构档位)</th>
+            <th>QUESTION / TASK (Prefill 与 Decode 机制)</th>
+            <th>MODEL ANSWER (TTFT / TPOT / 多轮召回 / 成本)</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1: 全量 128K 稠密推理</strong></td>
+            <td>$O(N^2)$ 全算 Prefill + 每步全读 41.9GB KV</td>
+            <td>TTFT <code>14.80s ✕</code> · TPOT <code>46.5ms ✕</code> · 召回 <code>99.2%</code> · <code>68/hr</code> · <code>$352.94/1k ($1.76M/yr ✕)</code></td>
+            <td><span class="pill pill-human">延迟超标 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2: 输入端硬删词 (LLMLingua-2)</strong></td>
+            <td>小模型删掉 75% 词 (128K→32K) + 破缓存</td>
+            <td>TTFT <code>2.15s</code> · TPOT <code>14.8ms</code> · 召回 <code>71.4% (-27.8pt ✕)</code> · <code>295/hr</code> · <code>$81.36/1k</code></td>
+            <td><span class="pill pill-human">损毁代码/数字 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3: 永久性 KV 驱逐 (H2O/SnapKV)</strong></td>
+            <td>全算 Prefill + 按第 1 问永久删掉 85% KV</td>
+            <td>TTFT <code>14.80s ✕</code> · TPOT <code>11.6ms</code> · 召回 <code>64.8% (多轮失忆 ✕)</code> · <code>142/hr</code> · <code>$169.01/1k</code></td>
+            <td><span class="pill pill-human">多轮问答禁用 ✕</span></td>
+          </tr>
+          <tr>
+            <td><strong>Tier 4: MInference + Quest 动态检索</strong></td>
+            <td>垂直-斜线跳 88% 空块 + 包络框每步选 Top-4K</td>
+            <td>TTFT <code>1.82s (快8.13x 🏆)</code> · TPOT <code>9.8ms 🏆</code> · 召回 <code>98.9% 🏆</code> · <code>485/hr 🏆</code> · <code>$49.48/1k 🏆</code></td>
+            <td><span class="pill pill-auto">生产长文终极 🏆</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong style="color:#9d174d;">✅ 为什么 Quest 包络框开销极小却能提速 4.74 倍？</strong><br/>
+          每页 16 个 Token 只需存 2 个极值向量（体积 1/8），打分仅读 <code>2.6 GB</code> 包络 + 精算读 <code>1.3 GB</code> Top-256 页 = 共读 <code>3.9 GB</code>（比全读 <code>41.9 GB</code> 省 10.7 倍带宽）！
+        </div>
+        <div class="callout-box">
+          <strong style="color:#b91c1c;">✕ 为什么前两层 (Layer 0~1) 建议保持稠密不稀疏？</strong><br/>
+          Transformer 第 0~1 层的注意力分布极其平坦（负责全局词法平滑），从 Layer 2 开始启用 Quest Top-4K 选择可将精度损失控制在 <code>&lt;0.3%</code>！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Matrix Summary</strong>: Pairing MInference sparse prefill with Quest non-destructive page selection delivers 7.13× higher session throughput and saves $1,517,300/yr at 500k annual sessions.
+    </div>
+  </section>
+
+  <!-- CARD 4 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">4 / 7 · UNDER THE HOOD · MINFERENCE SLASH INDEX &amp; QUEST ENVELOPE</span>
+        <span class="badge-prov">Vertical-Slash Pit Kernel + [K_min, K_max] Bounding Box</span>
+      </div>
+      <h2 class="headline">底层机制：MInference 末尾 64 词探测掩码 + Quest 页面包络框上界打分协议</h2>
+      <p class="subhead">展示 Tier 4 如何跳过 88% Prefill 零值块，并在每个 Decode 步用微秒级包络内积挑出 Top-256 页。</p>
+
+      <div class="code-dark"><pre># 1. Prefill 阶段 (MInference): 用末尾 64 个 Query 探测垂直锚点列 (Vertical) 与斜线 (Slash)
+def minference_vertical_slash_prefill(Q, K, V, v_topk: int = 64, s_topk: int = 96):
+    # 仅计算最后 64 个 Query 与全量 128K Key 的近似注意力图 (~2.5ms)
+    approx_attn = torch.softmax((Q[:, :, -64:, :] @ K.transpose(-1, -2)) / sqrt_d, dim=-1)
+    vertical_indices = torch.topk(approx_attn.sum(dim=-2), k=v_topk, dim=-1).indices
+    slash_indices = detect_top_diagonals(approx_attn, k=s_topk)
+    # 仅对 ~12% 活跃块启动 Triton 稀疏 FlashAttention，生成完整 128K KV (14.80s -&gt; 1.82s!)
+    return triton_vertical_slash_flash_attn(Q, K, V, vertical_indices, slash_indices)</pre></div>
+
+      <div style="text-align:center;font-weight:800;color:#db2777;margin:6px 0;">↓ Decode 阶段 (Quest): 页面包络框 [K_min, K_max] 非破坏性打分挑选 Top-256 页 (&lt;answer&gt;) ↓</div>
+
+      <div class="code-dark"><pre># 2. Decode 阶段 (Quest): 保留全量 8,000 页 (16 tok/页)，每步动态挑选 Top-256 页 (4,096 tok)
+def quest_page_envelope_decode_step(q_t, kv_pages, k_min_env, k_max_env, top_pages: int = 256):
+    # q_t: [B, H, 1, D], k_min_env / k_max_env: [B, H, 8000, D]
+    # 通道级精确内积上界: 若 q_j &gt; 0 取 q_j * K_max_j，若 q_j &lt; 0 取 q_j * K_min_j (耗时 0.35ms)
+    upper_bound_scores = torch.maximum(q_t * k_max_env, q_t * k_min_env).sum(dim=-1)
+    top256_page_ids = torch.topk(upper_bound_scores, k=top_pages, dim=-1).indices
+    # 仅将这 256 个活跃页 (4,096 tokens = 3.1% 流量) Gather 进 Tensor Core 精算 Attention！
+    return flashinfer_paged_decode_subset(q_t, kv_pages, page_table=top256_page_ids)
+# &lt;answer&gt; Validated: 1.82s TTFT (8.13x), 9.8ms TPOT (4.74x), 98.9% 5-turn recall, $49.48/1k (-86.0%)</pre></div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Protocol Insight</strong>: Whenever a new 16-token KV page is filled, updating `K_min = min(page_K)` and `K_max = max(page_K)` is fused directly into the KV cache append kernel with zero extra kernel launches.
+    </div>
+  </section>
+
+  <!-- CARD 5 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">5 / 7 · ROBUSTNESS CHECK · CONTEXT SCALING SENSITIVITY (32K → 256K)</span>
+        <span class="badge-prov">32K Code → 64K 10-K Audit → 128K Legal → 256K Monorepo</span>
+      </div>
+      <h2 class="headline">长度扩展压测：扩至 256K 时稠密 Prefill 慢达 54.2 秒，MInference+Quest 仅需 4.95 秒且召回 98.4%</h2>
+      <p class="subhead">测试上下文从 32K 扩展至 256K 时，首词延迟（TTFT）与 5 轮追问大海捞针召回率的变化。</p>
+
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>QUESTION / ANSWER (上下文长度与业务场景)</th>
+            <th>ORIGINAL (Tier 1 稠密 / Tier 3 驱逐)</th>
+            <th>PERTURBED (Tier 4 MInference + Quest)</th>
+            <th>CHANGE (TTFT 提速与多轮召回优势)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>32K 上下文 (代码模块问答)</strong><br/>中型微服务仓库多轮排障</td>
+            <td>稠密 TTFT <code>1.45 s</code><br/>(Tier 3 召回率 <code>76.5%</code>)</td>
+            <td>TTFT <code>0.42 s ✅</code><br/>多轮召回率 <code>99.4% 🏆</code></td>
+            <td><strong style="color:#2563eb;">TTFT 快 3.45x ✅</strong><br/>多轮召回高出 <code>+22.9 pts</code></td>
+          </tr>
+          <tr>
+            <td><strong>64K 上下文 (10-K 年报多指标审计)</strong><br/>跨附注表格连续追问</td>
+            <td>稠密 TTFT <code>4.40 s</code><br/>(Tier 3 召回率 <code>69.2% ✕</code>)</td>
+            <td>TTFT <code>0.85 s ✅</code><br/>多轮召回率 <code>99.1% 🏆</code></td>
+            <td><strong style="color:#0891b2;">TTFT 快 5.18x ✅</strong><br/>步入亚秒级 64K 首字响应</td>
+          </tr>
+          <tr>
+            <td><strong>128K 上下文 (5 轮并购合同审查)</strong><br/>企业主力长文本基准</td>
+            <td>稠密 TTFT <code>14.80 s ✕</code><br/>(Tier 3 召回率 <code>64.8% ✕</code>)</td>
+            <td>TTFT <code>1.82 s 🏆</code><br/>多轮召回率 <code>98.9% 🏆</code></td>
+            <td><strong style="color:#059669;">TTFT 快 8.13x 🏆</strong><br/>多轮召回高出 <code>+34.1 pts</code></td>
+          </tr>
+          <tr>
+            <td><strong>256K 上下文 (整仓代码 / 多书合集)</strong><br/>二次方算力墙极限压测</td>
+            <td>稠密 TTFT <code>54.20 s ✕</code><br/>(Tier 3 召回跌至 <code>52.0% ✕</code>)</td>
+            <td>TTFT <code>4.95 s 🏆</code><br/>多轮召回率 <code>98.4% 🏆</code></td>
+            <td><strong style="color:#059669;">TTFT 快 10.95x 🏆</strong><br/>彻底打破 256K 不可用魔咒</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-dual">
+        <div class="callout-box">
+          <strong>🔍 为什么 Quest 的包络框必须做在 `RoPE 旋转位置编码之后`？</strong><br/>
+          因为内积打分 $\mathbf{q}_t \cdot \mathbf{k}_i$ 发生在施加 RoPE 之后！必须在 Key 向量完成 RoPE 旋转后再写入 Paged KV 并提取 `[K_min, K_max]`，上界才 100% 严密！
+        </div>
+        <div class="callout-box">
+          <strong>⚡ 为什么 GQA (Grouped-Query Attention) 让 Quest 更快？</strong><br/>
+          在 GQA-8 下，每 8 个 Query 头共享 1 个 KV 头，只需对该组 8 个 Query 求聚合包络即可一次性选出共享页面！
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Robustness Conclusion</strong>: At 256K context, Tier 4 achieves a 10.95× prefill speedup while maintaining 98.4% 5-turn recall (whereas permanent KV eviction drops to 52.0%).
+    </div>
+  </section>
+
+  <!-- CARD 6 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">6 / 7 · LATENCY &amp; RECALL SCALING · TTFT, TPOT &amp; MULTI-TURN RECALL BARS</span>
+        <span class="badge-prov">Paired Bar Comparison · Blue=Tier 4 MInference+Quest vs Slate=Tier 1/2/3 Baselines</span>
+      </div>
+      <h2 class="headline">延迟与精度对比：128K TTFT 从 14.8s 压至 1.82s，TPOT 压至 9.8ms，年省 $151.7 万</h2>
+      <p class="subhead">蓝色条（<code>#3B82F6</code>）代表 Tier 4 MInference + Quest 动态稀疏引擎，浅灰条（<code>#CBD5E1</code>）代表传统稠密与有损删减基线。</p>
+
+      <div class="decision-stack">
+        <div class="dec-card">
+          <strong>1. 128,000-Token 预填充首词延迟 (Prefill TTFT 秒，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: MInference 垂直-斜线稀疏预填充</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:12.3%;"></div></div>
+            <span class="bar-val">1.82 s (快 8.13x 🏆)</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: LLMLingua-2 4x 硬删词 (损精度)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:14.5%;"></div></div>
+            <span class="bar-val">2.15 s ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1 / Tier 3: 全量 128K 稠密 Prefill</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">14.80 s ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>2. 128K 上下文解码单步延迟 (Decode TPOT ms，越低越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: Quest 页面包络动态读 Top-4K</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:21.1%;"></div></div>
+            <span class="bar-val">9.8 ms (快 4.74x 🏆)</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: H2O/SnapKV 永久驱逐 (多轮失忆)</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:24.9%;"></div></div>
+            <span class="bar-val">11.6 ms ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 1: 全量读取 41.9GB KV 稠密解码</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:100.0%;"></div></div>
+            <span class="bar-val">46.5 ms ✕</span>
+          </div>
+        </div>
+
+        <div class="dec-card">
+          <strong>3. 5 轮跨章节换话题追问大海捞针召回率 (% ，越高越好)</strong>
+          <div class="bar-row">
+            <span class="bar-label">Tier 4: MInference + Quest (非破坏性全存)</span>
+            <div class="bar-track"><div class="bar-fill-pri" style="width:98.9%;"></div></div>
+            <span class="bar-val">98.9% 🏆</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 2: LLMLingua-2 输入端硬删词</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:71.4%;"></div></div>
+            <span class="bar-val">71.4% ✕</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Tier 3: H2O/SnapKV 永久性 KV 驱逐</span>
+            <div class="bar-track"><div class="bar-fill-base" style="width:64.8%;"></div></div>
+            <span class="bar-val">64.8% ✕</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Scaling Note</strong>: Non-destructive sparsity (Tier 4) cuts 1,000-session serving cost by 86.0% (`$352.94 → $49.48`) without sacrificing multi-turn document recall.
+    </div>
+  </section>
+
+  <!-- CARD 7 -->
+  <section class="card">
+    <div>
+      <div class="card-top">
+        <span class="badge-Step">7 / 7 · MY TAKE · GOOD FIT VS NOT FOR &amp; PRODUCTION READINESS</span>
+        <span class="badge-prov">Architect Decision Guide</span>
+      </div>
+      <h2 class="headline">架构师总结：Prefill 上 MInference 跳空块，Decode 上 Quest 包络框非破坏选页</h2>
+      <p class="subhead">记住黄金法则：“KV 可以不每步都读，但绝不能在多轮会话中途永久删掉！”</p>
+
+      <div class="fit-grid">
+        <div class="fit-good">
+          <h3>✅ Good Fit (强烈推荐场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>128K~256K 多轮代码库问答 / 法律合同 / 财报深度分析 → Tier 4 (MInference + Quest)</strong>：TTFT 压至 1.82s，TPOT 压至 9.8ms，5 轮追问召回 98.9%。</li>
+            <li>• <strong>长轨迹 Agent 多步推理 → Tier 4 + Host DRAM 分层</strong>：包络索引常驻 HBM，冷 KV 页放 DRAM 按需换入。</li>
+          </ul>
+        </div>
+        <div class="fit-bad">
+          <h3>⛔ Not For (严禁踩坑场景)</h3>
+          <ul class="fit-list">
+            <li>• <strong>严禁在多轮交互问答中开启 H2O / SnapKV 永久性 KV 删除 (Tier 3)</strong>：用户第 2 轮一旦换个章节提问就会失忆。</li>
+            <li>• <strong>严禁对代码、SQL 或财务报表做 LLMLingua 硬删词 (Tier 2)</strong>：会破坏关键语法符号与 Prefix Cache 命中。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dec-card">
+        <strong>🛠️ 生产上线 4 步核验清单 (Production Readiness Checklist)</strong>
+        <p style="font-size:12.5px;color:#334155;line-height:1.6;margin-top:6px;">
+          1. <code>[ ]</code> 预填充加速：对长度 <code>&gt;= 32,768</code> 的请求自动启用 <code>MInference Vertical-Slash</code> 动态稀疏内核。<br/>
+          2. <code>[ ]</code> 包络索引：在 PagedAttention (<code>page_size=16</code>) 写入 Post-RoPE Key 时同步更新每页 <code>[K_min, K_max]</code> 包络向量。<br/>
+          3. <code>[ ]</code> 分层保护：保持前 2 层（Layer 0~1）稠密计算，对 Layer 2~79 启用 Quest <code>top_k_pages=256 (4,096 tokens)</code> 动态选择。<br/>
+          4. <code>[ ]</code> 回归验证：使用 5 轮跨章节 Needle-in-a-Haystack 测试集核验第 5 轮召回率 <code>&gt;= 98.5%</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-dark">
+      <strong>Readiness Verdict</strong>: Production-ready for vLLM / SGLang / FlashInfer long-context pools. Provenance: `synthetic` + `anonymized_reported` (`independently_reproduced=false`).
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

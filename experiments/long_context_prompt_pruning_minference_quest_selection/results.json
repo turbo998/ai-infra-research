@@ -1,0 +1,109 @@
+{
+  "experiment_id": "long_context_prompt_pruning_minference_quest_selection",
+  "date": "2026-11-12",
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_anonymized_published_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "MInference 1.0: Accelerating Pre-filling for Long-Context LLMs via Dynamic Sparse Attention (A-Shape, Vertical-Slash, Block-Sparse)",
+      "Quest: Query-Aware Sparsity for Efficient Long-Context LLM Inference (Min-Max Page Envelope Bounding Box Scoring)",
+      "LLMLingua-2 & H2O / SnapKV Permanent KV Eviction Failure Modes under Multi-Turn Topic Shifts"
+    ]
+  },
+  "workload_baseline": {
+    "node": "8x H100 80GB SXM5 ($24.00/hr), 70B FP8/BF16 LLM (TP=8)",
+    "session_profile": "128,000-token context × 5 sequential multi-turn questions shifting focus across the document"
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_full_128k_dense_attention",
+      "name": "Tier 1: Full 128K Dense FlashAttention-3 Prefill + Full 128K Paged KV Decode (100% Compute & HBM Read)",
+      "name_zh": "Tier 1: 全量 128K 稠密 Prefill + 全量 128K KV 逐词读取 Decode (O(N^2) 算力墙 + 显存带宽墙)",
+      "mechanism": "Computes all 128K×128K causal attention pairs during prefill and reads all 41.9 GB of 128K KV cache on every decode step",
+      "prefill_128k_ttft_s": 14.8,
+      "decode_tpot_ms": 46.5,
+      "multi_turn_needle_recall_pct": 99.2,
+      "sessions_per_hour_per_node": 68.0,
+      "cost_per_1k_sessions_usd": 352.94,
+      "annual_500k_sessions_tco_usd": 1764700
+    },
+    {
+      "tier_id": "tier2_input_token_dropping_llmlingua2",
+      "name": "Tier 2: Hard Input Token Pruning (LLMLingua-2 4x Text Compression Before LLM + Prefix Cache Breakage)",
+      "name_zh": "Tier 2: 输入端硬删词压缩 (LLMLingua-2 4x 删词：破坏代码/数字语法且无法跨多轮保护未知考点)",
+      "mechanism": "BERT/XLM-R token classifier drops 75% of input tokens (128K -> 32K) before LLM prefill; irreversibly deletes exact numbers/code syntax",
+      "prefill_128k_ttft_s": 2.15,
+      "decode_tpot_ms": 14.8,
+      "multi_turn_needle_recall_pct": 71.4,
+      "sessions_per_hour_per_node": 295.0,
+      "cost_per_1k_sessions_usd": 81.36,
+      "annual_500k_sessions_tco_usd": 406800
+    },
+    {
+      "tier_id": "tier3_permanent_kv_eviction_h2o_snapkv",
+      "name": "Tier 3: Permanent KV Cache Eviction (H2O / SnapKV Drops 85% of KV After Turn-1 Query)",
+      "name_zh": "Tier 3: 永久性 KV 驱逐 (H2O / SnapKV 按第 1 问注意力永久删掉 85% KV：第 2~5 问换话题即失忆)",
+      "mechanism": "Evicts 85% of KV blocks permanently based on Turn-1 prompt attention; Turn-2..5 questions targeting previously evicted sections fail",
+      "prefill_128k_ttft_s": 14.8,
+      "decode_tpot_ms": 11.6,
+      "multi_turn_needle_recall_pct": 64.8,
+      "sessions_per_hour_per_node": 142.0,
+      "cost_per_1k_sessions_usd": 169.01,
+      "annual_500k_sessions_tco_usd": 845050
+    },
+    {
+      "tier_id": "tier4_minference_sparse_prefill_plus_quest_page_envelope_decode",
+      "name": "Tier 4: MInference Vertical-Slash Sparse Prefill + Quest Non-Destructive Page-Envelope Top-4K KV Selection",
+      "name_zh": "Tier 4: 预填充 MInference 垂直-斜线动态稀疏 + 解码期 Quest 页面包络非破坏性检索 (保留全量 KV 但每步仅读 Top-4K)",
+      "mechanism": "MInference skips 88% of 128K^2 prefill tiles via per-head Vertical-Slash patterns; Quest retains 100% KV in HBM/DRAM but scores [K_min, K_max] page bounding boxes to load only Top-4,096 KV tokens per decode step",
+      "prefill_128k_ttft_s": 1.82,
+      "decode_tpot_ms": 9.8,
+      "multi_turn_needle_recall_pct": 98.9,
+      "sessions_per_hour_per_node": 485.0,
+      "cost_per_1k_sessions_usd": 49.48,
+      "annual_500k_sessions_tco_usd": 247400
+    }
+  ],
+  "context_perturbation": [
+    {
+      "condition": "32K Context (Multi-Turn Codebase Q&A)",
+      "tier1_dense_ttft_s": 1.45,
+      "tier4_minference_ttft_s": 0.42,
+      "tier3_evict_recall_pct": 76.5,
+      "tier4_quest_recall_pct": 99.4,
+      "insight": "MInference speeds up 32K prefill 3.45x; Quest non-destructive Top-4K selection preserves Turn-2..5 recall"
+    },
+    {
+      "condition": "64K Context (Financial 10-K Multi-Metric Audit)",
+      "tier1_dense_ttft_s": 4.4,
+      "tier4_minference_ttft_s": 0.85,
+      "tier3_evict_recall_pct": 69.2,
+      "tier4_quest_recall_pct": 99.1,
+      "insight": "Quadratic O(N^2) attention begins dominating 64K prefill; MInference reaches 5.18x speedup"
+    },
+    {
+      "condition": "128K Context (5-Turn Legal / Repo Deep Dive Baseline)",
+      "tier1_dense_ttft_s": 14.8,
+      "tier4_minference_ttft_s": 1.82,
+      "tier3_evict_recall_pct": 64.8,
+      "tier4_quest_recall_pct": 98.9,
+      "insight": "8.13x faster TTFT (14.80s -> 1.82s) and 4.74x faster TPOT (46.5ms -> 9.8ms) with 98.9% multi-turn recall"
+    },
+    {
+      "condition": "256K Context (Full Monorepo / Multi-Book Synthesis)",
+      "tier1_dense_ttft_s": 54.2,
+      "tier4_minference_ttft_s": 4.95,
+      "tier3_evict_recall_pct": 52.0,
+      "tier4_quest_recall_pct": 98.4,
+      "insight": "10.95x faster prefill TTFT; permanent KV eviction (Tier 3) loses half of multi-turn needles at 256K"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_ttft_speedup_x": 8.13,
+    "tier4_vs_tier1_tpot_speedup_x": 4.74,
+    "tier4_vs_tier3_multi_turn_recall_gain_pt": 34.1,
+    "tier4_vs_tier1_throughput_gain_x": 7.13,
+    "tier4_vs_tier1_annual_savings_usd": 1517300
+  }
+}
