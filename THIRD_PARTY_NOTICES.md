@@ -17,3 +17,5 @@ Round 93 的对比式训练研究链接 Sentence Transformers 固定提交的 Ca
 Round 94 的词表并行交叉熵研究链接 NVIDIA Megatron-LM 固定提交的实际 loss 实现、旧兼容入口及上游 LICENSE。版权与文件级许可例外保留于上游；没有复制其实现或许可全文，也不从 GitHub 的 NOASSERTION 元数据臆断整个仓库许可。原创标量统计、有限差分、错误协议对照与字节/启动预算不是 GPU 基准或第三方代码镜像。
 
 Round 95 的流式卷积状态研究链接 Kyutai Moshi 固定提交的卷积模块、reset 变更与上游 LICENSE；GitHub 仓库许可元数据为 Apache-2.0，文件中的 Kyutai/Meta 原始权利声明保留于上游。原创标量离线公式、流式 adapter、overlap-add 与缓存预算未复制实现或模型权重，也不代表 Mimi 实测、音质或服务延迟。
+
+Round 96 的推荐稀疏 Embedding 表研究链接 Meta/PyTorch TorchRec 固定提交的 TW/RW/CW distributor、mean divisor 与 2026-11-11 subgroup root 修复；仓库许可元数据为 BSD-3-Clause，上游权利保留。原创 jagged 数值模型、表梯度有限差分、逻辑字节预算与本地 CPU 计时不复制实现，也不是 TorchRec/FBGEMM/GPU benchmark 或推荐质量评估。
