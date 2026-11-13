@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><title>SparseAdam coalescing and dense-state workbench</title><style>
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+  --cp-code: #0F172A;
+  --cp-primary: #3B82F6;
+  --cp-baseline: #CBD5E1;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+}
+
+*{box-sizing:border-box}body{margin:0;padding:24px;background:var(--cp-bg);color:var(--cp-text);
+font-family:"Segoe UI",Aptos,Calibri,-apple-system,BlinkMacSystemFont,sans-serif}
+main{max-width:1180px;margin:auto}h1{font-size:44px;line-height:1.13;margin:18px 0}
+h2{font-size:25px}p,li{line-height:1.55}.muted{color:var(--cp-text-muted)}
+.eyebrow{font-size:14px;letter-spacing:.12em;font-weight:700;color:var(--cp-accent)}
+.accent{background:linear-gradient(90deg,var(--cp-accent),var(--cp-primary));
+background-clip:text;color:transparent}
+.panel,blockquote{border:1px solid var(--cp-border);border-radius:16px;padding:20px;
+background:var(--cp-surface-soft);margin:16px 0}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pill{display:inline-block;border:1px solid var(--cp-border);border-radius:.625rem;
+padding:5px 9px;margin:4px 4px 4px 0;font-size:13px}
+.good{border-top:4px solid var(--cp-success)}.bad{border-top:4px solid var(--cp-danger)}
+pre,code{font-family:Consolas,"Courier New",Courier,monospace}
+pre{background:var(--cp-code);color:var(--cp-accent-fg);padding:24px;border-radius:16px;
+font-size:16px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:16px}th,td{text-align:left;padding:14px 8px;
+border-bottom:1px solid var(--cp-border)}th{font-size:12px;letter-spacing:.04em}
+.bar{height:14px;background:var(--cp-surface-soft);border-radius:5px;overflow:hidden;margin:6px 0 12px}
+.bar i{display:block;height:100%;background:var(--cp-primary)}.bar.baseline i{background:var(--cp-baseline)}
+.card{position:relative;width:900px;height:1125px;max-width:100%;margin:0 auto 32px;
+padding:46px;background:var(--cp-surface);border:1px solid var(--cp-border);border-radius:16px;
+display:flex;flex-direction:column;overflow:hidden}
+.card:before{content:"";position:absolute;top:0;left:0;right:0;height:10px;
+background:linear-gradient(90deg,var(--cp-accent),var(--cp-primary))}
+.evidence{flex:1}.callout{background:var(--cp-surface-soft);padding:18px;border-radius:12px;margin:14px 0}
+footer{border-top:1px solid var(--cp-border);padding-top:16px;display:flex;justify-content:space-between;font-size:13px}
+label{display:flex;flex-direction:column;gap:8px;font-size:15px}
+input,button,select{font:inherit;border:1px solid var(--cp-border-strong);border-radius:.625rem;
+padding:10px;background:var(--cp-surface);color:var(--cp-text);max-width:100%}
+button{cursor:pointer;background:var(--cp-accent);color:var(--cp-accent-fg)}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--cp-link);outline-offset:3px}
+.error{color:var(--cp-danger);font-weight:700}output{display:block}
+@media(max-width:700px){body{padding:12px}.grid{grid-template-columns:1fr}
+.card{height:auto;min-height:1125px;padding:24px}h1{font-size:34px}table{font-size:13px}th,td{padding:10px 4px}}
+@media print{body{padding:0;background:var(--cp-surface)}.card{margin:0;border:0;border-radius:0;break-after:page}
+@page{size:900px 1125px;margin:0}}
+</style></head><body><h1>Sparse gradients do not imply sparse Adam moments</h1>
+    <p>Round 120 · Original two-row scalar first-update model. Initial weights [1,2], zero moments,
+    lr=0.1, beta1=beta2=0.5. No native PyTorch optimizer/GPU execution.</p>
+    <form id="form"><label>Stored row:integer-gradient pairs (1..64, each absolute gradient at most 2^32-1)
+    <input id="entries" value="0:1,0:2" required></label>
+    <label>Per-parameter step<input id="step" type="number" value="1" step="1" required></label>
+    <label>Epsilon before bias rescaling<input id="eps" type="number" value="0.00000001" step="any" required></label>
+    <div class="grid"><label>rows<input id="rows" type="number" step="1" value="16384" required></label><label>width<input id="width" type="number" step="1" value="128" required></label><label>stored_rows<input id="stored_rows" type="number" step="1" value="128" required></label><label>unique_rows<input id="unique_rows" type="number" step="1" value="64" required></label></div><button>Coalesce before the nonlinear moment</button></form>
+    <p id="error" role="alert"></p><pre id="result" aria-live="polite"></pre>
+    <p>Budget selects float32 dense table/moments and row-sparse gradient with int64 row indices.
+    Raw/unique counts are independent selected storage assumptions, not actual allocations or peak HBM.</p><script>
+(() => {
+  const param = new URLSearchParams(window.location.search).get("scoutTheme");
+  const theme = param === "light" || param === "dark" ? param :
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", theme);
+})();
+
+const DEFAULT={"rows": 16384, "width": 128, "stored_rows": 128, "unique_rows": 64};
+
+function estimate(p){
+ for(const key of Object.keys(DEFAULT))if(!Number.isSafeInteger(p[key])||p[key]<0)throw Error("bounded exact nonnegative counts required");
+ if(p.rows<1||p.width<1||p.unique_rows>Math.min(p.rows,p.stored_rows))throw Error("positive dimensions and feasible unique/stored counts required");
+ const out={selected_float32_parameter_bytes:p.rows*p.width*4,selected_dense_float32_two_moments_bytes:p.rows*p.width*8,
+ selected_raw_sparse_gradient_bytes:p.stored_rows*(8+p.width*4),selected_coalesced_sparse_gradient_bytes:p.unique_rows*(8+p.width*4)};
+ if(!Object.values(out).every(Number.isSafeInteger))throw Error("byte result exceeds exact arithmetic range");
+ return out;
+}
+function calculate(entries,t,eps){
+ if(!Number.isSafeInteger(t)||t<1||!Number.isFinite(eps)||eps<0)throw Error("positive exact parameter step and nonnegative finite eps required");
+ if(entries.length<1||entries.length>64)throw Error("require 1..64 scalar stored entries");
+ const gradients=new Map;
+ for(const [row,g] of entries){
+  if(!Number.isSafeInteger(row)||row<0||row>=2||!Number.isSafeInteger(g)||Math.abs(g)>2**32-1)throw Error("teaching input needs row 0/1 and bounded integer gradients (absolute value <=2^32-1)");
+  gradients.set(row,(gradients.get(row)||0)+g);
+ }
+ const out=[];
+ for(const [row,g] of gradients){
+  const m=.5*g,v=.5*g*g,den=Math.sqrt(v)+eps;
+  if(!Number.isFinite(g)||!Number.isFinite(den)||den<=0)throw Error("original finite positive update denominator required");
+  const delta=.1*Math.sqrt(1-.5**t)/(1-.5**t)*m/den;
+  if(!Number.isFinite(delta))throw Error("finite update required");
+  out.push({row,coalesced_gradient:g,square:g*g,first_update_delta:delta,weight_after:row+1-delta});
+ }
+ return out;
+}
+
+function update(event){
+ if(event)event.preventDefault();
+ const error=document.getElementById("error"),out=document.getElementById("result");error.textContent="";out.textContent="";
+ try{
+  if(!document.getElementById("form").checkValidity())throw Error("Complete all required controls");
+  const pieces=document.getElementById("entries").value.split(",").map(s=>s.trim().split(":"));
+  if(pieces.some(pair=>pair.length!==2||pair.some(s=>!s.trim())))throw Error("entries require row:gradient pairs");
+  const result=calculate(pieces.map(pair=>pair.map(Number)),Number(document.getElementById("step").value),Number(document.getElementById("eps").value));
+  const p=Object.fromEntries(Object.keys(DEFAULT).map(k=>[k,Number(document.getElementById(k).value)]));
+  out.textContent=JSON.stringify({result,budget:estimate(p),note:"First-update scalar model only. Materialized zeros differ from absent keys with history. Per-parameter step is not per-row age; dense moments remain dense."},null,2);
+ }catch(e){error.textContent=e.message}
+}
+document.getElementById("form").addEventListener("submit",update);update();
+</script></body></html>

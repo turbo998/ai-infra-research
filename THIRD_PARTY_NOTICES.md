@@ -65,3 +65,5 @@ Round 117 的采样研究链接固定 FlashInfer 2026-11-13 basic categorical ba
 Round 118 链接固定 NVIDIA/cccl DeviceRadixSort（component header SPDX BSD-3），上游权利保留；2026-11-10 修改为 ADL qualification 维护，不冒充新算法。原创 key/byte-pass、numeric/bit-string oracles、CPU timing 与视觉未复制 CUB 实现；原型显式拒绝 NaNs，不认证 native 内部 zero encoding、NaN order、workspace 或 GPU speed。
 
 Round 119 链接固定 PyTorch 2026-11-12 implicit gradient fan-in guard（BSD-style repository license），上游权利保留。原创 scalar slots、IEEE rounding、Fraction oracle、CPU timing 与视觉未复制 autograd 实现；source native tests 不算本地复现，flag 不等于跨次 .grad accumulation ban、general reduction ban 或 float64/memory 保证。
+
+Round 120 链接固定 PyTorch SparseAdam 与 functional API（BSD-style），既有 mask/coalesce 契约与 8 月 public-API 日期已分开，不冒充新算法。Scalar updates、Decimal/Fraction oracles、CPU grouping 与视觉原创，未复制 upstream optimizer；native precision/speed/HBM/state compaction 未复现，原型 finite-positive-denominator policy 比 native 更窄。
