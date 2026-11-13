@@ -35,3 +35,5 @@ Round 102 的集合监督研究链接固定 RT-DETR matcher 与 criterion（Apac
 Round 103 的 Neural ODE 研究链接固定 Diffrax adjoints（Apache-2.0）与 torchdiffeq adjoint（MIT）；上游权利保留。原创固定 Euler、离散 reverse、block replay 与连续增广反向时间对照未复制实现或权重；不是框架 adaptive solver 复现、online/binomial checkpointing、科学质量或 GPU/peak-memory benchmark。
 
 Round 104 的 Gaussian rasterization 研究链接固定 gsplat tile/depth、alpha gates 与 2026-09-01 int64 offset 变更（Apache-2.0）；上游权利保留。原创 square-support CPU 分桶、混合、梯度和宽索引算术未复制实现或场景资产，不是 3D projection、ellipse culling、gsplat/CUDA、图像质量或 peak-memory benchmark。
+
+Round 105 的 multiresolution hash-grid/LoD 研究链接固定 tiny-cuda-nn 2026-09-29 native hard/soft LoD 变更及 grid/helpers；已直接检查 LICENSE.txt 的 BSD-3-Clause 条款，GitHub license API 返回 NOASSERTION。上游权利保留。原创二维标量 gather、展开参考、碰撞 VJP、固定 LoD 权重和有界分配模型未复制 source 实现、训练权重或渲染资产；不是 native CUDA/JIT、完整二阶/LoD-input 导数、图像质量或 peak-HBM benchmark。
