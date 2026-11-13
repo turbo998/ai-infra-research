@@ -19,3 +19,5 @@ Round 94 的词表并行交叉熵研究链接 NVIDIA Megatron-LM 固定提交的
 Round 95 的流式卷积状态研究链接 Kyutai Moshi 固定提交的卷积模块、reset 变更与上游 LICENSE；GitHub 仓库许可元数据为 Apache-2.0，文件中的 Kyutai/Meta 原始权利声明保留于上游。原创标量离线公式、流式 adapter、overlap-add 与缓存预算未复制实现或模型权重，也不代表 Mimi 实测、音质或服务延迟。
 
 Round 96 的推荐稀疏 Embedding 表研究链接 Meta/PyTorch TorchRec 固定提交的 TW/RW/CW distributor、mean divisor 与 2026-11-11 subgroup root 修复；仓库许可元数据为 BSD-3-Clause，上游权利保留。原创 jagged 数值模型、表梯度有限差分、逻辑字节预算与本地 CPU 计时不复制实现，也不是 TorchRec/FBGEMM/GPU benchmark 或推荐质量评估。
+
+Round 97 的 GNN 邻居采样研究链接 PyG 固定提交的 NeighborLoader 文档与 MIT LICENSE；seed-first、n_id、fanout/hop 与子图策略的上游权利保留。原创依赖闭包、特征梯度、确定性邻居 fixture 与独立 uniform 子集枚举未复制上游实现，不代表 PyG/GPU 执行、真实采样吞吐或训练质量。
