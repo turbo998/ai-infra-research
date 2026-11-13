@@ -67,3 +67,5 @@ Round 118 链接固定 NVIDIA/cccl DeviceRadixSort（component header SPDX BSD-3
 Round 119 链接固定 PyTorch 2026-11-12 implicit gradient fan-in guard（BSD-style repository license），上游权利保留。原创 scalar slots、IEEE rounding、Fraction oracle、CPU timing 与视觉未复制 autograd 实现；source native tests 不算本地复现，flag 不等于跨次 .grad accumulation ban、general reduction ban 或 float64/memory 保证。
 
 Round 120 链接固定 PyTorch SparseAdam 与 functional API（BSD-style），既有 mask/coalesce 契约与 8 月 public-API 日期已分开，不冒充新算法。Scalar updates、Decimal/Fraction oracles、CPU grouping 与视觉原创，未复制 upstream optimizer；native precision/speed/HBM/state compaction 未复现，原型 finite-positive-denominator policy 比 native 更窄。
+
+Round 121 链接固定 ONNX QuantizeLinear reference（Apache-2.0），上游权利保留。Exact Fraction/BigInt per-axis int8/uint8、rounding oracle、CPU timing 与视觉原创，未复制 upstream；8 月 float6 更新单列且未评测，不认证 native division/overflow、FP6/FP8/INT4、GPU speed 或 model quality。
