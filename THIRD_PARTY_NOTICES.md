@@ -55,3 +55,5 @@ Round 112 的 Parquet pruning 研究链接固定 DuckDB 2026-11 reader、statist
 Round 113 的指数直方图研究链接固定 OpenTelemetry Go 2026-11 bucket-logic deduplication、2026-10 circular-storage、public interval 与 aggregation contract（Apache-2.0）；不称为指数直方图新发明。上游权利保留。原创 exact-rational mapping、immutable merge、interval oracle 与 CPU timing 未复制实现或私有观测；仅非负值、scale -10..0，counter capacity 不冒充 retained SDK total，未测 native concurrency、collector、OTLP 或生产吞吐。
 
 Round 114 的 RoPE 研究链接固定 FlashInfer 2026-11-10 regular dimension guard 与 cached rotary/layout repair（Apache-2.0）；上游权利保留。原创 scalar planes、Q/K permutation、complex relative-angle oracle、CPU timing 与 selected payload 未复制上游实现、模型权重或私有 prompts；不冒充 native failure/fix、GPU speedup、真实 checkpoint conversion、模型质量或 peak-HBM benchmark。
+
+Round 115 的 DLPack 研究链接固定 2026-11-04 header / Python spec（Apache-2.0）；该提交只将版本 1.3 改为 1.4，既有 ownership/stream 规则不称为新发明。上游权利保留。原创 scalar descriptor、toy capsule、partial-order enumeration、Python buffer 计时与视觉未复制上游实现；不执行 native PyCapsule/C ABI/GPU，不把枚举比例冒充竞态概率或把 buffer view 计时冒充 DLPack speedup。
