@@ -29,3 +29,5 @@ Round 99 的逐样本裁剪研究链接 Opacus 固定 Linear norm sampler、全�
 Round 100 的半结构化稀疏研究链接 PyTorch 固定 sparse classes、conversion 与 LICENSE；上游权利保留，GitHub 许可元数据为 NOASSERTION，不擅自确认单一 SPDX。原创 2:4 nibble、剪枝与标量乘法未复制实现；逻辑编码不冒充物理 CUTLASS/cuSPARSELt 格式，不代表 GPU 性能、FP8/ROCm 验证或模型质量。
 
 Round 101 的 CTC 研究链接固定 pyctcdecode decoder（Apache-2.0）与 NeMo 集成；上游权利保留。原创路径枚举、prefix log-sum、独立 target forward 和 CPU 计时没有复制 decoder 实现或模型权重；合成声学概率不代表 WER/CER、校准 confidence、LM/BPE/时间戳一致性或原生 ASR/GPU 性能。
+
+Round 102 的集合监督研究链接固定 RT-DETR matcher 与 criterion（Apache-2.0）；上游权利保留。原创穷举、subset DP、标量监督梯度和 DDP count 算术未复制检测器实现或权重，不是 Hungarian 算法实现、原生 SciPy 计时、focal/GIoU 复现或 detector AP/FPS benchmark。
