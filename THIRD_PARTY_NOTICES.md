@@ -61,3 +61,5 @@ Round 115 的 DLPack 研究链接固定 2026-11-04 header / Python spec（Apache
 Round 116 的 Mel 前端研究链接固定 Transformers 2026-11-12 audio dependency migration（Apache-2.0）；上游权利保留。原创 scalar filter、rational triangle/frame-start oracles、projection timing 与视觉未复制上游实现、模型权重或录音。Source float32-before-normalization、Slaney 与 transpose 契约已区分；不冒充 native librosa bit-exact reproduction、ASR accuracy 或 GPU benchmark。
 
 Round 117 的采样研究链接固定 FlashInfer 2026-11-13 basic categorical batch-invariant 更新（Apache-2.0）；不自动推广到已有 filtered APIs，上游权利保留。原创 exact rational filters/CDF、supplied-uniform identity、CPU lookup 与视觉未复制上游实现或模型权重；不复现 native Philox/canonical float tree，不把 C-backed bisect/Python-loop 对照冒充 GPU sampler speedup。
+
+Round 118 链接固定 NVIDIA/cccl DeviceRadixSort（component header SPDX BSD-3），上游权利保留；2026-11-10 修改为 ADL qualification 维护，不冒充新算法。原创 key/byte-pass、numeric/bit-string oracles、CPU timing 与视觉未复制 CUB 实现；原型显式拒绝 NaNs，不认证 native 内部 zero encoding、NaN order、workspace 或 GPU speed。
