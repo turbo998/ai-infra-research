@@ -39,3 +39,5 @@ Round 104 的 Gaussian rasterization 研究链接固定 gsplat tile/depth、alph
 Round 105 的 multiresolution hash-grid/LoD 研究链接固定 tiny-cuda-nn 2026-09-29 native hard/soft LoD 变更及 grid/helpers；已直接检查 LICENSE.txt 的 BSD-3-Clause 条款，GitHub license API 返回 NOASSERTION。上游权利保留。原创二维标量 gather、展开参考、碰撞 VJP、固定 LoD 权重和有界分配模型未复制 source 实现、训练权重或渲染资产；不是 native CUDA/JIT、完整二阶/LoD-input 导数、图像质量或 peak-HBM benchmark。
 
 Round 106 的 sparse-convolution coordinate-map 研究链接固定 spconv conv/ops（Apache-2.0）；repo pin 2024-12-15，conv.py 最后变更 2023-03-23，不声称 2026 新发布。上游权利保留。原创 batched 1D scalar map、dense reference、tied adjoint、支持/行身份控制与 selected Native pair budget 未复制 source、权重或数据集；不是 native CUDA/3D kernel、模型质量或 peak-HBM 复现。
+
+Round 107 的 VFR timestamp/clip 研究链接固定 TorchCodec 2026-11-09 low-level APIs stable 变更、decoder PTS index 与 sampler policies（BSD-3-Clause）；不声称新发明 VFR 算法。上游权利保留。原创整数 tick interval/oracle、平均 FPS 对照、clip padding、重复 slots 和 logical tensor budget 未复制 source、编码媒体、数据集或权重；不是 TorchCodec/FFmpeg/NVDEC、实际解码帧数、视频质量或 peak-HBM benchmark。
