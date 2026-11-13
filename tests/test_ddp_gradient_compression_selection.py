@@ -129,6 +129,13 @@ const document={documentElement:{setAttribute:(key,value)=>{theme=value;}}};
         root = ET.fromstring(svg)
         self.assertEqual(root.attrib["viewBox"], "0 0 1600 1000")
         self.assertIn("not GPU measurements", svg)
+        ys = [
+            float(point.split(",")[1])
+            for polygon in root.findall(".//{http://www.w3.org/2000/svg}polygon")
+            for point in polygon.attrib["points"].split()
+        ]
+        self.assertGreaterEqual(min(ys), 200)
+        self.assertLessEqual(max(ys), 620)
 
 
 if __name__ == "__main__":

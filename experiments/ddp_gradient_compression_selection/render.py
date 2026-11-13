@@ -366,7 +366,7 @@ def summary_svg(report: dict) -> str:
     parts = []
 
     def point(x: float, y: float, z: float) -> tuple[float, float]:
-        return 800 + (x - y) * 1.65, 380 + (x + y) * 0.65 - z * 1.6
+        return 800 + (x - y) * 1.65, 410 + (x + y) * 0.55 - z * 1.6
 
     def polygon(points: list[tuple], fill: str) -> str:
         return '<polygon points="' + " ".join(f"{a:.2f},{b:.2f}" for a, b in points) + f'" fill="{fill}" stroke="#475569" stroke-width="1"/>'
