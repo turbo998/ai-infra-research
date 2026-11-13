@@ -71,3 +71,5 @@ Round 120 链接固定 PyTorch SparseAdam 与 functional API（BSD-style），�
 Round 121 链接固定 ONNX QuantizeLinear reference（Apache-2.0），上游权利保留。Exact Fraction/BigInt per-axis int8/uint8、rounding oracle、CPU timing 与视觉原创，未复制 upstream；8 月 float6 更新单列且未评测，不认证 native division/overflow、FP6/FP8/INT4、GPU speed 或 model quality。
 
 Round 122 链接固定 MAPIE quantile helpers（BSD-3-Clause）与既有 conformal theory；11 月 10 日 educational tree 更新非新 theorem。Exact ranks、synthetic exhaustive holdouts、CPU selection 与视觉原创，未复制 upstream；coverage 只指固定 exchangeable world enumeration，不冒充 real-data/per-group/单 query confidence 或 native MAPIE 复现。
+
+Round 123 链接固定 linear_operator Cholesky helper（MIT），3 月 modern API migration 非新算法。Scalar factor/solve、Fraction elimination、CPU cache timing 与视觉原创，未复制 upstream；selected observation-noise shift 与 native numerical rescue jitter 区分，不冒充 native rescue/GPU 或 calibrated posterior quality。
