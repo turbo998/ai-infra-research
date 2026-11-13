@@ -43,3 +43,5 @@ Round 106 的 sparse-convolution coordinate-map 研究链接固定 spconv conv/o
 Round 107 的 VFR timestamp/clip 研究链接固定 TorchCodec 2026-11-09 low-level APIs stable 变更、decoder PTS index 与 sampler policies（BSD-3-Clause）；不声称新发明 VFR 算法。上游权利保留。原创整数 tick interval/oracle、平均 FPS 对照、clip padding、重复 slots 和 logical tensor budget 未复制 source、编码媒体、数据集或权重；不是 TorchCodec/FFmpeg/NVDEC、实际解码帧数、视频质量或 peak-HBM benchmark。
 
 Round 108 的 nullable List buffer 研究链接固定 Arrow 2026-11-13 required-object None guards、ArrayData offsets/validity 与 List flatten（Apache-2.0，LICENSE.txt）；合法 nullable buffers 与缺失必需对象不同。上游权利保留。原创 immutable List<int32>、显式 canonical copy、CPU 计时、buffer payload 与 SVG 未复制 source、数据集或资产；不是 native constructor crash、Arrow allocator、NumPy/LargeList execution、RSS 或 peak-HBM benchmark。
+
+Round 109 的 symbolic shape 研究链接固定 JAX 2026-11-04 polynomial optimization、scope、univariate solving 与 export 文档（Apache-2.0）；上游权利保留。原创 affine solver、有界穷举、inequality 域检查、CPU 计时与 signature/padding policy 未复制实现、模型或数据集；不是 native parser/compiler、完整 polynomial engine、上游优化 speedup、实际 compilation events、padding-mask 等价性或 peak-HBM benchmark。
