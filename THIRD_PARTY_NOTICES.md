@@ -15,3 +15,5 @@ Round 92 的 DDP 梯度通信压缩研究链接 PyTorch `v2.10.0` 固定提交�
 Round 93 的对比式训练研究链接 Sentence Transformers 固定提交的 CachedMNRL/GradCache mixin 与 GradCache 原论文 v2。Sentence Transformers 保留 Apache-2.0 许可及版权，论文保留其作者权利。独立编写的标量 encoder、InfoNCE 数值检查与内存/计算预算不是第三方实现镜像，也未复现或冒用论文的模型质量及性能结论。
 
 Round 94 的词表并行交叉熵研究链接 NVIDIA Megatron-LM 固定提交的实际 loss 实现、旧兼容入口及上游 LICENSE。版权与文件级许可例外保留于上游；没有复制其实现或许可全文，也不从 GitHub 的 NOASSERTION 元数据臆断整个仓库许可。原创标量统计、有限差分、错误协议对照与字节/启动预算不是 GPU 基准或第三方代码镜像。
+
+Round 95 的流式卷积状态研究链接 Kyutai Moshi 固定提交的卷积模块、reset 变更与上游 LICENSE；GitHub 仓库许可元数据为 Apache-2.0，文件中的 Kyutai/Meta 原始权利声明保留于上游。原创标量离线公式、流式 adapter、overlap-add 与缓存预算未复制实现或模型权重，也不代表 Mimi 实测、音质或服务延迟。
