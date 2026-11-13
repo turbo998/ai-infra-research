@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Autograd fan-in contracts — seven cards</title><style>
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+  --cp-code: #0F172A;
+  --cp-primary: #3B82F6;
+  --cp-baseline: #CBD5E1;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+}
+
+*{box-sizing:border-box}body{margin:0;padding:24px;background:var(--cp-bg);color:var(--cp-text);
+font-family:"Segoe UI",Aptos,Calibri,-apple-system,BlinkMacSystemFont,sans-serif}
+main{max-width:1180px;margin:auto}h1{font-size:44px;line-height:1.13;margin:18px 0}
+h2{font-size:25px}p,li{line-height:1.55}.muted{color:var(--cp-text-muted)}
+.eyebrow{font-size:14px;letter-spacing:.12em;font-weight:700;color:var(--cp-accent)}
+.accent{background:linear-gradient(90deg,var(--cp-accent),var(--cp-primary));
+background-clip:text;color:transparent}
+.panel,blockquote{border:1px solid var(--cp-border);border-radius:16px;padding:20px;
+background:var(--cp-surface-soft);margin:16px 0}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pill{display:inline-block;border:1px solid var(--cp-border);border-radius:.625rem;
+padding:5px 9px;margin:4px 4px 4px 0;font-size:13px}
+.good{border-top:4px solid var(--cp-success)}.bad{border-top:4px solid var(--cp-danger)}
+pre,code{font-family:Consolas,"Courier New",Courier,monospace}
+pre{background:var(--cp-code);color:var(--cp-accent-fg);padding:24px;border-radius:16px;
+font-size:16px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:16px}th,td{text-align:left;padding:14px 8px;
+border-bottom:1px solid var(--cp-border)}th{font-size:12px;letter-spacing:.04em}
+.bar{height:14px;background:var(--cp-surface-soft);border-radius:5px;overflow:hidden;margin:6px 0 12px}
+.bar i{display:block;height:100%;background:var(--cp-primary)}.bar.baseline i{background:var(--cp-baseline)}
+.card{position:relative;width:900px;height:1125px;max-width:100%;margin:0 auto 32px;
+padding:46px;background:var(--cp-surface);border:1px solid var(--cp-border);border-radius:16px;
+display:flex;flex-direction:column;overflow:hidden}
+.card:before{content:"";position:absolute;top:0;left:0;right:0;height:10px;
+background:linear-gradient(90deg,var(--cp-accent),var(--cp-primary))}
+.evidence{flex:1}.callout{background:var(--cp-surface-soft);padding:18px;border-radius:12px;margin:14px 0}
+footer{border-top:1px solid var(--cp-border);padding-top:16px;display:flex;justify-content:space-between;font-size:13px}
+label{display:flex;flex-direction:column;gap:8px;font-size:15px}
+input,button,select{font:inherit;border:1px solid var(--cp-border-strong);border-radius:.625rem;
+padding:10px;background:var(--cp-surface);color:var(--cp-text);max-width:100%}
+button{cursor:pointer;background:var(--cp-accent);color:var(--cp-accent-fg)}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--cp-link);outline-offset:3px}
+.error{color:var(--cp-danger);font-weight:700}output{display:block}
+@media(max-width:700px){body{padding:12px}.grid{grid-template-columns:1fr}
+.card{height:auto;min-height:1125px;padding:24px}h1{font-size:34px}table{font-size:13px}th,td{padding:10px 4px}}
+@media print{body{padding:0;background:var(--cp-surface)}.card{margin:0;border:0;border-radius:0;break-after:page}
+@page{size:900px 1125px;margin:0}}
+</style></head><body><section class="card"><p class="eyebrow">1 / 7 · HANDS-ON · AUTOGRAD FAN-IN</p><h1>One backward slot can hide a precision decision at its second gradient arrival</h1><div class='grid'><div><h3>Scenarios</h3><p>Active fan-in<br>Explicit combiner<br>Separate backward calls</p></div><div><h3>Structured input</h3><p>[16777216,1,-16777216]<br>Float32 contributions</p></div><div><h3>Decisions</h3><p>Guard actual arrivals<br>Declare accumulation policy</p><span class='pill'>Original CPU scalar model</span></div></div><div class='dark'>November 12 PyTorch adds disallow_implicit_grad_accumulation. It guards within-task implicit sums, not cross-call .grad accumulation. Synthetic, independently_reproduced=false.</div></section><section class="card"><p class="eyebrow">2 / 7 · SCENARIO: CANCELLATION</p><h1>The original narrow fold returns 0; the explicit wide fold returns 1</h1><blockquote>Exact sum of the supplied encoded inputs: 1. A per-add float32 rounding loses the middle one.</blockquote><div class='metric'><span class='pill'>score · exact-order agreement</span><h3>Float32 schedules: 4/6</h3><div class="bar baseline"><i style="width:66.666667%"></i></div></div><div class='metric'><span class='pill'>score · original explicit policy</span><h3>Wide schedules: 6/6</h3><div class="bar"><i style="width:100.000000%"></i></div></div><p>Not a promise of general float64 exactness or native scheduling frequency. The flag does not select this policy.</p></section><section class="card"><p class="eyebrow">3 / 7 · WHAT I TESTED</p><h1>Undefined, zero and separate-task arrivals have different meanings</h1><table><tr><th>SCENARIO</th><th>QUESTION/TASK</th><th>MODEL ANSWER</th><th>ACTION</th></tr><tr><td>One active arrival</td><td>Forward fanout alone?</td><td>No second-slot sum</td><td>Act automatically</td></tr><tr><td>✕ Second defined arrival</td><td>Strict task enabled</td><td>Explicit rejection</td><td>Inspect producer</td></tr><tr><td>Undefined / zero</td><td>Equivalent?</td><td>No; zero is defined</td><td>Retain distinction</td></tr><tr><td>Explicit split slots</td><td>One arrival per slot</td><td>Combiner owns sum</td><td>Declare precision</td></tr><tr><td>Separate backward tasks</td><td>Leaf .grad 1 then 2</td><td>3</td><td>Different contract</td></tr></table><div class='grid'><div class='metric'>Gate: guard actual traversed backward edges, not every forward use.</div><div class='metric'>Failure analysis: the guard is not a transaction or universal reduction ban.</div></div></section><section class="card"><p class="eyebrow">4 / 7 · UNDER THE HOOD</p><h1>Give each use a distinct gradient slot, then make the one sum explicit</h1><pre>original task-slot verifier:
+  undefined arrival: ignore
+  defined arrival + occupied same slot:
+    strict → explicit error
+    otherwise → selected narrow addition
+
+reentrant task:
+  effective strict = local OR parent</pre><p>↓ Original explicit model</p><pre>branch 0 → split slot 0
+branch 1 → split slot 1
+branch 2 → split slot 2
+
+explicit float64 sum → one float32 result
+one upstream arrival
+
+No native tensor views or full engine reproduced</pre></section><section class="card"><p class="eyebrow">5 / 7 · ROBUSTNESS CHECK</p><h1>Reordering three contributions changes narrow exact agreement to 4/6</h1><table><tr><th>QUESTION/ANSWER</th><th>ORIGINAL</th><th>REORDERED</th><th>CHANGE (PTS)</th></tr><tr><td>Float32 exact-sum agreement</td><td>0/1</td><td>4/6</td><td>66.67</td></tr><tr><td>Explicit wide agreement</td><td>1/1</td><td>6/6</td><td>0.00</td></tr></table><p>All six permutations enumerated, not random scheduling probabilities. First-slot state survives the original model's rejection; do not assume rollback or silently retry.</p></section><section class="card"><p class="eyebrow">6 / 7 · LATENCY</p><h1>The original wide fold avoids per-add packing; this is not native engine speed</h1><div class='metric'><b>24 supplied contributions</b><p>Float64 fold, final float32 0.007633 ms</p><div class="bar"><i style="width:0.906859%"></i></div><p>Struct float32 each add 0.013400 ms</p><div class="bar baseline"><i style="width:1.591953%"></i></div></div><div class='metric'><b>96 supplied contributions</b><p>Float64 fold, final float32 0.029367 ms</p><div class="bar"><i style="width:3.488833%"></i></div><p>Struct float32 each add 0.052133 ms</p><div class="bar baseline"><i style="width:6.193569%"></i></div></div><div class='metric'><b>384 supplied contributions</b><p>Float64 fold, final float32 0.117700 ms</p><div class="bar"><i style="width:13.983051%"></i></div><p>Struct float32 each add 0.211267 ms</p><div class="bar baseline"><i style="width:25.099002%"></i></div></div><div class='metric'><b>1536 supplied contributions</b><p>Float64 fold, final float32 0.476300 ms</p><div class="bar"><i style="width:56.585617%"></i></div><p>Struct float32 each add 0.841733 ms</p><div class="bar baseline"><i style="width:100.000000%"></i></div></div><p>Original scalar policies intentionally produce different results. Input float32 conversion included; Python struct packing dominates narrow work. Two warmups, seven alternating repeats, three operations/sample; median repeat means. Native autograd/tensors/views/GPU excluded.</p></section><section class="card"><p class="eyebrow">7 / 7 · MY TAKE</p><h1>Use the new guard to expose ownership of sums, not to promise no accumulation</h1><div class='grid'><div class='good'><h3>✅ Good fit</h3><p>Active backward fan-in audits, explicit gradient-combiner precision and reentrant flag scope.</p></div><div class='bad'><h3>⛔ Not for</h3><p>Cross-call .grad bans, broadcast-reduction detection, general higher-order differentiation, compiled autograd or guaranteed memory reduction.</p></div></div><div class='dark'>Pinned BSD-style PyTorch sources; original scalar task/rounding/art. Native engine latency, native precision policy and peak HBM null. Compiled strict mode unsupported in inspected source. Browser inspection not performed.</div></section></body></html>
