@@ -21,3 +21,5 @@ Round 95 的流式卷积状态研究链接 Kyutai Moshi 固定提交的卷积模
 Round 96 的推荐稀疏 Embedding 表研究链接 Meta/PyTorch TorchRec 固定提交的 TW/RW/CW distributor、mean divisor 与 2026-11-11 subgroup root 修复；仓库许可元数据为 BSD-3-Clause，上游权利保留。原创 jagged 数值模型、表梯度有限差分、逻辑字节预算与本地 CPU 计时不复制实现，也不是 TorchRec/FBGEMM/GPU benchmark 或推荐质量评估。
 
 Round 97 的 GNN 邻居采样研究链接 PyG 固定提交的 NeighborLoader 文档与 MIT LICENSE；seed-first、n_id、fanout/hop 与子图策略的上游权利保留。原创依赖闭包、特征梯度、确定性邻居 fixture 与独立 uniform 子集枚举未复制上游实现，不代表 PyG/GPU 执行、真实采样吞吐或训练质量。
+
+Round 98 的 Fourier 神经算子研究链接 neuraloperator 固定 SpectralConv 与 2026-02-24 Hermitian enforcement 变更；上游 MIT 权利保留。原创可分离/直接 DFT、空间循环卷积与复数缓存预算未复制实现或模型权重；没有执行 neuraloperator/PyTorch/cuFFT，也未复现上游 GPU artifact、PDE 质量或峰值 HBM。
