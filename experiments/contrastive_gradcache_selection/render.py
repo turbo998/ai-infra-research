@@ -203,9 +203,8 @@ def workbench(report: dict) -> str:
     )
 
 
-def summary_svg(report: dict) -> str:
-    b = report["budget"]
-    # A physical card sorter: two input magazines feed a shared cache drawer.
+def sorter_scene() -> str:
+    """Three supported card magazines; shared original figure geometry."""
     solids = []
 
     def pos(x, y, z):
@@ -238,7 +237,12 @@ def summary_svg(report: dict) -> str:
     for x in (-205,195):
         for y in (-115,110):
             block(x,y,6,5,5,3)
-    scene = "".join(markup for _,markup in sorted(solids))
+    return "".join(markup for _,markup in sorted(solids))
+
+
+def summary_svg(report: dict) -> str:
+    b = report["budget"]
+    scene = sorter_scene()
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" '
         'role="img" aria-labelledby="title description"><title id="title">Global negatives and exact GradCache replay</title>'
