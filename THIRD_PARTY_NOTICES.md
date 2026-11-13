@@ -31,3 +31,5 @@ Round 100 的半结构化稀疏研究链接 PyTorch 固定 sparse classes、conv
 Round 101 的 CTC 研究链接固定 pyctcdecode decoder（Apache-2.0）与 NeMo 集成；上游权利保留。原创路径枚举、prefix log-sum、独立 target forward 和 CPU 计时没有复制 decoder 实现或模型权重；合成声学概率不代表 WER/CER、校准 confidence、LM/BPE/时间戳一致性或原生 ASR/GPU 性能。
 
 Round 102 的集合监督研究链接固定 RT-DETR matcher 与 criterion（Apache-2.0）；上游权利保留。原创穷举、subset DP、标量监督梯度和 DDP count 算术未复制检测器实现或权重，不是 Hungarian 算法实现、原生 SciPy 计时、focal/GIoU 复现或 detector AP/FPS benchmark。
+
+Round 103 的 Neural ODE 研究链接固定 Diffrax adjoints（Apache-2.0）与 torchdiffeq adjoint（MIT）；上游权利保留。原创固定 Euler、离散 reverse、block replay 与连续增广反向时间对照未复制实现或权重；不是框架 adaptive solver 复现、online/binomial checkpointing、科学质量或 GPU/peak-memory benchmark。
