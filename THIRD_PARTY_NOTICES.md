@@ -11,3 +11,5 @@ JEDEC 标准正文没有取得，不推测其版权授权或伪称已阅读。�
 目前不为全部内容添加统一开源授权。自有代码/文档与第三方引用的授权需分别处理；公开访问并不消除版权。
 
 Round 92 的 DDP 梯度通信压缩研究链接 PyTorch `v2.10.0` 固定提交的 PowerSGD/default hooks 实现与版本化文档；PyTorch 保留其 BSD-3-Clause 许可和相应版权。原始合成模型、H5、报告和图示未复制第三方实现。LMSYS 2026-11-12 公告仅作为当日背景链接，不作为梯度压缩性能证据，也未镜像其文字或图片。
+
+Round 93 的对比式训练研究链接 Sentence Transformers 固定提交的 CachedMNRL/GradCache mixin 与 GradCache 原论文 v2。Sentence Transformers 保留 Apache-2.0 许可及版权，论文保留其作者权利。独立编写的标量 encoder、InfoNCE 数值检查与内存/计算预算不是第三方实现镜像，也未复现或冒用论文的模型质量及性能结论。
