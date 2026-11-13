@@ -25,3 +25,5 @@ Round 97 的 GNN 邻居采样研究链接 PyG 固定提交的 NeighborLoader 文
 Round 98 的 Fourier 神经算子研究链接 neuraloperator 固定 SpectralConv 与 2026-02-24 Hermitian enforcement 变更；上游 MIT 权利保留。原创可分离/直接 DFT、空间循环卷积与复数缓存预算未复制实现或模型权重；没有执行 neuraloperator/PyTorch/cuFFT，也未复现上游 GPU artifact、PDE 质量或峰值 HBM。
 
 Round 99 的逐样本裁剪研究链接 Opacus 固定 Linear norm sampler、全局 norm、weighted replay 与 optimizer scaling；上游 Apache-2.0 权利保留。原创标量梯度、Gram 与固定噪声向量未复制实现，不是 Opacus/PyTorch 实测或私人训练；无 sampler、accountant、Gaussian/secure RNG、epsilon/delta 保证或 GPU 指标。
+
+Round 100 的半结构化稀疏研究链接 PyTorch 固定 sparse classes、conversion 与 LICENSE；上游权利保留，GitHub 许可元数据为 NOASSERTION，不擅自确认单一 SPDX。原创 2:4 nibble、剪枝与标量乘法未复制实现；逻辑编码不冒充物理 CUTLASS/cuSPARSELt 格式，不代表 GPU 性能、FP8/ROCm 验证或模型质量。
