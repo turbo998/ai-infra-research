@@ -53,3 +53,5 @@ Round 111 的 distributed AUROC 研究链接固定 TorchMetrics 2026-09 compatib
 Round 112 的 Parquet pruning 研究链接固定 DuckDB 2026-11 reader、statistics validity 与 comparison propagation（MIT）；11 月 scratch-buffer 改动仅作时间线，不把既有剪枝称为新发明。上游权利保留。原创整数 SQL 三值 interpreter、row oracle、CPU timing 与 selected IO budget 未复制实现、权重或数据集；constant-bound/nullability analogue 不冒充 native string regression，未测 Parquet 解码、object-store IO、DuckDB native latency 或 peak memory。
 
 Round 113 的指数直方图研究链接固定 OpenTelemetry Go 2026-11 bucket-logic deduplication、2026-10 circular-storage、public interval 与 aggregation contract（Apache-2.0）；不称为指数直方图新发明。上游权利保留。原创 exact-rational mapping、immutable merge、interval oracle 与 CPU timing 未复制实现或私有观测；仅非负值、scale -10..0，counter capacity 不冒充 retained SDK total，未测 native concurrency、collector、OTLP 或生产吞吐。
+
+Round 114 的 RoPE 研究链接固定 FlashInfer 2026-11-10 regular dimension guard 与 cached rotary/layout repair（Apache-2.0）；上游权利保留。原创 scalar planes、Q/K permutation、complex relative-angle oracle、CPU timing 与 selected payload 未复制上游实现、模型权重或私有 prompts；不冒充 native failure/fix、GPU speedup、真实 checkpoint conversion、模型质量或 peak-HBM benchmark。
