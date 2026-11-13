@@ -41,3 +41,5 @@ Round 105 的 multiresolution hash-grid/LoD 研究链接固定 tiny-cuda-nn 2026
 Round 106 的 sparse-convolution coordinate-map 研究链接固定 spconv conv/ops（Apache-2.0）；repo pin 2024-12-15，conv.py 最后变更 2023-03-23，不声称 2026 新发布。上游权利保留。原创 batched 1D scalar map、dense reference、tied adjoint、支持/行身份控制与 selected Native pair budget 未复制 source、权重或数据集；不是 native CUDA/3D kernel、模型质量或 peak-HBM 复现。
 
 Round 107 的 VFR timestamp/clip 研究链接固定 TorchCodec 2026-11-09 low-level APIs stable 变更、decoder PTS index 与 sampler policies（BSD-3-Clause）；不声称新发明 VFR 算法。上游权利保留。原创整数 tick interval/oracle、平均 FPS 对照、clip padding、重复 slots 和 logical tensor budget 未复制 source、编码媒体、数据集或权重；不是 TorchCodec/FFmpeg/NVDEC、实际解码帧数、视频质量或 peak-HBM benchmark。
+
+Round 108 的 nullable List buffer 研究链接固定 Arrow 2026-11-13 required-object None guards、ArrayData offsets/validity 与 List flatten（Apache-2.0，LICENSE.txt）；合法 nullable buffers 与缺失必需对象不同。上游权利保留。原创 immutable List<int32>、显式 canonical copy、CPU 计时、buffer payload 与 SVG 未复制 source、数据集或资产；不是 native constructor crash、Arrow allocator、NumPy/LargeList execution、RSS 或 peak-HBM benchmark。
