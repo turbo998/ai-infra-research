@@ -180,6 +180,9 @@ Round 175 基于公开发布的 HuggingFace Safetensors、GGML GGUF v3、vLLM Ru
 
 Round 176 基于公开发布的 Model Context Protocol (MCP 2025-03-26+ Streamable HTTP) 与 Google / Linux Foundation Agent2Agent (A2A) 协议规范构建原创合成多智能体协议与网关评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 177 基于公开发布的 NVIDIA NCCL 2.21–2.26 算法（Ring, Tree, NVLS, PAT）、协议（LL, LL128, Simple）与 User Buffer 零拷贝注册架构文档构建原创合成 SM 重叠与通信评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
