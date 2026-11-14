@@ -228,6 +228,8 @@ Round 199 基于公开发布的 WSD (`Warmup-Stable-Decay`, MiniCPM / DeepSeek-V
 
 Round 200 基于公开发布的 Megatron-LM Sequence Parallelism (SP)、DeepSpeed Ulysses (`All-to-All`)、Striped / ZigZag Ring Attention 与 Unified Sequence Parallelism (`Hybrid 2D USP`) 架构规范构建原创合成百万长上下文并行 MFU 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 201 基于公开发布的 CUTLASS 3.x `Stream-K` 持久化工作分解论文、Wave Quantization 原理与 NVIDIA Hopper/Blackwell `PDL (Programmatic Dependent Launch)` 硬件规范构建原创合成小批量解码瘦矩阵乘与算子重叠评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
