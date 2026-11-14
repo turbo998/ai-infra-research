@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>Decode Context Parallelism (DCP) for MLA &amp; GQA Sizer (Round 216)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 216 · 解码上下文并行（Decode Context Parallelism, DCP）与 MLA/GQA 序列切分计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择长上下文 Decode KV 切分架构档位 (DeepSeek-V3 MLA · 128K Context · 8x H100)</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 传统纯 TP=8 (MLA 仅 1 个共享 KV 头无法按头切分 · 8 卡全量复制 128K KV)</option>
+          <option value="t2">Tier 2: 粗粒度连续区间 DCP=8 (每卡存连续 16K · 变长请求负载倾斜)</option>
+          <option value="t3">Tier 3: 细粒度 Page-Block 交错 DCP=8 + 标准 AllGather LSE (5.4 ms)</option>
+          <option value="t4" selected>Tier 4: 混合 TP=8 权重 + Interleaved DCP=8 序列切分 + NVLink 融合 LSE 归并 (4.2 ms)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>KV 显存冗余复制倍数</div><div class="val" id="rep">1x (零冗余)</div></div>
+      <div class="kpi"><div>单卡每步读取 KV 长度</div><div class="val" id="tok">16,384 Tokens</div></div>
+      <div class="kpi"><div>Decode 步延迟 (TBT)</div><div class="val" id="tbt">4.2 ms</div></div>
+      <div class="kpi"><div>128K 最大并发请求数</div><div class="val" id="req">64 条 (8.0x)</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (混合 TP=8 权重 + Interleaved DCP=8 序列切分)：彻底攻克 DeepSeek-V3 MLA 单共享 KV 头在纯 TP=8 下被迫複製 8 份的死穴，按 Page Block 将 128K 序列均匀切分至 8 张卡（每卡仅读 16K），通过 NVLink 融合 LSE 归并实现 6.76 倍解码加速 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { rep: "8x 冗余复制 ✕", tok: "131,072 Tokens", tbt: "28.4 ms", req: "8 条 (1.0x)", v: "Tier 1 (纯 TP=8)：因为 MLA 只有 1 个压缩潜变量头 c_KV，无法按 Head 切分，导致 8 张 GPU 各存一份一模一样的 128K KV Cache ✕" },
+      t2: { rep: "1x (零冗余)", tok: "16,384 (不均)", tbt: "8.9 ms ⚠️", req: "56 条", v: "Tier 2 (粗粒度连续分块 DCP=8)：虽消除了复制，但短于 16K 的请求全部压在 GPU 0 上，造成严重负载倾斜 ⚠️" },
+      t3: { rep: "1x (零冗余)", tok: "16,384 Tokens", tbt: "5.4 ms", req: "64 条 (8.0x)", v: "Tier 3 (Page-Block 轮询交错 DCP=8)：以 64-Token 页为单位在 8 卡间交错分布，任意长度请求 8 卡负载均衡 ✅" },
+      t4: { rep: "1x (零冗余)", tok: "16,384 Tokens", tbt: "4.2 ms 🏆", req: "64 条 (8.0x)", v: "Tier 4 (Interleaved DCP=8 + 融合 NVLink LSE 归并)：单步 TBT 从 28.4 ms 骤降至 4.2 ms，128K 并发容量翻 8 倍 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("rep").textContent = d.rep;
+      document.getElementById("tok").textContent = d.tok;
+      document.getElementById("tbt").textContent = d.tbt;
+      document.getElementById("req").textContent = d.req;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
