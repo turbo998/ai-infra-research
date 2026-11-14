@@ -212,6 +212,8 @@ Round 191 基于公开发布的 CNCF Cilium eBPF (`Netkit` / `Sockmap`)、Multus
 
 Round 192 基于公开发布的 Task Arithmetic、SLERP、TIES-Merging、DARE (`Drop And REscale`) 与 `mergekit` 架构规范构建原创合成大模型零训练权重合并评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 193 基于公开发布的 FlashInfer Sort-Free Rejection Sampling、Min-P Sampling (`p_i >= min_p * p_max`) 与 Gumbel-Max Trick 数学原理构建原创合成大词表采样延迟与高温连贯度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
