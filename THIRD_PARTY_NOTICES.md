@@ -139,3 +139,5 @@ Round 154 链接SGLang Nov14sampling row-drop hostflag优化、ScheduleBatch/Sam
 Round 155 链接vLLM Nov14context-KV-onlyprefill builder/layout修正、metadata/workspace/CG/helper/allocated kernel reuse与Apache-2.0 LICENSE；权利保留，无实现镜像。原创plain per-layer kernel/address/selected-byte planner与CPUdummy constructors；unpadded ledger不认证native packing/padding/allocator、global CUDAgraphs、KVquality或GPUlatency。
 
 Round 156 链接SGLang Nov14multimodal placement/transport模块refactor、processor integration/IPCbudget与Apache-2.0 LICENSE；权利保留，无实现镜像。原创policy projection/CPUbulk timer，非nativeprocessor/tensors/IPC/VMM/worker性能；sourcecomments的硬件吞吐未复现。原型显式拒绝transport typo，与nativehelper的CPUfallback区别已披露。
+
+Round 157 链接vLLM Nov14ROCmFDexport capability gate修正、allocation taxonomy/config/executor tests与Apache-2.0 LICENSE；权利保留，无实现镜像。原创typed config/runtime-witness ledger/CPUclassification；无nativeROCm/VMM/POSIXFD/UCX/RDMA、startup/peak/throughput认证。FD仍需单physical allocation/segment，mixed registration限制与mandatory失败已披露。
