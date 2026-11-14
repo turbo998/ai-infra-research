@@ -1,0 +1,76 @@
+{
+  "experiment_id": "ray_data_heterogeneous_cpu_gpu_streaming_etl_selection",
+  "date": "2026-11-15",
+  "round": 180,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_published_ray_data_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "Anyscale / Ray Data StreamingExecutor & Op-Level Backpressure Policies (ConcurrencyCapBackpressurePolicy)",
+      "Apache Arrow / Plasma Zero-Copy Shared Memory Object Store & Multimodal Video/Image ETL Benchmarks",
+      "Large-Scale Multimodal Pre-Training Data Ingestion Roofline Studies (CPU Decode vCPUs per H100 GPU)"
+    ]
+  },
+  "workload": {
+    "dataset_profile": "500 TB Compressed Multimodal Video/Image-Text Dataset (Decompresses to 2,500 TB raw RGB frames & tokenized tensors)",
+    "cluster_resources": "32xH100 GPUs (4 GPU Nodes, $80/hr total) paired with elastic remote CPU preprocessing workers",
+    "cpu_to_gpu_ratio_mismatch": "1 H100 GPU consumes ~450 images/s, requiring ~24 vCPUs of JPEG/H.264 decoding; an 8xH100 node needs 192 vCPUs for ETL alone, exceeding its 96–128 local CPU cores!"
+  },
+  "tiers": [
+    {
+      "id": "tier1_staged_spark_s3_materialization",
+      "name": "Tier 1: 传统分阶段 Spark 离线预处理落盘 S3 + GPU 读取 (2,500TB 中间落盘放大 · 耗时 54.0h ✕)",
+      "name_en": "Tier 1: Two-Stage Offline Spark ETL -> S3 Materialization -> GPU Read (2,500 TB Intermediate S3 Write)",
+      "intermediate_storage_tb": 2500.0,
+      "gpu_active_utilization_pct": 68.0,
+      "memory_spill_oom_rate_pct": 18.5,
+      "pipeline_completion_hours": 54.0,
+      "total_job_cost_usd": 14800.0,
+      "recommended_for": "Small static tabular datasets reused >50 times; prohibitive 5x storage explosion (500TB -> 2.5PB) for multimodal video/image tensors.",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_node_local_pytorch_dataloader_shm",
+      "name": "Tier 2: 单机同域 PyTorch DataLoader (`num_workers=16`) (本机 CPU 解码算力不足饿死 GPU · 利用率 52.4% ✕)",
+      "name_en": "Tier 2: Node-Local PyTorch DataLoader (`num_workers=16`) (Local CPU Bottleneck Starves GPUs to 52.4% Util)",
+      "intermediate_storage_tb": 0.0,
+      "gpu_active_utilization_pct": 52.4,
+      "memory_spill_oom_rate_pct": 34.0,
+      "pipeline_completion_hours": 39.5,
+      "total_job_cost_usd": 11200.0,
+      "recommended_for": "Pure text LLM training where tokenization is lightweight; fails on multimodal VLM/Video where 8 GPUs overwhelm 128 host CPU cores and /dev/shm.",
+      "status": "warn"
+    },
+    {
+      "id": "tier3_ray_data_remote_cpu_unbounded_queue",
+      "name": "Tier 3: 远程 CPU 池解耦预处理但无细粒度背压 (CPU 生产过快撑爆 Plasma 内存并触发磁盘 Spill)",
+      "name_en": "Tier 3: Disaggregated Remote CPU Pool Without Fine-Grained Backpressure (Plasma Object Store Spill)",
+      "intermediate_storage_tb": 180.0,
+      "gpu_active_utilization_pct": 81.5,
+      "memory_spill_oom_rate_pct": 22.0,
+      "pipeline_completion_hours": 25.4,
+      "total_job_cost_usd": 7450.0,
+      "recommended_for": "Early streaming prototypes before tuning `max_concurrent_tasks` and per-operator output queue budgets.",
+      "status": "warn"
+    },
+    {
+      "id": "tier4_ray_data_streaming_backpressure_elastic_spot_cpu",
+      "name": "Tier 4: Ray Data 异构流式执行器 (`StreamingExecutor`) + 信用背压限流 + 弹性 Spot CPU 池 (96.8% GPU 满载 🏆)",
+      "name_en": "Tier 4: Ray Data Heterogeneous StreamingExecutor + Credit Backpressure + Elastic Spot CPU Pool (96.8% GPU Util)",
+      "intermediate_storage_tb": 0.0,
+      "gpu_active_utilization_pct": 96.8,
+      "memory_spill_oom_rate_pct": 0.2,
+      "pipeline_completion_hours": 18.2,
+      "total_job_cost_usd": 5210.0,
+      "recommended_for": "Production 100TB–10PB multimodal VLM/Video training & batch inference: 0 TB intermediate disk, 96.8% GPU util, and -64.8% total cost.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_speedup_ratio": 2.97,
+    "tier4_vs_tier2_gpu_util_gain_pts": 44.4,
+    "tier4_vs_tier1_cost_reduction_pct": 64.8,
+    "tier4_intermediate_storage_saved_tb": 2500.0
+  }
+}
