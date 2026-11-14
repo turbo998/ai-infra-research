@@ -107,3 +107,5 @@ Round 138 链接固定 ONNX DepthToSpace/SpaceToDepth schema/reference、8 月 3
 Round 139 链接固定 PyTorch ConvTranspose1d、requested output_size 与 native slow transpose shape guard（BSD-style）；上游权利保留。原创 onechannel integer scatter、独立 finite forward-matrix oracle、adjoint、分组 payload 与 CPU timing/视觉未复制实现；output_padding<stride 为更窄原型域；非 native kernel/BLAS/cuDNN、grouped execution/workspace、streaming 或音视频质量认证。
 
 Round 140 链接固定 liburing manpages（所读 SPDX LGPL-2.0-or-later）、LICENSE(MIT)、COPYING(LGPL-2.1)；保留文件级上游权利，不以单一许可概括仓库。原创 uint32 SQ/CQ、one-shot buffer ledger、deque oracle、CPU list paths 与视觉未复制文档或native实现；非Linux/atomics/SQPOLL/multishot/notification/cancellation/CQ-overflow或native IOPS/memory认证。
+
+Round 141 链接固定 Linux memory policy 文档、weighted-interleave ABI与mm/mempolicy.c（source SPDX GPL-2.0-only）；保留上游权利，无代码镜像。原创 ideal first-write/page-index interval models、expanded-cycle oracle和CPU lookup/视觉非native allocator、cpuset rebind、fallback、THP、shared cache、auto weights、migration或NUMA带宽认证。
