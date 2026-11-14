@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>千卡集群 25GB 容器镜像秒级分发与 SquashFS import torch 风暴计算器 (Round 187)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 187 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">千卡集群 25GB 容器镜像秒级分发（Nydus / Dragonfly P2P）与 SquashFS 计算器</span>
+      </div>
+      <div>
+        <a href="../components/ai-container-image-nydus-dragonfly-p2p-squashfs-import-storm-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/ai-container-image-nydus-dragonfly-p2p-squashfs-import-storm-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./ai-container-image-nydus-dragonfly-p2p-squashfs-import-storm-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="container-nydus-squashfs-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 AI 集群容器冷启动耗时、P2P 流量节省与 `import torch` 元数据风暴仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/ai_container_image_nydus_dragonfly_squashfs_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="cntNodesSelect">1. 并发启动的 GPU 节点规模 (每节点 8 卡):</label>
+          <select id="cntNodesSelect" onchange="updateCntSizer()">
+            <option value="128">128 节点 (1,024 GPUs · 1,024 并发 Python 进程)</option>
+            <option value="512" selected>512 节点 (基准：4,096 GPUs · 7,373 万次 stat 请求)</option>
+            <option value="1024">1,024 节点 (8,192 GPUs · 1.47 亿次 stat 请求)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="cntImgSelect">2. CUDA + PyTorch + vLLM 容器镜像体积:</label>
+          <select id="cntImgSelect" onchange="updateCntSizer()">
+            <option value="15">15 GB (精简推理镜像)</option>
+            <option value="25" selected>25 GB (基准：标准 NGC PyTorch 训练/推理镜像)</option>
+            <option value="40">40 GB (含多模态依赖全量巨型镜像)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>镜像分发与 Python 环境挂载档位</th>
+              <th>单节点实际拉取流量</th>
+              <th>镜像拉取解压耗时</th>
+              <th>共享存储 MDS 元数据请求</th>
+              <th>`import torch` &amp; 总冷启动耗时</th>
+            </tr>
+          </thead>
+          <tbody id="cntSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="cntDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const CNT_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 中心 Harbor gzip 串行拉取 + 共享 NFS 散装 Conda', pull: 395.0, imp: 185.0, frac: 1.0, mdsFactor: 1.0 },
+      { id: 't2', name: '🟨 Tier 2: Dragonfly P2P 全量分发 + zstd 解压 + NFS 散装 Conda', pull: 38.0, imp: 142.0, frac: 1.0, mdsFactor: 1.0 },
+      { id: 't3', name: '🟦 Tier 3: Nydus RAFS / eStargz 块级按需懒加载 (用户态 FUSE)', pull: 4.5, imp: 12.4, frac: 0.062, mdsFactor: 0.016 },
+      { id: 't4', name: '🟩 Tier 4: Nydus 内核态 EROFS + P2P + SquashFS 单文件挂载 Conda', pull: 1.6, imp: 2.2, frac: 0.062, mdsFactor: 0.00005 }
+    ];
+
+    function updateCntSizer() {
+      const nodes = parseInt(document.getElementById('cntNodesSelect').value, 10) || 512;
+      const imgGb = parseFloat(document.getElementById('cntImgSelect').value) || 25.0;
+      const nodeScale = nodes / 512.0;
+      const imgScale = imgGb / 25.0;
+      const baseMdsM = (nodes * 8 * 18000) / 1e6;
+
+      const tbody = document.getElementById('cntSizerTbody');
+      tbody.innerHTML = CNT_TIERS.map(r => {
+        const isBest = r.id === 't4';
+        const netGb = (imgGb * r.frac).toFixed(2);
+        const pullS = r.id === 't1' ? (r.pull * nodeScale * imgScale).toFixed(1) : (r.pull * imgScale).toFixed(1);
+        const impS = r.id === 't1' || r.id === 't2' ? (r.imp * nodeScale).toFixed(1) : r.imp.toFixed(1);
+        const totS = (parseFloat(pullS) + parseFloat(impS)).toFixed(1);
+        const mdsM = (baseMdsM * r.mdsFactor).toFixed(3);
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${netGb} GB / 节点</code></td>
+          <td><code>${pullS} s</code></td>
+          <td><code>${mdsM} Million RPCs</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">import ${impS}s · 总计 ${totS}s</strong></td>
+        </tr>`;
+      }).join('');
+
+      const t1Tot = ((395.0 * nodeScale * imgScale) + (185.0 * nodeScale)).toFixed(1);
+      const t4Tot = ((1.6 * imgScale) + 2.2).toFixed(1);
+      document.getElementById('cntDecisionCallout').innerHTML =
+        `<strong>架构师选型结论（${nodes} 节点 / ${nodes * 8} 卡并发启动 · ${imgGb}GB 镜像）</strong>：强烈首选 <strong>Tier 4 (Nydus 内核态 EROFS + Dragonfly P2P + SquashFS Loopback 挂载 Conda 环境)</strong>！将单节点拉取流量从 <code>${imgGb} GB</code> 降至 <code>${(imgGb * 0.062).toFixed(2)} GB (-93.8%)</code>，消除 <code>${baseMdsM.toFixed(1)}M</code> 次共享存储元数据风暴，使全集群作业冷启动耗时从 <code>${t1Tot} s</code> 骤降至 <code>${t4Tot} s</code> 🏆！`;
+    }
+    updateCntSizer();
+  </script>
+</body>
+</html>

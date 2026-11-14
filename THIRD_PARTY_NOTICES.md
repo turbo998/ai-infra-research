@@ -200,6 +200,8 @@ Round 185 基于公开发布的 Byte-Level BPE (`tiktoken` / `tokenizers`)、Lla
 
 Round 186 基于公开发布的 RoPE (Rotary Position Embedding)、Position Interpolation (PI)、NTK-Aware Scaling、YaRN (`NTK-by-parts` + `mscale`) 与 Microsoft LongRoPE 学术论文构建原创合成长上下文位置外推评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 187 基于公开发布的 CNCF Dragonfly P2P、Dragonfly Nydus RAFS v6 (`EROFS over fscache`)、OCI `eStargz` 与 Linux `SquashFS` / `OverlayFS` 架构规范构建原创合成千卡容器镜像按需加载与 `import torch` 元数据风暴评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
