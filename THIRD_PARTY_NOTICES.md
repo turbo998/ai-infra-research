@@ -89,3 +89,5 @@ Round 129 链接固定 Flink boundedwatermark、statusvalve、windowoperator（A
 Round 130 链接固定 PyTorch SDPA、CausalBias 与 MHA 文档/源码（BSD-style）。位置掩码、均匀零logits标量模型、排序位置oracle、CPU路径和视觉原创，未复制实现；Nov14regionalAOTI更新不是新掩码语义发明；空行null为原创策略，非nativeSDPA/GPU/softmax/quality复现。
 
 Round 131 链接固定 ONNX ScatterND29 spec、reference 与11月12日mean能力变更（Apache-2.0）。整数坐标/切片模型、独立destination-first oracle、CPU sum/count与视觉原创，未复制实现；mean含原值一次、floor、negativealiases、none重复拒绝、k0whole tensor按固定合同；不认证nativeONNX/FP/atomic/GPU。
+
+Round 132 链接固定 Dynamo LoRA HRW 与 allocator interface（所读文件Apache-2.0 SPDX）。显式score-table策略、独立subset oracle、CPUtopK/fullsort与视觉原创，未复制实现；nativeBLAKE3编码仅说明、未执行；sticky、partialunderfill、allfullbasicHRW回退与missingusageeligibility按固定策略，非nativehash/controller/load/residency/GPU认证。
