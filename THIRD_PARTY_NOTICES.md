@@ -87,3 +87,5 @@ Round 128 链接固定 ONNX NMS reference 与10月28日 optional-scalar/omission
 Round 129 链接固定 Flink boundedwatermark、statusvalve、windowoperator（Apache-2.0）。Discreteevent/windowmodel、boundary/invariantoracles、CPUaggregation与视觉原创，未复制implementation；allidlemaxflush/resumealignment按pinnedsource，变更日期查询TLS失败不虚构日期；非nativeclocks/triggers/checkpoint/sink/exactly-once复现。
 
 Round 130 链接固定 PyTorch SDPA、CausalBias 与 MHA 文档/源码（BSD-style）。位置掩码、均匀零logits标量模型、排序位置oracle、CPU路径和视觉原创，未复制实现；Nov14regionalAOTI更新不是新掩码语义发明；空行null为原创策略，非nativeSDPA/GPU/softmax/quality复现。
+
+Round 131 链接固定 ONNX ScatterND29 spec、reference 与11月12日mean能力变更（Apache-2.0）。整数坐标/切片模型、独立destination-first oracle、CPU sum/count与视觉原创，未复制实现；mean含原值一次、floor、negativealiases、none重复拒绝、k0whole tensor按固定合同；不认证nativeONNX/FP/atomic/GPU。
