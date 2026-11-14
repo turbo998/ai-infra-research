@@ -159,3 +159,5 @@ Round164链接vLLM Nov14worker early GCfreeze与capture/warmup helpers、Python3
 Round165链接vLLM Nov14internal dataclass slots与保留dict的scheduler定义、Python3.12文档，Apache-2.0及文档权利保留，无实现镜像。原创三field records/materialized-dict shells，非native DTO/RSS/IPC。inherited dict可能为空，JS只预测sealed Python contract；不把首300-file APIresponse当全repo统计。
 
 Round166链接vLLM Nov14Kimi-K3 metadata-only image、原始尺寸/resize-derived counts、dictionary parser与model embedding paths，Apache-2.0权利保留，无实现镜像。原创bounded geometry/ordered occurrence planner/CPUmemo，非nativecheckpoint/tokenizer/PIL/Torch/encoder/EC。尺寸重复不删占位符；声明RGB预算和compact descriptors不是native流量，shape-only验收不是embedding执行。
+
+Round167链接SGLang Nov14included-router leaf resolution与既有auth decision/inventory tests，Apache-2.0权利保留，无实现镜像。原创literal tree/symbolic credential witnesses，非FastAPI/Starlette/Rust/实际secret校验或漏洞/安全认证。NORMAL/OPTIONAL/FORCE与probe/raw-path、WS逻辑/传输状态分开；CPUdeepcopy registry benchmark不外推native动态遍历。
