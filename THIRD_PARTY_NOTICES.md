@@ -254,6 +254,8 @@ Round 212 基于公开发布的 NVIDIA PTX ISA `setmaxnreg.inc / setmaxnreg.dec`
 
 Round 213 基于公开发布的 Triton/CUTLASS `2D CTA Tile Swizzling (GROUP_SIZE_M=8)` 原理与 NVIDIA Hopper/Blackwell `cudaAccessPolicyWindow (Persisting / Streaming)` L2 缓存驻留规范构建原创合成 L2 命中率与 HBM 读放大评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 214 基于公开发布的 CUTLASS CuTe `Swizzle<B,M,S>` 异或地址重排代数与 NVIDIA Hopper/Blackwell `CU_TENSOR_MAP_SWIZZLE_128B` 硬件 TMA/WGMMA 描述符规范构建原创合成共享内存 32-Bank 冲突消除与有效带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

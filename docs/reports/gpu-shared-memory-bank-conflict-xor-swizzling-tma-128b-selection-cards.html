@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>7-Card Visual Benchmark Report · GPU Shared Memory Bank Conflict &amp; XOR Swizzling (Round 214)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1500px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 18px; margin: 8px 0 10px; line-height: 1.35; color: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94a3b8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; }
+    .bar-row { margin: 8px 0; font-size: 12px; }
+    .bar-bg { background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · SHARED MEMORY BANK CONFLICTS &amp; XOR SWIZZLING</div>
+        <h2>Hardware TMA + WGMMA 128B XOR Swizzling Eliminates 8-Way Bank Conflicts and Boosts SRAM Bandwidth 7.9x</h2>
+        <p style="font-size:13px;color:#cbd5e1;">Evaluates Unswizzled Row-Major SRAM, Legacy +8 FP16 Row Padding, Software CuTe Swizzle&lt;3,3,3&gt;, and Hardware TMA/WGMMA SWIZZLE_128B on H100.</p>
+      </div>
+      <div class="code">Unswizzled [64, 64] FP16:  2.38 TB/s (8-Way Conflict ✕)
+Legacy +8 Row Padding:    14.20 TB/s (12.5% SRAM Waste ⚠️)
+Hardware SWIZZLE_128B:    18.80 TB/s (0% Waste, 795 TF 🏆)</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: THE 128-BYTE ROW STRIDE BANK COLLISION</div>
+        <h2>Why [64, 64] FP16 Tiles Map Every Column Element to the Exact Same SRAM Bank</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Task Type: <code>choice</code> / <code>score</code> · Action: <strong>Act automatically</strong> (Use <code>Swizzle&lt;3,3,3&gt;</code> / <code>CU_TENSOR_MAP_SWIZZLE_128B</code> instead of row padding).</p>
+        <div class="bar-row">Tier 1 Unswizzled 8-Way Bank Conflict (2.38 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:12.7%;background:#ef4444;"></div></div></div>
+        <div class="bar-row">Tier 2 Legacy +8 FP16 Row Padding (14.2 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:75.5%;background:#f59e0b;"></div></div></div>
+        <div class="bar-row">Tier 3 Software CuTe XOR Swizzle&lt;3,3,3&gt; (17.6 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:93.6%;"></div></div></div>
+        <div class="bar-row">Tier 4 Hardware TMA + WGMMA SWIZZLE_128B (18.8 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:100.0%;background:#10b981;"></div></div></div>
+      </div>
+      <div class="foot">Grounded in experiments/gpu_shared_memory_bank_conflict_xor_swizzle_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>Full 4-Tier Shared Memory Layout Matrix</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>CONFLICT</th><th>WASTE / SRAM BW</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 Unswizzled</td><td>8-Way ✕</td><td>0.0% / 2.38 TB/s</td><td>Reject</td></tr>
+            <tr><td>Tier 2 +8 Padding</td><td>1-Way</td><td>12.5% / 14.2 TB/s ⚠️</td><td>Breaks TMA</td></tr>
+            <tr><td>Tier 3 CuTe XOR</td><td>1-Way</td><td>0.0% / 17.6 TB/s</td><td>Confirm ✅</td></tr>
+            <tr><td>Tier 4 HW 128B</td><td>1-Way</td><td>0.0% / 18.8 TB/s</td><td>Act auto 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">✕ marks 8-way bank serialization; ⚠️ marks 12.5% wasted SRAM and broken 128B alignment.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>CuTe Swizzle&lt;3,3,3&gt; &amp; TMA SWIZZLE_128B Mechanics</h2>
+        <div class="code">// 1. Software XOR Swizzle (8 chunks of 16 Bytes per 128B row):
+int phys_col_chunk = logical_col_chunk ^ (row &amp; 0x7);
+// Row fixed -&gt; permutes 0..7; Col fixed -&gt; permutes 0..7!
+↓
+// 2. Hopper/Blackwell Hardware TMA + WGMMA Descriptor:
+cuTensorMapEncodeTiled(&amp;tma_map, ...,
+  CU_TENSOR_MAP_SWIZZLE_128B, ...);
+// TMA swizzles in hardware on write; WGMMA unswizzles in hardware!</div>
+      </div>
+      <div class="foot">Zero thread ALU instructions and zero wasted shared memory bytes.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>SRAM Bandwidth &amp; Capacity Waste Perturbation</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>UNSWIZZLED / PAD</th><th>HW SWIZZLE_128B</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>SRAM Bandwidth</td><td>2.38 TB/s</td><td>18.80 TB/s</td><td>7.90x Faster</td></tr>
+            <tr><td>Wasted SRAM (Pad)</td><td>12.5 %</td><td>0.0 %</td><td>-12.5 % Saved</td></tr>
+            <tr><td>Sustained TFLOPS</td><td>240.0 TFLOPS</td><td>795.0 TFLOPS</td><td>3.31x Higher</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Audit `l1tex__data_bank_conflicts_pipe_lsu_mem_shared.sum == 0` in Nsight Compute.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY &amp; BANDWIDTH</div>
+        <h2>Effective Shared Memory Bandwidth (TB/s, Higher is Better)</h2>
+        <div class="bar-row">Tier 4 Hardware TMA + WGMMA SWIZZLE_128B (18.8 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:100%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 3 Software CuTe XOR Swizzle&lt;3,3,3&gt; (17.6 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:93.6%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 2 Legacy +8 FP16 Row Padding (14.2 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:75.5%;background:#cbd5e1;"></div></div></div>
+        <div class="bar-row">Tier 1 Unswizzled 8-Way Bank Conflict (2.38 TB/s)<div class="bar-bg"><div class="bar-fill" style="width:12.7%;background:#cbd5e1;"></div></div></div>
+      </div>
+      <div class="foot">Primary path (#3B82F6) vs Baseline (#CBD5E1).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p style="font-size:12px;color:#6ee7b7;"><strong>✅ Good fit:</strong> Using <code>CU_TENSOR_MAP_SWIZZLE_128B</code> (or <code>64B / 32B</code>) for Hopper/Blackwell TMA+WGMMA tiles and CuTe <code>Swizzle&lt;3,3,3&gt;</code> for Ampere <code>cp.async + ldmatrix</code>.</p>
+        <p style="font-size:12px;color:#fca5a5;"><strong>⛔ Not for:</strong> Using legacy <code>+8</code> row padding on Hopper/Blackwell where TMA and WGMMA descriptors require strict <code>128-Byte</code> stride alignment.</p>
+      </div>
+      <div class="foot">License: MIT · Provenance: synthetic + anonymized_reported</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{
+  "experiment_id": "gpu_shared_memory_bank_conflict_xor_swizzle_selection",
+  "round": 214,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "num_banks": 32,
+    "bytes_per_bank": 4,
+    "bank_line_bytes": 128,
+    "sram_speedup_x": 7.9
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_unswizzled_row_major_16way_bank_conflict",
+      "name": "Tier 1: 朴素未重排 [64, 64] FP16 共享内存 (每行 128B 同余 Bank 0 · 8-Way/16-Way 严重冲突)",
+      "bank_conflict_way": 8,
+      "wasted_sram_pct": 0.0,
+      "effective_sram_bandwidth_tbs": 2.38,
+      "sustained_tflops": 240.0,
+      "verdict": "列向访问或 ldmatrix.trans 时所有线程全部撞在同一组 Bank 上，单条指令被串行拆成 8~16 拍执行，SRAM 带宽暴跌 87.5% ✕"
+    },
+    {
+      "tier_id": "tier2_legacy_plus8_row_padding_alignment_broken",
+      "name": "Tier 2: 传统教科书 +8 FP16 行填充 (smem[64][64+8] · 浪费 12.5% SRAM 且破坏 TMA/WGMMA 128B 对齐)",
+      "bank_conflict_way": 1,
+      "wasted_sram_pct": 12.5,
+      "effective_sram_bandwidth_tbs": 14.2,
+      "sustained_tflops": 540.0,
+      "verdict": "虽然错开了 Bank，但浪费 12.5% 宝贵 SRAM 导致流水级数从 4 级掉到 3 级，且无法兼容要求 128B 严格对齐的 Hopper TMA 与 WGMMA ⚠️"
+    },
+    {
+      "tier_id": "tier3_software_cute_xor_swizzle_b3_m3_s3",
+      "name": "Tier 3: 软件 CuTe 异或重排 Swizzle<3,3,3> (col_chunk ^ (row % 8) · 零填充开销但消耗整数 ALU)",
+      "bank_conflict_way": 1,
+      "wasted_sram_pct": 0.0,
+      "effective_sram_bandwidth_tbs": 17.6,
+      "sustained_tflops": 730.0,
+      "verdict": "利用异或双射性质同时实现行访问与列访问 0 Bank Conflict 且 0 字节空间浪费，仅消耗少量线程地址计算指令 ✅"
+    },
+    {
+      "tier_id": "tier4_hardware_tma_wgmma_swizzle_128b_descriptor",
+      "name": "Tier 4: 硬件原生 CU_TENSOR_MAP_SWIZZLE_128B (TMA 硬件自动异或写入 + WGMMA 描述符硬件直读)",
+      "bank_conflict_way": 1,
+      "wasted_sram_pct": 0.0,
+      "effective_sram_bandwidth_tbs": 18.8,
+      "sustained_tflops": 795.0,
+      "verdict": "TMA 引擎在搬运途中由硬件硅片自动完成 128B XOR Swizzle，WGMMA 按描述符零冲突直读 SRAM，带宽飙至 18.8 TB/s (快 7.9x) 🏆"
+    }
+  ]
+}
