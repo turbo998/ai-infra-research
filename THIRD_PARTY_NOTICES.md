@@ -238,6 +238,8 @@ Round 204 基于公开发布的 CUDA Driver Virtual Memory Management (`cuMemAdd
 
 Round 205 基于公开发布的 `KIVI` (ICML 2024, Per-Channel Key + Per-Token Value 非对称量化) 与 `KVQuant` (NeurIPS 2024, `Pre-RoPE` 旋转前 Key 通道量化 + 稀疏离群隔离) 论文构建原创合成长上下文 KV Cache 低比特量化与并发容量评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 206 基于公开发布的 NVIDIA NCCL `PXN (Proxy by NVLink)` 跨轨路由机制、`NCCL_P2P_PXN_LEVEL` 规范与 DeepSeek `DeepEP` 分层机内 NVLink 预聚合架构构建原创合成 8-Rail 集群 Spine 绕行消除与有效总线带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
