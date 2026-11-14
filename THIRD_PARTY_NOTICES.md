@@ -188,6 +188,9 @@ Round 179 基于公开发布的 NVIDIA GPU XID Errors 官方手册、HBM3/HBM3e 
 
 Round 180 基于公开发布的 Anyscale Ray Data StreamingExecutor、算子级信用背压（Backpressure）与 Apache Arrow / Plasma 共享内存架构规范构建原创合成多模态流式供数评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 181 基于公开发布的 NVIDIA Dynamo 分布式推理框架、NIXL (NVIDIA Inference Xfer Library)、Triton Inference Server、Ray Serve LLM 与 KServe 架构文档构建原创合成推理编排评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

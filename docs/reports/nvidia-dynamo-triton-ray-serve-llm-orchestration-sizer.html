@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级分布式推理编排框架（Triton vs. KServe vs. Ray Serve vs. NVIDIA Dynamo）计算器 (Round 181)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 181 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级分布式推理编排框架（Triton vs. KServe vs. Ray Serve vs. NVIDIA Dynamo + NIXL）选型计算器</span>
+      </div>
+      <div>
+        <a href="../components/nvidia-dynamo-triton-ray-serve-llm-orchestration-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/nvidia-dynamo-triton-ray-serve-llm-orchestration-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./nvidia-dynamo-triton-ray-serve-llm-orchestration-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="dynamo-triton-ray-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 分布式推理编排层 SLA Goodput、KV 交接延迟与成本仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/nvidia_dynamo_triton_ray_serve_orchestration_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="orchSceneSelect">1. 核心AI业务架构形态:</label>
+          <select id="orchSceneSelect" onchange="updateOrchSizer()">
+            <option value="cv">传统视觉 CV / 语音 ASR / BERT / 搜推单机多模型串联</option>
+            <option value="mlops">企业级标准 K8s 多租户百模型声明式托管与灰度发布</option>
+            <option value="compound">Python 复合智能体流水线 (OCR + Embedding + Rerank + LLM)</option>
+            <option value="disagg" selected>大规模 70B~671B 大模型跨节点 PD 分离与高吞吐 Token 工厂</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="orchGpusSelect">2. 推理集群 GPU 规模 (H200/B200 GPUs):</label>
+          <select id="orchGpusSelect" onchange="updateOrchSizer()">
+            <option value="8">8 GPUs (单机部署)</option>
+            <option value="64" selected>64 GPUs (8 节点生产集群)</option>
+            <option value="256">256 GPUs (32 节点大型智算中心)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>分布式推理编排框架档位</th>
+              <th>32K KV 跨机交接延迟</th>
+              <th>集群 KV 命中率</th>
+              <th>单卡达标 Goodput</th>
+              <th>P/D 比例动态重平衡</th>
+              <th>每百万达标 Token 成本</th>
+            </tr>
+          </thead>
+          <tbody id="orchSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="orchDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const ORCH_TIERS = [
+      { id: 't1', name: '🟨 Tier 1: 传统 Triton Inference Server (C++ 单机无状态批处理)', kvMs: '145.0 ms', hit: '16.0%', goodput: 215.0, rebal: '420.0 s', cost1m: '$1.86 / 1M' },
+      { id: 't2', name: '🟦 Tier 2: 标准 KServe 声明式云平台 (K8s CRD + Knative)', kvMs: '92.0 ms', hit: '24.5%', goodput: 284.0, rebal: '240.0 s', cost1m: '$1.41 / 1M' },
+      { id: 't3', name: '🟪 Tier 3: Ray Serve LLM 复合智能体编排 (Python DAG + 前缀路由)', kvMs: '48.0 ms ✅', hit: '76.0% ✅', goodput: 445.0, rebal: '45.0 s ✅', cost1m: '$0.90 / 1M (-51.6%)' },
+      { id: 't4', name: '🟩 Tier 4: NVIDIA Dynamo + NIXL (Rust 控制面 + 零拷贝 PD 分离)', kvMs: '14.2 ms (快10.2x) 🏆', hit: '92.5% 🏆', goodput: 690.0, rebal: '8.5 s 🏆', cost1m: '$0.58 / 1M (-68.8%) 🏆' }
+    ];
+
+    function updateOrchSizer() {
+      const scene = document.getElementById('orchSceneSelect').value;
+      const gpus = parseInt(document.getElementById('orchGpusSelect').value, 10) || 64;
+      const bestMap = { cv: 't1', mlops: 't2', compound: 't3', disagg: 't4' };
+      const bestId = bestMap[scene] || 't4';
+
+      const tbody = document.getElementById('orchSizerTbody');
+      tbody.innerHTML = ORCH_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        const totalGoodput = Math.round(r.goodput * gpus).toLocaleString();
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.kvMs}</code></td>
+          <td><code>${r.hit}</code></td>
+          <td><code>${r.goodput.toFixed(0)} tok/s/GPU (集群 ${totalGoodput})</code></td>
+          <td><code>${r.rebal}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost1m}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const msgMap = {
+        t1: `<strong>架构师选型结论（传统 CV/ASR/搜推单机模型）</strong>：首选 <strong>Tier 1 (经典 Triton Inference Server)</strong>，凭借极致的 C++ 共享内存 Ensemble 与动态批处理压榨单卡极限吞吐 ✅！`,
+        t2: `<strong>架构师选型结论（标准 K8s 多租户 MLOps 管控）</strong>：首选 <strong>Tier 2 (KServe)</strong>，通过标准 Kubernetes <code>InferenceService</code> CRD 实现百个部门模型的声明式发布与灰度切流 ✅！`,
+        t3: `<strong>架构师选型结论（复合 AI / 多模型 RAG 工作流）</strong>：首选 <strong>Tier 3 (Ray Serve LLM)</strong>，用纯 Python 代码将 OCR、Embedding、Reranker 与 LLM 编排为异步 DAG 并按小数 GPU 独立扩缩容 ✅！`,
+        t4: `<strong>架构师选型结论（${gpus} GPUs · 大规模 70B~671B 跨机 PD 分离）</strong>：强烈首选 <strong>Tier 4 (NVIDIA Dynamo + NIXL)</strong>！利用 Rust 高性能 KV 智能路由与 <code>NIXL</code> 零拷贝 RDMA 传输（32K KV 仅需 <code>14.2 ms</code>），将单卡达标 Goodput 推升至 <code>690 tok/s/GPU (3.21x)</code>，成本直降 <code>68.8% ($0.58/1M)</code> 🏆！`
+      };
+      document.getElementById('orchDecisionCallout').innerHTML = msgMap[bestId];
+    }
+    updateOrchSizer();
+  </script>
+</body>
+</html>
