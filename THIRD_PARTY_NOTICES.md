@@ -81,3 +81,5 @@ Round 125 链接固定 SciPy resample_poly 既有规则（BSD-3-Clause）。Exac
 Round 126 链接固定 ONNX Resize reference 与9月30日 integer-output align_corners 修复（Apache-2.0）。Fraction1-Dgeometry/interpolation、独立 hat-basis oracle、CPU grid timing与视觉原创，未复制implementation；非 nativeONNX/cubic/ROI/antialias/visionquality/GPU复现。
 
 Round 127 链接固定 Mamba classic selective-scan ordered affine operator/prefixcallback（Apache-2.0）。ScalarFractionrecurrence/tree、独立productexpansion、CPUfloatpaths与视觉原创，未复制implementation；zero-resetpacking为原创extension，非nativeAPI承诺；JulyMamba3Blackwellfix属于不同kernel、未执行，非11月新scan算法。
+
+Round 128 链接固定 ONNX NMS reference 与10月28日 optional-scalar/omission修复（Apache-2.0）。ExactIoU/classgreedy、独立candidate-removal/cell-areaoracles、CPUgeometry与视觉原创，未复制implementation；strictscorepredicate/tiepolicy明确为pinnedreference，不认证nativebackends/GPU/detectionquality。
