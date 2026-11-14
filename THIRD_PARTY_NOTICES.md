@@ -204,6 +204,8 @@ Round 187 基于公开发布的 CNCF Dragonfly P2P、Dragonfly Nydus RAFS v6 (`E
 
 Round 188 基于公开发布的 IEEE 1588v2 PTP (Precision Time Protocol)、ITU-T SyncE、Linux `ptp4l`/`phc2sys`、ConnectX 硬件 PHC 与 PCIe PTM 架构规范构建原创合成纳秒级时钟同步与分布式慢节点 Trace 归因评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 189 基于公开发布的 PCIe Access Control Services (ACS)、Linux IOMMU Passthrough (`iommu=pt`)、NVIDIA GPUDirect RDMA (`nvidia-peermem`) 与 Linux 内核 `dma-buf` (`ibv_reg_dmabuf_mr`) 架构规范构建原创合成 400G RDMA P2P 带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
