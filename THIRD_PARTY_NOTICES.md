@@ -155,3 +155,5 @@ Round162链接SGLang Nov14out-of-tree HiCache logical-page registry与staged rot
 Round163链接SGLang Nov14Rust joint Full/SWA eviction与原有effective-profile gate，Apache-2.0权利保留，无实现镜像。原创resource-unit forest/CPUkey queue，不是nativeRust/tree/allocator/backup。wrong collapse是counterfactual；native pending finish与integration tests只读取未执行，shared-pool byte/token成本不由synthetic units推断。
 
 Round164链接vLLM Nov14worker early GCfreeze与capture/warmup helpers、Python3.12GC文档，Apache-2.0及Python文档权利保留，无实现镜像。原创epoch ledger与隔离CPython probes；模型visits不是actual扫描telemetry，whole-interpreter freeze count不冒充subset。nativeweights/CUDA/worker及GPUmemory释放未认证。
+
+Round165链接vLLM Nov14internal dataclass slots与保留dict的scheduler定义、Python3.12文档，Apache-2.0及文档权利保留，无实现镜像。原创三field records/materialized-dict shells，非native DTO/RSS/IPC。inherited dict可能为空，JS只预测sealed Python contract；不把首300-file APIresponse当全repo统计。
