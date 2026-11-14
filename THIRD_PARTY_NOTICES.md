@@ -260,6 +260,8 @@ Round 215 基于公开发布的 `Hydragen` (跨请求共享前缀批处理矩阵
 
 Round 216 基于公开发布的 vLLM / SGLang / TensorRT-LLM (`Helix`) `Decode Context Parallelism (DCP)` 架构与 `DeepSeek-V3 MLA` 序列维度 Page-Block 交错切分及 `LogSumExp` 归并原理构建原创合成长上下文解码并行评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 217 基于公开发布的 SGLang / vLLM `DP-Attention (--enable-dp-attention) + EP-MoE` 混合并行架构、跨 DP Rank 统一 CUDA Graph Bucket 对齐与 `Two-Batch Overlap (TBO)` 原理构建原创合成 MoE 推理吞吐与负载均衡评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

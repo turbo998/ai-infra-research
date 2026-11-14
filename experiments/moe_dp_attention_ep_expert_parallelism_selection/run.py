@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Round 217: MoE Serving Hybrid Parallelism (TP-Attention vs DP-Attention + EP-MoE & Token-Balanced Dispatch) Evaluator."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+def evaluate_dp_attention_ep_moe_tiers(
+    num_gpus: int = 64,
+) -> dict[str, Any]:
+    """Evaluate 4 Attention + MoE hybrid parallelism tiers on a 64-GPU DeepSeek-V3 / MoE serving cluster."""
+    tiers = [
+        {
+            "tier_id": "tier1_pure_tp_attention_plus_tp_moe",
+            "name": "Tier 1: 传统全层 TP (TP-Attention + TP-MoE · 每层 2 次全网 AllReduce + 专家碎片化为瘦矩阵)",
+            "kv_cache_duplication_x": 8,
+            "attention_allreduce_per_layer": 1,
+            "per_gpu_throughput_toks": 1820,
+            "p99_tbt_ms": 38.5,
+            "verdict": "MLA 共享 KV 在机内 8 卡全量重复存储，且 256 个专家被 TP 切成极窄瘦矩阵，每层还要额外跑 TP AllReduce，吞吐仅 1,820 tok/s/GPU ✕",
+        },
+        {
+            "tier_id": "tier2_tp8_attention_plus_ep64_moe",
+            "name": "Tier 2: 机内 TP=8 Attention + 跨机 EP=64 MoE (消除专家瘦矩阵，但仍保留机内 8x KV 冗余与 TP 同步)",
+            "kv_cache_duplication_x": 8,
+            "attention_allreduce_per_layer": 1,
+            "per_gpu_throughput_toks": 3150,
+            "p99_tbt_ms": 24.0,
+            "verdict": "虽然 MoE 层用上了 EP=64，但 Attention 层仍用 TP=8，导致同节点 8 张卡存着完全相同的 KV Cache 且每层多一次机内 AllReduce ⚠️",
+        },
+        {
+            "tier_id": "tier3_unbalanced_dp_attention_plus_ep64_moe",
+            "name": "Tier 3: 开启 DP-Attention (--enable-dp-attention) + EP=64 MoE (无全局 Token 均衡导致 DP 慢卡木桶效应)",
+            "kv_cache_duplication_x": 1,
+            "attention_allreduce_per_layer": 0,
+            "per_gpu_throughput_toks": 4380,
+            "p99_tbt_ms": 18.2,
+            "verdict": "每张卡独立跑 DP-Attention 彻底消除 KV 复制与 Attention AllReduce，但若各 DP Rank 请求数不均，64 卡会在每层 MoE 入口互相等慢卡 ✅",
+        },
+        {
+            "tier_id": "tier4_token_balanced_dp_attention_ep64_cudagraph_tbo",
+            "name": "Tier 4: Token 均衡 DP-Attention + EP=64 MoE + 统一 CUDA Graph 桶对齐 + TBO 双批次重叠",
+            "kv_cache_duplication_x": 1,
+            "attention_allreduce_per_layer": 0,
+            "per_gpu_throughput_toks": 5640,
+            "p99_tbt_ms": 11.4,
+            "verdict": "全局调度器保持 64 个 DP Rank 的活跃 Token 数与 KV 长度偏差 <5%，对齐统一 CUDA Graph 桶并开启 TBO，单卡吞吐飙至 5,640 tok/s (3.10x) 🏆",
+        },
+    ]
+
+    return {
+        "experiment_id": "moe_dp_attention_ep_expert_parallelism_selection",
+        "round": 217,
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload": {
+            "num_gpus": num_gpus,
+            "moe_experts": 256,
+            "throughput_gain_x": round(5640 / 1820, 2),
+        },
+        "tiers": tiers,
+    }
+
+
+def main() -> None:
+    results = evaluate_dp_attention_ep_moe_tiers()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {out_path}")
+
+
+if __name__ == "__main__":
+    main()

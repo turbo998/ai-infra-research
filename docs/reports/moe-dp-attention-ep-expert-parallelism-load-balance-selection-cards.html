@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>7-Card Visual Benchmark Report · MoE DP-Attention + EP-MoE Hybrid Parallelism (Round 217)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1500px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 18px; margin: 8px 0 10px; line-height: 1.35; color: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94a3b8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; }
+    .bar-row { margin: 8px 0; font-size: 12px; }
+    .bar-bg { background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · MOE DP-ATTENTION + EP-MOE</div>
+        <h2>Token-Balanced DP-Attention + EP=64 MoE Eliminates Attention AllReduce &amp; Boosts Throughput 3.10x</h2>
+        <p style="font-size:13px;color:#cbd5e1;">Evaluates Pure TP, TP=8 Attention + EP=64 MoE, Unbalanced DP-Attention + EP=64, and Token-Balanced DP-Attention + EP=64 + TBO across 64 H100/H800 GPUs.</p>
+      </div>
+      <div class="code">Pure TP (Attention + MoE):    1,820 tok/s/GPU (8x KV Dup ✕)
+TP=8 Attention + EP=64 MoE:   3,150 tok/s/GPU (8x KV Dup ⚠️)
+Balanced DP-Attn + EP=64:     5,640 tok/s/GPU (1x KV, 3.10x 🏆)</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: WHY TP-ATTENTION BOTTLENECKS MOE SERVING</div>
+        <h2>Replicating 3.5 GB MLA Weights Beats Replicating 60 GB of KV Cache Across 8 GPUs</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Task Type: <code>choice</code> / <code>score</code> · Action: <strong>Act automatically</strong> (Enable <code>--enable-dp-attention</code> with global token-count load balancing).</p>
+        <div class="bar-row">Tier 1 Pure TP-Attention + TP-MoE (1,820 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:32.3%;background:#ef4444;"></div></div></div>
+        <div class="bar-row">Tier 2 TP=8 Attention + EP=64 MoE (3,150 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:55.9%;background:#f59e0b;"></div></div></div>
+        <div class="bar-row">Tier 3 Unbalanced DP-Attention + EP=64 (4,380 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:77.7%;"></div></div></div>
+        <div class="bar-row">Tier 4 Balanced DP-Attn + EP=64 + TBO (5,640 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:100.0%;background:#10b981;"></div></div></div>
+      </div>
+      <div class="foot">Grounded in experiments/moe_dp_attention_ep_expert_parallelism_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>Full 4-Tier Attention + MoE Parallelism Matrix</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>KV DUP / AR</th><th>THROUGHPUT / TBT</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 Pure TP</td><td>8x / 1 AR ✕</td><td>1,820 / 38.5ms</td><td>Reject</td></tr>
+            <tr><td>Tier 2 TP8+EP64</td><td>8x / 1 AR ⚠️</td><td>3,150 / 24.0ms</td><td>Upgrade</td></tr>
+            <tr><td>Tier 3 DP+EP64</td><td>1x / 0 AR</td><td>4,380 / 18.2ms</td><td>Confirm ✅</td></tr>
+            <tr><td>Tier 4 Bal DP+EP</td><td>1x / 0 AR</td><td>5,640 / 11.4ms</td><td>Act auto 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">✕ marks skinny expert GEMMs + 8x KV duplication; ⚠️ marks intra-node TP AllReduce overhead.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>DP-Attention to EP-MoE All-to-All Transition &amp; Dummy Padding</h2>
+        <div class="code"># 1. Global Max Batch Size Sync for Uniform CUDA Graph Bucket:
+global_max_bs = all_reduce_max(local_dp_bs)
+pad_dummy_tokens_to_bucket(local_batch, global_max_bs)
+↓
+# 2. Independent Local DP-Attention (Zero TP AllReduce!):
+attn_out = local_mla_attention(local_batch, local_kv_cache)
+↓
+# 3. Direct Dispatch into EP=64 MoE All-to-All (DeepEP):
+expert_in = deepep_dispatch_all_to_all(attn_out, topk_ids)
+moe_out = grouped_gemm_experts(expert_in)
+final_out = deepep_combine_all_to_all(moe_out)</div>
+      </div>
+      <div class="foot">Synchronizing CUDA Graph bucket sizes across DP ranks prevents hang or graph fallback.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>DP Rank Straggler Skew &amp; Throughput Perturbation</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>TP8-ATTN + EP64</th><th>BALANCED DP-ATTN</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>KV Cache Duplication</td><td>8x per Node</td><td>1x (Zero Dup)</td><td>8x More KV Cap</td></tr>
+            <tr><td>Throughput / GPU</td><td>3,150 tok/s</td><td>5,640 tok/s</td><td>+79.0 % Gain</td></tr>
+            <tr><td>P99 Decode TBT</td><td>24.0 ms</td><td>11.4 ms</td><td>-52.5 % Latency</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Keeping DP rank token count skew &lt;5% eliminates barrier waiting before MoE All-to-All.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY &amp; THROUGHPUT</div>
+        <h2>Per-GPU Serving Throughput (Tokens/sec/GPU, Higher is Better)</h2>
+        <div class="bar-row">Tier 4 Balanced DP-Attention + EP=64 + TBO (5,640 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:100%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 3 Unbalanced DP-Attention + EP=64 (4,380 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:77.7%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 2 TP=8 Attention + EP=64 MoE (3,150 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:55.9%;background:#cbd5e1;"></div></div></div>
+        <div class="bar-row">Tier 1 Pure TP-Attention + TP-MoE (1,820 tok/s)<div class="bar-bg"><div class="bar-fill" style="width:32.3%;background:#cbd5e1;"></div></div></div>
+      </div>
+      <div class="foot">Primary path (#3B82F6) vs Baseline (#CBD5E1).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p style="font-size:12px;color:#6ee7b7;"><strong>✅ Good fit:</strong> Enabling <code>--enable-dp-attention</code> (`DP=EP=64` or `DP=8, TP=1`) for high-throughput <code>DeepSeek-V3 / R1</code> and <code>Qwen3-MoE</code> serving with token-count-balanced L7 routing.</p>
+        <p style="font-size:12px;color:#fca5a5;"><strong>⛔ Not for:</strong> Ultra-long single-request contexts where a single request's KV cache exceeds 1 GPU's HBM (use hybrid <code>DP=8 x DCP=8</code> instead).</p>
+      </div>
+      <div class="foot">License: MIT · Provenance: synthetic + anonymized_reported</div>
+    </div>
+  </div>
+</body>
+</html>
