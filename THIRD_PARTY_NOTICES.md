@@ -111,3 +111,5 @@ Round 140 链接固定 liburing manpages（所读 SPDX LGPL-2.0-or-later）、LI
 Round 141 链接固定 Linux memory policy 文档、weighted-interleave ABI与mm/mempolicy.c（source SPDX GPL-2.0-only）；保留上游权利，无代码镜像。原创 ideal first-write/page-index interval models、expanded-cycle oracle和CPU lookup/视觉非native allocator、cpuset rebind、fallback、THP、shared cache、auto weights、migration或NUMA带宽认证。
 
 Round 142 链接 SQLite WAL/transaction/checkpoint/file-format 文档及固定public-domain wal.c；无实现镜像。原创ledger、immutable transaction oracle、CPU lookup与视觉，另有same-thread隔离SQLite合成fixture。未执行race/corruption/crash测试；本机3.49.1回补状态未认证，部署须核验官方WAL-reset修复。无原生checkpoint性能或持久性认证。
+
+Round 143 链接11月14日SQLite public-domain dbstat fix/回归与文件格式；无实现镜像。原创field-context/leaf-header几何、opaque cells、interval oracle、CPU decoding与视觉；另读取自己生成的原生空表文件。dbstat模块缺失指标显式null，未编译执行新patched binary；非record/overflow/tree/file完整性、native dbstat性能认证。
