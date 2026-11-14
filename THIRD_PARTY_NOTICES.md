@@ -182,6 +182,9 @@ Round 176 基于公开发布的 Model Context Protocol (MCP 2025-03-26+ Streamab
 
 Round 177 基于公开发布的 NVIDIA NCCL 2.21–2.26 算法（Ring, Tree, NVLS, PAT）、协议（LL, LL128, Simple）与 User Buffer 零拷贝注册架构文档构建原创合成 SM 重叠与通信评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 178 基于公开发布的 vLLM V1 架构设计（EngineCore, Persistent InputBatch, CachedRequestData）与 SGLang Zero-Overhead Overlap Scheduler 公开论文/架构文档构建原创合成 CPU 调度空泡与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
