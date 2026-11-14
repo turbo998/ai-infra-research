@@ -256,6 +256,8 @@ Round 213 基于公开发布的 Triton/CUTLASS `2D CTA Tile Swizzling (GROUP_SIZ
 
 Round 214 基于公开发布的 CUTLASS CuTe `Swizzle<B,M,S>` 异或地址重排代数与 NVIDIA Hopper/Blackwell `CU_TENSOR_MAP_SWIZZLE_128B` 硬件 TMA/WGMMA 描述符规范构建原创合成共享内存 32-Bank 冲突消除与有效带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 215 基于公开发布的 `Hydragen` (跨请求共享前缀批处理矩阵乘) 与 `FlashInfer Cascade Attention` (多级 Radix 树前缀分解 + 在线 `LogSumExp` 状态归并) 论文构建原创合成共享前缀 Decode 注意力带宽节省与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
