@@ -216,6 +216,8 @@ Round 193 基于公开发布的 FlashInfer Sort-Free Rejection Sampling、Min-P 
 
 Round 194 基于公开发布的 Per-Head QK-Norm (ViT-22B / Chameleon / Qwen3 / Gemma-3)、Attention Logit Soft-Capping、PaLM / ST-MoE `z-loss` 与 FP32 Residual Stream 数值稳定性原理构建原创合成预训练防 Loss 尖峰评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 195 基于公开发布的 JEDEC HBM3/HBM3e Temperature-Controlled Refresh (`tREFI` 2x/4x) 规范、NVIDIA DCGM (`DCGM_FI_DEV_MEM_TEMP` / `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS`) 与导热界面材料泵出 (TIM Pump-Out) 热力学原理构建原创合成显存温控与降频遥测评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
