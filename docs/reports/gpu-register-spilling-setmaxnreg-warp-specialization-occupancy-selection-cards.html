@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>7-Card Visual Benchmark Report · GPU Register Spilling &amp; Hopper setmaxnreg (Round 212)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1500px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 18px; margin: 8px 0 10px; line-height: 1.35; color: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94a3b8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; }
+    .bar-row { margin: 8px 0; font-size: 12px; }
+    .bar-bg { background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · GPU REGISTER SPILLING &amp; SETMAXNREG</div>
+        <h2>Hopper/Blackwell setmaxnreg Reallocates 16,384 Registers From Producer to Consumer Warps for 2.96x Speedup</h2>
+        <p style="font-size:13px;color:#cbd5e1;">Evaluates Unconstrained Large-Tile Spill, Brute-Force maxrregcount=128, Uniform Static Launch Bounds, and Asymmetric setmaxnreg (40 Producer / 232 Consumer Regs).</p>
+      </div>
+      <div class="code">Large-Tile Register Spill:  265.0 TFLOPS (256B Spill ✕)
+Uniform Launch Bounds:      590.0 TFLOPS (  0B Spill ✅)
+Asymmetric setmaxnreg:      785.0 TFLOPS (  0B Spill 🏆)</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: THE 65,536 REGISTER FILE WALL</div>
+        <h2>Why Uniform Register Allocation Starves Consumer WGMMA Warps in 384-Thread CTAs</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Task Type: <code>choice</code> / <code>score</code> · Action: <strong>Act automatically</strong> (Use <code>setmaxnreg.dec</code> on Producer warps and <code>setmaxnreg.inc</code> on Consumer warps).</p>
+        <div class="bar-row">Tier 1 Unconstrained Local-Mem Spill (265.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:33.8%;background:#ef4444;"></div></div></div>
+        <div class="bar-row">Tier 2 Forced maxrregcount=128 Spill (310.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:39.5%;background:#f59e0b;"></div></div></div>
+        <div class="bar-row">Tier 3 Uniform 168-Reg Smaller Tile (590.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:75.2%;"></div></div></div>
+        <div class="bar-row">Tier 4 Asymmetric setmaxnreg 40/232 (785.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:100.0%;background:#10b981;"></div></div></div>
+      </div>
+      <div class="foot">Grounded in experiments/gpu_register_spilling_setmaxnreg_occupancy_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>Full 4-Tier Register Allocation &amp; Spill Matrix</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>PROD / CONS REGS</th><th>SPILL / TFLOPS</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 Spill</td><td>168 / 168</td><td>256B / 265 TF ✕</td><td>Reject</td></tr>
+            <tr><td>Tier 2 Cap 128</td><td>128 / 128</td><td>368B / 310 TF ⚠️</td><td>Reject</td></tr>
+            <tr><td>Tier 3 Uniform</td><td>168 / 168</td><td>0B / 590 TF</td><td>Confirm ✅</td></tr>
+            <tr><td>Tier 4 setmaxnreg</td><td>40 / 232</td><td>0B / 785 TF</td><td>Act auto 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">✕ marks STL/LDL HBM local memory spilling; ⚠️ marks counterproductive occupancy forcing.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>Hopper/Blackwell PTX setmaxnreg Register Transfer</h2>
+        <div class="code">// CTA = 384 threads (1 Producer WarpGroup + 2 Consumer WarpGroups)
+if (warp_group_idx == 0) {
+  // Producer only issues TMA loads; release 128 regs/thread!
+  asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;\n" :: "n"(40));
+  producer_tma_loop();
+} else {
+  // Consumers claim donated regs to hold 128x256 FP32 accumulators!
+  asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;\n" :: "n"(232));
+  consumer_wgmma_loop(); // 128*40 + 256*232 = 64,512 &lt;= 65,536!
+}</div>
+      </div>
+      <div class="foot">Reallocates the SM physical register file dynamically at runtime between warp-groups.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>ptxas Spill Audit &amp; Register Budget Math</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>UNCONSTRAINED SPILL</th><th>SETMAXNREG 40/232</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>Consumer Regs/Thread</td><td>168 (+64 Spilled)</td><td>232 In-Register</td><td>+64 Regs</td></tr>
+            <tr><td>Spill Bytes/Thread</td><td>256 Bytes</td><td>0 Bytes</td><td>-100 % Spill</td></tr>
+            <tr><td>Sustained TFLOPS</td><td>265.0 TFLOPS</td><td>785.0 TFLOPS</td><td>2.96x Faster</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Always inspect `nvcc -Xptxas -v` output for `0 bytes spill stores, 0 bytes spill loads`.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY &amp; THROUGHPUT</div>
+        <h2>Sustained Tensor Core Throughput (TFLOPS, Higher is Better)</h2>
+        <div class="bar-row">Tier 4 Asymmetric setmaxnreg 40/232 (785.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:100%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 3 Uniform 168-Reg Smaller Tile (590.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:75.2%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 2 Forced maxrregcount=128 Spill (310.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:39.5%;background:#cbd5e1;"></div></div></div>
+        <div class="bar-row">Tier 1 Unconstrained Large-Tile Spill (265.0 TFLOPS)<div class="bar-bg"><div class="bar-fill" style="width:33.8%;background:#cbd5e1;"></div></div></div>
+      </div>
+      <div class="foot">Primary path (#3B82F6) vs Baseline (#CBD5E1).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p style="font-size:12px;color:#6ee7b7;"><strong>✅ Good fit:</strong> Using <code>setmaxnreg.dec / setmaxnreg.inc</code> in Warp-Specialized Hopper/Blackwell kernels (<code>FlashAttention-3</code>, <code>CUTLASS 3.x</code>, <code>ThunderKittens</code>) and auditing <code>-Xptxas -v</code> for zero spill.</p>
+        <p style="font-size:12px;color:#fca5a5;"><strong>⛔ Not for:</strong> Blindly capping <code>--maxrregcount</code> on Tensor Core kernels where register accumulators dominate performance.</p>
+      </div>
+      <div class="foot">License: MIT · Provenance: synthetic + anonymized_reported</div>
+    </div>
+  </div>
+</body>
+</html>

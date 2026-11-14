@@ -250,6 +250,8 @@ Round 210 基于公开发布的 IEEE-754 `BFloat16` 算术规范、`Stochastic R
 
 Round 211 基于公开发布的 NVIDIA Ampere/Hopper/Blackwell HBM `Row Remapping (XID 63 / XID 64)` 硬件白皮书与 DCGM `ROW_REMAP_PENDING / ROW_REMAP_FAILURE` 遥测规范构建原创合成千卡集群显存 ECC 分级自愈与防毒药节点评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 212 基于公开发布的 NVIDIA PTX ISA `setmaxnreg.inc / setmaxnreg.dec` 规范、CUDA `Local Memory Spilling (STL/LDL)` 机制与 FlashAttention-3 / CUTLASS 3.x Warp-Specialization 寄存器重分配原理构建原创合成 SM 寄存器预算与溢出评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
