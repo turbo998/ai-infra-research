@@ -220,6 +220,8 @@ Round 195 基于公开发布的 JEDEC HBM3/HBM3e Temperature-Controlled Refresh 
 
 Round 196 基于公开发布的 MemGPT / Letta (OS-Paged Core Memory)、Zep / Graphiti (Bi-Temporal Knowledge Graph `t_valid / t_invalid`) 与 Mem0 架构规范构建原创合成长周期 Agent 记忆时序一致性与成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 197 基于公开发布的 NVIDIA GPUDirect Storage (`GDS / nvidia-fs / cuFile`)、RAPIDS `KvikIO`、Linux `io_uring` (`O_DIRECT`) 与 PCIe Switch P2P (`PIX`) 架构规范构建原创合成 NVMe-to-GPU 直读吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

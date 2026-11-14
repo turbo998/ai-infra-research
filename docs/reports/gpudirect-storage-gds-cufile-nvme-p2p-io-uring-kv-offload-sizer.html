@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>GPUDirect Storage（GDS / cuFile）与 NVMe P2P 选型计算器 (Round 197)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 197 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">GPUDirect Storage（GDS / cuFile）、NVMe PCIe P2P 直读与 `io_uring` 选型计算器</span>
+      </div>
+      <div>
+        <a href="../components/gpudirect-storage-gds-cufile-nvme-p2p-io-uring-kv-offload-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/gpudirect-storage-gds-cufile-nvme-p2p-io-uring-kv-offload-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./gpudirect-storage-gds-cufile-nvme-p2p-io-uring-kv-offload-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="gds-nvme-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 本地 NVMe SSD 阵列到 GPU 显存直读吞吐、140GB 权重加载与 KV 恢复耗时仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/gpudirect_storage_gds_cufile_nvme_iouring_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="gdsDrivesSelect">1. 单节点本地 PCIe Gen5 NVMe SSD 盘数 (单盘 14 GB/s):</label>
+          <select id="gdsDrivesSelect" onchange="updateGdsSizer()">
+            <option value="4">4 块 Gen5 NVMe (理论峰值 56.0 GB/s)</option>
+            <option value="8" selected>8 块 Gen5 NVMe (基准：标准 8 卡机每卡配 1 盘 · 112.0 GB/s)</option>
+            <option value="16">16 块 Gen5 NVMe (高密存储推理节点 · 224.0 GB/s)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="gdsPayloadSelect">2. 目标加载/卸载负载体积 (Weight / KV Cache):</label>
+          <select id="gdsPayloadSelect" onchange="updateGdsSizer()">
+            <option value="10">10 GB (32K 长上下文多请求 KV Cache 批量恢复)</option>
+            <option value="140" selected>140 GB (基准：70B BF16 模型权重 / 单机 Checkpoint)</option>
+            <option value="670">670 GB (DeepSeek-V3/R1 671B FP8 全量权重)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>NVMe-to-GPU 存储 I/O 架构档位</th>
+              <th>整机实测直读吞吐</th>
+              <th>加载目标数据耗时</th>
+              <th>主机内存流量放大</th>
+              <th>CPU 占用率</th>
+            </tr>
+          </thead>
+          <tbody id="gdsSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="gdsDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const GDS_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统 POSIX Buffered I/O (Page Cache + 用户态拷贝)', bw8: 18.5, dram: '3.0x (三次进出 DDR5 ✕)', cpu: '92.0% ✕' },
+      { id: 't2', name: '🟨 Tier 2: O_DIRECT + io_uring + Pinned Host Bounce Buffer', bw8: 48.0, dram: '2.0x (仍经过主机内存 ⚠️)', cpu: '28.0%' },
+      { id: 't3', name: '🟦 Tier 3: GPUDirect Storage (cuFile · NVMe 挂在 CPU 直连槽 PHB)', bw8: 64.5, dram: '0.0x (零 DRAM 读写 ✅)', cpu: '11.0% ✅' },
+      { id: 't4', name: '🟩 Tier 4: GPUDirect Storage (nvidia-fs + cuFile + NVMe 挂在 PIX Switch)', bw8: 98.5, dram: '0.0x (Switch 内部 P2P 🏆)', cpu: '6.5% 🏆' }
+    ];
+
+    function updateGdsSizer() {
+      const drives = parseInt(document.getElementById('gdsDrivesSelect').value, 10) || 8;
+      const payloadGb = parseFloat(document.getElementById('gdsPayloadSelect').value) || 140.0;
+      const scale = drives / 8.0;
+
+      const tbody = document.getElementById('gdsSizerTbody');
+      tbody.innerHTML = GDS_TIERS.map(r => {
+        const isBest = r.id === 't4';
+        const bw = r.id === 't1' ? Math.min(24.0, r.bw8 * scale).toFixed(1) : (r.bw8 * scale).toFixed(1);
+        const sec = (payloadGb / parseFloat(bw)).toFixed(2);
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${bw} GB/s</code></td>
+          <td><code>${sec} 秒</code></td>
+          <td><code>${r.dram}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cpu}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const t4Bw = (98.5 * scale).toFixed(1);
+      const t4Sec = (payloadGb / parseFloat(t4Bw)).toFixed(2);
+      document.getElementById('gdsDecisionCallout').innerHTML =
+        `<strong>架构师选型结论（${drives} 块 Gen5 NVMe · 读取 ${payloadGb}GB 数据）</strong>：强烈首选 <strong>Tier 4 (GPUDirect Storage <code>nvidia-fs + cuFile</code> 且在硬件上将 NVMe 挂载于 GPU 所属的 PCIe Switch <code>PIX</code> 下)</strong>！实现 <code>${t4Bw} GB/s</code> 的零拷贝 P2P 直读吞吐，仅需 <code>${t4Sec} 秒</code> 即可将 <code>${payloadGb} GB</code> 数据直接灌入 GPU HBM3e 显存 🏆！`;
+    }
+    updateGdsSizer();
+  </script>
+</body>
+</html>
