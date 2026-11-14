@@ -121,3 +121,5 @@ Round 145 链接11月14日PyTorch nccl2 TCP TLS feature、API/options/process ga
 Round 146 链接固定PyTorch ShrinkNCCL.cpp与NVIDIA shrink/split/default/abort/sharing API事实；PyTorch BSD-style权利保留，NVIDIA事实改写，无实现镜像。原创parent-relative association、cyclic-row/checkpoint ledger、独立slice oracle、CPU planner与60-solid视觉；无native NCCL/GPU、abort/shared-resource、checkpoint I/O、optimizer/step恢复或wire/peak认证。
 
 Round 147 链接ONNX Nov13BJT opset29Pack/Unpack schema/reference/function/tests与Apache-2.0 LICENSE；权利保留，无实现镜像。原创rank-two axis/radix reservoir、explicit-bitstream oracle、BigInt parity、CPU packing与60-solid视觉；原型strict errors不代表schema invalid-input保证，无ONNX/reference/function/ORT/GPU、数值quantization或runtime峰值认证。
+
+Round 148 链接ONNX Nov13BJTfinite FP4/FP6 NaN文档/test澄清及Apache-2.0 LICENSE；权利保留，无实现镜像。原创exact rational RNE/zero/saturation/NaN policy、piecewise/exhaustive oracles、CPU tick lookup与60-solid视觉；policy block非native exception保证，无ONNX Cast/GPU、float32预舍入、scales/calibration或model quality认证。
