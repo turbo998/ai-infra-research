@@ -97,3 +97,5 @@ Round 133 链接固定 Ceph EC/profile文档及COPYING；doc/*为CC-BY-SA-3.0。
 Round 134 链接固定 RedisBloom chain（RSALv2/SSPLv1/AGPLv3选择）、deps/bloom（所读BSDheader）及LICENSE。显式坐标模型、finite-universe/set oracle、层界、计数删除反例、CPUprobes与视觉原创，未复制上游实现；理想sizing/层界不等于nativeMurmur/Redis/FPR/allocator/数据库收益。
 
 Round 135 链接2026-11-14读取的AWS S3 multipart workflow、completion API与limits。原创byte/opaque-token ledger、独立flatten oracle、HTTPbody fixture、CPUassembly与视觉，未复制上游实现或文案；无云凭据/操作，非nativeETag/checksum/SDK/network或globalcheckpointatomicity认证。
+
+Round 136 链接固定 Redis hyperloglog.c 的 rank、register MAX 与 Ertl histogram estimator。所读文件头许可为 RSALv2 / SSPLv1 / AGPLv3 选择，部分内容另有 BSD3 来源说明；上游权利保留。原创有限 16-bit digest、classic/linear-counting teaching 模型、字符串 oracle、CPU rank paths 与视觉未复制实现；非 native Murmur/Ertl、Redis memory/accuracy/latency 或生产误差复现，渐近 RSE 非逐样本保证。
