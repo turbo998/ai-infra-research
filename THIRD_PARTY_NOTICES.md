@@ -230,6 +230,8 @@ Round 200 基于公开发布的 Megatron-LM Sequence Parallelism (SP)、DeepSpee
 
 Round 201 基于公开发布的 CUTLASS 3.x `Stream-K` 持久化工作分解论文、Wave Quantization 原理与 NVIDIA Hopper/Blackwell `PDL (Programmatic Dependent Launch)` 硬件规范构建原创合成小批量解码瘦矩阵乘与算子重叠评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 202 基于公开发布的 IST-DASLab `Marlin` (`LOP3` IEEE-754 位运算解包) 与 NeuralMagic / vLLM `Machete` (Hopper `WGMMA + TMA` 混合输入内核) 架构规范构建原创合成 `W4A16 / W4A8` 反量化算子加速评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
