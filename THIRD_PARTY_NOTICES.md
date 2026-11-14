@@ -153,3 +153,5 @@ Round161链接SGLang Nov14SPFopt-in aging与extend-onlycounter修正，Apache-2.
 Round162链接SGLang Nov14out-of-tree HiCache logical-page registry与staged rotation生命周期，Apache-2.0权利保留，无实现镜像。原创aligned owner ledger/CPUmetadata partition，不是nativeplugin/allocator/copy。上游注册集合仍为空；detached错误方案是counterfactual，native旧startup实际拒绝sharded storage；capacity miss仅为observed attempt，非eviction/retry结果。
 
 Round163链接SGLang Nov14Rust joint Full/SWA eviction与原有effective-profile gate，Apache-2.0权利保留，无实现镜像。原创resource-unit forest/CPUkey queue，不是nativeRust/tree/allocator/backup。wrong collapse是counterfactual；native pending finish与integration tests只读取未执行，shared-pool byte/token成本不由synthetic units推断。
+
+Round164链接vLLM Nov14worker early GCfreeze与capture/warmup helpers、Python3.12GC文档，Apache-2.0及Python文档权利保留，无实现镜像。原创epoch ledger与隔离CPython probes；模型visits不是actual扫描telemetry，whole-interpreter freeze count不冒充subset。nativeweights/CUDA/worker及GPUmemory释放未认证。
