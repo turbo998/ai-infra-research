@@ -222,6 +222,8 @@ Round 196 基于公开发布的 MemGPT / Letta (OS-Paged Core Memory)、Zep / Gr
 
 Round 197 基于公开发布的 NVIDIA GPUDirect Storage (`GDS / nvidia-fs / cuFile`)、RAPIDS `KvikIO`、Linux `io_uring` (`O_DIRECT`) 与 PCIe Switch P2P (`PIX`) 架构规范构建原创合成 NVMe-to-GPU 直读吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 198 基于公开发布的 SwiGLU / GeGLU 门控前馈网络、vLLM `MergedColumnParallelLinear` (`w13_weight` + `silu_and_mul`) 与 Primer / NVIDIA Nemotron-H `Squared ReLU` (`ReLU²`) 激活稀疏性原理构建原创合成 FFN 显存与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
