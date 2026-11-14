@@ -266,6 +266,8 @@ Round 218 基于公开发布的 InfiniBand `OpenSM` (`minhop / ftree / updn / ar
 
 Round 219 基于公开发布的 PyTorch `set_float32_matmul_precision` 规范、NVIDIA `TensorFloat-32 (TF32)` 硬件白皮书与 cuBLAS `Ozaki Scheme (BF16x3)` 23-bit 尾数拆分仿真原理构建原创合成 Tensor Core 矩阵乘精度与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 220 基于公开发布的 NVIDIA CUDA `cudaHostAlloc / cudaMemcpyAsync` 驱动行为规范与双硬件 `Copy Engine (CE0 H2D + CE1 D2H)` 全双工 PCIe DMA 原理构建原创合成锁页内存池与双向并发卸载评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

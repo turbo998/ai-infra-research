@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>CUDA Pinned Memory &amp; Dual Copy Engine Full-Duplex Sizer (Round 220)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 220 · CUDA 锁页内存（Pinned Memory）与双硬件 Copy Engine 全双工计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 Host-GPU PCIe Gen5 x16 传输架构档位 (KV Cache / 激活值双向卸载)</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 普通 Pageable 内存 + non_blocking=True (静默同步阻塞 + 11.8 GB/s)</option>
+          <option value="t2">Tier 2: 在每步热循环中动态调用 .pin_memory() (内核 ioctl 锁表卡顿 · 18.5 GB/s)</option>
+          <option value="t3">Tier 3: 预分配常驻 Pinned 环形缓冲池 + 单 Stream (单向 54.2 GB/s · H2D/D2H 串行)</option>
+          <option value="t4" selected>Tier 4: NUMA 巨页常驻 Pinned 池 + 双 Copy Engine 独立流 (CE0 H2D + CE1 D2H 全双工 108.4 GB/s)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>CPU 线程阻塞耗时</div><div class="val" id="stl">0.02 ms</div></div>
+      <div class="kpi"><div>有效 PCIe 总带宽</div><div class="val" id="bw">108.4 GB/s</div></div>
+      <div class="kpi"><div>真正异步计算重叠</div><div class="val" id="ovl">100% 异步</div></div>
+      <div class="kpi"><div>相对 Pageable 提速</div><div class="val" id="spd">9.19 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (常驻 Pinned 池 + 双独立 Copy Engine Stream_H2D / Stream_D2H)：彻底消除 Pageable 静默同步阻塞与运行期 ioctl 锁表开销，同时驱动两套硬件 DMA 引擎跑满 PCIe Gen5 上下行全双工 108.4 GB/s 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { stl: "42.50 ms ✕", bw: "11.8 GB/s", ovl: "假异步 (同步阻塞) ✕", spd: "1.00 x", v: "Tier 1 (Pageable + non_blocking=True)：未锁页内存无法直通 DMA，驱动静默卡死 CPU 线程做分块二次拷贝 ✕" },
+      t2: { stl: "26.00 ms ⚠️", bw: "18.5 GB/s", ovl: "被锁页阻塞 ⚠️", spd: "1.57 x", v: "Tier 2 (热循环内动态 .pin_memory())：每次调用 cudaMallocHost 都要进内核锁页并映射 IOMMU，比拷贝本身还慢 ⚠️" },
+      t3: { stl: "0.02 ms", bw: "54.2 GB/s", ovl: "100% 异步", spd: "4.59 x", v: "Tier 3 (预分配 Pinned 池 + 单拷贝流)：跑满单向 PCIe Gen5，但把 H2D 与 D2H 放在同一 Stream 会导致双向排队 ✅" },
+      t4: { stl: "0.02 ms 🏆", bw: "108.4 GB/s", ovl: "100% 全双工异步", spd: "9.19 x", v: "Tier 4 (预分配 Pinned 池 + 双独立 H2D/D2H Copy Engine 流)：同时跑满 54.2 GB/s H2D 预取与 54.2 GB/s D2H 卸载 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("stl").textContent = d.stl;
+      document.getElementById("bw").textContent = d.bw;
+      document.getElementById("ovl").textContent = d.ovl;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
