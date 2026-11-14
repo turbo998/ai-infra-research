@@ -246,6 +246,8 @@ Round 208 基于公开发布的 NVIDIA CUDA 12.4+ `Green Contexts (CUgreenCtx / 
 
 Round 209 基于公开发布的 IEEE 802.3bs/df `RS(544, 514)` PAM4 前向纠错码规范、NVIDIA `mlxlink` 16 桶 FEC 符号错误直方图与 CMIS 5.0 光模块数字诊断规范构建原创合成千卡集群光模块灰故障预警与自动摘除评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 210 基于公开发布的 IEEE-754 `BFloat16` 算术规范、`Stochastic Rounding (无偏随机舍入)` 论文与 `Kahan Compensated Summation (Revisiting BFloat16 Training)` 原理构建原创合成无 `FP32 Master Weights` 显存节省与收敛精度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
