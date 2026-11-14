@@ -105,3 +105,5 @@ Round 137 链接固定 RoaringFormatSpec（已检查 Apache-2.0 LICENSE）与 CR
 Round 138 链接固定 ONNX DepthToSpace/SpaceToDepth schema/reference、8 月 31 日 opset28 mode/function-body 变更（Apache-2.0）与固定 PyTorch TorchScript exporter（BSD-style）；上游权利保留。原创整数 gather/scatter、inverse/adjoint、direct-op gate、CPU planning 与视觉未复制实现；非 native converter/kernel、strided tensor、GPU/fusion、zero-copy 或 image-quality 认证。
 
 Round 139 链接固定 PyTorch ConvTranspose1d、requested output_size 与 native slow transpose shape guard（BSD-style）；上游权利保留。原创 onechannel integer scatter、独立 finite forward-matrix oracle、adjoint、分组 payload 与 CPU timing/视觉未复制实现；output_padding<stride 为更窄原型域；非 native kernel/BLAS/cuDNN、grouped execution/workspace、streaming 或音视频质量认证。
+
+Round 140 链接固定 liburing manpages（所读 SPDX LGPL-2.0-or-later）、LICENSE(MIT)、COPYING(LGPL-2.1)；保留文件级上游权利，不以单一许可概括仓库。原创 uint32 SQ/CQ、one-shot buffer ledger、deque oracle、CPU list paths 与视觉未复制文档或native实现；非Linux/atomics/SQPOLL/multishot/notification/cancellation/CQ-overflow或native IOPS/memory认证。

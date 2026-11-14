@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><title>io_uring ring credits and buffer lifetime workbench</title><style>
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+  --cp-code: #0F172A;
+  --cp-primary: #3B82F6;
+  --cp-baseline: #CBD5E1;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+}
+
+*{box-sizing:border-box}body{margin:0;padding:24px;background:var(--cp-bg);color:var(--cp-text);
+font-family:"Segoe UI",Aptos,Calibri,-apple-system,BlinkMacSystemFont,sans-serif}
+main{max-width:1180px;margin:auto}h1{font-size:44px;line-height:1.13;margin:18px 0}
+h2{font-size:25px}p,li{line-height:1.55}.muted{color:var(--cp-text-muted)}
+.eyebrow{font-size:14px;letter-spacing:.12em;font-weight:700;color:var(--cp-accent)}
+.accent{background:linear-gradient(90deg,var(--cp-accent),var(--cp-primary));
+background-clip:text;color:transparent}
+.panel,blockquote{border:1px solid var(--cp-border);border-radius:16px;padding:20px;
+background:var(--cp-surface-soft);margin:16px 0}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pill{display:inline-block;border:1px solid var(--cp-border);border-radius:.625rem;
+padding:5px 9px;margin:4px 4px 4px 0;font-size:13px}
+.good{border-top:4px solid var(--cp-success)}.bad{border-top:4px solid var(--cp-danger)}
+pre,code{font-family:Consolas,"Courier New",Courier,monospace}
+pre{background:var(--cp-code);color:var(--cp-accent-fg);padding:24px;border-radius:16px;
+font-size:16px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:16px}th,td{text-align:left;padding:14px 8px;
+border-bottom:1px solid var(--cp-border)}th{font-size:12px;letter-spacing:.04em}
+.bar{height:14px;background:var(--cp-surface-soft);border-radius:5px;overflow:hidden;margin:6px 0 12px}
+.bar i{display:block;height:100%;background:var(--cp-primary)}.bar.baseline i{background:var(--cp-baseline)}
+.card{position:relative;width:900px;height:1125px;max-width:100%;margin:0 auto 32px;
+padding:46px;background:var(--cp-surface);border:1px solid var(--cp-border);border-radius:16px;
+display:flex;flex-direction:column;overflow:hidden}
+.card:before{content:"";position:absolute;top:0;left:0;right:0;height:10px;
+background:linear-gradient(90deg,var(--cp-accent),var(--cp-primary))}
+.evidence{flex:1}.callout{background:var(--cp-surface-soft);padding:18px;border-radius:12px;margin:14px 0}
+footer{border-top:1px solid var(--cp-border);padding-top:16px;display:flex;justify-content:space-between;font-size:13px}
+label{display:flex;flex-direction:column;gap:8px;font-size:15px}
+input,button,select{font:inherit;border:1px solid var(--cp-border-strong);border-radius:.625rem;
+padding:10px;background:var(--cp-surface);color:var(--cp-text);max-width:100%}
+button{cursor:pointer;background:var(--cp-accent);color:var(--cp-accent-fg)}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--cp-link);outline-offset:3px}
+.error{color:var(--cp-danger);font-weight:700}output{display:block}
+@media(max-width:700px){body{padding:12px}.grid{grid-template-columns:1fr}
+.card{height:auto;min-height:1125px;padding:24px}h1{font-size:34px}table{font-size:13px}th,td{padding:10px 4px}}
+@media print{body{padding:0;background:var(--cp-surface)}.card{margin:0;border:0;border-radius:0;break-after:page}
+@page{size:900px 1125px;margin:0}}
+</style></head><body><h1>SQ credit is not an ordinary-read buffer release</h1><p>Round140 · Original sequential state model on this host,not Linux/io_uring execution.</p>
+        <form id="form"><div class="grid"><label>entries<input id="entries" value="2" type="number" step="1" required></label><label>cq_entries<input id="cq_entries" value="4" type="number" step="1" required></label><label>buffers<input id="buffers" value="3" type="number" step="1" required></label><label>start<input id="start" value="0" type="number" step="1" required></label></div><label>Original commands JSON<textarea id="commands" rows="9" required>[["submit", 100, 0], ["submit", 101, 1], ["consume"], ["submit", 102, 2], ["consume"], ["consume"], ["complete", 101, -5], ["complete", 100, 4], ["complete", 102, 4], ["reap"], ["reap"], ["reap"]]</textarea></label>
+        <button>Trace ring credit and completion identities</button></form><p id="error" role="alert"></p><pre id="result" aria-live="polite"></pre>
+        <p>Commands:submit(requestID,buffer),consume,complete(requestID,result),reap. Ordinary requests use4bytes;negative result remains an explicit error,short result is not full completion.
+        No SQPOLL,multishot,skip-success,zero-copy-send notifications,real atomics or native CQ overflow.
+        Submitted IDs are never reused in this original bounded session policy.</p><script>
+(() => {
+  const param = new URLSearchParams(window.location.search).get("scoutTheme");
+  const theme = param === "light" || param === "dark" ? param :
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", theme);
+})();
+
+const DEFAULT={"entries": 2, "cq_entries": 4, "buffers": 3, "start": 0};
+
+const U32=2**32;
+function depth(tail,head){if(![tail,head].every(v=>Number.isInteger(v)&&v>=0&&v<U32))throw Error("Unsigned32bit counters required");return (tail-head+U32)%U32;}
+function capacity(n){if(!Number.isInteger(n)||n<1||n>1024||(n&(n-1)))throw Error("Poweroftwo ring entries1..1024required");return n;}
+function play(p,commands){
+ if(Object.keys(p).length!==4||!Number.isInteger(p.buffers)||p.buffers<1||p.buffers>65536)throw Error("Bounded ring/buffer parameters required");
+ capacity(p.entries);capacity(p.cq_entries);depth(p.start,p.start);
+ if(!Array.isArray(commands)||commands.length>128)throw Error("At most128commands required");
+ let head=p.start,tail=p.start,ch=p.start,ct=p.start;const sq=Array(p.entries).fill(null),cq=Array(p.cq_entries).fill(null),pending=new Map(),owned=new Map(),used=new Set(),results=[];
+ const snapshot=()=>({sq_head:head,sq_tail:tail,sq_depth:depth(tail,head),sq_free:p.entries-depth(tail,head),cq_head:ch,cq_tail:ct,cq_depth:depth(ct,ch),sq_slots:sq.map(v=>v?[...v]:null),pending:[...pending].sort((a,b)=>a[0]-b[0]).map(([request_id,v])=>({request_id,...v})),buffer_owners:[...owned].sort((a,b)=>a[0]-b[0]).map(([buffer,request_id])=>({buffer,request_id}))});
+ for(const cmd of commands){
+ if(!Array.isArray(cmd))throw Error("Each command must be an array");const [op,id,arg]=cmd;let result=null;
+ if(op==="submit"&&cmd.length===3){
+ if(!Number.isSafeInteger(id)||id<0||used.has(id))throw Error("Original request IDs cannot be reused");
+ if(!Number.isInteger(arg)||arg<0||arg>=p.buffers||owned.has(arg))throw Error("Buffer outside pool or still owned");
+ if(depth(tail,head)>=p.entries)throw Error("Original SQ full");const slot=tail&(p.entries-1);sq[slot]=[id,arg];tail=(tail+1)%U32;pending.set(id,{buffer:arg,state:"queued",requested_bytes:4});owned.set(arg,id);used.add(id);result=slot;
+ }else if(op==="consume"&&cmd.length===1){
+ if(!depth(tail,head))throw Error("Original SQ empty");const slot=head&(p.entries-1),[request,buffer]=sq[slot];sq[slot]=null;head=(head+1)%U32;pending.get(request).state="inflight";result=request;
+ }else if(op==="complete"&&cmd.length===3){
+ if(!Number.isSafeInteger(id)||!pending.has(id)||pending.get(id).state!=="inflight")throw Error("Unknown,unconsumed or completed request");
+ if(!Number.isInteger(arg)||arg< -4095||arg>pending.get(id).requested_bytes)throw Error("Original read result outside bounded contract");
+ if(depth(ct,ch)>=p.cq_entries)throw Error("Original CQ full;native overflow not modeled");cq[ct&(p.cq_entries-1)]=[id,arg];ct=(ct+1)%U32;pending.get(id).state="completion-queued";
+ }else if(op==="reap"&&cmd.length===1){
+ if(!depth(ct,ch))throw Error("Original CQ empty");const slot=ch&(p.cq_entries-1),[request,value]=cq[slot],item=pending.get(request);cq[slot]=null;ch=(ch+1)%U32;pending.delete(request);owned.delete(item.buffer);
+ result={request_id:request,buffer:item.buffer,result:value,requested_bytes:item.requested_bytes,status:value<0?"error":value===item.requested_bytes?"complete":"short_or_eof"};
+ }else throw Error("Unsupported command or argument count");
+ results.push({command:cmd,result,snapshot:snapshot()});
+ }
+ return results;
+}
+function budget(p){
+ if(Object.keys(p).length!==6||!Object.values(p).every(v=>Number.isInteger(v)&&v>=1))throw Error("Positive exact selected payload parameters required");
+ capacity(p.sq_entries);capacity(p.cq_entries);if(p.buffer_count>65536||p.buffer_bytes>2**30||p.sqe_bytes>256||p.cqe_bytes>256)throw Error("Selected payload parameters exceed bounded contract");
+ const sq=p.sq_entries*p.sqe_bytes,cq=p.cq_entries*p.cqe_bytes;
+ return {selected_sqe_payload_bytes:sq,selected_cqe_payload_bytes:cq,selected_ring_entry_payload_bytes:sq+cq,selected_buffer_pool_payload_bytes:p.buffer_count*p.buffer_bytes,note:"selected entry/pool payload only;no ring indexes,SQ indirection,mmap pages,kernel state,pinning,allocator or native peak memory"};
+}
+
+function update(event){if(event)event.preventDefault();const error=document.getElementById("error"),out=document.getElementById("result");error.textContent="";out.textContent="";
+ try{if(!document.getElementById("form").checkValidity())throw Error("Complete all fields");
+ const p=Object.fromEntries(Object.keys(DEFAULT).map(k=>[k,Number(document.getElementById(k).value)]));
+ out.textContent=JSON.stringify(play(p,JSON.parse(document.getElementById("commands").value)),null,2);
+ }catch(e){error.textContent=e.message}}
+document.getElementById("form").addEventListener("submit",update);update();
+</script></body></html>
