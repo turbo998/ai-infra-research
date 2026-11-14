@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>CUDA 12.4+ Green Contexts (CUgreenCtx) SM Partitioning Sizer (Round 208)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 208 · CUDA 12.4+ Green Contexts (CUgreenCtx) 进程内 SM 切分与流重叠计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择多流并发与 SM 资源隔离架构档位 (H100 132 SMs · Compute + Comm/Decode)</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 默认同优先级双 CUDA Stream (Persistent GEMM 霸占 132 SM · 饿死 2.40ms)</option>
+          <option value="t2">Tier 2: 传统流优先级 cudaStreamCreateWithPriority (无法打断运行中 CTA · 1.15ms)</option>
+          <option value="t3">Tier 3: 传统 CUDA MPS 进程级静态限额 (需跨进程 IPC · 0.45ms)</option>
+          <option value="t4" selected>Tier 4: CUDA 12.4+ Green Contexts (单进程内 108 SM + 24 SM 硬隔离 · 0.02ms)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>计算流 / 通信流 SM 配比</div><div class="val" id="sms">108 / 24 SMs</div></div>
+      <div class="kpi"><div>高优流启动排队延迟</div><div class="val" id="dly">0.02 ms</div></div>
+      <div class="kpi"><div>重叠后单步总耗时</div><div class="val" id="stp">10.2 ms</div></div>
+      <div class="kpi"><div>排队抖动降低倍数</div><div class="val" id="jit">120.0 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (CUDA 12.4+ Green Contexts)：在同一个 PyTorch 进程内将 132 个 SM 物理切分为 108 个计算 SM 与 24 个通信/Decode 专属 SM，彻底根除 Persistent GEMM 对通信流与小批量解码流的阻塞，启动延迟降至 0.02 ms 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { sms: "132 / 0 (争抢)", dly: "2.40 ms ✕", stp: "14.8 ms", jit: "1.0 x", v: "Tier 1 (默认双流)：Stream A 上的持久化矩阵乘一次性占满 132 个 SM，Stream B 只能干等 2.40ms 变成串行执行 ✕" },
+      t2: { sms: "132 / 0 (软抢占)", dly: "1.15 ms ⚠️", stp: "13.1 ms", jit: "2.1 x", v: "Tier 2 (传统流优先级)：硬件只能在 CTA 块退场时切换高优流，面对 Persistent Kernel 依然会被阻塞 1.15ms ⚠️" },
+      t3: { sms: "108 / 24 (跨进程)", dly: "0.45 ms", stp: "11.9 ms", jit: "5.3 x", v: "Tier 3 (CUDA MPS)：虽能限制 SM 比例但属于进程级静态配置，单进程内不同 Stream 仍无法隔离 ✅" },
+      t4: { sms: "108 / 24 SMs", dly: "0.02 ms", stp: "10.2 ms", jit: "120.0 x", v: "Tier 4 (Green Contexts)：单进程内 108 SM + 24 SM 硬件级分区，通信流与 Decode 流零排队 0.02ms 秒启动 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("sms").textContent = d.sms;
+      document.getElementById("dly").textContent = d.dly;
+      document.getElementById("stp").textContent = d.stp;
+      document.getElementById("jit").textContent = d.jit;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>

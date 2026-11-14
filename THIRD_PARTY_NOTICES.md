@@ -242,6 +242,8 @@ Round 206 基于公开发布的 NVIDIA NCCL `PXN (Proxy by NVLink)` 跨轨路由
 
 Round 207 基于公开发布的 `RMSNorm` 论文、Gemma/Qwen 零中心化 `(1+w)` 参数化、FlashInfer/Liger-Kernel `Fused Add+RMSNorm` 以及 TransformerEngine 单趟三合一 `Add+RMSNorm+FP8 Quant` 规范构建原创合成归一化算子融合与显存流量评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 208 基于公开发布的 NVIDIA CUDA 12.4+ `Green Contexts (CUgreenCtx / cuDevSmResourceSplitByCount)` Driver API 规范与 `DualPipe / NanoFlow` 计算通信 SM 分区重叠原理构建原创合成进程内 SM 切分与流并发评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
