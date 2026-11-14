@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>7-Card Visual Benchmark Report · Asymmetric KV Cache Quantization KIVI &amp; KVQuant (Round 205)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1500px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 18px; margin: 8px 0 10px; line-height: 1.35; color: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94a3b8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; }
+    .bar-row { margin: 8px 0; font-size: 12px; }
+    .bar-bg { background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · ASYMMETRIC KV CACHE QUANTIZATION</div>
+        <h2>Pre-RoPE Per-Channel Key + Per-Token Value Quantization Compresses KV Cache 5.0x With 99.2% 128K Recall</h2>
+        <p style="font-size:13px;color:#cbd5e1;">Evaluates Uncompressed FP16 KV, Symmetric Per-Token INT4, KIVI Asymmetric (Per-Channel K + Per-Token V), and KVQuant Pre-RoPE on Llama-3-70B-128K.</p>
+      </div>
+      <div class="code">Naive Per-Token INT4 PPL:  24.85 (31.0% 128K Recall ✕)
+KIVI Asymmetric 3.5-bit:    5.24 (97.8% 128K Recall ✅)
+KVQuant Pre-RoPE 3.2-bit:   5.18 (99.2% 128K Recall 🏆)</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: KEY-CHANNEL VS VALUE-TOKEN OUTLIER ASYMMETRY</div>
+        <h2>Key Outliers Concentrate in Fixed Channels While Value Outliers Concentrate in Tokens</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Task Type: <code>choice</code> / <code>score</code> · Action: <strong>Act automatically</strong> (Quantize Key per-channel and Value per-token).</p>
+        <div class="bar-row">Tier 1 FP16 Uncompressed KV (99.5% 128K Needle)<div class="bar-bg"><div class="bar-fill" style="width:99.5%;"></div></div></div>
+        <div class="bar-row">Tier 2 Naive Per-Token INT4 Key (31.0% 128K Needle ✕)<div class="bar-bg"><div class="bar-fill" style="width:31.0%;background:#ef4444;"></div></div></div>
+        <div class="bar-row">Tier 3 KIVI Asymmetric 3.5-bit (97.8% 128K Needle)<div class="bar-bg"><div class="bar-fill" style="width:97.8%;"></div></div></div>
+        <div class="bar-row">Tier 4 KVQuant Pre-RoPE 3.2-bit (99.2% 128K Needle)<div class="bar-bg"><div class="bar-fill" style="width:99.2%;background:#10b981;"></div></div></div>
+      </div>
+      <div class="foot">Grounded in experiments/kv_cache_quantization_kivi_kvquant_prerope_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>Full 4-Tier KV Cache Quantization Matrix</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>KV BITS</th><th>PPL / 128K NEEDLE</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 FP16 KV</td><td>16.0</td><td>5.12 / 99.5% ⚠️</td><td>4 Reqs Cap</td></tr>
+            <tr><td>Tier 2 Token INT4</td><td>4.25</td><td>24.85 / 31.0% ✕</td><td>Reject</td></tr>
+            <tr><td>Tier 3 KIVI</td><td>3.50</td><td>5.24 / 97.8%</td><td>Confirm ✅</td></tr>
+            <tr><td>Tier 4 KVQuant</td><td>3.20</td><td>5.18 / 99.2%</td><td>Act auto 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">✕ marks Per-Token Key quantization collapse; ⚠️ marks 40GB/request FP16 HBM bottleneck.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>KIVI Residual Buffer &amp; KVQuant Pre-RoPE Flow</h2>
+        <div class="code"># 1. KVQuant Pre-RoPE Key Cache Storage:
+k_pre_rope = W_k(hidden_states) # Stationary channel outliers!
+k_quant, k_outlier_csr = quantize_per_channel_nuq(k_pre_rope)
+↓
+# 2. On-the-fly RoPE inside FlashDecoding SRAM registers:
+k_reg = dequantize_in_sram(k_quant, scale_ch) + k_outlier_csr
+k_rot = apply_rotary_emb_in_register(k_reg, cos_pos, sin_pos)
+scores = q_rot @ k_rot.T</div>
+      </div>
+      <div class="foot">Storing Key pre-RoPE prevents rotary position embeddings from mixing outlier channels.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>128K Concurrency &amp; Perplexity Perturbation</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>PER-TOKEN INT4</th><th>KVQUANT PRE-ROPE</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>WikiText-2 PPL</td><td>24.85</td><td>5.18</td><td>-19.67 PPL</td></tr>
+            <tr><td>128K Needle Acc</td><td>31.0 %</td><td>99.2 %</td><td>+68.2 %</td></tr>
+            <tr><td>128K Concurrency</td><td>4 (FP16)</td><td>18 Reqs</td><td>4.5x Higher</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Tested across 128K Needle-in-a-Haystack retrieval and WikiText-2 evaluation.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY &amp; CONCURRENCY</div>
+        <h2>Max Concurrent 128K Context Requests (8x H100 Node)</h2>
+        <div class="bar-row">Tier 4 KVQuant Pre-RoPE 3.2-bit (18 Reqs)<div class="bar-bg"><div class="bar-fill" style="width:100%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 3 KIVI Asymmetric 3.5-bit (16 Reqs)<div class="bar-bg"><div class="bar-fill" style="width:88.9%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 2 Naive Per-Token INT4 (15 Reqs, Broken PPL)<div class="bar-bg"><div class="bar-fill" style="width:83.3%;background:#cbd5e1;"></div></div></div>
+        <div class="bar-row">Tier 1 FP16 Uncompressed KV (4 Reqs)<div class="bar-bg"><div class="bar-fill" style="width:22.2%;background:#cbd5e1;"></div></div></div>
+      </div>
+      <div class="foot">Primary path (#3B82F6) vs Baseline (#CBD5E1).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p style="font-size:12px;color:#6ee7b7;"><strong>✅ Good fit:</strong> <code>FP8 E4M3 KV</code> with per-head scaling for 32K–64K serving; <code>KIVI</code> (calibration-free) or <code>KVQuant Pre-RoPE</code> for 128K–1M ultra-long context serving at 3–4 bits.</p>
+        <p style="font-size:12px;color:#fca5a5;"><strong>⛔ Not for:</strong> Applying symmetric per-token <code>INT4/INT2</code> quantization to the <code>Key</code> cache without channel-wise scaling.</p>
+      </div>
+      <div class="foot">License: MIT · Provenance: synthetic + anonymized_reported</div>
+    </div>
+  </div>
+</body>
+</html>

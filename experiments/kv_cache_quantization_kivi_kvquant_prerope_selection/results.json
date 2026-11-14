@@ -1,0 +1,51 @@
+{
+  "experiment_id": "kv_cache_quantization_kivi_kvquant_prerope_selection",
+  "round": 205,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "model_name": "Llama-3-70B-128K",
+    "context_length": 131072,
+    "compression_ratio_x": 5.0,
+    "concurrency_gain_x": 4.5
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_fp16_uncompressed_kv_baseline",
+      "name": "Tier 1: 原生 FP16/BF16 未压缩 KV Cache (精度基线 · 单请求 128K 占 40GB 显存)",
+      "kv_bits_effective": 16.0,
+      "wikitext2_perplexity": 5.12,
+      "needle_in_haystack_128k_acc_pct": 99.5,
+      "max_128k_concurrent_requests": 4,
+      "verdict": "精度无损但 128K 单条请求独占 40GB KV 显存，8 卡 H100 最多并发 4 条请求即耗尽显存 ⚠️"
+    },
+    {
+      "tier_id": "tier2_naive_per_token_symmetric_int4_kv",
+      "name": "Tier 2: 传统对称 Per-Token INT4 KV 量化 (Key 通道离群值拉爆缩放因子)",
+      "kv_bits_effective": 4.25,
+      "wikitext2_perplexity": 24.85,
+      "needle_in_haystack_128k_acc_pct": 31.0,
+      "max_128k_concurrent_requests": 15,
+      "verdict": "Key 矩阵中少数固定通道存在 20x 离群值，按 Token 量化会把其余正常通道全部压成 0，PPL 暴增至 24.85 彻底崩盘 ✕"
+    },
+    {
+      "tier_id": "tier3_kivi_asymmetric_per_channel_k_per_token_v",
+      "name": "Tier 3: KIVI 非对称量化 (Key 按通道 Per-Channel + Value 按词元 Per-Token + 128 残差池)",
+      "kv_bits_effective": 3.5,
+      "wikitext2_perplexity": 5.24,
+      "needle_in_haystack_128k_acc_pct": 97.8,
+      "max_128k_concurrent_requests": 16,
+      "verdict": "顺应 Key 通道离群与 Value 词元离群的物理分布，3.5-bit 下 PPL 仅微增 0.12，128K 并发数提升 4.0 倍 ✅"
+    },
+    {
+      "tier_id": "tier4_kvquant_prerope_key_plus_1pct_outlier_nuq",
+      "name": "Tier 4: KVQuant (Pre-RoPE 旋转前 Key 通道量化 + FlashDecode 寄存器内实时 RoPE + 1% 稀疏离群隔离)",
+      "kv_bits_effective": 3.2,
+      "wikitext2_perplexity": 5.18,
+      "needle_in_haystack_128k_acc_pct": 99.2,
+      "max_128k_concurrent_requests": 18,
+      "verdict": "在 RoPE 旋转搅乱通道前对 Key 做静态通道校准量化，PPL 仅相差 0.06，128K 大海捞针准确率 99.2%，并发暴涨 4.5 倍 🏆"
+    }
+  ]
+}

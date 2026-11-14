@@ -236,6 +236,8 @@ Round 203 基于公开发布的 Linux Kernel `hugetlbfs` (`2MB / 1GB` HugePages)
 
 Round 204 基于公开发布的 CUDA Driver Virtual Memory Management (`cuMemAddressReserve` / `cuMemUnmap` / `cuMemMap`) 规范、vLLM `Sleep Mode (Level 1 / Level 2)` 与 SGLang `TorchMemorySaver` 架构构建原创合成推理引擎秒级休眠唤醒与同卡 RL 混部评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 205 基于公开发布的 `KIVI` (ICML 2024, Per-Channel Key + Per-Token Value 非对称量化) 与 `KVQuant` (NeurIPS 2024, `Pre-RoPE` 旋转前 Key 通道量化 + 稀疏离群隔离) 论文构建原创合成长上下文 KV Cache 低比特量化与并发容量评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

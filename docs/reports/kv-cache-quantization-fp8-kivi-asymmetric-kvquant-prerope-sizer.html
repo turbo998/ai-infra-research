@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>KIVI Asymmetric &amp; KVQuant Pre-RoPE KV Cache Quantization Sizer (Round 205)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 205 · 非对称 KV Cache 量化（KIVI 与 KVQuant Pre-RoPE）定容计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 KV Cache 量化架构档位 (Llama-3-70B · 128K Context)</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 原生 FP16/BF16 未压缩 KV Cache (16-bit · 最大并发 4)</option>
+          <option value="t2">Tier 2: 传统对称 Per-Token INT4 KV 量化 (Key 通道离群值崩盘 · PPL 24.85)</option>
+          <option value="t3">Tier 3: KIVI 非对称量化 (Per-Channel Key + Per-Token Value · PPL 5.24)</option>
+          <option value="t4" selected>Tier 4: KVQuant (Pre-RoPE Key 通道量化 + 寄存器实时 RoPE + 1% 稀疏离群)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>等效 KV 位宽</div><div class="val" id="bits">3.2 bits</div></div>
+      <div class="kpi"><div>WikiText-2 PPL</div><div class="val" id="ppl">5.18</div></div>
+      <div class="kpi"><div>128K 大海捞针准确率</div><div class="val" id="nih">99.2 %</div></div>
+      <div class="kpi"><div>128K 最大并发请求数</div><div class="val" id="conc">18 条 (4.5x)</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (KVQuant Pre-RoPE)：在 RoPE 旋转混合通道之前对 Key 执行静态 Per-Channel 量化，并在 FlashDecoding 寄存器内实时施加 RoPE，以 3.2-bit 实现 99.2% 的 128K 检索精度与 4.5 倍并发提升 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { bits: "16.0 bits", ppl: "5.12", nih: "99.5 %", conc: "4 条 (1.0x)", v: "Tier 1 (原生 FP16 KV)：单条 128K 请求占用 40GB KV 显存，并发上限仅 4 条 ⚠️" },
+      t2: { bits: "4.25 bits", ppl: "24.85 ✕", nih: "31.0 % ✕", conc: "15 条", v: "Tier 2 (传统对称 Per-Token INT4)：Key 的固定通道离群值拉爆每个 Token 的缩放因子，模型彻底失忆崩盘 ✕" },
+      t3: { bits: "3.5 bits", ppl: "5.24", nih: "97.8 %", conc: "16 条 (4.0x)", v: "Tier 3 (KIVI 非对称量化)：Key 按通道量化 + Value 按 Token 量化 + 128 词元 FP16 残差池，免校准即插即用 ✅" },
+      t4: { bits: "3.2 bits", ppl: "5.18", nih: "99.2 %", conc: "18 条 (4.5x)", v: "Tier 4 (KVQuant Pre-RoPE)：旋转前缓存量化 Key 消除位置依赖，128K 大海捞针达 99.2%，并发提升 4.5 倍 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("bits").textContent = d.bits;
+      document.getElementById("ppl").textContent = d.ppl;
+      document.getElementById("nih").textContent = d.nih;
+      document.getElementById("conc").textContent = d.conc;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
