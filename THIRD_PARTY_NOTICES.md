@@ -99,3 +99,5 @@ Round 134 链接固定 RedisBloom chain（RSALv2/SSPLv1/AGPLv3选择）、deps/b
 Round 135 链接2026-11-14读取的AWS S3 multipart workflow、completion API与limits。原创byte/opaque-token ledger、独立flatten oracle、HTTPbody fixture、CPUassembly与视觉，未复制上游实现或文案；无云凭据/操作，非nativeETag/checksum/SDK/network或globalcheckpointatomicity认证。
 
 Round 136 链接固定 Redis hyperloglog.c 的 rank、register MAX 与 Ertl histogram estimator。所读文件头许可为 RSALv2 / SSPLv1 / AGPLv3 选择，部分内容另有 BSD3 来源说明；上游权利保留。原创有限 16-bit digest、classic/linear-counting teaching 模型、字符串 oracle、CPU rank paths 与视觉未复制实现；非 native Murmur/Ertl、Redis memory/accuracy/latency 或生产误差复现，渐近 RSE 非逐样本保证。
+
+Round 137 链接固定 RoaringFormatSpec（已检查 Apache-2.0 LICENSE）与 CRoaring 11 月 9 日 Roaring64 C++ query capability patch；上游权利保留。原创 uint32 container payload codec、strict run-saving policy、interval oracle、Python CPU paths 与视觉未复制上游示例/图/实现；非完整 portable reader/writer、native runOptimize/64-bit rank/select/SIMD、memory 或 ACL freshness/latency 认证。
