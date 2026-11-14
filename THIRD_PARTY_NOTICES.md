@@ -129,3 +129,5 @@ Round 149 链接ONNX Nov13BJT STRING helper byte-preservation修正、TensorProt
 Round 150 链接ONNX Nov13BJT ImageDecoder RGB/BGR reference修正、opset20schema/tests及Apache-2.0 LICENSE；权利保留，无实现镜像。原创post-decode六mode逻辑、alpha/palette/bilevel与channel-order oracle、CPU copied reorder；无codec/Pillow/NumPy/ONNX、Grayscale、native stride/peak或model quality认证。
 
 Round 151 链接PyTorch Nov14ROCm CK fixed/varlen backward unused dbias correction与BSD-3-Clause LICENSE；权利保留，无实现镜像。原创exact subledger、pair-count/BigInt oracles与最大512KiBCPUbytearray toy；selected预算非native OOM预测，无ROCm/CK、gradient error、allocator peak或backward latency复现。
+
+Round 152 链接PyTorch Nov14Dynamo dictionary semantic-guard correction、guard/DICT_MERGE/dict变量/tests与BSD-3-Clause LICENSE；权利保留，无实现镜像。原创dynamic-scalar guard-plan模型、native CPython-only oracle与CPUordered-equality timer；无native Dynamo/PyTorch compilation、value/slot/identity guard或frame/compile-latency认证。
