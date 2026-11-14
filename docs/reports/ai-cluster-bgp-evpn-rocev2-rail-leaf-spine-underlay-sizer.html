@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>AI 智算集群三层路由控制面、BGP Unnumbered 与 WCMP 选型计算器 (Round 174)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 174 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">AI 智算集群三层路由控制面、BGP Unnumbered 与 RoCEv2 多轨选型计算器</span>
+      </div>
+      <div>
+        <a href="../components/ai-cluster-bgp-evpn-rocev2-rail-leaf-spine-underlay-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/ai-cluster-bgp-evpn-rocev2-rail-leaf-spine-underlay-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./ai-cluster-bgp-evpn-rocev2-rail-leaf-spine-underlay-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="bgp-unnumbered-rail-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 AI 智算集群 BGP 控制面、闪断收敛与非对称 WCMP 带宽仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/ai_cluster_bgp_evpn_rocev2_rail_underlay_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="bgpScaleSelect">1. 智算集群规模与光模块链路总数:</label>
+          <select id="bgpScaleSelect" onchange="updateBgpSizer()">
+            <option value="512">512 GPUs (1,024 根 400G/800G 链路)</option>
+            <option value="2048" selected>2,048 GPUs (基准：4,096 根 400G/800G 链路 · 8 轨拓扑)</option>
+            <option value="8192">8,192 GPUs (16,384 根 400G/800G 链路)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="bgpTenantSelect">2. 运营模式与容错要求:</label>
+          <select id="bgpTenantSelect" onchange="updateBgpSizer()">
+            <option value="cloud" selected>多租户智算云 / 严苛千卡预训练 (要求光模块闪断 0 任务中断)</option>
+            <option value="single">单租户内部研发集群 (追求零配置 ZTP 快速开局)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>网络控制面架构档位</th>
+              <th>手工互联 IP 配置行数</th>
+              <th>链路闪断收敛耗时</th>
+              <th>断 1 根上联后 AllReduce 带宽保持</th>
+              <th>闪断触发 NCCL 崩溃率</th>
+              <th>Day-0 开局工时</th>
+            </tr>
+          </thead>
+          <tbody id="bgpSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="bgpDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const BGP_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统二层 VLAN / MLAG + 默认 180s BGP', ips2k: 12288, conv: '95,000 ms (95s) ✕', bw: '38.5% ✕', abort: '94.0% 必崩 ✕', hrs: 140 },
+      { id: 't2', name: '🟨 Tier 2: 手工静态 /31 IPv4 eBGP + 等权 ECMP', ips2k: 8192, conv: '1,850.0 ms', bw: '62.0% (非对称拥塞)', abort: '28.5%', hrs: 64 },
+      { id: 't3', name: '🟦 Tier 3: RFC 5549 BGP Unnumbered + 独立轨 ASN + 300ms BFD', ips2k: 0, conv: '340.0 ms ✅', bw: '76.5% ✅', abort: '4.2%', hrs: 6.5 },
+      { id: 't4', name: '🟩 Tier 4: BGP Unnumbered + 硬件 15ms BFD + WCMP + EVPN', ips2k: 0, conv: '18.5 ms (快100x) 🏆', bw: '96.4% (近无损) 🏆', abort: '0.1% (零中断) 🏆', hrs: 4.0 }
+    ];
+
+    function updateBgpSizer() {
+      const gpus = parseInt(document.getElementById('bgpScaleSelect').value, 10) || 2048;
+      const mode = document.getElementById('bgpTenantSelect').value;
+      const scale = gpus / 2048.0;
+      const bestId = mode === 'cloud' ? 't4' : 't3';
+
+      const tbody = document.getElementById('bgpSizerTbody');
+      tbody.innerHTML = BGP_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        const ips = Math.round(r.ips2k * scale).toLocaleString();
+        const hrs = (r.hrs * Math.sqrt(scale)).toFixed(1);
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${ips} 行</code></td>
+          <td><code>${r.conv}</code></td>
+          <td><code>${r.bw}</code></td>
+          <td><code>${r.abort}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${hrs} 小时</strong></td>
+        </tr>`;
+      }).join('');
+
+      const savedIps = Math.round(8192 * scale).toLocaleString();
+      document.getElementById('bgpDecisionCallout').innerHTML = `<strong>架构师选型结论（${gpus.toLocaleString()} GPUs 集群）</strong>：首选 <strong>${bestId === 't4' ? 'Tier 4 (BGP Unnumbered + 硬件 15ms BFD + Link-Bandwidth WCMP + EVPN)' : 'Tier 3 (RFC 5549 BGP Unnumbered + 轨道独立 ASN)'}</strong>！直接消灭 <code>${savedIps} 个</code> 手工点对点互联 IP 配置，并在单根 Spine 上联光模块闪断时以 <code>18.5 ms</code> 极速收敛、通过 WCMP 加权分流保留 <code>96.4%</code> 的 AllReduce 有效带宽 🏆！`;
+    }
+    updateBgpSizer();
+  </script>
+</body>
+</html>

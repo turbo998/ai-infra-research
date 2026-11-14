@@ -174,5 +174,8 @@ Round 172 基于公开发布的 DeepSeek-V3/R1 (MLA, MTP, DeepEP) 架构白皮�
 
 Round 173 基于公开发布的 SGLang RadixAttention、vLLM APC、NVIDIA Dynamo KV-Aware Router、LMCache/Mooncake 与商业 API Context Caching 计费规则构建原创合成缓存命中与经济学评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 174 基于公开发布的 IETF RFC 5549、RFC 7938、SONiC / NVIDIA Cumulus Linux / Arista EOS 硬件 BFD 与 BGP Link-Bandwidth WCMP 规范构建原创合成三层控制面与容错评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 

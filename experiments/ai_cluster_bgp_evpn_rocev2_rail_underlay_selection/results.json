@@ -1,0 +1,76 @@
+{
+  "experiment_id": "ai_cluster_bgp_evpn_rocev2_rail_underlay_selection",
+  "date": "2026-11-14",
+  "round": 174,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_published_network_rfcs_and_sonic_designs",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "RFC 5549 (Advertising IPv4 Network Layer Reachability Information with an IPv6 Next Hop) & RFC 7938 (BGP in Large-Scale Data Centers)",
+      "SONiC / NVIDIA Cumulus Linux / Arista AI Fabric BGP Unnumbered, Hardware BFD & WCMP (Link-Bandwidth Community) Reference Designs",
+      "Meta & Microsoft RoCEv2 Rail-Optimized Clos Underlay & Asymmetric Link Failure WCMP Benchmarks"
+    ]
+  },
+  "workload": {
+    "cluster_topology": "2,048-GPU Rail-Optimized RoCEv2 Fabric (256 Nodes × 8 NICs, 8 Rail Planes, 64 Leaf Switches, 32 Spine Switches, 4,096 × 400G/800G Links)",
+    "failure_scenario": "Single 400G/800G Leaf-to-Spine optical transceiver flap & asymmetric 31/32 uplink degradation during 2,048-GPU synchronous AllReduce",
+    "nccl_timeout_threshold": "NCCL IB/RoCE QP retry exhaustion (~4.2s–18s) & Watchdog Timeout (30s–180s) if routing blackhole persists"
+  },
+  "tiers": [
+    {
+      "id": "tier1_legacy_l2_vlan_mlag_default_bgp_timer",
+      "name": "Tier 1: 传统二层大 VLAN / MLAG + 默认 BGP Hold-Timer 180s (链路闪断必崩 NCCL ✕)",
+      "name_en": "Tier 1: Legacy L2 VLAN / MLAG + Default 180s BGP Hold-Timer (Guaranteed NCCL Timeout on Link Flap)",
+      "manual_ip_lines_4096_links": 12288,
+      "failover_convergence_ms": 95000.0,
+      "allreduce_bw_under_1link_loss_pct": 38.5,
+      "nccl_flap_job_abort_rate_pct": 94.0,
+      "day0_provisioning_hours": 140.0,
+      "recommended_for": "Legacy enterprise office networks only; fatal for >64-GPU RoCEv2 fabrics (PFC + L2 flood loops and 95s blackholes).",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_manual_slash31_ipv4_ebgp_equal_ecmp",
+      "name": "Tier 2: 手工静态 /31 IPv4 eBGP Clos + 等权 ECMP (8,192 个手工 IP，断 1 根上联即拥塞)",
+      "name_en": "Tier 2: Manual /31 Point-to-Point IPv4 eBGP Clos + Equal-Cost ECMP (8,192 Manual IPs, Asymmetry Bottleneck)",
+      "manual_ip_lines_4096_links": 8192,
+      "failover_convergence_ms": 1850.0,
+      "allreduce_bw_under_1link_loss_pct": 62.0,
+      "nccl_flap_job_abort_rate_pct": 28.5,
+      "day0_provisioning_hours": 64.0,
+      "recommended_for": "Small static clusters; suffers from manual /31 IP typos, BGP path hunting, and Equal-ECMP overloading degraded Leafs.",
+      "status": "warn"
+    },
+    {
+      "id": "tier3_rfc5549_bgp_unnumbered_rail_asn_soft_bfd",
+      "name": "Tier 3: RFC 5549 BGP Unnumbered + 轨道独立 ASN + 300ms BFD (零互联 IP + 消除路径狩猎)",
+      "name_en": "Tier 3: RFC 5549 BGP Unnumbered + Rail-Independent ASN + 300ms BFD (Zero P2P IPs, No Path Hunting)",
+      "manual_ip_lines_4096_links": 0,
+      "failover_convergence_ms": 340.0,
+      "allreduce_bw_under_1link_loss_pct": 76.5,
+      "nccl_flap_job_abort_rate_pct": 4.2,
+      "day0_provisioning_hours": 6.5,
+      "recommended_for": "Standard single-tenant SONiC / Cumulus AI clusters seeking zero-touch ZTP cabling and clean Rail-plane ASN isolation.",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_bgp_unnumbered_hw_bfd_15ms_wcmp_evpn_vrf",
+      "name": "Tier 4: BGP Unnumbered + 硬件 15ms BFD + Link-Bandwidth WCMP 加权路由 + EVPN 多租户",
+      "name_en": "Tier 4: BGP Unnumbered + Hardware 15ms BFD + Link-Bandwidth WCMP + EVPN Multi-Tenant VRF",
+      "manual_ip_lines_4096_links": 0,
+      "failover_convergence_ms": 18.5,
+      "allreduce_bw_under_1link_loss_pct": 96.4,
+      "nccl_flap_job_abort_rate_pct": 0.1,
+      "day0_provisioning_hours": 4.0,
+      "recommended_for": "Production 512–32,768 GPU AI clouds: converges in 18.5ms (within IB/RoCE QP retry window) and retains 96.4% AllReduce BW via WCMP.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier2_convergence_speedup_ratio": 100.0,
+    "tier4_vs_tier1_convergence_speedup_ratio": 5135.1,
+    "tier4_vs_tier2_asymmetric_bw_gain_pts": 34.4,
+    "tier4_manual_ip_eliminated_count": 8192
+  }
+}
