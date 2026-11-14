@@ -196,6 +196,8 @@ Round 183 基于公开发布的 AWS Mountpoint for Amazon S3、`aws-c-s3` CRT (`
 
 Round 184 基于公开发布的 MIT Han Lab StreamingLLM (`Attention Sinks`)、H2O (`Heavy-Hitter Oracle`)、SnapKV 与 DuoAttention (`Retrieval vs. Streaming Heads`) 学术论文与架构规范构建原创合成长上下文 KV 缓存预算与大海捞针（NIAH）评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 185 基于公开发布的 Byte-Level BPE (`tiktoken` / `tokenizers`)、Llama-2/3、Qwen2.5 (`151,936` vocab) 与 DeepSeek-V3 (`128,000` vocab) 分词器架构规范构建原创合成多语种 Token 膨胀率与预分词延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
