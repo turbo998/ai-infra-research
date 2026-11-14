@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>GB200 MNNVL、IMEX 通道与多租户安全隔离选型计算器 (Round 182)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 182 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">GB200 MNNVL、IMEX 跨机显存通道与多租户安全隔离选型计算器</span>
+      </div>
+      <div>
+        <a href="../components/gb200-mnnvl-imex-channels-nvlink-fabric-manager-isolation-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/gb200-mnnvl-imex-channels-nvlink-fabric-manager-isolation-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./gb200-mnnvl-imex-channels-nvlink-fabric-manager-isolation-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="gb200-mnnvl-imex-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 GB200 NVL72 机柜超节点 MNNVL 带宽、IMEX 安全边界与故障爆炸域仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/gb200_mnnvl_imex_channels_nvlink_isolation_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="mnnvlTenantSelect">1. 机柜租户与作业切分形态:</label>
+          <select id="mnnvlTenantSelect" onchange="updateMnnvlSizer()">
+            <option value="multi_cloud" selected>外部多租户智算云 (同一柜 72 卡切分给 4 个独立租户 · 各 16~20 卡)</option>
+            <option value="internal_k8s">企业内部 K8s 多团队共享池 (多个 8~32 卡作业并发调度)</option>
+            <option value="monolith">单租户独占整柜 72 卡 (单一超大预训练/Wide-EP 作业)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="mnnvlCheckSelect">2. 诊断关注焦点:</label>
+          <select id="mnnvlCheckSelect" onchange="updateMnnvlSizer()">
+            <option value="perf" selected>排查为什么跨节点集合通信掉速 16 倍 + 保障多租户显存安全</option>
+            <option value="blast">控制单张 GPU 致命 XID 故障导致整柜 72 卡连坐的爆炸半径</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>MNNVL 与 IMEX 隔离架构档位</th>
+              <th>单卡有效集合带宽</th>
+              <th>72 卡 MoE All-to-All</th>
+              <th>跨租户显存越权暴露风险</th>
+              <th>单点致命故障连坐范围</th>
+              <th>整柜有效产出率</th>
+            </tr>
+          </thead>
+          <tbody id="mnnvlSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="mnnvlDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const MNNVL_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 漏挂 IMEX 设备或节点列表不一致 (静默退回网卡 RDMA)', bw: '48.0 GB/s (慢16.2x ✕)', a2a: '680.0 us ✕', leak: '0.0% (未通 MNNVL)', blast: '4 GPUs (单 Tray)', goodput: '24.5% ✕' },
+      { id: 't2', name: '🟨 Tier 2: 全柜共享默认 channel0 + 单一全局 NVLink 域', bw: '780.0 GB/s ✅', a2a: '42.0 us ✅', leak: '100.0% 高危越权 ✕', blast: '72 GPUs (整柜连坐)', goodput: '78.0%' },
+      { id: 't3', name: '🟦 Tier 3: K8s DRA ComputeDomain 动态分配每作业独占 channelN', bw: '775.0 GB/s ✅', a2a: '43.5 us ✅', leak: '0.0% (内核隔离 ✅)', blast: '72 GPUs (共享交换表)', goodput: '88.5% ✅' },
+      { id: 't4', name: '🟩 Tier 4: K8s DRA 独占 IMEX + NMX-C 硬件级 NVSwitch 分区隔离', bw: '778.0 GB/s 🏆', a2a: '42.5 us 🏆', leak: '0.0% (软硬双保险 🏆)', blast: '16 GPUs (-77.8% 🏆)', goodput: '95.6% 🏆' }
+    ];
+
+    function updateMnnvlSizer() {
+      const tenant = document.getElementById('mnnvlTenantSelect').value;
+      const bestId = tenant === 'multi_cloud' ? 't4' : (tenant === 'internal_k8s' ? 't3' : 't2');
+
+      const tbody = document.getElementById('mnnvlSizerTbody');
+      tbody.innerHTML = MNNVL_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.bw}</code></td>
+          <td><code>${r.a2a}</code></td>
+          <td><code>${r.leak}</code></td>
+          <td><code>${r.blast}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.goodput}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('mnnvlDecisionCallout');
+      if (bestId === 't4') {
+        callout.innerHTML = `<strong>架构师选型结论（外部多租户 GB200 智算云）</strong>：必须采用 <strong>Tier 4 (K8s DRA 动态独占 <code>IMEX channelN</code> + NMX-C 硬件级 NVSwitch 分区隔离)</strong>！既防止因漏挂 IMEX 退回 <code>48 GB/s</code> 慢网，又在 OS 驱动与 NVSwitch 芯片 ALUT 表双层彻底阻断跨租户显存偷读（<code>0.0%</code> 暴露），并将单点故障爆炸半径从 72 卡缩小至 <code>16 卡 (-77.8%)</code> 🏆！`;
+      } else if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（企业内部多作业 K8s 集群）</strong>：首选 <strong>Tier 3 (NVIDIA K8s DRA Driver <code>ComputeDomain</code> 自动按 Job 分配独立 <code>/dev/nvidia-caps-imex-channels/channelN</code>)</strong>，零配置实现作业间显存导入隔离与 <code>775 GB/s</code> 满速 MNNVL ✅！`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（单租户独占 72 卡整柜）</strong>：可直接使用 <strong>Tier 2</strong>，但务必核验 18 台 Compute Tray 的 <code>nvidia-imex</code> 守护进程全部处于 <code>READY</code> 状态且容器已挂载 IMEX 设备，防止跌入 Tier 1 的 16.2 倍降速陷阱！`;
+      }
+    }
+    updateMnnvlSizer();
+  </script>
+</body>
+</html>

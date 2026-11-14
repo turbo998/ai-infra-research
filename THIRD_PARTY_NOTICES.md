@@ -190,6 +190,9 @@ Round 180 基于公开发布的 Anyscale Ray Data StreamingExecutor、算子级�
 
 Round 181 基于公开发布的 NVIDIA Dynamo 分布式推理框架、NIXL (NVIDIA Inference Xfer Library)、Triton Inference Server、Ray Serve LLM 与 KServe 架构文档构建原创合成推理编排评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 182 基于公开发布的 NVIDIA Multi-Node NVLink (MNNVL)、IMEX (`nvidia-imex`)、K8s DRA `ComputeDomain` 与 NMX-C 硬件分区架构规范构建原创合成跨节点显存安全与带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

@@ -1,0 +1,76 @@
+{
+  "experiment_id": "gb200_mnnvl_imex_channels_nvlink_isolation_selection",
+  "date": "2026-11-15",
+  "round": 182,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_published_mnnvl_specs",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "NVIDIA Multi-Node NVLink (MNNVL), IMEX Service (`nvidia-imex`) & `/dev/nvidia-caps-imex-channels` Documentation",
+      "NVIDIA K8s DRA Driver (`ComputeDomain` CRD) & NMX-C (NVLink Management Controller) Fabric Partitioning Guides",
+      "NCCL 2.21+ `NCCL_MNNVL_ENABLE` & `CU_MEM_HANDLE_TYPE_FABRIC` Memory Registration Architecture"
+    ]
+  },
+  "workload": {
+    "rack_architecture": "NVIDIA GB200 NVL72 Rack Supernode (18 Compute Trays × 4 B200 GPUs = 72 GPUs, 9 NVSwitch Trays, 130 TB/s NVLink-5 Copper Backplane)",
+    "imex_mechanism": "Because 18 trays run 18 separate Linux OS kernels, POSIX fd IPC fails across trays; nvidia-imex daemon exchanges fabric memory handles over TCP/IP and authorizes GPU MMU mappings via /dev/nvidia-caps-imex-channels/channelN",
+    "security_and_fallback_risks": "1) Unmounted IMEX channel device causes silent fallback from 900 GB/s/dir NVLink-5 to 50 GB/s NIC; 2) Sharing channel0 across tenants allows any tenant to import peer HBM handles!"
+  },
+  "tiers": [
+    {
+      "id": "tier1_missing_imex_silent_nic_fallback",
+      "name": "Tier 1: 容器未挂载 IMEX 通道或 `nvidia-imex` 异常 (静默回退至网卡 RDMA · 带宽暴跌 16.2x ✕)",
+      "name_en": "Tier 1: Unmounted IMEX Channel / Daemon Mismatch (Silent Fallback to RoCE/IB NIC = 16.2x Bandwidth Drop)",
+      "effective_allreduce_busbw_gbs": 48.0,
+      "moe_alltoall_72gpu_us": 680.0,
+      "cross_tenant_hbm_exposure_pct": 0.0,
+      "nvswitch_fault_blast_radius_gpus": 4,
+      "rack_effective_goodput_pct": 24.5,
+      "recommended_for": "Broken configuration trap! Paying for a $3M+ GB200 NVL72 copper backplane while accidentally running cross-tray collectives over 400G/800G Ethernet/IB.",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_shared_global_imex_channel0_single_partition",
+      "name": "Tier 2: 全柜共享默认 `channel0` + 单一全局 NVLink 域 (跑满 780 GB/s，但跨租户显存 100% 裸奔 ✕)",
+      "name_en": "Tier 2: Shared Global `channel0` + Single Rack Partition (780 GB/s BusBW, 100% Cross-Tenant HBM Breach Risk)",
+      "effective_allreduce_busbw_gbs": 780.0,
+      "moe_alltoall_72gpu_us": 42.0,
+      "cross_tenant_hbm_exposure_pct": 100.0,
+      "nvswitch_fault_blast_radius_gpus": 72,
+      "rack_effective_goodput_pct": 78.0,
+      "recommended_for": "Strictly single-tenant 72-GPU monolithic pretraining jobs; fatal in multi-tenant clouds (shared channel0 permits cross-tenant cuMemImportFromShareableHandle).",
+      "status": "warn"
+    },
+    {
+      "id": "tier3_k8s_dra_per_job_ephemeral_imex_channel",
+      "name": "Tier 3: K8s DRA `ComputeDomain` 动态分配每作业独立 `IMEX channelN` (零跨租户显存泄露 ✅)",
+      "name_en": "Tier 3: K8s DRA `ComputeDomain` Per-Job Ephemeral `IMEX channelN` Isolation (0% Cross-Tenant HBM Leak)",
+      "effective_allreduce_busbw_gbs": 775.0,
+      "moe_alltoall_72gpu_us": 43.5,
+      "cross_tenant_hbm_exposure_pct": 0.0,
+      "nvswitch_fault_blast_radius_gpus": 72,
+      "rack_effective_goodput_pct": 88.5,
+      "recommended_for": "Multi-job internal enterprise GB200 clusters isolating each distributed job into a unique Linux capability channel (/dev/nvidia-caps-imex-channels/channelN).",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_k8s_dra_imex_plus_nmxc_hardware_nvlink_partition",
+      "name": "Tier 4: K8s DRA 独立 IMEX 通道 + NMX-C 硬件级 NVSwitch 分区隔离 (硬件防泄露 + 故障域收敛 🏆)",
+      "name_en": "Tier 4: K8s DRA Ephemeral IMEX + NMX-C Hardware NVSwitch Partitioning (Hardware Isolation & Contained Blast Radius)",
+      "effective_allreduce_busbw_gbs": 778.0,
+      "moe_alltoall_72gpu_us": 42.5,
+      "cross_tenant_hbm_exposure_pct": 0.0,
+      "nvswitch_fault_blast_radius_gpus": 16,
+      "rack_effective_goodput_pct": 95.6,
+      "recommended_for": "Production multi-tenant GB200 NVL72 AI clouds: enforces both OS IMEX channel isolation and NVSwitch silicon access-control tables.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_busbw_speedup_ratio": 16.21,
+    "tier4_vs_tier1_alltoall_speedup_ratio": 16.0,
+    "tier4_vs_tier2_blast_radius_reduction_pct": 77.8,
+    "tier4_cross_tenant_exposure_pct": 0.0
+  }
+}
