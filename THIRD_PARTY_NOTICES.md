@@ -137,3 +137,5 @@ Round 153 链接SGLang Nov14HiCache controller logical-dtype namespace correctio
 Round 154 链接SGLang Nov14sampling row-drop hostflag优化、ScheduleBatch/SamplingBatchInfo/params/backend与Apache-2.0 LICENSE；权利保留，无实现镜像。原创canonical support/selected-prefix ledger与CPUheapq/sorted timer；safe sticky不等于错误native tokens，无Torch/SGLang/GPU/NPU、seeded tie-order或native加速复现。
 
 Round 155 链接vLLM Nov14context-KV-onlyprefill builder/layout修正、metadata/workspace/CG/helper/allocated kernel reuse与Apache-2.0 LICENSE；权利保留，无实现镜像。原创plain per-layer kernel/address/selected-byte planner与CPUdummy constructors；unpadded ledger不认证native packing/padding/allocator、global CUDAgraphs、KVquality或GPUlatency。
+
+Round 156 链接SGLang Nov14multimodal placement/transport模块refactor、processor integration/IPCbudget与Apache-2.0 LICENSE；权利保留，无实现镜像。原创policy projection/CPUbulk timer，非nativeprocessor/tensors/IPC/VMM/worker性能；sourcecomments的硬件吞吐未复现。原型显式拒绝transport typo，与nativehelper的CPUfallback区别已披露。
