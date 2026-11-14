@@ -161,3 +161,5 @@ Round165链接vLLM Nov14internal dataclass slots与保留dict的scheduler定义�
 Round166链接vLLM Nov14Kimi-K3 metadata-only image、原始尺寸/resize-derived counts、dictionary parser与model embedding paths，Apache-2.0权利保留，无实现镜像。原创bounded geometry/ordered occurrence planner/CPUmemo，非nativecheckpoint/tokenizer/PIL/Torch/encoder/EC。尺寸重复不删占位符；声明RGB预算和compact descriptors不是native流量，shape-only验收不是embedding执行。
 
 Round167链接SGLang Nov14included-router leaf resolution与既有auth decision/inventory tests，Apache-2.0权利保留，无实现镜像。原创literal tree/symbolic credential witnesses，非FastAPI/Starlette/Rust/实际secret校验或漏洞/安全认证。NORMAL/OPTIONAL/FORCE与probe/raw-path、WS逻辑/传输状态分开；CPUdeepcopy registry benchmark不外推native动态遍历。
+
+Round168链接vLLM Nov14Rust frontend/managed-engine drain与signal-target tests，Apache-2.0权利保留，无实现镜像。原创无signal timeline及CPUfinish计数，不查询PID、不spawn/kill任何process。5s floor/200ms poll是源码常量；instant reap/finish tie为模型假设，非nativeDP/OS停机SLA，no-op计数保留未知。
