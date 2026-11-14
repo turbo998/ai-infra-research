@@ -167,3 +167,6 @@ Round168链接vLLM Nov14Rust frontend/managed-engine drain与signal-target tests
 Round169链接vLLM Nov14MOSS-Audio dummy长度/budget修正与原生processor/tests/shared helper，Apache-2.0权利保留，无实现镜像。原创ceil-frame witness/integer token/span/bytes，不生成waveform、不执行STFT/NumPy/Torch/GPU。375/13为声明sizing而非nativebench；实际features/peak保留未知，markers及共享waveform与mel batch独立。
 
 Round170链接vLLM Nov14MiniMax XCD sparse-decode host/kernel/tail-placement tests，Apache-2.0权利保留，无实现镜像。原创integer ownership/one-round candidate，非FlyDSL/NVFP4/MXFP8/真实GPU。Reported注释timings不归档为坐标；同split bitwise tests未执行，occupancy2/cost model在scope外，padding WG不当有效工作。
+
+Round 171 基于公开发布的 NVIDIA H100/H200/B200/GB200 NVL72 与 AMD Instinct MI325X 硬件规格参数构建原创合成屋脊线与 TCO 选型分析模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
