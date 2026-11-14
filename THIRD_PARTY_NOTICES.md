@@ -127,3 +127,5 @@ Round 148 链接ONNX Nov13BJTfinite FP4/FP6 NaN文档/test澄清及Apache-2.0 LI
 Round 149 链接ONNX Nov13BJT STRING helper byte-preservation修正、TensorProto schema及Apache-2.0 LICENSE；权利保留，无实现镜像。原创typed records/有限wire subset、literal/random oracles与CPU fragment assembly；trim仅错误模型，非旧NumPy复现，无native helper/protobuf roundtrip、general parser或network性能认证。
 
 Round 150 链接ONNX Nov13BJT ImageDecoder RGB/BGR reference修正、opset20schema/tests及Apache-2.0 LICENSE；权利保留，无实现镜像。原创post-decode六mode逻辑、alpha/palette/bilevel与channel-order oracle、CPU copied reorder；无codec/Pillow/NumPy/ONNX、Grayscale、native stride/peak或model quality认证。
+
+Round 151 链接PyTorch Nov14ROCm CK fixed/varlen backward unused dbias correction与BSD-3-Clause LICENSE；权利保留，无实现镜像。原创exact subledger、pair-count/BigInt oracles与最大512KiBCPUbytearray toy；selected预算非native OOM预测，无ROCm/CK、gradient error、allocator peak或backward latency复现。
