@@ -1,0 +1,72 @@
+{
+  "experiment_id": "llm_checkpoint_format_safetensors_gguf_tensorizer_selection",
+  "date": "2026-11-14",
+  "round": 175,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_published_storage_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "HuggingFace Safetensors Specification (8-byte LE length + JSON header + zero-copy mmap alignment)",
+      "GGML / llama.cpp GGUF v3 Binary Specification & K-Quant Super-Block Memory Layout",
+      "vLLM Run:ai Model Streamer, CoreWeave Tensorizer & NVIDIA GPUDirect Storage (cuFile) Benchmarks"
+    ]
+  },
+  "workload": {
+    "model_checkpoint": "70B Dense / 140 GB BF16 (or 140 GB FP8 MoE Shard) loaded across an 8xH100 Node from Local NVMe RAID0 / Lustre / S3",
+    "binary_header_contracts": "Safetensors: [8-byte LE uint64 Header Size N] + [N-byte UTF-8 JSON Header] + [64B-aligned Raw Tensor Buffers]; GGUF: ['GGUF' Magic + Version + Tensor/KV Counts + Embedded Tokenizer + Super-Block Quantized Buffers]",
+    "autoscaling_impact": "Every second of weight loading during K8s pod scale-up burns 8 GPUs ($20/hr/node) at 0% inference throughput"
+  },
+  "tiers": [
+    {
+      "id": "tier1_legacy_pytorch_pickle_bin",
+      "name": "Tier 1: 传统 PyTorch Pickle (.bin / .pt) (存在 RCE 远程代码执行漏洞 + 2倍主存拷贝 = 168.0s)",
+      "name_en": "Tier 1: Legacy PyTorch Pickle (.bin / .pt) (Arbitrary Code Execution RCE Risk + 2x Host RAM Copy = 168.0s)",
+      "load_latency_140gb_s": 168.0,
+      "peak_host_ram_gb": 284.0,
+      "effective_ingest_bw_gbs": 0.83,
+      "rce_security_safe": false,
+      "recommended_for": "Deprecated for production model distribution; Python pickle VM executes arbitrary __reduce__ payloads and doubles CPU RAM.",
+      "status": "fail"
+    },
+    {
+      "id": "tier2_gguf_single_file_edge_hybrid",
+      "name": "Tier 2: GGUF 单文件自包含格式 (内嵌 Tokenizer + K-Quant 超块量化 · 端侧 AIPC / KTransformers 标配)",
+      "name_en": "Tier 2: GGUF Single-File Self-Contained Format (Embedded Tokenizer + K-Quant Super-Blocks for Edge/Hybrid)",
+      "load_latency_140gb_s": 18.4,
+      "peak_host_ram_gb": 8.5,
+      "effective_ingest_bw_gbs": 7.61,
+      "rce_security_safe": true,
+      "recommended_for": "Apple Silicon, AIPC (llama.cpp / Ollama), and KTransformers CPU+GPU hybrid serving needing single-file Q4_K_M / Q8_0 deployment.",
+      "status": "pass"
+    },
+    {
+      "id": "tier3_safetensors_mmap_local_nvme",
+      "name": "Tier 3: 标准 Safetensors + OS mmap 零拷贝映射 (本地 NVMe 14.5s，但网盘 4KB 缺页中断会降速)",
+      "name_en": "Tier 3: Standard HuggingFace Safetensors + OS mmap Zero-Copy (14.5s on Local NVMe; Stalls on Network 4KB Page Faults)",
+      "load_latency_140gb_s": 14.5,
+      "peak_host_ram_gb": 12.0,
+      "effective_ingest_bw_gbs": 9.66,
+      "rce_security_safe": true,
+      "recommended_for": "Default open-weight distribution & single-node vLLM/SGLang serving backed by local PCIe Gen5 NVMe SSDs.",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_safetensors_runai_streamer_tensorizer_gds",
+      "name": "Tier 4: Pre-Sharded Safetensors / Tensorizer + Run:ai Streamer / GDS (O_DIRECT 并发流 + GPUDirect 直写 HBM = 3.2s)",
+      "name_en": "Tier 4: Pre-Sharded Safetensors / Tensorizer + Run:ai Streamer / GDS (O_DIRECT + GPUDirect Storage cuFile = 3.2s)",
+      "load_latency_140gb_s": 3.2,
+      "peak_host_ram_gb": 4.0,
+      "effective_ingest_bw_gbs": 43.75,
+      "rce_security_safe": true,
+      "recommended_for": "Serverless GPU autoscaling & multi-node K8s clusters: bypasses OS page cache via cuFile/O_DIRECT for 52.5x faster cold start.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier1_load_speedup_ratio": 52.5,
+    "tier4_vs_tier3_load_speedup_ratio": 4.53,
+    "tier4_vs_tier1_host_ram_reduction_pct": 98.6,
+    "tier4_ingest_bw_gbs": 43.75
+  }
+}

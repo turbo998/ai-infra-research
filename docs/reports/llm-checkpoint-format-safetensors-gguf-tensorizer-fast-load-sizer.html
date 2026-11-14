@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>大模型权重存储格式（Safetensors vs. GGUF vs. Tensorizer）加载计算器 (Round 175)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 175 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">大模型权重存储格式（Pickle vs. GGUF vs. Safetensors vs. Tensorizer/Run:ai Streamer）选型计算器</span>
+      </div>
+      <div>
+        <a href="../components/llm-checkpoint-format-safetensors-gguf-tensorizer-fast-load-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/llm-checkpoint-format-safetensors-gguf-tensorizer-fast-load-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./llm-checkpoint-format-safetensors-gguf-tensorizer-fast-load-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="checkpoint-format-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 大模型权重序列化格式与百 GB 冷启动加载耗时仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/llm_checkpoint_format_safetensors_gguf_tensorizer_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="fmtSizeSelect">1. 模型权重文件总大小 (Checkpoint Footprint GB):</label>
+          <select id="fmtSizeSelect" onchange="updateFormatSizer()">
+            <option value="16">16 GB (8B BF16 / 14B FP8 小模型)</option>
+            <option value="140" selected>140 GB (基准：70B BF16 或 140B FP8 权重)</option>
+            <option value="671">671 GB (满血 DeepSeek-V3/R1 671B FP8 权重)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="fmtEnvSelect">2. 部署目标硬件与存储环境:</label>
+          <select id="fmtEnvSelect" onchange="updateFormatSizer()">
+            <option value="k8s" selected>云端 K8s GPU 集群自动扩缩容 (Lustre / 3FS / S3 / 本地 NVMe RAID)</option>
+            <option value="single">单机 8 卡 GPU 固定长驻部署 (本地 PCIe Gen5 NVMe)</option>
+            <option value="edge">端侧 AIPC / Mac Studio / KTransformers CPU+GPU 异构</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>权重格式与加载管线档位</th>
+              <th>当前模型加载耗时</th>
+              <th>主机 CPU 内存峰值</th>
+              <th>有效入显存吞吐</th>
+              <th>RCE 安全免疫</th>
+            </tr>
+          </thead>
+          <tbody id="fmtSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="fmtDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const FMT_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统 PyTorch Pickle (.bin / .pt)', load140: 168.0, ram140: 284.0, bw: '0.83 GB/s ✕', safe: '⛔ 否 (高危 RCE 漏洞)' },
+      { id: 't2', name: '🟨 Tier 2: GGUF 单文件自包含格式 (llama.cpp / KTransformers)', load140: 18.4, ram140: 8.5, bw: '7.61 GB/s', safe: '✅ 是 (内嵌词表+超块量化)' },
+      { id: 't3', name: '🟦 Tier 3: 标准 Safetensors + OS mmap 零拷贝映射', load140: 14.5, ram140: 12.0, bw: '9.66 GB/s ✅', safe: '✅ 是 (8B头+JSON偏移)' },
+      { id: 't4', name: '🟩 Tier 4: Pre-Sharded Safetensors / Tensorizer + Run:ai Streamer / GDS', load140: 3.2, ram140: 4.0, bw: '43.75 GB/s 🏆', safe: '🏆 是 + 支持流式直写 HBM' }
+    ];
+
+    function updateFormatSizer() {
+      const gb = parseFloat(document.getElementById('fmtSizeSelect').value) || 140.0;
+      const env = document.getElementById('fmtEnvSelect').value;
+      const scale = gb / 140.0;
+      const bestId = env === 'edge' ? 't2' : (env === 'single' ? 't3' : 't4');
+
+      const tbody = document.getElementById('fmtSizerTbody');
+      tbody.innerHTML = FMT_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        const loadS = (r.load140 * scale).toFixed(1);
+        const ramG = r.id === 't1' ? (r.ram140 * scale).toFixed(1) : r.ram140.toFixed(1);
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${loadS} 秒</code></td>
+          <td><code>${ramG} GB</code></td>
+          <td><code>${r.bw}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.safe}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const t4Load = (3.2 * scale).toFixed(1);
+      const t1Load = (168.0 * scale).toFixed(1);
+      document.getElementById('fmtDecisionCallout').innerHTML = bestId === 't4'
+        ? `<strong>架构师选型结论（${gb} GB 模型 · K8s 弹性 GPU 集群）</strong>：强烈首选 <strong>Tier 4 (预切分 Sharded Safetensors / Tensorizer + Run:ai Streamer / GPUDirect Storage)</strong>！绕过 OS 4KB 缺页中断，以 <code>43.75 GB/s</code> 并发流在 <code>${t4Load} 秒</code> 内完成冷启动（比传统 Pickle 的 <code>${t1Load} 秒</code> 快 <code>52.5x</code>）🏆！`
+        : (bestId === 't2'
+          ? `<strong>架构师选型结论（${gb} GB 模型 · 端侧/KTransformers 异构）</strong>：首选 <strong>Tier 2 (GGUF 单文件格式)</strong>，将 Tokenizer、配置与 K-Quant 权重合而为一，免依赖直接 mmap 启动 ✅！`
+          : `<strong>架构师选型结论（${gb} GB 模型 · 单机固定 NVMe 部署）</strong>：首选 <strong>Tier 3 (标准 HuggingFace Safetensors)</strong>，彻底根除 Pickle RCE 漏洞并将主机内存峰值控制在 <code>12.0 GB</code> 以内 ✅！`);
+    }
+    updateFormatSizer();
+  </script>
+</body>
+</html>

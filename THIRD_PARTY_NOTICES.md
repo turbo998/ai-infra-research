@@ -176,6 +176,9 @@ Round 173 基于公开发布的 SGLang RadixAttention、vLLM APC、NVIDIA Dynamo
 
 Round 174 基于公开发布的 IETF RFC 5549、RFC 7938、SONiC / NVIDIA Cumulus Linux / Arista EOS 硬件 BFD 与 BGP Link-Bandwidth WCMP 规范构建原创合成三层控制面与容错评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 175 基于公开发布的 HuggingFace Safetensors、GGML GGUF v3、vLLM Run:ai Model Streamer、CoreWeave Tensorizer 与 NVIDIA GPUDirect Storage (cuFile) 规范构建原创合成权重序列化与加载评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
