@@ -192,6 +192,9 @@ Round 181 基于公开发布的 NVIDIA Dynamo 分布式推理框架、NIXL (NVID
 
 Round 182 基于公开发布的 NVIDIA Multi-Node NVLink (MNNVL)、IMEX (`nvidia-imex`)、K8s DRA `ComputeDomain` 与 NMX-C 硬件分区架构规范构建原创合成跨节点显存安全与带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 183 基于公开发布的 AWS Mountpoint for Amazon S3、`aws-c-s3` CRT (`s3torchconnector`)、S3 Express One Zone、`s5cmd` 与 NVIDIA `cuObject` (S3-over-RDMA) 架构规范构建原创合成云对象存储吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

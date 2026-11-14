@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>AI 云原生对象存储高吞吐读写（boto3 vs. Mountpoint vs. s5cmd vs. S3-RDMA）计算器 (Round 183)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 183 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">AI 云原生对象存储高吞吐读写（boto3 vs. Mountpoint vs. s5cmd vs. S3-over-RDMA）计算器</span>
+      </div>
+      <div>
+        <a href="../components/ai-object-storage-s3-express-mountpoint-s5cmd-rdma-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/ai-object-storage-s3-express-mountpoint-s5cmd-rdma-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./ai-object-storage-s3-express-mountpoint-s5cmd-rdma-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="s3-object-storage-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 云端对象存储单节点吞吐、Checkpoint 加载耗时与停顿成本仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/ai_object_storage_s3_express_mountpoint_rdma_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="s3PayloadSelect">1. 单次加载/保存的模型权重或 Checkpoint 体积 (GB):</label>
+          <select id="s3PayloadSelect" onchange="updateS3Sizer()">
+            <option value="140">140 GB (70B 模型权重冷启动拉取)</option>
+            <option value="500" selected>500 GB (基准：大型训练状态分片或满血 671B 权重)</option>
+            <option value="2000">2,000 GB / 2 TB (超大分布式检查点)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="s3UseCaseSelect">2. 业务代码侵入性与延迟要求:</label>
+          <select id="s3UseCaseSelect" onchange="updateS3Sizer()">
+            <option value="rdma" selected>千卡高频 Checkpoint / L3 KV 缓存卸载 (追求 2.8ms 延迟与 44 GB/s 直写显存)</option>
+            <option value="sdk">容器镜像启动拉取权重 / PyTorch DCP 直连 S3 (追求高性价比跑满标准 S3)</option>
+            <option value="posix">存量脚本零代码改动直接读本地文件路径 (`/mnt/s3/...`)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>对象存储客户端与存储层档位</th>
+              <th>单节点读取吞吐</th>
+              <th>首字节延迟 (TTFB)</th>
+              <th>当前体积加载耗时</th>
+              <th>主机 CPU 占用</th>
+              <th>月度存储+GPU空转总账单</th>
+            </tr>
+          </thead>
+          <tbody id="s3SizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="s3DecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const S3_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统 Python boto3 默认下载 / 旧版 s3fs-fuse', bw: 0.18, ttfb: '68.0 ms ✕', cpu: '85.0% (GIL满载)', cost500: 64200 },
+      { id: 't2', name: '🟨 Tier 2: 新一代 Rust FUSE 挂载 (Mountpoint for S3 + NVMe 缓存)', bw: 11.80, ttfb: '45.0 ms', cpu: '38.0%', cost500: 14800 },
+      { id: 't3', name: '🟦 Tier 3: 原生 C/Rust 128 并发 Range-GET (aws-c-s3 / s5cmd)', bw: 26.50, ttfb: '38.0 ms ✅', cpu: '22.0% ✅', cost500: 8200 },
+      { id: 't4', name: '🟩 Tier 4: S3 Express One Zone + S3-over-RDMA (cuObject 直写显存)', bw: 44.20, ttfb: '2.8 ms (快24.3x) 🏆', cpu: '4.5% (零拷贝) 🏆', cost500: 4950 }
+    ];
+
+    function updateS3Sizer() {
+      const gb = parseFloat(document.getElementById('s3PayloadSelect').value) || 500.0;
+      const mode = document.getElementById('s3UseCaseSelect').value;
+      const scale = gb / 500.0;
+      const bestId = mode === 'posix' ? 't2' : (mode === 'sdk' ? 't3' : 't4');
+
+      const tbody = document.getElementById('s3SizerTbody');
+      tbody.innerHTML = S3_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        const loadS = (gb / r.bw).toFixed(1);
+        const cost = Math.round(r.cost500 * scale).toLocaleString();
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.bw.toFixed(2)} GB/s</code></td>
+          <td><code>${r.ttfb}</code></td>
+          <td><code>${loadS} 秒</code></td>
+          <td><code>${r.cpu}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">$${cost} / 月</strong></td>
+        </tr>`;
+      }).join('');
+
+      const t4Sec = (gb / 44.20).toFixed(1);
+      const t1Sec = (gb / 0.18).toFixed(0);
+      document.getElementById('s3DecisionCallout').innerHTML = bestId === 't4'
+        ? `<strong>架构师选型结论（${gb} GB 载荷 · 高频 Checkpoint / KV 卸载）</strong>：强烈首选 <strong>Tier 4 (同可用区 S3 Express One Zone + S3-over-RDMA <code>cuObject</code>)</strong>！将首字节延迟从 <code>68.0 ms</code> 压至 <code>2.8 ms</code>，单节点吞吐飙至 <code>44.20 GB/s (快 245.6x)</code>，加载 ${gb}GB 仅需 <code>${t4Sec} 秒</code>（而传统 boto3 需 <code>${t1Sec} 秒</code>）🏆！`
+        : (bestId === 't3'
+          ? `<strong>架构师选型结论（${gb} GB 载荷 · 标准 S3 高性价比直连）</strong>：首选 <strong>Tier 3 (<code>s5cmd</code> / <code>aws-c-s3</code> CRT 128 并发 Range-GET + 前缀哈希打散)</strong>，在不增加 S3 Express 存储单价的前提下跑出 <code>26.50 GB/s (快 147.2x)</code> ✅！`
+          : `<strong>架构师选型结论（${gb} GB 载荷 · 零代码改动 POSIX 挂载）</strong>：首选 <strong>Tier 2 (Rust <code>Mountpoint for Amazon S3</code> / <code>gcsfuse v2</code> + 本地 NVMe 缓存)</strong>，单机顺序读高达 <code>11.80 GB/s</code> ✅！`);
+    }
+    updateS3Sizer();
+  </script>
+</body>
+</html>
