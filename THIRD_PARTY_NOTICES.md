@@ -214,6 +214,8 @@ Round 192 基于公开发布的 Task Arithmetic、SLERP、TIES-Merging、DARE (`
 
 Round 193 基于公开发布的 FlashInfer Sort-Free Rejection Sampling、Min-P Sampling (`p_i >= min_p * p_max`) 与 Gumbel-Max Trick 数学原理构建原创合成大词表采样延迟与高温连贯度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 194 基于公开发布的 Per-Head QK-Norm (ViT-22B / Chameleon / Qwen3 / Gemma-3)、Attention Logit Soft-Capping、PaLM / ST-MoE `z-loss` 与 FP32 Residual Stream 数值稳定性原理构建原创合成预训练防 Loss 尖峰评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
