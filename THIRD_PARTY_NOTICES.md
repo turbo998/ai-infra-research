@@ -91,3 +91,5 @@ Round 130 链接固定 PyTorch SDPA、CausalBias 与 MHA 文档/源码（BSD-sty
 Round 131 链接固定 ONNX ScatterND29 spec、reference 与11月12日mean能力变更（Apache-2.0）。整数坐标/切片模型、独立destination-first oracle、CPU sum/count与视觉原创，未复制实现；mean含原值一次、floor、negativealiases、none重复拒绝、k0whole tensor按固定合同；不认证nativeONNX/FP/atomic/GPU。
 
 Round 132 链接固定 Dynamo LoRA HRW 与 allocator interface（所读文件Apache-2.0 SPDX）。显式score-table策略、独立subset oracle、CPUtopK/fullsort与视觉原创，未复制实现；nativeBLAKE3编码仅说明、未执行；sticky、partialunderfill、allfullbasicHRW回退与missingusageeligibility按固定策略，非nativehash/controller/load/residency/GPU认证。
+
+Round 133 链接固定 Ceph EC/profile文档及COPYING；doc/*为CC-BY-SA-3.0。此处原创事实总结、GF256/Vandermonde矩阵、独立Lagrange oracle、CPUparity与视觉，未复制上游实现或文档文本；非Ceph/ISA-L byte parity、FastEC、耐久度或nativeperformance复现。经典条带预算与FastEC布局显式区分。
