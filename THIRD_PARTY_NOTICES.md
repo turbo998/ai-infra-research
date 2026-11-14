@@ -143,3 +143,5 @@ Round 156 链接SGLang Nov14multimodal placement/transport模块refactor、proce
 Round 157 链接vLLM Nov14ROCmFDexport capability gate修正、allocation taxonomy/config/executor tests与Apache-2.0 LICENSE；权利保留，无实现镜像。原创typed config/runtime-witness ledger/CPUclassification；无nativeROCm/VMM/POSIXFD/UCX/RDMA、startup/peak/throughput认证。FD仍需单physical allocation/segment，mixed registration限制与mandatory失败已披露。
 
 Round 158 链接SGLang Nov14roundedSiLU LUT、dtype/device cache、native full-gate-word tests与Apache-2.0 LICENSE；权利保留，无实现镜像。原创有限FP32/16-bit arithmetic/cache模型及CPUtiming；Pythonlibm-exp不等于CUDA__nv_expf，8-key稀疏fixture不等于65536-entry原生表。NaN/Inf payload、GPU字节/吞吐、allocator peak均未知；shared/HBM与空预热范围已披露。
+
+Round 159 链接vLLM Nov14grouped MoE padding mask默认eligibility/coverage guard与Apache-2.0 LICENSE；权利保留，无实现镜像。原创precomputed ID/整数weight ledger/CPUscalar dispatch，非native logits/topk/GEMM/EPLB/DeepEP。AITERoptin、ungrouped提前返回、mask row ordering与sentinelconsumer契约分开；assignment counts不是原生FLOPs，logical route bytes不是allocator peak。
