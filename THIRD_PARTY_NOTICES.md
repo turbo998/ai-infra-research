@@ -93,3 +93,5 @@ Round 131 链接固定 ONNX ScatterND29 spec、reference 与11月12日mean能力
 Round 132 链接固定 Dynamo LoRA HRW 与 allocator interface（所读文件Apache-2.0 SPDX）。显式score-table策略、独立subset oracle、CPUtopK/fullsort与视觉原创，未复制实现；nativeBLAKE3编码仅说明、未执行；sticky、partialunderfill、allfullbasicHRW回退与missingusageeligibility按固定策略，非nativehash/controller/load/residency/GPU认证。
 
 Round 133 链接固定 Ceph EC/profile文档及COPYING；doc/*为CC-BY-SA-3.0。此处原创事实总结、GF256/Vandermonde矩阵、独立Lagrange oracle、CPUparity与视觉，未复制上游实现或文档文本；非Ceph/ISA-L byte parity、FastEC、耐久度或nativeperformance复现。经典条带预算与FastEC布局显式区分。
+
+Round 134 链接固定 RedisBloom chain（RSALv2/SSPLv1/AGPLv3选择）、deps/bloom（所读BSDheader）及LICENSE。显式坐标模型、finite-universe/set oracle、层界、计数删除反例、CPUprobes与视觉原创，未复制上游实现；理想sizing/层界不等于nativeMurmur/Redis/FPR/allocator/数据库收益。
