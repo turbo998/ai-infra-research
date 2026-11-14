@@ -206,6 +206,8 @@ Round 188 基于公开发布的 IEEE 1588v2 PTP (Precision Time Protocol)、ITU-
 
 Round 189 基于公开发布的 PCIe Access Control Services (ACS)、Linux IOMMU Passthrough (`iommu=pt`)、NVIDIA GPUDirect RDMA (`nvidia-peermem`) 与 Linux 内核 `dma-buf` (`ibv_reg_dmabuf_mr`) 架构规范构建原创合成 400G RDMA P2P 带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 190 基于公开发布的 Linux NUMA (`numactl`)、OpenMP 线程模型 (`OMP_NUM_THREADS`)、Kubernetes `CPUManager` (`static`) / `TopologyManager` (`single-numa-node`) 与 Mellanox IRQ Affinity 架构规范构建原创合成双路 8 卡服务器主机侧 DMA 与抖动评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

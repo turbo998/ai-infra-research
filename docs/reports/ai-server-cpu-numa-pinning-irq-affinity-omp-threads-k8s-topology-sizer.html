@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>AI 服务器 CPU NUMA 绑核、OMP 线程风暴与网卡 IRQ 隔离计算器 (Round 190)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 190 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">AI 服务器 CPU NUMA 亲和性绑核、`OMP_NUM_THREADS` 与网卡 IRQ 隔离计算器</span>
+      </div>
+      <div>
+        <a href="../components/ai-server-cpu-numa-pinning-irq-affinity-omp-threads-k8s-topology-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/ai-server-cpu-numa-pinning-irq-affinity-omp-threads-k8s-topology-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./ai-server-cpu-numa-pinning-irq-affinity-omp-threads-k8s-topology-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="cpu-numa-irq-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 双路 8 卡服务器 OpenMP 线程数、H2D Pinned DMA 带宽与 Step 抖动仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/ai_server_cpu_numa_pinning_irq_omp_topology_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="numaCoresSelect">1. 整机双路 CPU 总逻辑核心数 (vCPUs):</label>
+          <select id="numaCoresSelect" onchange="updateNumaSizer()">
+            <option value="128">128 vCPUs (双路 32 核 · 每 GPU 可分 14 核 + 2 核 IRQ)</option>
+            <option value="256" selected>256 vCPUs (基准：双路 64 核 · 未设 OMP 时炸出 2,048 线程)</option>
+            <option value="384">384 vCPUs (双路 96 核 EPYC · 未设 OMP 时炸出 3,072 线程)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="numaOrchSelect">2. 作业部署与运行环境:</label>
+          <select id="numaOrchSelect" onchange="updateNumaSizer()">
+            <option value="k8s" selected>Kubernetes 容器化集群 (支持 TopologyManager single-numa-node)</option>
+            <option value="bare">Slurm / 裸金属 `torchrun` 直接启动</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>CPU NUMA 亲和性与中断隔离档位</th>
+              <th>整机并发 OpenMP 线程数</th>
+              <th>Host-to-GPU DMA 带宽</th>
+              <th>CUDA 算子下发 P99 延迟</th>
+              <th>训练 Step 周期抖动率</th>
+            </tr>
+          </thead>
+          <tbody id="numaSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="numaDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const NUMA_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 默认无绑核 + 未限 OMP_NUM_THREADS (跨 UPI 拷贝)', ompMult: 8, bw: '24.2 GB/s ✕', lat: '85.0 μs ✕', jit: '28.4% (严重掉速 ✕)' },
+      { id: 't2', name: '🟨 Tier 2: 限制 OMP_NUM_THREADS=8 但任由 CFS 跨 Socket 漂移', ompMult: 0, bw: '31.5 GB/s ⚠️', lat: '24.0 μs ⚠️', jit: '14.2% ⚠️' },
+      { id: 't3', name: '🟦 Tier 3: numactl / torchrun 按 GPU 所属 Socket 严格绑核 (--membind)', ompMult: 0, bw: '52.8 GB/s ✅', lat: '6.2 μs ✅', jit: '3.8% ✅' },
+      { id: 't4', name: '🟩 Tier 4: K8s single-numa-node 静态独占核 + 网卡 IRQ 专核隔离', ompMult: 0, bw: '54.5 GB/s 🏆', lat: '3.5 μs 🏆', jit: '0.6% (零干扰 🏆)' }
+    ];
+
+    function updateNumaSizer() {
+      const cores = parseInt(document.getElementById('numaCoresSelect').value, 10) || 256;
+      const mode = document.getElementById('numaOrchSelect').value;
+      const bestId = mode === 'bare' ? 't3' : 't4';
+
+      const tbody = document.getElementById('numaSizerTbody');
+      tbody.innerHTML = NUMA_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        const ompStr = r.id === 't1' ? `${(cores * 8).toLocaleString()} 线程 (爆炸 ✕)` : '64 线程 (8/Rank ✅)';
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${ompStr}</code></td>
+          <td><code>${r.bw}</code></td>
+          <td><code>${r.lat}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.jit}</strong></td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('numaDecisionCallout').innerHTML =
+        `<strong>架构师选型结论（${cores} vCPUs 8 卡节点）</strong>：若不设置 <code>OMP_NUM_THREADS</code>，8 个 Rank 会瞬间派生出 <code>${(cores * 8).toLocaleString()}</code> 个线程互抢 CPU！强烈首选 <strong>${bestId === 't4' ? 'Tier 4 (K8s single-numa-node 静态绑核 + 网卡 IRQ 隔离)' : 'Tier 3 (numactl --cpunodebind --membind + IRQ 隔离)'}</strong>，将 Host-to-GPU 内存带宽从跨片的 <code>24.2 GB/s</code> 提升至本地 NUMA 的 <code>54.5 GB/s (2.25x)</code>，并将训练 Step 抖动压至 <code>0.6%</code> 🏆！`;
+    }
+    updateNumaSizer();
+  </script>
+</body>
+</html>
