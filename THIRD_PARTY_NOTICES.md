@@ -75,3 +75,5 @@ Round 122 链接固定 MAPIE quantile helpers（BSD-3-Clause）与既有 conform
 Round 123 链接固定 linear_operator Cholesky helper（MIT），3 月 modern API migration 非新算法。Scalar factor/solve、Fraction elimination、CPU cache timing 与视觉原创，未复制 upstream；selected observation-noise shift 与 native numerical rescue jitter 区分，不冒充 native rescue/GPU 或 calibrated posterior quality。
 
 Round 124 链接 2026-11-14 PyTorch regional AOTI capture 更新及 BSD-style LICENSE。Bounded storage/view/event model、index oracles、CPU samples 与视觉原创，未复制 implementation；不复现 native arbitrary-object traversal、autograd、export/compile/GPU。Detach/live storage、clone alias guards、pending status 分开标注。
+
+Round 125 链接固定 SciPy resample_poly 既有规则（BSD-3-Clause）。Exact rational nonzero-phase FIR、独立 dense zero-insertion oracle、CPU float paths 与视觉原创，未复制 implementation；11月 tree 更新不冒充新 resampling algorithm；custom FIR/zero boundary control 非 native Kaiser/audio quality/streaming/GPU 复现。
