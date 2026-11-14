@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级大模型 Context Caching、KV 计费经济学与 TTL 定容计算器 (Round 173)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 173 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级大模型 Context Caching、KV 计费经济学与 TTL 架构选型计算器</span>
+      </div>
+      <div>
+        <a href="../components/llm-context-caching-prompt-cache-billing-kv-ttl-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/llm-context-caching-prompt-cache-billing-kv-ttl-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./llm-context-caching-prompt-cache-billing-kv-ttl-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="context-caching-ttl-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 大模型 Context Caching 命中率、TTFT 加速与月度账单仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/llm_context_caching_prompt_cache_billing_ttl_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="ccSessionsSelect">1. 每日多轮 Agent / RAG 会话总量 (Sessions/Day):</label>
+          <select id="ccSessionsSelect" onchange="updateContextCacheSizer()">
+            <option value="10000">10,000 会话/天 (中型研发/客服团队)</option>
+            <option value="50000" selected>50,000 会话/天 (基准：每日 100 万轮 48K 上下文调用)</option>
+            <option value="200000">200,000 会话/天 (大型企业级 Coding Agent 平台)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="ccPatternSelect">2. 业务会话形态与轮次深度:</label>
+          <select id="ccPatternSelect" onchange="updateContextCacheSizer()">
+            <option value="agent" selected>20 轮 Coding Agent / 深度工具调用 (48K 平均上下文 + 多实例集群)</option>
+            <option value="rag">5 ~ 8 轮 企业知识库问答 (32K 静态文档库 + 5 分钟思考间隔)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Context Caching 架构档位</th>
+              <th>8 副本集群有效命中率</th>
+              <th>48K 平均首字延迟 (TTFT)</th>
+              <th>节省 Prefill 算力</th>
+              <th>单次 20 轮会话成本</th>
+              <th>月度集群总账单 (USD)</th>
+            </tr>
+          </thead>
+          <tbody id="ccSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="ccDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const CC_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 无状态全量重算 + 顶部动态时间戳破坏前缀', hit: '0.0% ✕', ttft: '2,840.0 ms ✕', saved: '0.0%', sess: 1.92, bill50k: 288000 },
+      { id: 't2', name: '🟨 Tier 2: 普通 Round-Robin 轮询网关 + 单机 HBM LRU', hit: '14.5% (1/N 稀释)', ttft: '2,410.0 ms', saved: '13.8%', sess: 1.66, bill50k: 249000 },
+      { id: 't3', name: '🟦 Tier 3: 静态前缀置顶规范 + 5m/1h TTL + Host DRAM 二级池', hit: '78.5% ✅', ttft: '620.0 ms (4.58x)', saved: '76.2%', sess: 0.52, bill50k: 78000 },
+      { id: 't4', name: '🟩 Tier 4: 全局 KV 感知前缀树路由 + 分布式 RDMA 池 + 追加式历史', hit: '94.2% 🏆', ttft: '185.0 ms (15.35x)', saved: '92.8%', sess: 0.24, bill50k: 36000 }
+    ];
+
+    function updateContextCacheSizer() {
+      const sessions = parseInt(document.getElementById('ccSessionsSelect').value, 10) || 50000;
+      const pattern = document.getElementById('ccPatternSelect').value;
+      const scale = sessions / 50000.0;
+      const bestId = pattern === 'agent' ? 't4' : 't3';
+
+      const tbody = document.getElementById('ccSizerTbody');
+      tbody.innerHTML = CC_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        const monthly = Math.round(r.bill50k * scale).toLocaleString();
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.hit}</code></td>
+          <td><code>${r.ttft}</code></td>
+          <td><code>${r.saved}</code></td>
+          <td><code>$${r.sess.toFixed(2)}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">$${monthly} / 月</strong></td>
+        </tr>`;
+      }).join('');
+
+      const savedUsd = Math.round((288000 - (bestId === 't4' ? 36000 : 78000)) * scale).toLocaleString();
+      document.getElementById('ccDecisionCallout').innerHTML = bestId === 't4'
+        ? `<strong>架构师选型结论（${sessions.toLocaleString()} 会话/天 · 20 轮 Coding Agent 模式）</strong>：必须部署 <strong>Tier 4 (Dynamo/Mooncake 全局 KV 感知路由 + 分布式 RDMA KV 池 + 严格追加式历史规范)</strong>！彻底消除 8 副本轮询导致的命中率暴跌，将集群缓存命中率从 <code>14.5%</code> 推升至 <code>94.2%</code>，48K TTFT 从 <code>2,840 ms</code> 压至 <code>185 ms (快 15.35x)</code>，每月直接立省 <code>$${savedUsd} (-87.5%)</code> 🏆！`
+        : `<strong>架构师选型结论（${sessions.toLocaleString()} 会话/天 · 企业知识库问答模式）</strong>：首选 <strong>Tier 3 (静态前缀置顶 + 5m/1h TTL 断点 + Host Pinned DRAM 二级池)</strong>，将命中率提升至 <code>78.5%</code>，每月净省 <code>$${savedUsd} (-72.9%)</code> ✅！`;
+    }
+    updateContextCacheSizer();
+  </script>
+</body>
+</html>

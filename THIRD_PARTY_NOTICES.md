@@ -172,4 +172,7 @@ Round 171 基于公开发布的 NVIDIA H100/H200/B200/GB200 NVL72 与 AMD Instin
 
 Round 172 基于公开发布的 DeepSeek-V3/R1 (MLA, MTP, DeepEP) 架构白皮书、SGLang/vLLM 与 KTransformers/Mooncake 公开架构参数构建原创合成私有化定容与 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 173 基于公开发布的 SGLang RadixAttention、vLLM APC、NVIDIA Dynamo KV-Aware Router、LMCache/Mooncake 与商业 API Context Caching 计费规则构建原创合成缓存命中与经济学评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
