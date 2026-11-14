@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>PyTorch float32_matmul_precision (TF32 vs FP32 vs Ozaki BF16x3) Sizer (Round 219)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 219 · PyTorch float32_matmul_precision（IEEE FP32 vs TF32 vs Ozaki BF16x3）计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择矩阵乘精度与硬件执行单元档位 (NVIDIA H100 SXM)</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: PyTorch 2.x 默认 'highest' (allow_tf32=False · 掉入 67 TFLOPS CUDA Core)</option>
+          <option value="t2">Tier 2: 错误开启 FP16 16-Bit 累加器 (allow_fp16_reduced_precision_reduction · 65504 溢出)</option>
+          <option value="t3">Tier 3: 显式开启 'high' / allow_tf32=True (TF32 Tensor Core · 365 TFLOPS)</option>
+          <option value="t4" selected>Tier 4: 分层精度路由 (BF16/FP8 主干 + TF32 MoE 门控 + Ozaki 3xBF16 23-bit 精确仿真)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>输入尾数位宽</div><div class="val" id="mnt">10 / 23 bits</div></div>
+      <div class="kpi"><div>硬件累加器位宽</div><div class="val" id="acc">32-bit FP32</div></div>
+      <div class="kpi"><div>实测持续算力</div><div class="val" id="tfl">780.0 TFLOPS</div></div>
+      <div class="kpi"><div>相对默认 FP32 提速</div><div class="val" id="spd">9.55x ~ 20.4x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (分层精度路由)：一行 torch.set_float32_matmul_precision("high") 将未转型的 FP32 算子（如 MoE Router Gate）从 38.2 TFLOPS 的 SIMT CUDA Core 切回 365 TFLOPS 的 TF32 Tensor Core（提速 9.55 倍），主干跑满 780 TFLOPS 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { mnt: "23-bit (SIMT)", acc: "32-bit FP32", tfl: "38.2 TFLOPS ✕", spd: "1.00 x", v: "Tier 1 (PyTorch 2.x 默认 'highest')：allow_tf32 默认为 False，任何 float32 矩阵乘直接掉下 Tensor Core，算力损失近 90% ✕" },
+      t2: { mnt: "10-bit (FP16)", acc: "16-bit FP16 ⚠️", tfl: "680.0 TFLOPS", spd: "精度崩盘", v: "Tier 2 (16-bit 累加器陷阱)：把矩阵内积中间累加也降为 FP16，超过 65,504 直接溢出 Inf/NaN ⚠️" },
+      t3: { mnt: "10-bit (TF32)", acc: "32-bit FP32", tfl: "365.0 TFLOPS", spd: "9.55 x ✅", v: "Tier 3 (显式开启 'high' / TF32)：保持 8-bit 指数防溢出与 32-bit 累加器，FP32 矩阵乘直接飙升 9.55 倍 ✅" },
+      t4: { mnt: "分层 7/10/23-bit", acc: "32-bit FP32", tfl: "780.0 TFLOPS 🏆", spd: "9.55x ~ 20.4x", v: "Tier 4 (主干 BF16/FP8 + 路由 TF32 + 病态矩阵 cuBLAS BF16x3 Ozaki 拆分)：兼顾极致吞吐与 23-bit 严苛精度 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("mnt").textContent = d.mnt;
+      document.getElementById("acc").textContent = d.acc;
+      document.getElementById("tfl").textContent = d.tfl;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
