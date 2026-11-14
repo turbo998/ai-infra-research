@@ -147,3 +147,5 @@ Round 158 链接SGLang Nov14roundedSiLU LUT、dtype/device cache、native full-g
 Round 159 链接vLLM Nov14grouped MoE padding mask默认eligibility/coverage guard与Apache-2.0 LICENSE；权利保留，无实现镜像。原创precomputed ID/整数weight ledger/CPUscalar dispatch，非native logits/topk/GEMM/EPLB/DeepEP。AITERoptin、ungrouped提前返回、mask row ordering与sentinelconsumer契约分开；assignment counts不是原生FLOPs，logical route bytes不是allocator peak。
 
 Round 160 链接vLLM Nov14multimodal graph cumulative-padding/FlashInfer Q-Ksection callbacks与Apache-2.0 LICENSE；权利保留，无实现镜像。原创1-D metadata/write-coverage/CPUlist-copy模型，非nativegraph/attention。scalar bypass、explicitoverride、sharedmissing错误和oversize eager分别披露；nativepackedhelper仍zero_，CPU优化比值不是它的执行或GPU吞吐。
+
+Round161链接SGLang Nov14SPFopt-in aging与extend-onlycounter修正，Apache-2.0权利保留，无实现镜像。原创bounded rational clock/rank/page oracle，已到达固定队列common-offset消去；nativefloat精度、cache/prefetch/admission/queue吞吐及wall-time SLA均未认证。
