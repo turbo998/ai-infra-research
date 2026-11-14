@@ -194,6 +194,8 @@ Round 182 基于公开发布的 NVIDIA Multi-Node NVLink (MNNVL)、IMEX (`nvidia
 
 Round 183 基于公开发布的 AWS Mountpoint for Amazon S3、`aws-c-s3` CRT (`s3torchconnector`)、S3 Express One Zone、`s5cmd` 与 NVIDIA `cuObject` (S3-over-RDMA) 架构规范构建原创合成云对象存储吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 184 基于公开发布的 MIT Han Lab StreamingLLM (`Attention Sinks`)、H2O (`Heavy-Hitter Oracle`)、SnapKV 与 DuoAttention (`Retrieval vs. Streaming Heads`) 学术论文与架构规范构建原创合成长上下文 KV 缓存预算与大海捞针（NIAH）评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
