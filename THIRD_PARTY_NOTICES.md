@@ -133,3 +133,5 @@ Round 151 链接PyTorch Nov14ROCm CK fixed/varlen backward unused dbias correcti
 Round 152 链接PyTorch Nov14Dynamo dictionary semantic-guard correction、guard/DICT_MERGE/dict变量/tests与BSD-3-Clause LICENSE；权利保留，无实现镜像。原创dynamic-scalar guard-plan模型、native CPython-only oracle与CPUordered-equality timer；无native Dynamo/PyTorch compilation、value/slot/identity guard或frame/compile-latency认证。
 
 Round 153 链接SGLang Nov14HiCache controller logical-dtype namespace correction、unified keys/Mooncake README与Apache-2.0 LICENSE，辅助链接ONNXFP8定义；权利保留，无实现镜像。原创JSONkey/object writer-witness、scalar probes/CPythonhalf oracle与CPUkeyassembly；非native msgspec/key兼容、SGLang/Mooncake、FP8cast或KVquality/hit-rate复现。
+
+Round 154 链接SGLang Nov14sampling row-drop hostflag优化、ScheduleBatch/SamplingBatchInfo/params/backend与Apache-2.0 LICENSE；权利保留，无实现镜像。原创canonical support/selected-prefix ledger与CPUheapq/sorted timer；safe sticky不等于错误native tokens，无Torch/SGLang/GPU/NPU、seeded tie-order或native加速复现。
