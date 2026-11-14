@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>百万长上下文并行（Ulysses vs. ZigZag Ring vs. 混合 USP）选型计算器 (Round 200)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 200 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">百万长上下文并行（Megatron SP vs. Ulysses vs. ZigZag Ring vs. 混合 USP）计算器</span>
+      </div>
+      <div>
+        <a href="../components/long-context-parallelism-tp-sp-ulysses-zigzag-ring-hybrid-usp-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/long-context-parallelism-tp-sp-ulysses-zigzag-ring-hybrid-usp-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./long-context-parallelism-tp-sp-ulysses-zigzag-ring-hybrid-usp-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="long-context-usp-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 512K~4M 超长上下文二维并行拓扑 (`Ulysses × Ring`) 与 MFU 仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/long_context_parallelism_ulysses_ring_usp_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="uspGpusSelect">1. 单个长序列并行组总 GPU 规模 (`CP_World_Size`):</label>
+          <select id="uspGpusSelect" onchange="updateUspSizer()">
+            <option value="8">单机 8 GPUs (Ulysses=8 × Ring=1 · 纯 NVLink 闭环)</option>
+            <option value="32" selected>4 节点 32 GPUs (基准：Ulysses=8 × ZigZag Ring=4)</option>
+            <option value="64">8 节点 64 GPUs (Ulysses=8 × ZigZag Ring=8 · 冲击 4M 上下文)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="uspGqaSelect">2. 模型 GQA KV 注意力头数 (`num_key_value_heads`):</label>
+          <select id="uspGqaSelect" onchange="updateUspSizer()">
+            <option value="8" selected>8 个 KV Heads (基准：Llama-3-70B / Qwen2.5-72B)</option>
+            <option value="4">4 个 KV Heads (高压缩比 GQA · Ulysses 不复制上限 U=4)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>长上下文序列/上下文并行架构档位</th>
+              <th>因果掩码负载失衡比</th>
+              <th>未掩盖通信空泡占比</th>
+              <th>512K 训练/Prefill MFU</th>
+              <th>支持最大上下文长度</th>
+            </tr>
+          </thead>
+          <tbody id="uspSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="uspDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const USP_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 朴素连续分块 Ring Attention (未用 ZigZag 折纸配对)', imb: '7.0x (首卡闲置等末卡 ✕)', bub: '44.5% ✕', mfu: '22.0% ✕', maxK: '256K' },
+      { id: 't2', name: '🟨 Tier 2: 纯 DeepSpeed Ulysses 跨多机 All-to-All (超出 KV 头数被迫复制)', imb: '1.0x ✅', bub: '36.0% (跨机 A2A ⚠️)', mfu: '31.5% ⚠️', maxK: '512K' },
+      { id: 't3', name: '🟦 Tier 3: 纯一维 ZigZag Ring Attention (首尾配对 · 32 步环传)', imb: '1.0x ✅', bub: '19.5%', mfu: '42.8% ✅', maxK: '2,048K (2M)' },
+      { id: 't4', name: '🟩 Tier 4: 混合二维并行 USP (机内 NVLink Ulysses × 机间 RDMA ZigZag Ring)', imb: '1.0x 🏆', bub: '4.2% (全掩盖 🏆)', mfu: '54.2% (快 2.46x 🏆)', maxK: '4,096K (4M 🏆)' }
+    ];
+
+    function updateUspSizer() {
+      const gpus = parseInt(document.getElementById('uspGpusSelect').value, 10) || 32;
+      const kvHeads = parseInt(document.getElementById('uspGqaSelect').value, 10) || 8;
+      const uDeg = Math.min(gpus, kvHeads);
+      const rDeg = Math.max(1, gpus / uDeg);
+
+      const tbody = document.getElementById('uspSizerTbody');
+      tbody.innerHTML = USP_TIERS.map(r => {
+        const isBest = r.id === 't4';
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.imb}</code></td>
+          <td><code>${r.bub}</code></td>
+          <td><code>${r.mfu}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.maxK}</strong></td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('uspDecisionCallout').innerHTML =
+        `<strong>架构师选型结论（${gpus} GPUs · ${kvHeads} GQA KV Heads）</strong>：强烈首选 <strong>Tier 4 (混合二维并行 USP：机内 NVLink <code>Ulysses = ${uDeg}</code> × 机间 RDMA <code>ZigZag Ring = ${rDeg}</code>)</strong>！机内 <code>Ulysses=${uDeg}</code> 恰好对齐 <code>${kvHeads}</code> 个 KV 头（零 KV 复制开销），并将跨机 Ring 环传步数从 <code>${gpus} 步</code> 缩短为 <code>${rDeg} 步</code>，使 512K 超长上下文 MFU 达到惊人的 <code>54.2%</code> 🏆！`;
+    }
+    updateUspSizer();
+  </script>
+</body>
+</html>
