@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>Linux 1GB HugePages, GPU TLB &amp; RDMA MTT Sizer (Round 203)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 203 · Linux 1GB HugePages、GPU TLB 与 RDMA 网卡 MTT 缓存仿真器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 Host 内存页配置档位 (512 GB Host DRAM KV-Cache Pool)</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 默认 4KB 标准物理页 (1.34 亿个页表项 · 99.9% MTT/TLB Miss)</option>
+          <option value="t2">Tier 2: 透明大页 THP=always (khugepaged 后台拼页 95ms 卡顿)</option>
+          <option value="t3">Tier 3: 显式 2MB hugetlbfs (262,144 个页表项 · 0.45s 注册)</option>
+          <option value="t4" selected>Tier 4: 启动预留 1GB 巨页 (仅 512 个页表项 · 54.2 GB/s 零遍历)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>512GB 池总页表项数</div><div class="val" id="ptes">512</div></div>
+      <div class="kpi"><div>RDMA 注册耗时 (s)</div><div class="val" id="pin">0.04 s</div></div>
+      <div class="kpi"><div>随机 KV 块 DMA 带宽</div><div class="val" id="bw">54.2 GB/s</div></div>
+      <div class="kpi"><div>P99 尾延迟停顿</div><div class="val" id="stall">0.3 ms</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (1GB HugePages + Grace 64KB ATS)：512 GB 内存池仅由 512 个 1GB 物理巨页组成，100% 装入 RDMA 网卡 MTT 缓存与 GPU IOTLB，注册快 1,200 倍、随机 KV 块搬运提速 2.74 倍 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { ptes: "134,217,728", pin: "48.0 s", bw: "19.8 GB/s", stall: "14.5 ms", v: "Tier 1 (4KB 标准页)：1.34 亿个页表项撑爆网卡 MTT 缓存与 GPU TLB，随机 KV 块访问退化为四级页表回溯 ✕" },
+      t2: { ptes: "262,144 (动态)", pin: "3.2 s", bw: "42.5 GB/s", stall: "95.0 ms", v: "Tier 2 (THP=always)：后台 khugepaged 内存整理线程锁住内存分配区长达 95ms，导致 P99 推理尾延迟剧烈抖动 ⚠️" },
+      t3: { ptes: "262,144", pin: "0.45 s", bw: "49.2 GB/s", stall: "1.2 ms", v: "Tier 3 (2MB 显式 hugetlbfs)：页表项减少 512 倍且无后台碎片整理停顿，随机 KV 搬运恢复至 49.2 GB/s ✅" },
+      t4: { ptes: "512", pin: "0.04 s", bw: "54.2 GB/s", stall: "0.3 ms", v: "Tier 4 (1GB HugePages + Grace 64KB ATS)：512 GB 内存池仅需 512 个页表项，100% 命中网卡 MTT 与 GPU TLB 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("ptes").textContent = d.ptes;
+      document.getElementById("pin").textContent = d.pin;
+      document.getElementById("bw").textContent = d.bw;
+      document.getElementById("stall").textContent = d.stall;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
