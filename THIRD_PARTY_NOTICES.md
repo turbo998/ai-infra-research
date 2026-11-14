@@ -240,6 +240,8 @@ Round 205 基于公开发布的 `KIVI` (ICML 2024, Per-Channel Key + Per-Token V
 
 Round 206 基于公开发布的 NVIDIA NCCL `PXN (Proxy by NVLink)` 跨轨路由机制、`NCCL_P2P_PXN_LEVEL` 规范与 DeepSeek `DeepEP` 分层机内 NVLink 预聚合架构构建原创合成 8-Rail 集群 Spine 绕行消除与有效总线带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 207 基于公开发布的 `RMSNorm` 论文、Gemma/Qwen 零中心化 `(1+w)` 参数化、FlashInfer/Liger-Kernel `Fused Add+RMSNorm` 以及 TransformerEngine 单趟三合一 `Add+RMSNorm+FP8 Quant` 规范构建原创合成归一化算子融合与显存流量评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
