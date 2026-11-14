@@ -101,3 +101,5 @@ Round 135 链接2026-11-14读取的AWS S3 multipart workflow、completion API与
 Round 136 链接固定 Redis hyperloglog.c 的 rank、register MAX 与 Ertl histogram estimator。所读文件头许可为 RSALv2 / SSPLv1 / AGPLv3 选择，部分内容另有 BSD3 来源说明；上游权利保留。原创有限 16-bit digest、classic/linear-counting teaching 模型、字符串 oracle、CPU rank paths 与视觉未复制实现；非 native Murmur/Ertl、Redis memory/accuracy/latency 或生产误差复现，渐近 RSE 非逐样本保证。
 
 Round 137 链接固定 RoaringFormatSpec（已检查 Apache-2.0 LICENSE）与 CRoaring 11 月 9 日 Roaring64 C++ query capability patch；上游权利保留。原创 uint32 container payload codec、strict run-saving policy、interval oracle、Python CPU paths 与视觉未复制上游示例/图/实现；非完整 portable reader/writer、native runOptimize/64-bit rank/select/SIMD、memory 或 ACL freshness/latency 认证。
+
+Round 138 链接固定 ONNX DepthToSpace/SpaceToDepth schema/reference、8 月 31 日 opset28 mode/function-body 变更（Apache-2.0）与固定 PyTorch TorchScript exporter（BSD-style）；上游权利保留。原创整数 gather/scatter、inverse/adjoint、direct-op gate、CPU planning 与视觉未复制实现；非 native converter/kernel、strided tensor、GPU/fusion、zero-copy 或 image-quality 认证。
