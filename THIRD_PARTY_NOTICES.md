@@ -234,6 +234,8 @@ Round 202 基于公开发布的 IST-DASLab `Marlin` (`LOP3` IEEE-754 位运算�
 
 Round 203 基于公开发布的 Linux Kernel `hugetlbfs` (`2MB / 1GB` HugePages)、NVIDIA ConnectX `mlx5` MTT 内存翻译表规范与 Grace-Blackwell `64KB` 基础页 `ATS (Address Translation Services)` 规范构建原创合成大内存 KV 池页表与 TLB 覆盖率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 204 基于公开发布的 CUDA Driver Virtual Memory Management (`cuMemAddressReserve` / `cuMemUnmap` / `cuMemMap`) 规范、vLLM `Sleep Mode (Level 1 / Level 2)` 与 SGLang `TorchMemorySaver` 架构构建原创合成推理引擎秒级休眠唤醒与同卡 RL 混部评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
