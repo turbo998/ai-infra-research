@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>AI 服务器带外管理（BMC / Redfish）、GPU XID 分级与自愈计算器 (Round 179)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 179 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">AI 服务器带外管理（BMC / Redfish）、GPU XID 错误分级与自动自愈计算器</span>
+      </div>
+      <div>
+        <a href="../components/ai-server-bmc-redfish-out-of-band-xid-auto-rma-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/ai-server-bmc-redfish-out-of-band-xid-auto-rma-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./ai-server-bmc-redfish-out-of-band-xid-auto-rma-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box" id="bmc-redfish-xid-sizer">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 AI 智算中心 GPU XID 故障诊断与带外 Redfish 自愈 MTTR 仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/ai_server_bmc_redfish_oob_xid_auto_rma_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="xidCodeSelect">1. 线上突发报错的 NVIDIA GPU XID 代码:</label>
+          <select id="xidCodeSelect" onchange="updateXidSizer()">
+            <option value="31">XID 31 / 13 / 43 (GPU Memory Page Fault · 用户 Triton/CUDA 代码越界)</option>
+            <option value="63">XID 63 / 94 (Row Remapping Pending / Contained ECC · 单次显存位翻转)</option>
+            <option value="79" selected>XID 79 (GPU has fallen off the bus · PCIe 掉卡或整机 OS 死锁)</option>
+            <option value="64">XID 64 / 48 / 95 (Row Remap Failure / Uncontained ECC · 硬件彻底损坏)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="xidScaleSelect">2. 智算集群 GPU 规模:</label>
+          <select id="xidScaleSelect" onchange="updateXidSizer()">
+            <option value="512">512 GPUs (64 台 8 卡节点)</option>
+            <option value="2048" selected>2,048 GPUs (基准：256 台 8 卡 HGX 节点)</option>
+            <option value="8192">8,192 GPUs (1,024 台 8 卡节点)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>带外管理与故障自愈架构档位</th>
+              <th>平均故障恢复耗时 (MTTR)</th>
+              <th>XID 31 误封机器率</th>
+              <th>XID 79 掉卡死机发现耗时</th>
+              <th>月度空转浪费算力 (GPU-hrs)</th>
+            </tr>
+          </thead>
+          <tbody id="xidSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="xidDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const XID_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 被动人工查 dmesg + 传统 IPMI 轮询', mttr: '285.0 分钟 ✕', falseCordon: '72.0% ✕', detect: '3,600.0 s (1h) ✕', waste2k: 18400 },
+      { id: 't2', name: '🟨 Tier 2: 带内 DCGM Exporter + 一刀切 NPD 封机', mttr: '68.0 分钟', falseCordon: '68.0% 误杀 ✕', detect: '600.0 s (等超时)', waste2k: 9200 },
+      { id: 't3', name: '🟦 Tier 3: XID 三级分类状态机 + HBM 动态行重映射门禁', mttr: '14.5 分钟 ✅', falseCordon: '2.5% ✅', detect: '180.0 s', waste2k: 2100 },
+      { id: 't4', name: '🟩 Tier 4: 带外 Redfish SSE 遥测 (SMBPBI) + 四阶自动自愈闭环', mttr: '2.4 分钟 (快118.8x) 🏆', falseCordon: '0.0% 零误杀 🏆', detect: '3.5 s (带外秒抓) 🏆', waste2k: 420 }
+    ];
+
+    function updateXidSizer() {
+      const code = document.getElementById('xidCodeSelect').value;
+      const gpus = parseInt(document.getElementById('xidScaleSelect').value, 10) || 2048;
+      const scale = gpus / 2048.0;
+
+      const tbody = document.getElementById('xidSizerTbody');
+      tbody.innerHTML = XID_TIERS.map(r => {
+        const isBest = r.id === 't4';
+        const waste = Math.round(r.waste2k * scale).toLocaleString();
+        return `<tr style="${isBest ? 'background:rgba(16,185,129,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.mttr}</code></td>
+          <td><code>${r.falseCordon}</code></td>
+          <td><code>${r.detect}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${waste} GPU-hrs / 月</strong></td>
+        </tr>`;
+      }).join('');
+
+      const actionMap = {
+        '31': `<strong>针对 XID 31 / 13 / 43 的标准自愈动作</strong>：这是<strong>用户代码非法内存访问（MMU Page Fault）</strong>，显卡硬件 100% 完好！<strong>严禁执行 <code>kubectl cordon</code> 封锁机器</strong>！只需清理残留进程即可立即接新任务（消除 Tier 2 高达 68% 的误封机率）✅！`,
+        '63': `<strong>针对 XID 63 / 94 的标准自愈动作</strong>：HBM3e 显存已记录待重映射坏行（Row Remapping Pending）。自动在作业间隙执行一次 <strong>带内热重置 (<code>nvidia-smi -r</code>)</strong> 即可激活硬件备用行满血复活，无需报修拆机 ✅！`,
+        '79': `<strong>针对 XID 79 (Fallen Off Bus) 的标准自愈动作</strong>：PCIe 总线已锁死且常伴随宿主机 OS 死机（带内监控失联，软重启 <code>reboot</code> 无效）！必须由 <strong>Tier 4 带外 BMC Redfish SSE 在 3.5 秒内捕获，并自动下发 <code>Chassis.Reset (PowerCycle)</code> 冷断电放电重启</strong>，2.4 分钟内恢复上线 🏆！`,
+        '64': `<strong>针对 XID 64 / 48 / 95 的标准自愈动作</strong>：HBM 备用行已耗尽（Row Remap Failure）或发生不可恢复双比特 ECC 损坏！立即自动 <strong><code>kubectl cordon</code> 隔离该节点、切换热备节点，并附上带外 Redfish CPER 故障快照自动提报厂商 RMA 换卡工单</strong> 🏆！`
+      };
+      document.getElementById('xidDecisionCallout').innerHTML = actionMap[code];
+    }
+    updateXidSizer();
+  </script>
+</body>
+</html>

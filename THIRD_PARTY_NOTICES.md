@@ -184,6 +184,9 @@ Round 177 基于公开发布的 NVIDIA NCCL 2.21–2.26 算法（Ring, Tree, NVL
 
 Round 178 基于公开发布的 vLLM V1 架构设计（EngineCore, Persistent InputBatch, CachedRequestData）与 SGLang Zero-Overhead Overlap Scheduler 公开论文/架构文档构建原创合成 CPU 调度空泡与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 179 基于公开发布的 NVIDIA GPU XID Errors 官方手册、HBM3/HBM3e Dynamic Row Remapping 规范与 DMTF Redfish / HGX BMC (MCTP/SMBPBI) 架构规范构建原创合成故障分级与自愈评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
