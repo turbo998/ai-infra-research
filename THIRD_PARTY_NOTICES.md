@@ -163,3 +163,5 @@ Round166链接vLLM Nov14Kimi-K3 metadata-only image、原始尺寸/resize-derive
 Round167链接SGLang Nov14included-router leaf resolution与既有auth decision/inventory tests，Apache-2.0权利保留，无实现镜像。原创literal tree/symbolic credential witnesses，非FastAPI/Starlette/Rust/实际secret校验或漏洞/安全认证。NORMAL/OPTIONAL/FORCE与probe/raw-path、WS逻辑/传输状态分开；CPUdeepcopy registry benchmark不外推native动态遍历。
 
 Round168链接vLLM Nov14Rust frontend/managed-engine drain与signal-target tests，Apache-2.0权利保留，无实现镜像。原创无signal timeline及CPUfinish计数，不查询PID、不spawn/kill任何process。5s floor/200ms poll是源码常量；instant reap/finish tie为模型假设，非nativeDP/OS停机SLA，no-op计数保留未知。
+
+Round169链接vLLM Nov14MOSS-Audio dummy长度/budget修正与原生processor/tests/shared helper，Apache-2.0权利保留，无实现镜像。原创ceil-frame witness/integer token/span/bytes，不生成waveform、不执行STFT/NumPy/Torch/GPU。375/13为声明sizing而非nativebench；实际features/peak保留未知，markers及共享waveform与mel batch独立。
