@@ -224,6 +224,8 @@ Round 197 基于公开发布的 NVIDIA GPUDirect Storage (`GDS / nvidia-fs / cuF
 
 Round 198 基于公开发布的 SwiGLU / GeGLU 门控前馈网络、vLLM `MergedColumnParallelLinear` (`w13_weight` + `silu_and_mul`) 与 Primer / NVIDIA Nemotron-H `Squared ReLU` (`ReLU²`) 激活稀疏性原理构建原创合成 FFN 显存与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 199 基于公开发布的 WSD (`Warmup-Stable-Decay`, MiniCPM / DeepSeek-V3 / Llama-3 / OLMo-2)、`1 - sqrt` Cooldown 退火曲线与 Mid-Training Annealing 数据配比切换原理构建原创合成跨阶段续训与退火评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
