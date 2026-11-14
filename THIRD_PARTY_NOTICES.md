@@ -208,6 +208,8 @@ Round 189 基于公开发布的 PCIe Access Control Services (ACS)、Linux IOMMU
 
 Round 190 基于公开发布的 Linux NUMA (`numactl`)、OpenMP 线程模型 (`OMP_NUM_THREADS`)、Kubernetes `CPUManager` (`static`) / `TopologyManager` (`single-numa-node`) 与 Mellanox IRQ Affinity 架构规范构建原创合成双路 8 卡服务器主机侧 DMA 与抖动评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 191 基于公开发布的 CNCF Cilium eBPF (`Netkit` / `Sockmap`)、Multus CNI、NVIDIA Network Operator (`SR-IOV` + `RDMA CNI`) 与 Linux `rdma system set netns exclusive` 架构规范构建原创合成 K8s 双平面智算容器网络评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
