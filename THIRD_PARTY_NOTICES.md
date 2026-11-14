@@ -73,3 +73,5 @@ Round 121 链接固定 ONNX QuantizeLinear reference（Apache-2.0），上游权
 Round 122 链接固定 MAPIE quantile helpers（BSD-3-Clause）与既有 conformal theory；11 月 10 日 educational tree 更新非新 theorem。Exact ranks、synthetic exhaustive holdouts、CPU selection 与视觉原创，未复制 upstream；coverage 只指固定 exchangeable world enumeration，不冒充 real-data/per-group/单 query confidence 或 native MAPIE 复现。
 
 Round 123 链接固定 linear_operator Cholesky helper（MIT），3 月 modern API migration 非新算法。Scalar factor/solve、Fraction elimination、CPU cache timing 与视觉原创，未复制 upstream；selected observation-noise shift 与 native numerical rescue jitter 区分，不冒充 native rescue/GPU 或 calibrated posterior quality。
+
+Round 124 链接 2026-11-14 PyTorch regional AOTI capture 更新及 BSD-style LICENSE。Bounded storage/view/event model、index oracles、CPU samples 与视觉原创，未复制 implementation；不复现 native arbitrary-object traversal、autograd、export/compile/GPU。Detach/live storage、clone alias guards、pending status 分开标注。
