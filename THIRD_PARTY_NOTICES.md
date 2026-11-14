@@ -113,3 +113,5 @@ Round 141 链接固定 Linux memory policy 文档、weighted-interleave ABI与mm
 Round 142 链接 SQLite WAL/transaction/checkpoint/file-format 文档及固定public-domain wal.c；无实现镜像。原创ledger、immutable transaction oracle、CPU lookup与视觉，另有same-thread隔离SQLite合成fixture。未执行race/corruption/crash测试；本机3.49.1回补状态未认证，部署须核验官方WAL-reset修复。无原生checkpoint性能或持久性认证。
 
 Round 143 链接11月14日SQLite public-domain dbstat fix/回归与文件格式；无实现镜像。原创field-context/leaf-header几何、opaque cells、interval oracle、CPU decoding与视觉；另读取自己生成的原生空表文件。dbstat模块缺失指标显式null，未编译执行新patched binary；非record/overflow/tree/file完整性、native dbstat性能认证。
+
+Round 144 链接固定PyTorch all_to_all_single、NCCL测试入口及BSD-style LICENSE；权利保留，无实现镜像。原创split矩阵、单destination scalar transport、direct-owner oracle、CPU inverse lookup与视觉；无原生PyTorch/NCCL/MPI/GPU、network、PSK/TLS、零长度backend、top-k副本或async stream认证。
