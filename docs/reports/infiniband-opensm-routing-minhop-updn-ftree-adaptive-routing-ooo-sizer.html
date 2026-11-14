@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>InfiniBand OpenSM Routing &amp; Adaptive Routing OOO Sizer (Round 218)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 218 · InfiniBand OpenSM 路由引擎（minhop / ftree / updn / ar_ftree）与乱序重排计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 InfiniBand OpenSM / UFM 路由引擎架构档位 (NDR 400G · 50 GB/s 线速)</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 默认 minhop 静态路由 (LFT 严重偏载 + Credit-Loop 死锁风险 · 24.8 GB/s)</option>
+          <option value="t2">Tier 2: 纯静态 ftree 路由 (断链破坏对称性时悄悄回退至 minhop · 36.2 GB/s)</option>
+          <option value="t3">Tier 3: 防死锁静态路由链 ftree,updn (免疫环路死锁 · 41.5 GB/s)</option>
+          <option value="t4" selected>Tier 4: 硬件自适应路由 ar_ftree,ar_updn + 网卡硬件 OOO + &lt;1ms Fast Recovery (49.2 GB/s)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>Credit-Loop 死锁免疫</div><div class="val" id="dlk">100% 免疫</div></div>
+      <div class="kpi"><div>断链自愈收敛耗时</div><div class="val" id="fov">0.8 ms</div></div>
+      <div class="kpi"><div>MoE AlltoAll 单卡带宽</div><div class="val" id="bw">49.2 GB/s</div></div>
+      <div class="kpi"><div>400G 线速利用率</div><div class="val" id="eff">98.4 %</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (ar_ftree,ar_updn + RNIC OOO + Fast Recovery)：Quantum-2 交换机根据上行端口实时队列深度逐包动态选路，配合 ConnectX-7 网卡硬件乱序直写 (OOO) 与交换机本地 0.8ms 断链快切，AlltoAll 跑满 49.2 GB/s (提速 1.98 倍) 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { dlk: "有死锁风险 ✕", fov: "2,500.0 ms", bw: "24.8 GB/s", eff: "49.6 %", v: "Tier 1 (默认 minhop)：仅按跳数静态填表，多条流扎堆同一根 Spine 链路且断链时易引发 Credit-Loop 缓冲区死锁 ✕" },
+      t2: { dlk: "回退时有风险 ⚠️", fov: "1,800.0 ms", bw: "36.2 GB/s", eff: "72.4 %", v: "Tier 2 (纯静态 ftree)：虽在完美拓扑下均衡，但一旦断一根线或插错端口，OpenSM 会悄悄回退至默认 minhop ⚠️" },
+      t3: { dlk: "100% 免疫", fov: "650.0 ms", bw: "41.5 GB/s", eff: "83.0 %", v: "Tier 3 (ftree,updn 防死锁链)：以 updn 作为兜底，严格遵循 Up*/Down* 定理消除环路死锁 ✅" },
+      t4: { dlk: "100% 免疫", fov: "0.8 ms 🏆", bw: "49.2 GB/s", eff: "98.4 %", v: "Tier 4 (ar_ftree,ar_updn + RNIC OOO + Fast Recovery)：硬件逐包自适应选路 + 0.8ms 自治快切，跑满 98.4% 线速 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("dlk").textContent = d.dlk;
+      document.getElementById("fov").textContent = d.fov;
+      document.getElementById("bw").textContent = d.bw;
+      document.getElementById("eff").textContent = d.eff;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
