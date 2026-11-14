@@ -170,3 +170,6 @@ Round170链接vLLM Nov14MiniMax XCD sparse-decode host/kernel/tail-placement tes
 
 Round 171 基于公开发布的 NVIDIA H100/H200/B200/GB200 NVL72 与 AMD Instinct MI325X 硬件规格参数构建原创合成屋脊线与 TCO 选型分析模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 172 基于公开发布的 DeepSeek-V3/R1 (MLA, MTP, DeepEP) 架构白皮书、SGLang/vLLM 与 KTransformers/Mooncake 公开架构参数构建原创合成私有化定容与 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
