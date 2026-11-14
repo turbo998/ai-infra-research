@@ -210,6 +210,8 @@ Round 190 基于公开发布的 Linux NUMA (`numactl`)、OpenMP 线程模型 (`O
 
 Round 191 基于公开发布的 CNCF Cilium eBPF (`Netkit` / `Sockmap`)、Multus CNI、NVIDIA Network Operator (`SR-IOV` + `RDMA CNI`) 与 Linux `rdma system set netns exclusive` 架构规范构建原创合成 K8s 双平面智算容器网络评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 192 基于公开发布的 Task Arithmetic、SLERP、TIES-Merging、DARE (`Drop And REscale`) 与 `mergekit` 架构规范构建原创合成大模型零训练权重合并评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
