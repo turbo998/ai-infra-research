@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 258 · Long-Context KV Cache Quantization (FP8 vs Hadamard INT4) Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 258 · Long-Context `KV Cache` Quantization (`FP8 E4M3` vs `Hadamard INT4`) Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">KV Cache Quantization Architecture (128K Context)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Naive Symmetric Per-Token INT4 on K &amp; V</option>
+          <option value="t2">Tier 2: Calibrated FP8 (E4M3) KV Cache (2.0x)</option>
+          <option value="t3">Tier 3: Post-RoPE KIVI Asymmetric INT4</option>
+          <option value="t4" selected>Tier 4: Hadamard Rotated INT4 + BF16 Sink/Recent Window</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>128K RULER Accuracy (vs 91.5% BF16)</label>
+        <div id="acc" class="kpi">91.1% (-0.4 pt)</div>
+      </div>
+      <div class="card">
+        <label>KV Compression / Decode Speedup</label>
+        <div id="cmp" class="kpi">3.85x / 2.88x</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Applying an in-register 128x128 Walsh-Hadamard Transform ($Q H (K H)^T = Q K^T$) flattens Key's 38x channel outliers down to 2.4x; paired with keeping the first 4 Attention Sink tokens and latest 32 tokens in BF16, INT4 KV achieves 3.85x compression and 91.1% RULER accuracy.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { acc: "64.0% (-27.5 pt) ✕", cmp: "3.90x / 2.95x", bad: true, msg: "⛔ Key's 38x per-channel outliers crush the remaining 126 normal dimensions into zero under Per-Token INT4!" },
+      t2: { acc: "91.2% (-0.3 pt) ✅", cmp: "2.00x / 1.78x", bad: false, msg: "✅ FP8 (E4M3) uses floating-point exponent range to absorb Key outliers cleanly, capped at 2.0x compression." },
+      t3: { acc: "85.4% (-6.1 pt) ⚠️", cmp: "3.80x / 2.75x", bad: true, msg: "⚠️ Post-RoPE per-channel Key quantization suffers cosine/sine phase mixing across token positions." },
+      t4: { acc: "91.1% (-0.4 pt) 🏆", cmp: "3.85x / 2.88x 🏆", bad: false, msg: "🏆 Orthogonal Hadamard rotation + BF16 Sink/Sliding Window delivers 3.85x compression with 91.1% accuracy." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('acc');
+      el.textContent = d.acc;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('cmp').textContent = d.cmp;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

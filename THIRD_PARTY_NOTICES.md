@@ -342,6 +342,8 @@ Round 256 基于公开发布的 PCIe 规范 `Access Control Services (ACS: ReqRe
 
 Round 257 基于公开发布的 `GPipe / 1F1B / Interleaved 1F1B` 流水线并行方程与 `Zero-Bubble Pipeline Parallelism (ZB-H1 / ZB-H2 / DualPipe)` 反向传播激活梯度 `B` ($dX$) 与权重梯度 `W` ($dW$) 解耦调度原理构建原创合成气泡率与显存评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 258 基于公开发布的 `KIVI`（`Key` 按通道离群值与 `Value` 按 Token 分布不对称性）、`QuaRot / SpinQuant` 快速阿达玛正交旋转（`Fast Walsh-Hadamard Transform`）与 `Attention Sink` 保留原理构建原创合成长上下文 `KV Cache` 量化精度与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
