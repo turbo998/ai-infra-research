@@ -1,0 +1,59 @@
+{
+  "experiment_id": "ai_cluster_lustre_beegfs_small_file_webdataset_mds_bottleneck_selection",
+  "round": 296,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "cluster_gpus": 512,
+    "dataset_samples": 100000000,
+    "mean_sample_kb": 64,
+    "pfs_ost_peak_bandwidth_gbps": 200.0
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_raw_100m_individual_files_on_lustre_mds_collapse",
+      "name": "100M Individual 64KB Files (.jpg/.json) + Per-Rank glob() on Lustre/BeeGFS",
+      "cluster_read_bandwidth_gbps": 1.4,
+      "mds_metadata_iops": 120000,
+      "gpu_data_stall_pct": 84.0,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Every 64KB sample triggers 3 synchronous MDS RPCs (open/stat/close) -> saturates MDS at 120K IOPS while 200 GB/s OSTs sit 99.3% idle (1.4 GB/s)!"
+    },
+    {
+      "tier_id": "tier2_lmdb_or_hdf5_random_4kb_mmap_over_network_pfs",
+      "name": "Monolithic LMDB / HDF5 With Random mmap() Page Reads Over Network PFS",
+      "cluster_read_bandwidth_gbps": 18.5,
+      "mds_metadata_iops": 850,
+      "gpu_data_stall_pct": 42.0,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Eliminates MDS file-open storm, but random 64KB mmap reads across a 6TB LMDB trigger Lustre LDLM extent lock thrashing and 1MB OST read-amplification!"
+    },
+    {
+      "tier_id": "tier3_webdataset_512mb_tar_shards_sequential_streaming",
+      "name": "WebDataset 512MB Contiguous .tar Shards (Sequential OST Streaming)",
+      "cluster_read_bandwidth_gbps": 148.0,
+      "mds_metadata_iops": 15,
+      "gpu_data_stall_pct": 3.2,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Packs 8,192 samples per 512MB shard (cutting MDS IOPS 8,000x to 15 IOPS) and streams sequentially at 148.0 GB/s, but lacks O(1) random mid-shard resume."
+    },
+    {
+      "tier_id": "tier4_mosaicml_mds_indexed_shards_plus_lfs_stripe1_plus_local_nvme_cache",
+      "name": "MosaicML MDS / Lance Indexed 512MB Shards + lfs setstripe -c 1 + Node NVMe Cache",
+      "cluster_read_bandwidth_gbps": 186.0,
+      "mds_metadata_iops": 12,
+      "gpu_data_stall_pct": 0.4,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "1-OST-per-shard striping (-c 1) + O(1) byte-offset index + node-deduplicated local NVMe ring cache -> 186.0 GB/s (132.9x faster) & 0.4% GPU stall!"
+    }
+  ],
+  "summary": {
+    "bandwidth_speedup_x": 132.9,
+    "mds_iops_reduction_x": 10000.0,
+    "recommended_stall_pct": 0.4,
+    "recommended_tier": "tier4_mosaicml_mds_indexed_shards_plus_lfs_stripe1_plus_local_nvme_cache"
+  }
+}

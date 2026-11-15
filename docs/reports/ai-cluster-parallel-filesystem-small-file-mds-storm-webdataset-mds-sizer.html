@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 296 · Parallel File System 100M Small-File MDS Storm vs. Sharded Streaming Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 296 · Parallel File System (`Lustre/BeeGFS`) `100M` Small-File vs. `512MB` Shards Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Dataset Format &amp; Striping Policy (100M 64KB Samples, 200 GB/s PFS)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: 100M Individual 64KB Files (.jpg/.json) on Lustre</option>
+          <option value="t2">Tier 2: Monolithic 6TB LMDB / HDF5 With Random Network mmap()</option>
+          <option value="t3">Tier 3: WebDataset 512MB .tar Shards (Sequential Streaming)</option>
+          <option value="t4" selected>Tier 4: MosaicML MDS Indexed 512MB Shards + lfs setstripe -c 1</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Cluster Read Bandwidth</label>
+        <div id="bw" class="kpi">186.0 GB/s (132.9x Faster)</div>
+      </div>
+      <div class="card">
+        <label>MDS IOPS / GPU Data Stall</label>
+        <div id="stl" class="kpi">12 IOPS / 0.4% Stall</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Packing `8,192` samples into `512 MB` indexed `.mds` shards with `lfs setstripe -c 1` and node-local NVMe caching cuts `MDS` metadata IOPS 10,000x (`120K -&gt; 12 IOPS`) and lifts throughput from `1.4 GB/s` to `186.0 GB/s` (`0.4%` GPU stall).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { bw: "1.4 GB/s (0.7% Util! ✕)", stl: "120,000 IOPS / 84.0% Stall ✕", bad: true, msg: "⛔ Every 64KB file open/stat/close hits the MDS, saturating metadata servers at 120K IOPS while 200 GB/s OST disks sit 99.3% idle!" },
+      t2: { bw: "18.5 GB/s ⚠️", stl: "850 IOPS / 42.0% Stall ✕", bad: true, msg: "⛔ Random 64KB mmap page faults across a 6TB network LMDB trigger Lustre LDLM lock contention and 16x OST read amplification!" },
+      t3: { bw: "148.0 GB/s ✅", stl: "15 IOPS / 3.2% Stall ✅", bad: false, msg: "✅ 512MB .tar shards eliminate the MDS bottleneck (148 GB/s), though unindexed tarballs lack O(1) mid-shard resume." },
+      t4: { bw: "186.0 GB/s (132.9x Faster) 🏆", stl: "12 IOPS / 0.4% Stall 🏆", bad: false, msg: "🏆 Indexed 512MB .mds shards + lfs setstripe -c 1 + node-deduplicated NVMe cache achieves 186.0 GB/s and instant O(1) resume." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('bw');
+      el.textContent = d.bw;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('stl').textContent = d.stl;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

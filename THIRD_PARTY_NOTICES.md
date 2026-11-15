@@ -418,6 +418,8 @@ Round 294 基于公开发布的 `DeepGEMM / CUTLASS` Hopper/Blackwell MoE `Group
 
 Round 295 基于公开发布的 `FlashAttention-3 (FA3) FP8` `64x128` 块缩放（隔离第 0 号 `Attention Sink` 块）机制、正交哈达玛非相干旋转（`Incoherent Processing via Orthogonal Hadamard Rotation` $(QH)(KH)^T = QK^T$）与概率矩阵满量程缩放原理构建原创合成输出误差与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 296 基于公开发布的并行文件系统（`Lustre / BeeGFS / GPFS`）元数据服务（`MDS / MDT`）与对象存储目标（`OST`）分离架构、`100M` 小文件 `LDLM` 锁风暴机理以及 `WebDataset / MosaicML MDS` `512MB` 连续分片与 `lfs setstripe -c 1` 条带对齐原理构建原创合成读取带宽与 GPU 空转率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
