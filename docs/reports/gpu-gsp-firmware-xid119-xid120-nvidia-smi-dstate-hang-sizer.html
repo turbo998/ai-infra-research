@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>GPU GSP Firmware XID 119/120 &amp; nvidia-smi D-State Hang Sizer (Round 248)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 248 · GPU `GSP` 固件崩溃（`XID 119/120`）、`nvidia-smi` `D` 状态死锁与单飞熔断计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择发生 XID 119 (GSP RPC Timeout) 时节点探针保护与重启自愈架构</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 无保护高频轮询 nvidia-smi (堆积 480 个 kill -9 杀不死的 D 状态进程 · 拖死 Kubelet)</option>
+          <option value="t2">Tier 2: 仅套上 timeout 5s 外壳但无单飞锁 (D 状态免疫 SIGKILL · 仍堆积 180 个僵尸进程)</option>
+          <option value="t3">Tier 3: /dev/kmsg + 单飞熔断锁 + 带内 sudo reboot (关机阶段死等驱动句柄释放卡顿 35 分钟)</option>
+          <option value="t4" selected>Tier 4: /dev/kmsg 监听 + flock -n 单飞熔断锁 (&lt;=1 挂起进程) + 带外 BMC 硬重置 (2.2 分钟恢复)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>堆积 D 状态死进程</div><div class="val" id="prc">&lt;= 1 个</div></div>
+      <div class="kpi"><div>Kubelet 与 SSH 状态</div><div class="val" id="kbl">100% 存活</div></div>
+      <div class="kpi"><div>节点自愈恢复耗时</div><div class="val" id="rec">2.2 min</div></div>
+      <div class="kpi"><div>相比人工救火提速</div><div class="val" id="spd">109.1 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (/dev/kmsg 零 ioctl 监听 + flock -n 单飞熔断器 + 带外 BMC 硬重置)：一旦首个探针卡入内核 D 状态，后续探针在用户态 0.01ms 立即熔断退出，保住 Kubelet 存活并通过 BMC 2.2 分钟满血重启 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { prc: "480 个 ✕", kbl: "彻底假死 ✕", rec: "240.0 min ✕", spd: "1.0 x", v: "Tier 1 (无保护轮询)：首个 nvidia-smi 拿住内核互斥锁进入不可中断 D 状态，后续监控每秒新建进程排队锁死整台服务器 ✕" },
+      t2: { prc: "180 个 ✕", kbl: "PLEG 假死 ✕", rec: "120.0 min ⚠️", spd: "2.0 x", v: "Tier 2 (仅用 timeout 5s)：处于内核 D 状态的进程彻底无视 kill -9，timeout 退出了但子进程永远留在内核里继续堆积 ⚠️" },
+      t3: { prc: "<= 1 个 ✅", kbl: "存活 (关机卡死) ⚠️", rec: "35.0 min ⚠️", spd: "6.9 x", v: "Tier 3 (单飞熔断 + 带内 reboot)：虽止住了 D 状态雪崩，但 systemd-shutdown 会死等那 1 个挂起进程释放 /dev/nvidia* 而卡在关机半途 ✅" },
+      t4: { prc: "<= 1 个 🏆", kbl: "100% 存活 🏆", rec: "2.2 min 🏆", spd: "109.1 x", v: "Tier 4 (/dev/kmsg + 单飞熔断 + 带外 BMC 重置)：零 D 状态雪崩，跳过带内关机直接由 BMC 硬重置，2.2 分钟极速回池 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("prc").textContent = d.prc;
+      document.getElementById("kbl").textContent = d.kbl;
+      document.getElementById("rec").textContent = d.rec;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>

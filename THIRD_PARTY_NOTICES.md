@@ -322,6 +322,8 @@ Round 246 基于公开发布的 `vLLM V1 Automatic Prefix Caching (APC) / LMCach
 
 Round 247 基于公开发布的 PyTorch `FSDP / FSDP2` 反向传播 `ReduceScatter` 梯度分片释放机制（解释 `no_sync()` 引发全量未切分梯度 OOM 的物理原因）与 `2D HSDP (dp_replicate × dp_shard)` 机内 NVLink 分片、跨机 RoCE 延迟归约原理构建原创合成梯度累积评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 248 基于公开发布的 NVIDIA GPU System Processor (`GSP`) 固件超时规范（`XID 119 / XID 120`）、Linux 内核 `TASK_UNINTERRUPTIBLE (D-State)` 互斥锁机制与用户态 `flock -n` 单飞熔断及带外 BMC 硬重置原理构建原创合成节点防假死自愈评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
