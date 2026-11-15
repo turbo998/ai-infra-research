@@ -370,6 +370,8 @@ Round 270 基于公开发布的 `Punica (SGMV / BGMV 分段聚集矩阵乘)` 与
 
 Round 271 基于公开发布的 `bitsandbytes NF4` 显存反量化双遍读写机制、`GPTQ / AWQ` 权重量化与 `Marlin / Machete` 寄存器级 `lop3.b32` 浮点尾数直接注入解包原理构建原创合成 HBM 流量与解码延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 272 基于公开发布的 `Gated DeltaNet / Mamba-2 / Qwen3-Next` `3:1` 混合线性注意力架构、`FlashLinearAttention (FLA)` 分块并行算法与投机解码多步状态回滚环（`Speculative State Ring`）及间隔前缀快照原理构建原创合成长文本显存与召回率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

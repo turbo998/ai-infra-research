@@ -1,0 +1,47 @@
+{
+  "experiment_id": "llm_hybrid_linear_attention_mamba2_ssd_gdn_fla_kv_cache_selection",
+  "round": 272,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "context_len": 262144,
+    "hybrid_ratio": "3 Gated DeltaNet : 1 Full GQA",
+    "memory_reduction_pct": 72.5,
+    "decode_speedup_vs_pure_gqa_x": 6.64
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_pure_linear_attention_mamba2_without_full_attention_layers",
+      "name": "Tier 1: 纯 100% 线性注意力 / Mamba-2 (虽状态显存恒定为 0.6GB，但固定矩阵无法无损记忆精确键值对，256K RULER 崩至 38.0%)",
+      "per_req_256k_cache_hbm_gb": 0.6,
+      "long_context_256k_ruler_pct": 38.0,
+      "effective_decode_itl_ms": 4.8,
+      "verdict": "根据抽屉原理，固定大小的 [128,128] 状态矩阵无法无损装下 25.6 万词里的任意精确密码/单号，大海捞针彻底失效 ✕"
+    },
+    {
+      "tier_id": "tier2_pure_full_softmax_gqa_across_all_64_layers",
+      "name": "Tier 2: 传统 64 层全量 Softmax GQA (检索准确率 92.4%，但单条 256K 请求吃掉 64.0GB KV 显存且 Decode 慢至 38.5ms)",
+      "per_req_256k_cache_hbm_gb": 64.0,
+      "long_context_256k_ruler_pct": 92.4,
+      "effective_decode_itl_ms": 38.5,
+      "verdict": "每一层都要遍历全部 25.6 万个历史 KV Token，单请求显存高达 64GB 且被 HBM 带宽死死卡在 38.5ms ⚠️"
+    },
+    {
+      "tier_id": "tier3_3to1_hybrid_gated_deltanet_gqa_without_state_checkpoint_rollback",
+      "name": "Tier 3: 3:1 混合架构 (75% Gated DeltaNet + 25% GQA)，但推理引擎未做状态快照回滚 (无法跑投机解码与分段前缀缓存，14.2ms)",
+      "per_req_256k_cache_hbm_gb": 16.5,
+      "long_context_256k_ruler_pct": 92.6,
+      "effective_decode_itl_ms": 14.2,
+      "verdict": "线性层状态 S_t 是原地覆写的，一旦投机解码猜错词无法像 KV Cache 那样回退指针，且无法命中中间位置 Prefix Cache ✅"
+    },
+    {
+      "tier_id": "tier4_3to1_hybrid_gdn_gqa_plus_speculative_state_ring_and_interval_snapshots",
+      "name": "Tier 4: 3:1 混合架构 (Gated DeltaNet + GQA) + 投机解码多步状态环 (K+1 槽位秒级回滚) + 256-Token 间隔前缀状态快照",
+      "per_req_256k_cache_hbm_gb": 17.6,
+      "long_context_256k_ruler_pct": 92.6,
+      "effective_decode_itl_ms": 5.8,
+      "verdict": "省下 72.5% 显存 (64.0->17.6GB)，保留 25% GQA 锚定 92.6% 满分检索，且通过状态快照环完美解锁 MTP 投机解码与前缀缓存，快 6.64x 🏆"
+    }
+  ]
+}
