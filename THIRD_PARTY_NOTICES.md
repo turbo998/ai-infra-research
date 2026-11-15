@@ -390,6 +390,8 @@ Round 280 基于公开发布的 DeepSeek-V3 顺序因果多 Token 预测（`Sequ
 
 Round 281 基于公开发布的 OCP 高密冷板液冷（`Direct-to-Chip Liquid Cooling, DLC`）机柜热力学规范、`HBM3e` `85°C` 热降频阈值（`0x40`）、`RDHx` 背门热交换器对 `800G` 光模块的余热回收以及两级漏液检测联动 `BMC` 异步 `DCP` 优雅排空机制构建原创合成评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 282 基于公开发布的 `AReaL / THUDM Slime / verl` 异步强化学习训推解耦架构、Ray 控制面与 `NCCL / Mooncake RDMA` 数据面分离、可中断部分采样续写（`Interruptible Partial Rollout`）以及有界策略陈旧度（`τ <= 1`）与 `Dual-Clip` 重要性采样原理构建原创合成吞吐与收敛稳定性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
