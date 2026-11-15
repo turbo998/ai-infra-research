@@ -1,0 +1,47 @@
+{
+  "experiment_id": "ai_cluster_container_image_pull_oci_soci_nydus_dragonfly_p2p_selection",
+  "round": 276,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "num_nodes": 1024,
+    "num_gpus": 8192,
+    "image_size_compressed_gb": 25.0,
+    "startup_speedup_x": 134.4
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_central_harbor_oci_targz_pull_plus_shared_fs_conda_import",
+      "name": "Tier 1: 中心 Harbor 直接拉取 25GB tar.gz 镜像 + 共享 NFS/Lustre 挂载 Conda 环境 (耗时 1,680.0 秒 = 28 分钟!)",
+      "cold_start_to_step0_sec": 1680.0,
+      "shared_mds_stat_rpcs_millions": 450.5,
+      "network_bytes_pulled_per_node_gb": 25.0,
+      "verdict": "1024 节点并发拉 25GB 打爆中心镜像库网卡，解压 35 万个小文件后再由 8192 进程向共享存储狂发 4.5 亿次 stat() ✕"
+    },
+    {
+      "tier_id": "tier2_pre_pulled_image_but_pythonpath_conda_on_shared_lustre_nfs",
+      "name": "Tier 2: 基础镜像已预热，但业务 Conda/代码虚拟环境直接放共享 Lustre/NFS (8192 进程 import torch 卡死 780.0 秒)",
+      "cold_start_to_step0_sec": 780.0,
+      "shared_mds_stat_rpcs_millions": 450.5,
+      "network_bytes_pulled_per_node_gb": 2.4,
+      "verdict": "Python importlib 在 sys.path 上搜索数千个包触发 4.5 亿次同步元数据锁竞争，Lustre MDS 队列当场雪崩 ⚠️"
+    },
+    {
+      "tier_id": "tier3_dragonfly_p2p_with_legacy_oci_targz_full_download_and_extract",
+      "name": "Tier 3: 开启 Dragonfly P2P 镜像分发，但仍用传统 OCI tar.gz 全量下载并解压后才启动容器 (耗时 185.0 秒)",
+      "cold_start_to_step0_sec": 185.0,
+      "shared_mds_stat_rpcs_millions": 0.1,
+      "network_bytes_pulled_per_node_gb": 25.0,
+      "verdict": "P2P 解决了中心镜像仓库带宽瓶颈，但 tar.gz 强制要求下完 100% (25GB) 并单核解压完 45GB 才能启动进程 ✅"
+    },
+    {
+      "tier_id": "tier4_nydus_overlaybd_on_demand_p2p_plus_local_nvme_squashfs_loop_mount",
+      "name": "Tier 4: Nydus/OverlayBD 块级按需懒加载 + Dragonfly P2P + 虚拟环境打包为单文件 SquashFS 本地挂载 (12.5 秒!)",
+      "cold_start_to_step0_sec": 12.5,
+      "shared_mds_stat_rpcs_millions": 0.001,
+      "network_bytes_pulled_per_node_gb": 2.2,
+      "verdict": "无需等待 25GB 下载即刻秒级启动容器 (仅按需拉取实际用到的 2.2GB 数据块)，且 SquashFS 消灭 99.999% MDS 元数据风暴，快 134x 🏆"
+    }
+  ]
+}
