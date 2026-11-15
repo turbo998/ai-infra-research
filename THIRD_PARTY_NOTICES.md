@@ -274,6 +274,8 @@ Round 222 基于公开发布的 NVIDIA NCCL 2.23+ `PAT (Parallel Aggregated Tree
 
 Round 223 基于公开发布的 PCIe Base Specification 数据链路层 `LCRC / NAK Replay Rollover` 状态机、Linux `AER` 与 NVIDIA `DCGM_FI_DEV_PCIE_REPLAY_COUNTER` / `XID 79` 排障规范构建原创合成信号劣化与主动隔离评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 224 基于公开发布的 PyTorch `TorchDynamo / TorchInductor` 符号维度守卫（`mark_dynamic`）、`CUDAGraph Trees` 与 vLLM V1 `Piecewise Compilation` 分段图捕获及共享显存池原理构建原创合成编译开销与解码延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

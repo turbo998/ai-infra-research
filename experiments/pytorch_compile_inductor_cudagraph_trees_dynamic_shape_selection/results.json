@@ -1,0 +1,46 @@
+{
+  "experiment_id": "pytorch_compile_inductor_cudagraph_trees_dynamic_shape_selection",
+  "round": 224,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "eager_tpot_ms": 11.0,
+    "hbm_saved_vs_cudagraph_trees_gb": 16.2,
+    "tpot_speedup_x": 1.62
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_naive_full_model_compile_static_guard_recompilation_storm",
+      "name": "Tier 1: 朴素整模型 torch.compile (触发动态 Shape Guard 重编译风暴，撞上 cache_size_limit=8 退回 Eager)",
+      "runtime_recompilations": 8,
+      "cudagraph_pool_overhead_gb": 4.2,
+      "p99_decode_tpot_ms": 11.0,
+      "verdict": "变长请求不断触发 Shape Guard 失效，每次在线重编译卡死服务 35~60 秒，满 8 次后静默退回慢速 Eager 模式 (11.0 ms) ✕"
+    },
+    {
+      "tier_id": "tier2_reduce_overhead_cudagraph_trees_multi_bucket_hbm_explosion",
+      "name": "Tier 2: 盲目开启 mode='reduce-overhead' (CUDAGraph Trees 多分支独立显存池吞噬 +18.4 GB HBM)",
+      "runtime_recompilations": 1,
+      "cudagraph_pool_overhead_gb": 18.4,
+      "p99_decode_tpot_ms": 7.4,
+      "verdict": "虽利用 CUDAGraph Trees 消除了 Python 发射开销，但不同序列桶与控制流分支无法复用私有显存池，挤占 18.4 GB KV Cache 空间 ⚠️"
+    },
+    {
+      "tier_id": "tier3_regional_block_compile_with_explicit_mark_dynamic",
+      "name": "Tier 3: Regional 单层编译 + 显式 mark_dynamic 符号维度 (0 重编译，编译耗时缩短 7.7x)",
+      "runtime_recompilations": 0,
+      "cudagraph_pool_overhead_gb": 0.0,
+      "p99_decode_tpot_ms": 8.2,
+      "verdict": "仅对重复的 TransformerLayer 编译一次并显式声明符号维 s0，彻底消灭运行期重编译风暴且零额外图显存开销 ✅"
+    },
+    {
+      "tier_id": "tier4_piecewise_compile_shared_mempool_cudagraph_buckets",
+      "name": "Tier 4: Piecewise 分段编译 (跳过动态 Attention 元数据) + 共享显存池分桶 CUDAGraph",
+      "runtime_recompilations": 0,
+      "cudagraph_pool_overhead_gb": 2.2,
+      "p99_decode_tpot_ms": 6.8,
+      "verdict": "将含动态元数据的 Attention 与纯静态 GEMM/RMSNorm 切开分段捕获，所有 Batch 桶共享同一套 graph_pool_handle，仅占 2.2 GB 即跑出 6.8 ms (快 1.62x) 🏆"
+    }
+  ]
+}
