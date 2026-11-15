@@ -364,6 +364,8 @@ Round 267 基于公开发布的 PyTorch `torch.cuda.CUDAGraph` 显存虚拟地�
 
 Round 268 基于公开发布的 `Qwen2.5-VL / InternVL` 原生动态分辨率 `Varlen Windowed ViT`（双 `cu_seqlens` 局部窗口与全局注意力混合）及 `2x2 Pixel Unshuffle (PatchMerger)` 视觉 Token 4 倍压缩原理构建原创合成多模态首包延迟与显存评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 269 基于公开发布的 Kubernetes `Device Plugin`、`Topology Manager (single-numa-node)` 与 `Dynamic Resource Allocation (DRA) / Containerd NRI` 交换芯片级（`PIX`）联合资源分配原理构建原创合成跨插槽 `SYS` 绕行与 Pod 准入率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
