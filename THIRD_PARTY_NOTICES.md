@@ -348,6 +348,8 @@ Round 259 基于公开发布的 `DeepSeek-V2/V3 Multi-head Latent Attention (MLA
 
 Round 260 基于公开发布的 IEEE 754 `BFloat16` 7 位尾数舍入边界（$2^{-8}$ 下溢截断）、`Stochastic Rounding`（概率随机舍入）、`Kahan Compensated Summation`（卡汉误差补偿求和）与 `DeepSeek-V3 / TorchAO` 分块 `FP8` 优化器动量原理构建原创合成显存与收敛精度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 261 基于公开发布的 `vLLM V1 / SGLang` 多进程 `ZeroMQ (ZMQ_IPC)` 进程解耦架构、CPython `GIL` 并发竞争机理与 `Zero-Overhead Async Pre-Scheduling`（跨步前瞻调度与 GPU `D2D` 词 ID 直传）原理构建原创合成 CPU 气泡与 GPU 占空比评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

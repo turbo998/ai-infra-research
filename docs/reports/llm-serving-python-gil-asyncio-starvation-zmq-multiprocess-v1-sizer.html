@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 261 · LLM Serving Python GIL vs ZeroMQ &amp; Async Pre-Scheduling Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 261 · LLM Serving Python `GIL` vs `ZeroMQ` Multi-Process &amp; `Async Pre-Scheduling` Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Serving Process &amp; Scheduler Architecture (5.5ms GPU Step)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Monolithic Single-Process (FastAPI + Detok + Scheduler)</option>
+          <option value="t2">Tier 2: ZMQ Multi-Process + Serialized Scheduler</option>
+          <option value="t3">Tier 3: Persistent Batch + Sync D2H Token Copy</option>
+          <option value="t4" selected>Tier 4: ZMQ Multi-Process + Async Pre-Scheduling + GPU D2D</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Exposed CPU Bubble / Effective ITL</label>
+        <div id="bub" class="kpi">0.2 ms / 5.7 ms</div>
+      </div>
+      <div class="card">
+        <label>GPU Compute Duty Cycle</label>
+        <div id="duty" class="kpi">96.5% (3.51x)</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Isolating API/Tokenizer and Detokenizer via `ZeroMQ_IPC` and pre-scheduling Step `t+1` on the CPU while the GPU executes Step `t` (with on-GPU `D2D` token forwarding) slashes exposed CPU overhead from 14.5 ms to 0.2 ms (96.5% GPU duty cycle, 3.51x speedup).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { bub: "14.5 ms ✕ / 20.0 ms", duty: "27.5% (72.5% Idle) ✕", bad: true, msg: "⛔ Single-process Python GIL contention across 128 SSE streams stalls the GPU for 14.5 ms after every 5.5 ms step!" },
+      t2: { bub: "4.2 ms ⚠️ / 9.7 ms", duty: "56.7% ⚠️", bad: true, msg: "⚠️ Waiting for Step t to finish on the GPU before scheduling Step t+1 leaves a 4.2 ms inter-step bubble." },
+      t3: { bub: "2.1 ms / 7.6 ms", duty: "72.4% ✅", bad: false, msg: "⚠️ Calling `sampled_tokens.cpu()` synchronously before preparing Step t+1 inputs leaves a 2.1 ms stall." },
+      t4: { bub: "0.2 ms / 5.7 ms 🏆", duty: "96.5% (3.51x) 🏆", bad: false, msg: "🏆 ZeroMQ multi-process isolation + Async Pre-Scheduling + GPU D2D token forwarding achieves 96.5% GPU duty cycle." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('bub');
+      el.textContent = d.bub;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('duty').textContent = d.duty;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
