@@ -294,6 +294,8 @@ Round 232 基于公开发布的 PyTorch `ProcessGroupNCCL` `WorkNCCL` Watchdog �
 
 Round 233 基于公开发布的 PyTorch `DTensor` 混合并行梯度范数归约规则（区分 `Shard` 与 `Replicate` 避免重复累加）、`_foreach_norm` 批量算子与设备端无分支 `clamp(max=1.0)` 消除 `.item()` 同步阻塞原理构建原创合成梯度裁剪评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 234 基于公开发布的大词表模型输出层 `[N, V]` Logits 显存物化分析、推理 Prefill 末位切片（`logits_to_keep=1`）与 `Liger-Kernel / Apple Cut-Cross-Entropy (CCE)` 片上 SRAM 在线 `LogSumExp` 融合线性交叉熵原理构建原创合成显存与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

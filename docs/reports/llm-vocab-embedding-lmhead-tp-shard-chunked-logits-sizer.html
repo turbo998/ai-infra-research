@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>Large-Vocab LM Head Logits OOM &amp; Fused Linear Cross-Entropy Sizer (Round 234)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 234 · 大词表（`V = 152,064`）输出层 `LM Head` 显存海啸与融合交叉熵计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 32,768 Tokens × 152,064 词表 (Qwen2.5/3) 输出层 LM Head + Cross-Entropy 架构</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 朴素全量物化 lm_head(h).float() (BF16+FP32+Grad 瞬时爆占 37.12 GB HBM · OOM)</option>
+          <option value="t2">Tier 2: 仅开启 TP=4 词表并行 VocabParallel (单卡仍物化 9.28 GB 分片大表 · 64.5 ms)</option>
+          <option value="t3">Tier 3: 序列维度分块循环 Token-Chunked CE (每次仅物化 2,048 行 · 2.32 GB · 58.0 ms)</option>
+          <option value="t4" selected>Tier 4: 融合线性交叉熵 Liger / Cut-Cross-Entropy (片上 SRAM 在线 LSE · 0.08 GB · 40.3 ms)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>输出层峰值显存</div><div class="val" id="hbm">0.08 GB</div></div>
+      <div class="kpi"><div>前向+反向总耗时</div><div class="val" id="lat">40.3 ms</div></div>
+      <div class="kpi"><div>HBM Logits 物化</div><div class="val" id="mat">0 字节 (零物化)</div></div>
+      <div class="kpi"><div>峰值显存缩减倍数</div><div class="val" id="spd">464.0 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (Fused Linear Cross-Entropy · Liger / CCE)：在片上 SRAM 直接分块计算 h @ W^T 并完成在线 LogSumExp 与原位梯度累加，净省 37.04 GB HBM 显存并提速 3.42x 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { hbm: "37.12 GB ✕", lat: "138.0 ms ✕", mat: "全量物化 ✕", spd: "1.0 x", v: "Tier 1 (朴素全量物化)：在 Forward 最后一行同时驻留 BF16 Logits、FP32 Logits 与反向梯度，直接引爆 80GB H100 OOM ✕" },
+      t2: { hbm: "9.28 GB ⚠️", lat: "64.5 ms", mat: "物化 1/4 分片 ⚠️", spd: "4.0 x", v: "Tier 2 (TP=4 VocabParallel)：虽按词表切分降低了单卡压力，但在 32K~64K 长序列下仍白白吃掉近 10 GB 显存 ⚠️" },
+      t3: { hbm: "2.32 GB ✅", lat: "58.0 ms", mat: "仅小块物化 ✅", spd: "16.0 x", v: "Tier 3 (Token-Chunked 序列分块)：纯 PyTorch 切成 16 个 2,048-Token 小块依次算 Loss，免改底层算子即可省 34.8 GB ✅" },
+      t4: { hbm: "0.08 GB 🏆", lat: "40.3 ms 🏆", mat: "0 字节 (SRAM) 🏆", spd: "464.0 x", v: "Tier 4 (Fused Linear Cross-Entropy)：彻底消灭 HBM 中的 [N, V] Logits 矩阵，显存缩小 464 倍、速度提升 3.42 倍 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("hbm").textContent = d.hbm;
+      document.getElementById("lat").textContent = d.lat;
+      document.getElementById("mat").textContent = d.mat;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
