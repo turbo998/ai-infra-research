@@ -338,6 +338,8 @@ Round 254 基于公开发布的 NVIDIA `Multi-Instance GPU (MIG)` 硅片级物�
 
 Round 255 基于公开发布的 `XGrammar / llguidance` 上下文无关词表分离机制、紧凑 `int32` 位掩码（`Adaptive Token Bitmask`）与 `SGLang Jump-Forward Decoding` 确定性语法段快进原理构建原创合成结构化输出编译与解码延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 256 基于公开发布的 PCIe 规范 `Access Control Services (ACS: ReqRedir / CmpltRedir / UpstreamFwd)` 硬件路由机制、Linux `iommu=pt` 透传模式与 `GPUDirect RDMA (nvidia_peermem)` P2P 寻址原理构建原创合成 CPU Root Complex 绕行与带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
