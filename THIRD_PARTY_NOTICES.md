@@ -268,6 +268,8 @@ Round 219 基于公开发布的 PyTorch `set_float32_matmul_precision` 规范、
 
 Round 220 基于公开发布的 NVIDIA CUDA `cudaHostAlloc / cudaMemcpyAsync` 驱动行为规范与双硬件 `Copy Engine (CE0 H2D + CE1 D2H)` 全双工 PCIe DMA 原理构建原创合成锁页内存池与双向并发卸载评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 221 基于公开发布的 PyTorch `FSDP2 (fully_shard)`、`DTensor` 逐参数第 0 维分片与零 `record_stream` 确定性双流释放架构文档及 `TorchTitan` 混合并行原理构建原创合成显存与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
