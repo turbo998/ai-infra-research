@@ -384,6 +384,8 @@ Round 277 基于公开发布的 NVIDIA `Grace Hopper (GH200) / Grace Blackwell (
 
 Round 278 基于公开发布的 `vLLM / SGLang` `PreemptionMode (RECOMPUTE vs. SWAP)` 抢占机制、大模型推理 `Goodput (TTFT + TPOT Joint SLO)` 评估准则与 KV Cache 增长水位准入控制（Watermark Admission Gate）原理构建原创合成有效达标吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 279 基于公开发布的 SONiC / RoCEv2 `PFC Watchdog (action=drop vs. action=forward)` 硬件看门狗机制、ConnectX-7 `pfc_stall_prevention` 网卡侧超时保护与 Clos 拓扑 BGP `Valley-Free` 防折返环路死锁原理构建原创合成风暴爆炸半径与隔离耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
