@@ -356,6 +356,8 @@ Round 263 基于公开发布的 `DeepSpeed-Ulysses`（`All-to-All` 注意力头�
 
 Round 264 基于公开发布的旋转位置编码（`RoPE`）线性位置插值（`Linear PI`）、`Dynamic NTK` 与 `YaRN`（`NTK-by-Parts` 波长分段缩放及注意力温度补偿 $\text{mscale} = 0.1 \ln(s) + 1$）原理构建原创合成长短文本准确率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 265 基于公开发布的 NVIDIA `GPUDirect Storage (GDS / cuFile)` `4KB` 对齐 DMA 规范、`DeepSeek 3FS (Fire-Flyer File System)` / `LMCache` 巨块聚簇传输与 GPU 显存内 Scatter 拆页原理构建原创合成 NVMe `KV Cache` 卸载带宽与首包延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

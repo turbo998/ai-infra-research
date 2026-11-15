@@ -1,0 +1,47 @@
+{
+  "experiment_id": "ai_cluster_lustre_weka_3fs_gds_kv_cache_ssd_offload_selection",
+  "round": 265,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "kv_transfer_gb": 16.0,
+    "superblock_size_mb": 2.0,
+    "bw_speedup_vs_posix_x": 12.38,
+    "ttft_speedup_vs_posix_x": 12.26
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_posix_buffered_io_os_page_cache_triple_copy",
+      "name": "Tier 1: 传统 POSIX read() / 页缓存加载 (SSD -> OS Page Cache -> Pinned RAM -> GPU 三次拷贝，仅 4.2 GB/s)",
+      "effective_ssd_to_gpu_bw_gbps": 4.2,
+      "ttft_64k_prefix_hit_ms": 3800.0,
+      "host_cpu_core_saturation_pct": 100.0,
+      "verdict": "数据在主存里倒腾三次并打满全部 CPU 核，读 16GB KV Cache 耗时 3.8 秒，比从头重算 Prefill (1.15s) 还要慢 3 倍 ✕"
+    },
+    {
+      "tier_id": "tier2_naive_gds_cufile_per_16token_page_unaligned_small_io",
+      "name": "Tier 2: 开启 GDS (cuFile) 但按 16-Token 碎页 (18KB~64KB) 直接读取 (触发 4KB 非对齐回退与小 IO 瓶颈，仅 9.5 GB/s)",
+      "effective_ssd_to_gpu_bw_gbps": 9.5,
+      "ttft_64k_prefix_hit_ms": 1680.0,
+      "host_cpu_core_saturation_pct": 45.0,
+      "verdict": "PagedAttention 单层单页仅几十 KB (MLA 下 18.4KB 甚至不满足 4KB 对齐!)，导致 cuFile 静默退化走 Compat 主存中转 ⚠️"
+    },
+    {
+      "tier_id": "tier3_2mb_aligned_superblock_cufile_batch_without_layer_overlap",
+      "name": "Tier 3: 聚簇为 2MB 对齐巨块 (Super-Block) + cuFileBatchIOSubmit (跑出 31.0 GB/s，但全量读完才启动 GPU 计算)",
+      "effective_ssd_to_gpu_bw_gbps": 31.0,
+      "ttft_64k_prefix_hit_ms": 520.0,
+      "host_cpu_core_saturation_pct": 8.0,
+      "verdict": "满足 4KB 对齐与 NVMe 大块并发深度，绕过 CPU 直写显存，但未与逐层 Prefill/Decode 计算流水线重叠 ✅"
+    },
+    {
+      "tier_id": "tier4_2mb_superblock_gds_or_3fs_rdma_plus_gpu_scatter_and_layer_pipeline",
+      "name": "Tier 4: 2MB 对齐巨块 GDS / DeepSeek 3FS 零拷贝直通 + 显存内 Triton 拆页分发 + 逐层流水线重叠",
+      "effective_ssd_to_gpu_bw_gbps": 52.0,
+      "ttft_64k_prefix_hit_ms": 310.0,
+      "host_cpu_core_saturation_pct": 3.0,
+      "verdict": "8 盘 Gen5 NVMe / 3FS 以 52.0 GB/s 零 CPU 拷贝直灌 GPU 临时环形缓冲，由 GPU 算子高速分发至分页表，TTFT 猛降 12.3x 🏆"
+    }
+  ]
+}
