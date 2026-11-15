@@ -278,6 +278,8 @@ Round 224 基于公开发布的 PyTorch `TorchDynamo / TorchInductor` 符号维�
 
 Round 225 基于公开发布的 Linux 内核邻居子系统（`gc_thresh1/2/3`、`arp_ignore/arp_announce`）、TCP 全连接监听队列（`somaxconn`）、BGP EVPN `ARP Suppression` 与 PyTorch `c10d::TCPStore` 握手规范构建原创合成万卡集群初始化延迟与可靠性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 226 基于公开发布的大参数 MoE 专家激活幂律分布特性与跨层残差流投机路由预取（`Pre-gated MoE / MoE-Infinity` 原理）及异步 `Copy Engine` 流水线机制构建原创合成显存受限 MoE 卸载与预取延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
