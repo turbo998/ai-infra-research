@@ -346,6 +346,8 @@ Round 258 基于公开发布的 `KIVI`（`Key` 按通道离群值与 `Value` 按
 
 Round 259 基于公开发布的 `DeepSeek-V2/V3 Multi-head Latent Attention (MLA)` 解耦 RoPE 数学公式、Prefill 显式升维（`Up-Projection MHA`）算力方程与 Decode 矩阵吸收（`Weight Absorption MQA` + `FlashMLA` `576/512` 异构核）原理构建原创合成双态执行延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 260 基于公开发布的 IEEE 754 `BFloat16` 7 位尾数舍入边界（$2^{-8}$ 下溢截断）、`Stochastic Rounding`（概率随机舍入）、`Kahan Compensated Summation`（卡汉误差补偿求和）与 `DeepSeek-V3 / TorchAO` 分块 `FP8` 优化器动量原理构建原创合成显存与收敛精度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

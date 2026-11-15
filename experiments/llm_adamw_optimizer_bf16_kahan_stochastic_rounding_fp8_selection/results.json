@@ -1,0 +1,46 @@
+{
+  "experiment_id": "llm_adamw_optimizer_bf16_kahan_stochastic_rounding_fp8_selection",
+  "round": 260,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "model_params_b": 70,
+    "bf16_mantissa_bits": 7,
+    "hbm_saved_70b_gb": 490.0
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_pure_bf16_weights_and_moments_rne_stagnation",
+      "name": "Tier 1: 纯 BF16 权重与动量 (无 FP32 主权重，直接 RNE 舍入导致 |Δw|/|w|<2^-8 时 78% 参数更新被大数吃小数吞没!)",
+      "optimizer_plus_weight_bytes_per_param": 6.0,
+      "total_state_hbm_70b_gb": 420.0,
+      "val_loss_gap_vs_fp32_master": 0.38,
+      "verdict": "BF16 尾数仅 7 bit (最小步长 ~0.0078)，当学习率衰减至 3e-5 时 w + Δw 四舍五入后严格等于 w，训练中后期彻底停滞 ✕"
+    },
+    {
+      "tier_id": "tier2_standard_fp32_master_weights_and_fp32_m_v",
+      "name": "Tier 2: 传统混合精度基准 (BF16 前向权重 2B + FP32 主权重 4B + FP32 一阶/二阶动量 8B = 14B/参数)",
+      "optimizer_plus_weight_bytes_per_param": 14.0,
+      "total_state_hbm_70b_gb": 980.0,
+      "val_loss_gap_vs_fp32_master": 0.0,
+      "verdict": "精度完美无损，但仅 70B 模型的权重+优化器状态就吃掉 980GB 显存，且 Checkpoint 与优化器步 HBM 带宽开销巨大 ⚠️"
+    },
+    {
+      "tier_id": "tier3_bf16_master_weights_with_stochastic_rounding",
+      "name": "Tier 3: BF16 权重 + 概率随机舍入 (Stochastic Rounding 消除期望停滞，但低学习率下随机方差仍掉点 +0.018)",
+      "optimizer_plus_weight_bytes_per_param": 6.0,
+      "total_state_hbm_70b_gb": 420.0,
+      "val_loss_gap_vs_fp32_master": 0.018,
+      "verdict": "按 Δw/ULP 概率向上进位在数学期望上无偏，省去 FP32 主权重，但伪随机震荡破坏了收敛末期的精细谷底搜索 ✅"
+    },
+    {
+      "tier_id": "tier4_kahan_compensated_bf16_or_fp32_master_plus_block_fp8_moments",
+      "name": "Tier 4: Kahan 误差补偿主权重 + 分块 FP8 一阶动量 m 与 BF16/FP8 二阶动量 v (DeepSeek-V3 / TorchAO 范式)",
+      "optimizer_plus_weight_bytes_per_param": 7.0,
+      "total_state_hbm_70b_gb": 490.0,
+      "val_loss_gap_vs_fp32_master": 0.001,
+      "verdict": "确定性保留 100% 微小梯度残差 (零大数吃小数)，同时将不敏感的动量 m/v 压缩至分块 FP8/BF16，立省 490GB 显存且精度无损 🏆"
+    }
+  ]
+}
