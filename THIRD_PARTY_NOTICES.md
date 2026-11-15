@@ -298,6 +298,8 @@ Round 234 基于公开发布的大词表模型输出层 `[N, V]` Logits 显存�
 
 Round 235 基于公开发布的 CPython `PyObject` 引用计数（`ob_refcnt`）与 Linux `fork()` 写时复制（`Copy-on-Write`）交互原理、POSIX `/dev/shm` `SIGBUS` 机制及 `np.memmap` 只读映射索引规范构建原创合成 DataLoader 内存评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 236 基于公开发布的 `vLLM / SGLang` `PagedAttention` 页块粒度（`block_size = 1/16/64/256`）与 Hopper/Blackwell `WGMMA / TMA` 64-Token 瓦片对齐、`FlashMLA` 分页约束及 `Mooncake` RDMA 连续块传输原理构建原创合成带宽与碎片率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
