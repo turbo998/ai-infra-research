@@ -402,6 +402,8 @@ Round 286 基于公开发布的 Linux `cgroup v2` 内存记账规范、Kubernete
 
 Round 287 基于公开发布的 DeepSeek-V3 节点受限路由（`Node-Limited Routing M=4`）与 `DeepEP` 两阶段分层去重通信（`Stage-1 Same-Rail RDMA Deduplication + Stage-2 Intra-Node NVLink Fan-Out & Pre-Combine`）及 `FP8 Dispatch / BF16 Combine` 非对称精度原理构建原创合成通信耗时与重叠掩盖评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 288 基于公开发布的 `vLLM APC / SGLang RadixAttention` 链式块前缀哈希原理、System Prompt 动态时间戳与滑动窗口位移导致的缓存失效机制以及推理模型 `<think>` 模板剥离边界对齐规范构建原创合成多轮 Agent 命中率与首字延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
