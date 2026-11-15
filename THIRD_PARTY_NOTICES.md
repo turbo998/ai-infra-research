@@ -272,6 +272,8 @@ Round 221 基于公开发布的 PyTorch `FSDP2 (fully_shard)`、`DTensor` 逐参
 
 Round 222 基于公开发布的 NVIDIA NCCL 2.23+ `PAT (Parallel Aggregated Trees)` 并行聚合二项式树算法文档与千卡 FSDP `AllGather / ReduceScatter` 对数跳数通信原理构建原创合成集合通信延迟与带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 223 基于公开发布的 PCIe Base Specification 数据链路层 `LCRC / NAK Replay Rollover` 状态机、Linux `AER` 与 NVIDIA `DCGM_FI_DEV_PCIE_REPLAY_COUNTER` / `XID 79` 排障规范构建原创合成信号劣化与主动隔离评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
