@@ -308,6 +308,8 @@ Round 239 基于公开发布的 `verl / DeepSeek-R1 GRPO` 长思维链 RL 变长
 
 Round 240 基于公开发布的 NVIDIA NVLink 4.0/5.0 18 子链路条带化机制、DCGM `NVLINK_CRC_FLIT_ERROR / REPLAY_ERROR / RECOVERY_ERROR` 遥测规范与 `XID 74 / XID 149` 及 `nvidia-fabricmanager` 容错原理构建原创合成超节点机内互连健康评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 241 基于公开发布的 PyTorch `CUDACachingAllocator`（`PYTORCH_CUDA_ALLOC_CONF`）、`torch.cuda.empty_cache()` 同步释放机制与 CUDA Virtual Memory Management (`cuMemMap` `expandable_segments:True`) 虚拟页表拼接原理构建原创合成显存碎片与开销评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
