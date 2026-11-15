@@ -296,6 +296,8 @@ Round 233 基于公开发布的 PyTorch `DTensor` 混合并行梯度范数归约
 
 Round 234 基于公开发布的大词表模型输出层 `[N, V]` Logits 显存物化分析、推理 Prefill 末位切片（`logits_to_keep=1`）与 `Liger-Kernel / Apple Cut-Cross-Entropy (CCE)` 片上 SRAM 在线 `LogSumExp` 融合线性交叉熵原理构建原创合成显存与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 235 基于公开发布的 CPython `PyObject` 引用计数（`ob_refcnt`）与 Linux `fork()` 写时复制（`Copy-on-Write`）交互原理、POSIX `/dev/shm` `SIGBUS` 机制及 `np.memmap` 只读映射索引规范构建原创合成 DataLoader 内存评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

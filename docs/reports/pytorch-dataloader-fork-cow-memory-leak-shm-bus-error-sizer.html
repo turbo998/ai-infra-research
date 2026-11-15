@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>PyTorch DataLoader fork CoW RAM Leak &amp; /dev/shm Sizer (Round 235)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 235 · PyTorch `DataLoader` `fork CoW` 内存爆炸与 `/dev/shm` `Bus Error` 计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 8 卡节点 (64 个 DataLoader Workers, 12GB 样本索引) 存储与共享内存架构</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: Dataset 保存 Python list/dict (ob_refcnt 写时复制导致 64 倍膨胀 · 768.0 GB OOM)</option>
+          <option value="t2">Tier 2: 容器保留默认 64 MB /dev/shm (预取队列写满触发 SIGBUS Bus error 崩溃)</option>
+          <option value="t3">Tier 3: 内存 NumPy/Tensor 数组 + 64GiB /dev/shm (消除 Worker CoW · 8 Rank 占 96.0 GB)</option>
+          <option value="t4" selected>Tier 4: 只读 np.memmap 二进制索引 + persistent_workers + 64GiB /dev/shm (仅 12.2 GB)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>整机稳态主机内存</div><div class="val" id="ram">12.2 GB</div></div>
+      <div class="kpi"><div>内存复制放大倍数</div><div class="val" id="dup">1.0 x</div></div>
+      <div class="kpi"><div>SIGBUS / OOM 崩溃</div><div class="val" id="crs">0 次</div></div>
+      <div class="kpi"><div>相比 Python list 省内存</div><div class="val" id="spd">62.95 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (只读 np.memmap + persistent_workers=True + 64GiB /dev/shm)：8 个主进程与 64 个 Worker 100% 共享唯一一份内核只读映射页，0 次 ob_refcnt 脏页复制，节省 62.95 倍主机内存 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { ram: "768.0 GB ✕", dup: "64.0 x ✕", crs: "必现 OOM ✕", spd: "1.00 x", v: "Tier 1 (Python list/dict)：CPython 只读访问 list[i] 也会写 ob_refcnt (+1)，击穿 fork CoW 导致 64 个 Worker 各自复制一份 12GB ✕" },
+      t2: { ram: "96.0 GB", dup: "8.0 x ⚠️", crs: "必现 Bus error ✕", spd: "8.00 x", v: "Tier 2 (默认 64MB /dev/shm)：DataLoader 靠 /dev/shm 传 Tensor，64MB 瞬间塞满触发内核 SIGBUS 杀进程 ⚠️" },
+      t3: { ram: "96.0 GB ✅", dup: "8.0 x", crs: "0 次 ✅", spd: "8.00 x", v: "Tier 3 (进程内 NumPy/Tensor 数组 + 64G shm)：消除了 8 个子进程的 CoW 膨胀，但 8 个主进程仍各自持有一份 12GB 副本 ✅" },
+      t4: { ram: "12.2 GB 🏆", dup: "1.0 x 🏆", crs: "0 次 🏆", spd: "62.95 x", v: "Tier 4 (只读 np.memmap + persistent_workers + 64G shm)：全机 72 个进程共享同一份 12.2 GB 物理页，零泄漏零崩溃 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("ram").textContent = d.ram;
+      document.getElementById("dup").textContent = d.dup;
+      document.getElementById("crs").textContent = d.crs;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
