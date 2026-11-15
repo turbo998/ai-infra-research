@@ -326,6 +326,8 @@ Round 248 基于公开发布的 NVIDIA GPU System Processor (`GSP`) 固件超时
 
 Round 249 基于公开发布的 PyTorch `torch.autograd.graph.saved_tensors_hooks (save_on_cpu)` 执行时机语义、`nn.Parameter` 视图（`_base`）过滤规则与重算边界跨层 `stream_h2d` 提前预取（`Lookahead Prefetch`）原理构建原创合成激活值卸载重叠率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 250 基于公开发布的 `FlashAttention-2/3 flash_attn_varlen_func (cu_seqlens)` 块对角跳块机制、逐子文档 `position_ids` 归零规则与跨文档交界处 `shift_labels` 忽略索引（`labels[b] = -100`）原理构建原创合成序列打包精度与算子延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

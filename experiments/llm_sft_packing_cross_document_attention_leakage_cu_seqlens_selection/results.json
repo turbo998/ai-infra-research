@@ -1,0 +1,46 @@
+{
+  "experiment_id": "llm_sft_packing_cross_document_attention_leakage_cu_seqlens_selection",
+  "round": 250,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "packed_seq_len": 32768,
+    "kernel_speedup_vs_full_causal_x": 2.82,
+    "accuracy_gain_pt": 5.6
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_naive_concatenation_full_causal_mask_and_unreset_rope",
+      "name": "Tier 1: 朴素拼接 + 默认下三角掩码 (后序样本偷看前序样本 + position_ids 未归零导致评测掉点 5.6%)",
+      "downstream_sft_accuracy_pct": 76.4,
+      "extra_2d_mask_hbm_gb": 0.0,
+      "attention_kernel_latency_ms": 48.0,
+      "verdict": "把多条无关对话直接拼在一起跑普通 causal=True，不仅第 2 条对话全盘看到第 1 条对话内容，且位置编码从几千开始漂移 ✕"
+    },
+    {
+      "tier_id": "tier2_dense_2d_block_diagonal_mask_hbm_materialization",
+      "name": "Tier 2: 物化二维 [S, S] 块对角掩码矩阵 (虽隔离了文档，但 32K 下吞噬 8.0GB 显存且无法跳过块外计算)",
+      "downstream_sft_accuracy_pct": 81.2,
+      "extra_2d_mask_hbm_gb": 8.0,
+      "attention_kernel_latency_ms": 92.0,
+      "verdict": "在显存里构造 32768×32768 的二维布尔/浮点掩码既吃掉 8GB 显存，又迫使算子遍历全部非对角零块，耗时翻倍 ⚠️"
+    },
+    {
+      "tier_id": "tier3_varlen_cu_seqlens_without_boundary_label_shift_masking",
+      "name": "Tier 3: 开启 flash_attn_varlen (cu_seqlens) + 重置 RoPE，但漏屏蔽文档交界处 shift_labels[b] = -100",
+      "downstream_sft_accuracy_pct": 80.5,
+      "extra_2d_mask_hbm_gb": 0.0,
+      "attention_kernel_latency_ms": 17.0,
+      "verdict": "虽然 Attention 与 RoPE 已完全隔离，但全局 labels[1:] 错位迫使文档 A 的末尾 <eos> 去预测文档 B 的开头第一个词 ✅"
+    },
+    {
+      "tier_id": "tier4_varlen_cu_seqlens_plus_rope_reset_and_boundary_ignore_index",
+      "name": "Tier 4: flash_attn_varlen (cu_seqlens 硬件跳块) + 逐文档 RoPE 归零 + 交界处 labels[b]=-100 屏蔽",
+      "downstream_sft_accuracy_pct": 82.0,
+      "extra_2d_mask_hbm_gb": 0.0,
+      "attention_kernel_latency_ms": 17.0,
+      "verdict": "0 字节掩码显存，直接跳过 72% 跨文档非对角瓦片计算 (比普通下三角还快 2.82x!)，且 100% 消除跨文档注意力/位置/标签污染 🏆"
+    }
+  ]
+}

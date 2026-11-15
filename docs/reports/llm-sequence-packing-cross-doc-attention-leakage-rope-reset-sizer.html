@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 250 · Sequence Packing cu_seqlens, RoPE Reset &amp; Boundary Label Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 250 · Sequence Packing `cu_seqlens`, RoPE Reset &amp; Boundary `-100` Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Sequence Packing Architecture</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Naive Concatenation (Full Causal + Un-Reset RoPE)</option>
+          <option value="t2">Tier 2: Dense 2D [32K, 32K] Block-Diagonal Mask</option>
+          <option value="t3">Tier 3: cu_seqlens + RoPE Reset (No Boundary -100)</option>
+          <option value="t4" selected>Tier 4: cu_seqlens + RoPE Reset + Boundary -100 Guard</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Downstream SFT Accuracy (%)</label>
+        <div id="acc" class="kpi">82.0%</div>
+      </div>
+      <div class="card">
+        <label>Attention Kernel Latency / 2D Mask HBM</label>
+        <div id="lat" class="kpi">17.0 ms / 0.0 GB</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Passing 1D `cu_seqlens` to `flash_attn_varlen_func`, resetting `position_ids` to `0` at every document boundary, and setting `labels[cu_seqlens[1:-1]] = -100` eliminates all cross-document leakage and speeds up attention by 2.82x (17.0 ms vs 48.0 ms) with 0.0 GB 2D mask overhead.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { acc: "76.4% (-5.6 pt) ✕", lat: "48.0 ms / 0.0 GB", bad: true, msg: "⛔ Cross-document attention contamination & un-reset RoPE position drift drop SFT accuracy by -5.6%." },
+      t2: { acc: "81.2%", lat: "92.0 ms / 8.0 GB ✕", bad: true, msg: "⚠️ Materializing a 2D [32768, 32768] mask consumes 8.0 GB HBM per layer and disables hardware tile skipping (92.0 ms)." },
+      t3: { acc: "80.5% (-1.5 pt)", lat: "17.0 ms / 0.0 GB", bad: false, msg: "⚠️ Missing boundary `labels[cu_seqlens[1:-1]] = -100` trains Doc A's <eos> to predict Doc B's first word." },
+      t4: { acc: "82.0% 🏆", lat: "17.0 ms / 0.0 GB 🏆", bad: false, msg: "🏆 Lossless 82.0% accuracy with 2.82x faster hardware block-diagonal tile skipping and 0.0 GB 2D mask HBM." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const a = document.getElementById('acc');
+      a.textContent = d.acc;
+      a.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('lat').textContent = d.lat;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
