@@ -414,6 +414,8 @@ Round 292 基于公开发布的 NCCL RoCEv2 `NCCL_IB_GID_INDEX` (`RoCEv1` vs `Ro
 
 Round 293 基于公开发布的 `StreamingLLM` 注意力汇聚点（`Attention Sinks`）机制、`Gemma-3 / Mistral` `5:1` 局部滑动窗口与全局注意力交错架构以及 `vLLM V1 / SGLang` 分离式环形 SWA 页池与全局全量页池（`Split Circular-SWA / Full-Global Paged KV Pool`）原理构建原创合成显存开销与长文召回率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 294 基于公开发布的 `DeepGEMM / CUTLASS` Hopper/Blackwell MoE `Grouped GEMM` 算子架构、`FusedPermute` `M_BLOCK = 64 / 128` 连续块边界对齐、`1x128 FP8` 列主序缩放因子对齐与单一静态 `CUtensorMap` 描述符零更新机制构建原创合成算力利用率与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
