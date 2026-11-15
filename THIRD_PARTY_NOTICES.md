@@ -382,6 +382,8 @@ Round 276 基于公开发布的 `Nydus (RAFS v6 EROFS/fscache) / OverlayBD` 容�
 
 Round 277 基于公开发布的 NVIDIA `Grace Hopper (GH200) / Grace Blackwell (GB200)` `NVLink-C2C` 硬件一致性总线、`Address Translation Services (ATS)` `SMMUv3 / GMMU TLB` 地址转换机制与 ARM64 `64KB` 基础页 + `512MB PMD THP` 页表几何学原理构建原创合成带宽与 TLB 命中率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 278 基于公开发布的 `vLLM / SGLang` `PreemptionMode (RECOMPUTE vs. SWAP)` 抢占机制、大模型推理 `Goodput (TTFT + TPOT Joint SLO)` 评估准则与 KV Cache 增长水位准入控制（Watermark Admission Gate）原理构建原创合成有效达标吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
