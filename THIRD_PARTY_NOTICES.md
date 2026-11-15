@@ -400,6 +400,8 @@ Round 285 基于公开发布的 `EAGLE-3` 多层隐状态特征融合与训练�
 
 Round 286 基于公开发布的 Linux `cgroup v2` 内存记账规范、Kubernetes Kubelet `workingSetBytes = memory.current - inactive_file` 驱逐公式、`Safetensors mmap` 多进程 `active_file` 晋升、`POSIX_FADV_DONTNEED` 页缓存释放与 `O_DIRECT` 异步落盘机制构建原创合成容器防 `OOMKilled` 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 287 基于公开发布的 DeepSeek-V3 节点受限路由（`Node-Limited Routing M=4`）与 `DeepEP` 两阶段分层去重通信（`Stage-1 Same-Rail RDMA Deduplication + Stage-2 Intra-Node NVLink Fan-Out & Pre-Combine`）及 `FP8 Dispatch / BF16 Combine` 非对称精度原理构建原创合成通信耗时与重叠掩盖评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

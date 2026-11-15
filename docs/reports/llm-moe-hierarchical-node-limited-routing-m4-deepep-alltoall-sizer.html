@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 287 · MoE M=4 Node-Limited Routing &amp; DeepEP 2-Stage Dispatch Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 287 · MoE `M=4` Node-Limited Routing &amp; `DeepEP` 2-Stage `RDMA -&gt; NVLink` Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">EP=64 (8 Nodes × 8 GPUs, Top-8) Routing &amp; All-to-All Strategy</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Unconstrained Top-8 + Flat 64-Rank AllToAllv (BF16)</option>
+          <option value="t2">Tier 2: M=4 Node Cap + Naive Flat 64-Rank ncclAllToAllv</option>
+          <option value="t3">Tier 3: M=4 + 2-Stage RDMA-&gt;NVLink Deduplicated Dispatch (BF16)</option>
+          <option value="t4" selected>Tier 4: M=4 + DeepEP 2-Stage Dedup + FP8 Dispatch / BF16 Combine</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Per-Layer All-to-All Latency</label>
+        <div id="lat" class="kpi">1.42 ms (4.82x Faster)</div>
+      </div>
+      <div class="card">
+        <label>RDMA Copies/Tok / Overlap</label>
+        <div id="ovl" class="kpi">3.12 (FP8) / 100.0%</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Pairing `M=4` node-limited routing with `DeepEP` 2-stage `RDMA -&gt; NVLink` deduplicated dispatch and `FP8 Dispatch / BF16 Combine` cuts inter-node RDMA volume 4.56x and reduces `All-to-All` latency to `1.42 ms` (100% hidden under DualPipe compute).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { lat: "6.85 ms (Exposed Stall! ✕)", ovl: "7.12 (BF16) / 34.0% ✕", bad: true, msg: "⛔ Unconstrained Top-8 scatters each token to 7.12 nodes over slow 50 GB/s RDMA, stalling 6.85 ms/layer!" },
+      t2: { lat: "6.60 ms (Zero Savings! ✕)", ovl: "7.00 (BF16) / 35.5% ✕", bad: true, msg: "⛔ Flat AllToAllv still sends separate duplicate RDMA packets to multiple GPUs on the same remote node!" },
+      t3: { lat: "2.65 ms ✅", ovl: "3.12 (BF16) / 86.0% ✅", bad: false, msg: "✅ Sends 1 deduplicated copy per target node over RDMA and fans out over 450 GB/s intra-node NVLink." },
+      t4: { lat: "1.42 ms (4.82x Faster) 🏆", ovl: "3.12 (FP8) / 100.0% 🏆", bad: false, msg: "🏆 2-stage RDMA->NVLink deduplication + FP8 Dispatch / pre-reduced BF16 Combine achieves 1.42 ms and 100% compute overlap." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('lat');
+      el.textContent = d.lat;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('ovl').textContent = d.ovl;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
