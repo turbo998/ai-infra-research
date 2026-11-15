@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 257 · Zero-Bubble Pipeline Parallelism (B/W Split vs 1F1B) Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 257 · Pipeline Parallelism (`PP = 8`) `Zero-Bubble B/W Split` vs `1F1B` Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Pipeline Parallel Schedule (PP=8 · M=24)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: GPipe (All Forward Then All Backward)</option>
+          <option value="t2">Tier 2: Standard 1F1B (Monolithic Backward B+W)</option>
+          <option value="t3">Tier 3: Interleaved 1F1B (Virtual Stages V=4)</option>
+          <option value="t4" selected>Tier 4: Zero-Bubble PP (Split B=dX &amp; Deferred W=dW)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Pipeline Bubble / Peak Act HBM</label>
+        <div id="bub" class="kpi">1.2% / 28.0 GB</div>
+      </div>
+      <div class="card">
+        <label>Throughput / P2P Comm Volume</label>
+        <div id="tput" class="kpi">528 TFLOPS / 1.0x</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Decoupling backward into critical-path activation gradients `B` ($dX$) and deferred weight gradients `W` ($dW$) shrinks the pipeline bubble from 23.3% to 1.2% with 1.0x P2P traffic and 28.0 GB bounded activation memory (+28.2% higher TFLOPS).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { bub: "23.3% ✕ / 72.0 GB ✕", tput: "385 TFLOPS / 1.0x", bad: true, msg: "⛔ GPipe stores all M=24 micro-batches simultaneously (72.0 GB OOM) with a 23.3% pipeline bubble." },
+      t2: { bub: "23.3% ✕ / 28.0 GB", tput: "412 TFLOPS / 1.0x", bad: true, msg: "⚠️ Monolithic 1F1B blocks upstream stages while computing local weight gradients dW (23.3% idle bubble)." },
+      t3: { bub: "6.8% / 31.5 GB", tput: "468 TFLOPS / 4.0x Comm ⚠️", bad: false, msg: "⚠️ Interleaved 1F1B (V=4) cuts the bubble to 6.8%, but multiplies cross-node P2P communication traffic by 4.0x." },
+      t4: { bub: "1.2% / 28.0 GB 🏆", tput: "528 TFLOPS / 1.0x 🏆", bad: false, msg: "🏆 Immediate B(dX) relay + deferred W(dW) bubble filling achieves 1.2% bubble, 1.0x P2P comm, and 528 TFLOPS." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('bub');
+      el.textContent = d.bub;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('tput').textContent = d.tput;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

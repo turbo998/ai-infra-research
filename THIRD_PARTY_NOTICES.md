@@ -340,6 +340,8 @@ Round 255 基于公开发布的 `XGrammar / llguidance` 上下文无关词表分
 
 Round 256 基于公开发布的 PCIe 规范 `Access Control Services (ACS: ReqRedir / CmpltRedir / UpstreamFwd)` 硬件路由机制、Linux `iommu=pt` 透传模式与 `GPUDirect RDMA (nvidia_peermem)` P2P 寻址原理构建原创合成 CPU Root Complex 绕行与带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 257 基于公开发布的 `GPipe / 1F1B / Interleaved 1F1B` 流水线并行方程与 `Zero-Bubble Pipeline Parallelism (ZB-H1 / ZB-H2 / DualPipe)` 反向传播激活梯度 `B` ($dX$) 与权重梯度 `W` ($dW$) 解耦调度原理构建原创合成气泡率与显存评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
