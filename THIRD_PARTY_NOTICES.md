@@ -286,6 +286,8 @@ Round 228 基于公开发布的 `Ring Attention`、`Striped Attention` 与 `ZigZ
 
 Round 229 基于公开发布的 `Prompt Lookup Decoding (PLD)`、`Medusa`、`EAGLE-3` 多层特征自回归草稿树及 GPU 屋脊线算术强度拐点（`Roofline Ridge Point` 高并发验证负加速边界）原理构建原创合成投机解码选型与动态树限流评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 230 基于公开发布的并行文件系统 `MDS` 目录锁机制、Linux 内核 `Page Cache (O_DIRECT / POSIX_FADV_DONTNEED)` 与 `PyTorch Distributed Checkpoint (DCP)` 持久化锁页 `AsyncStager` 及两阶段原子重命名原理构建原创合成万卡 Checkpoint 停顿评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
