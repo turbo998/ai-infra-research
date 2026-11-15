@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>FlashAttention Backward Determinism &amp; dQ_accum Workspace Sizer (Round 238)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 238 · `FlashAttention-2/3` 反向传播 `dQ_accum` 乱序 `atomicAdd` 与确定性计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 FlashAttention 反向传播梯度 (dQ) 累加与确定性架构</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 默认 deterministic=False (多 CTA 并发乱序 atomicAdd · 每步漂移 6 ULP · 820 TFLOPS)</option>
+          <option value="t2">Tier 2: 退回单 CTA 串行扫描 K/V (虽 0 ULP，但丧失 KV 并行度暴跌至 310 TFLOPS)</option>
+          <option value="t3">Tier 3: 无界全分片 FP32 私有缓冲 (0 ULP · 但 32K 序列下额外吞噬 +16.0 GB HBM)</option>
+          <option value="t4" selected>Tier 4: FA2.6+/FA3 保序 deterministic=True (有界 0.5GB 缓冲 / 信号量 · 0 ULP · 785 TFLOPS)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>单步最大 ULP 漂移</div><div class="val" id="ulp">0 ULP (精确)</div></div>
+      <div class="kpi"><div>反向有效算力</div><div class="val" id="tf">785.0 TFLOPS</div></div>
+      <div class="kpi"><div>dQ 工作区显存</div><div class="val" id="mem">0.50 GB</div></div>
+      <div class="kpi"><div>相比串行确定性提速</div><div class="val" id="spd">2.53 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (FA2.6+/FA3 deterministic=True)：保持跨 K/V 块的满血 Tensor Core 并行计算，仅在写回 dQ_accum 时通过信号量/有界波次严格按 j=0,1,2... 保序累加，以 4.2% 极小代价实现 0 ULP 逐比特复现 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { ulp: "6 ULPs (发散) ✕", tf: "820.0 TFLOPS", mem: "0.25 GB", spd: "2.65 x", v: "Tier 1 (默认 deterministic=False)：跨 K/V 块的多个 CTA 同时向 dQ_accum 发起乱序 atomicAdd，浮点非结合律导致无法逐比特复现 ✕" },
+      t2: { ulp: "0 ULP ✅", tf: "310.0 TFLOPS ✕", mem: "0.25 GB", spd: "1.00 x", v: "Tier 2 (单 CTA 串行回退)：取消 KV 维度切分导致在 GQA/MLA 少头数下大量 SM 空闲，算力暴跌 62.2% ⚠️" },
+      t3: { ulp: "0 ULP ✅", tf: "710.0 TFLOPS", mem: "16.00 GB ✕", spd: "2.29 x", v: "Tier 3 (全分片 FP32 缓冲区)：每个 KV 块独占一份完整 [B,H,S,D] FP32 缓冲，32K 上下文下白白吃掉 16 GB 显存 ⚠️" },
+      t4: { ulp: "0 ULP (精确) 🏆", tf: "785.0 TFLOPS 🏆", mem: "0.50 GB 🏆", spd: "2.53 x", v: "Tier 4 (FA2.6+/FA3 deterministic=True)：95.7% 满血峰值算力 + 0.50 GB 极小显存 + 100% 逐比特可复现 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("ulp").textContent = d.ulp;
+      document.getElementById("tf").textContent = d.tf;
+      document.getElementById("mem").textContent = d.mem;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>

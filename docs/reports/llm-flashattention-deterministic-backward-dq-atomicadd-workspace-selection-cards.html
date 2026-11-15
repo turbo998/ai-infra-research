@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>7-Card Visual Benchmark Report · FlashAttention Deterministic Backward (Round 238)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1500px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 18px; margin: 8px 0 10px; line-height: 1.35; color: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94a3b8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; }
+    .bar-row { margin: 8px 0; font-size: 12px; }
+    .bar-bg { background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · FLASHATTENTION DETERMINISTIC BACKWARD</div>
+        <h2>Ordered `deterministic=True` Eliminates 6-ULP `dQ_accum` `atomicAdd` Drift at 785 TFLOPS (95.7% Peak)</h2>
+        <p style="font-size:13px;color:#cbd5e1;">Evaluates Default Unordered `atomicAdd`, Serial 1-CTA Fallback, Unbounded Split Buffers, and FA2.6+/FA3 Ordered `deterministic=True`.</p>
+      </div>
+      <div class="code">Default atomicAdd (False): 820 TFLOPS | 6-ULP Drift (Diverges!) ✕
+Serial 1-CTA Fallback:     310 TFLOPS | 0 ULP (-62.2% Speed) ⚠️
+Ordered deterministic=True: 785 TFLOPS | 0 ULP (0.5GB Buffer) 🏆</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: CROSS-CTA DQ_ACCUM ATOMICADD RACES</div>
+        <h2>Why Parallelizing Backward Across K/V Blocks Causes Run-to-Run Gradient Divergence</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Task Type: <code>choice</code> / <code>score</code> · Action: <strong>Act automatically</strong> (Enable `deterministic=True` for SDC Golden-Step checks, loss-spike replays, and CI).</p>
+        <div class="bar-row">Tier 2 Serial 1-CTA Fallback (310.0 TFLOPS · 0 ULP)<div class="bar-bg"><div class="bar-fill" style="width:37.8%;background:#ef4444;"></div></div></div>
+        <div class="bar-row">Tier 3 Unbounded Split Workspace (710.0 TFLOPS · +16.0 GB HBM)<div class="bar-bg"><div class="bar-fill" style="width:86.6%;background:#f59e0b;"></div></div></div>
+        <div class="bar-row">Tier 4 Ordered deterministic=True (785.0 TFLOPS · 0 ULP · 0.5 GB)<div class="bar-bg"><div class="bar-fill" style="width:95.7%;background:#10b981;"></div></div></div>
+        <div class="bar-row">Tier 1 Default Unordered atomicAdd (820.0 TFLOPS · 6-ULP Drift)<div class="bar-bg"><div class="bar-fill" style="width:100.0%;"></div></div></div>
+      </div>
+      <div class="foot">Grounded in experiments/llm_flashattention_deterministic_backward_splitkv_atomic_workspace_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>Full 4-Tier FlashAttention Backward Matrix</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>ULP DRIFT</th><th>BWD TFLOPS / HBM</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 Default</td><td>6 ULPs ✕</td><td>820 TF / 0.25 GB</td><td>Train Only</td></tr>
+            <tr><td>Tier 2 Serial</td><td>0 ULP</td><td>310 TF ✕ / 0.25 GB</td><td>Reject</td></tr>
+            <tr><td>Tier 3 Full Split</td><td>0 ULP</td><td>710 TF / 16.0 GB ✕</td><td>Bound Split</td></tr>
+            <tr><td>Tier 4 Ordered</td><td>0 ULP</td><td>785 TF / 0.50 GB</td><td>Act auto 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">✕ marks non-reproducible 6-ULP drift, 62% serial slowdown, or 16 GB workspace bloat.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>Enabling Bitwise-Exact Backward in PyTorch &amp; FA3</h2>
+        <div class="code"># 1. Enable ordered dQ accumulation in FlashAttention-2.6+ / FA3:
+out = flash_attn_func(
+    q, k, v, causal=True, deterministic=True  # Enforces ordered dQ_accum!
+)
+↓
+# 2. Pair with deterministic cuBLAS workspace to block Split-K atomicAdd:
+import os, torch
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+torch.use_deterministic_algorithms(True)</div>
+      </div>
+      <div class="foot">Ordered semaphores serialize only the final L2 write-back while keeping Tensor Core MMA 100% parallel.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Determinism, Throughput &amp; Workspace Overhead</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>DEFAULT / SERIAL</th><th>ORDERED DETERMINISTIC</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>Per-Step ULP Drift</td><td>6 ULPs (Default)</td><td>0 ULP (Bitwise Exact)</td><td>100% Reproducible</td></tr>
+            <tr><td>Backward TFLOPS</td><td>310.0 TF (Serial)</td><td>785.0 TFLOPS</td><td>2.53x Faster</td></tr>
+            <tr><td>dQ Workspace HBM</td><td>16.00 GB (Full Split)</td><td>0.50 GB (SM-Bounded)</td><td>-15.50 GB Saved</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Only 4.2% slower than non-deterministic default (785 vs 820 TFLOPS).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY &amp; THROUGHPUT</div>
+        <h2>Effective Backward Throughput (`TFLOPS`, Higher Is Better)</h2>
+        <div class="bar-row">Tier 4 Ordered deterministic=True (785.0 TFLOPS · 0 ULP)<div class="bar-bg"><div class="bar-fill" style="width:95.7%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 3 Unbounded Split Workspace (710.0 TFLOPS · 16 GB)<div class="bar-bg"><div class="bar-fill" style="width:86.6%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 1 Default Unordered atomicAdd (820.0 TFLOPS · 6-ULP Drift)<div class="bar-bg"><div class="bar-fill" style="width:100%;background:#cbd5e1;"></div></div></div>
+        <div class="bar-row">Tier 2 Serial 1-CTA Fallback (310.0 TFLOPS · 0 ULP)<div class="bar-bg"><div class="bar-fill" style="width:37.8%;background:#cbd5e1;"></div></div></div>
+      </div>
+      <div class="foot">Primary deterministic path (#3B82F6) vs Non-deterministic / Serial baselines (#CBD5E1).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p style="font-size:12px;color:#6ee7b7;"><strong>✅ Good fit:</strong> Enabling `deterministic=True` for SDC Golden-Step checks, loss-spike debugging replays, and kernel equivalence CI tests.</p>
+        <p style="font-size:12px;color:#fca5a5;"><strong>⛔ Not for:</strong> Falling back to 1-CTA serial execution (`310 TFLOPS`) or allocating unbounded 16 GB split buffers.</p>
+      </div>
+      <div class="foot">License: MIT · Provenance: synthetic + anonymized_reported</div>
+    </div>
+  </div>
+</body>
+</html>
