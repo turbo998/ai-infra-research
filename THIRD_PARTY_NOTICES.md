@@ -310,6 +310,8 @@ Round 240 基于公开发布的 NVIDIA NVLink 4.0/5.0 18 子链路条带化机�
 
 Round 241 基于公开发布的 PyTorch `CUDACachingAllocator`（`PYTORCH_CUDA_ALLOC_CONF`）、`torch.cuda.empty_cache()` 同步释放机制与 CUDA Virtual Memory Management (`cuMemMap` `expandable_segments:True`) 虚拟页表拼接原理构建原创合成显存碎片与开销评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 242 基于公开发布的 `Mooncake / NVIDIA Dynamo NIXL` Prefill-Decode (PD) 分离推理架构、目标端 KV 页槽位预留反压握手与逐层 `cudaEvent` 驱动的 `Layer-by-Layer Pipelined GPUDirect RDMA` 传输重叠原理构建原创合成跨机 KV 传输延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
