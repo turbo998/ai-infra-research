@@ -1,0 +1,47 @@
+{
+  "experiment_id": "llm_deepseek_eplb_moe_expert_load_balancer_replica_selection",
+  "round": 266,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "logical_experts": 256,
+    "physical_slots": 320,
+    "ep_gpus": 64,
+    "speedup_vs_static_x": 4.39
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_static_1to1_expert_placement_256_slots",
+      "name": "Tier 1: 静态 1:1 顺序放置 (256 个专家平分给 64 卡=4专家/卡，遇代码/数学偏斜流量单卡负载飙至均值 4.80x)",
+      "max_to_mean_gpu_load_ratio_x": 4.8,
+      "moe_layer_latency_ms": 4.3,
+      "extra_expert_hbm_per_gpu_gb": 0.0,
+      "verdict": "单张倒霉卡抽中 2 个热门代码专家，其余 63 张卡在 DeepEP Combine 屏障处干等它 3.4ms，集群算力利用率仅 21% ✕"
+    },
+    {
+      "tier_id": "tier2_flat_repacking_without_redundant_expert_replicas",
+      "name": "Tier 2: 仅做专家位置重排而不复制热门专家 (256 槽位无冗余，无法拆解单个超热专家且破坏跨机节点限制路由)",
+      "max_to_mean_gpu_load_ratio_x": 3.1,
+      "moe_layer_latency_ms": 2.95,
+      "extra_expert_hbm_per_gpu_gb": 0.0,
+      "verdict": "如果 1 个顶流专家自身流量就是均值的 3 倍，不给它建多副本分流，它所在的卡永远是全集群的木桶短板 ⚠️"
+    },
+    {
+      "tier_id": "tier3_flat_global_replication_320_slots_ignoring_node_hierarchy",
+      "name": "Tier 3: 扁平全局多副本复制 (256+64=320 槽位分摊热专家，但跨机随机打散破坏了 M=4 节点限制路由，耗时 1.85ms)",
+      "max_to_mean_gpu_load_ratio_x": 1.18,
+      "moe_layer_latency_ms": 1.85,
+      "extra_expert_hbm_per_gpu_gb": 2.1,
+      "verdict": "计算负载虽均衡至 1.18x，但把同一专家组打散到全部 8 台机器导致跨机 RDMA All-to-All 转发字节数暴增 ✅"
+    },
+    {
+      "tier_id": "tier4_deepseek_eplb_hierarchical_node_packing_plus_hot_replicas_and_live_swap",
+      "name": "Tier 4: DeepSeek EPLB 层次化负载均衡 (先按节点装箱保跨机路由 + 机内冗余热专家复制 320 槽位 + 后台无感切表)",
+      "max_to_mean_gpu_load_ratio_x": 1.12,
+      "moe_layer_latency_ms": 0.98,
+      "extra_expert_hbm_per_gpu_gb": 2.1,
+      "verdict": "每卡仅多花 2.1GB 显存多存 1 个冗余专家副本，将木桶倾斜从 4.80x 抹平至 1.12x，保住节点限制路由，提速 4.39x 🏆"
+    }
+  ]
+}

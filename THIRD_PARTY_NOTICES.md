@@ -358,6 +358,8 @@ Round 264 基于公开发布的旋转位置编码（`RoPE`）线性位置插值�
 
 Round 265 基于公开发布的 NVIDIA `GPUDirect Storage (GDS / cuFile)` `4KB` 对齐 DMA 规范、`DeepSeek 3FS (Fire-Flyer File System)` / `LMCache` 巨块聚簇传输与 GPU 显存内 Scatter 拆页原理构建原创合成 NVMe `KV Cache` 卸载带宽与首包延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 266 基于公开发布的 `DeepSeek EPLB (Expert Parallelism Load Balancer)` 三级层次化装箱算法（`Group-to-Node Packing`、机内冗余热门专家复制 `256 -> 320` 与 `Replica-to-GPU LPT Packing`）及后台双缓冲无感权重切表原理构建原创合成 MoE 负载均衡与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
