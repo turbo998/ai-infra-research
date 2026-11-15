@@ -368,6 +368,8 @@ Round 269 基于公开发布的 Kubernetes `Device Plugin`、`Topology Manager (
 
 Round 270 基于公开发布的 `Punica (SGMV / BGMV 分段聚集矩阵乘)` 与 `S-LoRA (Unified Paged Memory Pool 统一分页显存池)` 多租户并发 `Multi-LoRA` 推理原理构建原创合成算子发射次数与单步延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 271 基于公开发布的 `bitsandbytes NF4` 显存反量化双遍读写机制、`GPTQ / AWQ` 权重量化与 `Marlin / Machete` 寄存器级 `lop3.b32` 浮点尾数直接注入解包原理构建原创合成 HBM 流量与解码延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
