@@ -1,0 +1,46 @@
+{
+  "experiment_id": "ai_cluster_arp_neighbor_table_overflow_gc_thresh_selection",
+  "round": 225,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "cluster_gpus": 8192,
+    "default_linux_gc_thresh3": 1024,
+    "startup_speedup_x": 41.76
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_default_linux_gc_thresh3_1024_arp_overflow_crash",
+      "name": "Tier 1: Linux 默认内核参数 (gc_thresh3=1024 硬上限触发 neighbor table overflow 与 RoCEv2 建连超时)",
+      "arp_table_hard_limit": 1024,
+      "init_process_group_latency_sec": 142.0,
+      "startup_timeout_failure_rate_pct": 38.0,
+      "verdict": "当对端 IP 数突破 1,024 时内核直接丢弃 ARP 请求并抛 ENOBUFS，导致 rdma_resolve_addr 与 NCCL 建连大面积超时崩溃 ✕"
+    },
+    {
+      "tier_id": "tier2_raised_gc_thresh_but_default_somaxconn_4096_syn_drop",
+      "name": "Tier 2: 仅调大 ARP 表但保留默认 somaxconn=4096 与 arp_ignore=0 (Rank 0 SYN 队列溢出 + 多网卡 ARP 串音)",
+      "arp_table_hard_limit": 32768,
+      "init_process_group_latency_sec": 54.0,
+      "startup_timeout_failure_rate_pct": 6.5,
+      "verdict": "8,192 个进程同毫秒冲击 Rank 0 TCPStore 瞬间打爆 4,096 全连接队列，触发指数退避 SYN 重传且 8 张网卡出现 ARP Flux 串轨 ⚠️"
+    },
+    {
+      "tier_id": "tier3_tuned_sysctl_gc_thresh_32k_somaxconn_64k_arp_isolation",
+      "name": "Tier 3: 全套内核 sysctl 调优 (gc_thresh3=32768 + somaxconn=65535 + arp_ignore=1/arp_announce=2)",
+      "arp_table_hard_limit": 32768,
+      "init_process_group_latency_sec": 11.5,
+      "startup_timeout_failure_rate_pct": 0.2,
+      "verdict": "彻底消除内核邻居表溢出、TCP SYN 半连接丢包与 8 网卡同网段 ARP 乱回问题，将 8,192 卡建连耗时压至 11.5s ✅"
+    },
+    {
+      "tier_id": "tier4_sysctl_plus_evpn_arp_suppression_and_hierarchical_rendezvous",
+      "name": "Tier 4: 内核调优 + 交换机 BGP EVPN ARP 抑制 + 分层树状 Rendezvous / Rootless 握手",
+      "arp_table_hard_limit": 65536,
+      "init_process_group_latency_sec": 3.4,
+      "startup_timeout_failure_rate_pct": 0.0,
+      "verdict": "由 ToR 交换机本地代答 ARP 消灭全网广播风暴，并将 Rank 0 单点冲击改为两级树状聚合，8,192 卡启动仅需 3.4s (快 41.76x，0 失败) 🏆"
+    }
+  ]
+}

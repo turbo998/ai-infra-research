@@ -276,6 +276,8 @@ Round 223 基于公开发布的 PCIe Base Specification 数据链路层 `LCRC / 
 
 Round 224 基于公开发布的 PyTorch `TorchDynamo / TorchInductor` 符号维度守卫（`mark_dynamic`）、`CUDAGraph Trees` 与 vLLM V1 `Piecewise Compilation` 分段图捕获及共享显存池原理构建原创合成编译开销与解码延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 225 基于公开发布的 Linux 内核邻居子系统（`gc_thresh1/2/3`、`arp_ignore/arp_announce`）、TCP 全连接监听队列（`somaxconn`）、BGP EVPN `ARP Suppression` 与 PyTorch `c10d::TCPStore` 握手规范构建原创合成万卡集群初始化延迟与可靠性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
