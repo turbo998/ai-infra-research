@@ -394,6 +394,8 @@ Round 282 基于公开发布的 `AReaL / THUDM Slime / verl` 异步强化学习�
 
 Round 283 基于公开发布的 `QLoRA / PEFT merge_and_unload()` 双重量化死区吞噬原理、`Punica SGMV` 激活空间 `BF16` 旁路计算、原始 `BF16` 母版合并与 `SFT` 领域校准集 `AWQ / Block-FP8` 量化及 `LoftQ` 残差补偿机制构建原创合成精度留存与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 284 基于公开发布的 PCIe Gen5 (`32.0 GT/s x16`) `LTSSM` 静默降宽降速机制（`LnkSta < LnkCap`）、Retimer 信号完整性眼图闭合导致的 `LTSSM Recovery` 重训练风暴与 PCIe 5.0 硬件接收端眼图测试（`Lane Margining at the Receiver`）规范构建原创合成带宽与千卡通信效率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
