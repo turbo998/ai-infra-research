@@ -320,6 +320,8 @@ Round 245 基于公开发布的 NVIDIA `XID Errors` 官方诊断规范（区分�
 
 Round 246 基于公开发布的 `vLLM V1 Automatic Prefix Caching (APC) / LMCache / Mooncake` 默克尔链式块哈希机制、CPython `PYTHONHASHSEED` 跨进程随机化特性与多模态 `<image>` 占位符内容哈希及多租户 `cache_salt` 隔离原理构建原创合成前缀缓存安全与命中率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 247 基于公开发布的 PyTorch `FSDP / FSDP2` 反向传播 `ReduceScatter` 梯度分片释放机制（解释 `no_sync()` 引发全量未切分梯度 OOM 的物理原因）与 `2D HSDP (dp_replicate × dp_shard)` 机内 NVLink 分片、跨机 RoCE 延迟归约原理构建原创合成梯度累积评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
