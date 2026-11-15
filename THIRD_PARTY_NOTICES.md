@@ -416,6 +416,8 @@ Round 293 基于公开发布的 `StreamingLLM` 注意力汇聚点（`Attention S
 
 Round 294 基于公开发布的 `DeepGEMM / CUTLASS` Hopper/Blackwell MoE `Grouped GEMM` 算子架构、`FusedPermute` `M_BLOCK = 64 / 128` 连续块边界对齐、`1x128 FP8` 列主序缩放因子对齐与单一静态 `CUtensorMap` 描述符零更新机制构建原创合成算力利用率与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 295 基于公开发布的 `FlashAttention-3 (FA3) FP8` `64x128` 块缩放（隔离第 0 号 `Attention Sink` 块）机制、正交哈达玛非相干旋转（`Incoherent Processing via Orthogonal Hadamard Rotation` $(QH)(KH)^T = QK^T$）与概率矩阵满量程缩放原理构建原创合成输出误差与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

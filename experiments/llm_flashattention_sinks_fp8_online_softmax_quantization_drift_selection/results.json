@@ -1,0 +1,59 @@
+{
+  "experiment_id": "llm_flashattention_sinks_fp8_online_softmax_quantization_drift_selection",
+  "round": 295,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "seq_len": 65536,
+    "head_dim": 128,
+    "bf16_fa3_baseline_tflops": 660.0,
+    "bf16_fa3_baseline_acc_pct": 84.2
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_naive_per_tensor_fp8_fa3_sink_outlier_crush",
+      "name": "Naive Per-Tensor FP8 FlashAttention (Sink Token 0 Stretches Global Scale)",
+      "attention_tflops": 1210.0,
+      "output_rmse_vs_fp32": 0.048,
+      "long_context_acc_pct": 73.0,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Attention Sink (Token 0) has 30x higher magnitude, stretching the per-tensor scale and crushing 99.9% of tokens -> 0.0480 RMSE (-11.2 pt accuracy crash)!"
+    },
+    {
+      "tier_id": "tier2_per_head_fp8_without_block_or_hadamard_smoothing",
+      "name": "Per-Head FP8 Scaling (Still Crushed by Fixed-Channel RoPE Outliers)",
+      "attention_tflops": 1200.0,
+      "output_rmse_vs_fp32": 0.0195,
+      "long_context_acc_pct": 79.4,
+      "action": "Send to a human",
+      "status": "warn",
+      "note": "Separates heads, but within each head Token 0 and fixed outlier channels still dominate the 3-bit E4M3 mantissa (-4.8 pt drop)."
+    },
+    {
+      "tier_id": "tier3_per_block_64x128_tile_fp8_scaling_only",
+      "name": "FA3 Per-Block (64x128 Tile) FP8 Quantization (Isolates Sink Block 0)",
+      "attention_tflops": 1190.0,
+      "output_rmse_vs_fp32": 0.0072,
+      "long_context_acc_pct": 83.1,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Gives Block 0 (containing Token 0 sink) its own scale factor so Blocks 1..N retain full dynamic range, but channel-wise outliers remain."
+    },
+    {
+      "tier_id": "tier4_fa3_per_block_fp8_plus_incoherent_hadamard_qh_kh_rotation",
+      "name": "FA3 Per-Block FP8 + Incoherent Hadamard Rotation (QH)(KH)^T = QK^T + FP32 Softmax",
+      "attention_tflops": 1180.0,
+      "output_rmse_vs_fp32": 0.003,
+      "long_context_acc_pct": 84.1,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Applies orthogonal Hadamard rotation (QH)(KH)^T = QK^T to smear channel outliers + per-block tile scaling -> 16.0x lower RMSE (0.0030) & 1,180 TFLOPS!"
+    }
+  ],
+  "summary": {
+    "rmse_reduction_x": 16.0,
+    "speedup_vs_bf16_fa3_x": 1.79,
+    "accuracy_recovery_pt": 11.1,
+    "recommended_tier": "tier4_fa3_per_block_fp8_plus_incoherent_hadamard_qh_kh_rotation"
+  }
+}

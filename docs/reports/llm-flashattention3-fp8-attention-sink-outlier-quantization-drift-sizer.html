@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 295 · FlashAttention-3 FP8 Outlier Drift &amp; Hadamard Rotation Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 295 · `FlashAttention-3 FP8` (`E4M3`) Block Scaling &amp; Hadamard Rotation Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">FA3 FP8 Quantization &amp; Outlier Mitigation Policy (S=64K)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Naive Per-Tensor FP8 (Token 0 Sink Stretches Scale)</option>
+          <option value="t2">Tier 2: Per-Head FP8 Scaling (Unrotated Channel Outliers)</option>
+          <option value="t3">Tier 3: FA3 Per-Block (64x128 Tile) FP8 Quantization</option>
+          <option value="t4" selected>Tier 4: Per-Block FP8 + Incoherent Hadamard Rotation (QH)(KH)^T</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>64K Long-Context Accuracy</label>
+        <div id="acc" class="kpi">84.1% (vs 84.2% BF16)</div>
+      </div>
+      <div class="card">
+        <label>Output RMSE / Throughput</label>
+        <div id="rms" class="kpi">0.0030 / 1,180 TFLOPS</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Combining `64x128` per-block scaling (isolating the Block-0 `Attention Sink`) with in-register orthogonal Hadamard rotation `(QH)(KH)^T = QK^T` cuts `FP8` attention RMSE 16.0x (`0.0480 -&gt; 0.0030`) and delivers `1,180 TFLOPS` (`1.79x` over `FA3 BF16`) at `84.1%` accuracy.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { acc: "73.0% (-11.2 pt Crash! ✕)", rms: "0.0480 / 1,210 TFLOPS ✕", bad: true, msg: "⛔ Token 0 Attention Sink has 30x higher magnitude, stretching the per-tensor scale and crushing 99.9% of tokens!" },
+      t2: { acc: "79.4% (-4.8 pt Drop! ✕)", rms: "0.0195 / 1,200 TFLOPS ✕", bad: true, msg: "⚠️ Per-head scaling still suffers from Token 0 and fixed-channel RoPE outliers within each head." },
+      t3: { acc: "83.1% ✅", rms: "0.0072 / 1,190 TFLOPS ✅", bad: false, msg: "✅ Isolates Block 0 (Attention Sink) from Blocks 1..N, cutting RMSE to 0.0072." },
+      t4: { acc: "84.1% (vs 84.2% BF16) 🏆", rms: "0.0030 / 1,180 TFLOPS 🏆", bad: false, msg: "🏆 Per-block scaling + orthogonal Hadamard rotation (QH)(KH)^T = QK^T cuts RMSE 16.0x to 0.0030 at 1,180 TFLOPS." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('acc');
+      el.textContent = d.acc;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('rms').textContent = d.rms;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
