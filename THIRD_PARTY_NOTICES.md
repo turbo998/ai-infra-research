@@ -280,6 +280,8 @@ Round 225 基于公开发布的 Linux 内核邻居子系统（`gc_thresh1/2/3`�
 
 Round 226 基于公开发布的大参数 MoE 专家激活幂律分布特性与跨层残差流投机路由预取（`Pre-gated MoE / MoE-Infinity` 原理）及异步 `Copy Engine` 流水线机制构建原创合成显存受限 MoE 卸载与预取延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 227 基于公开发布的 NVIDIA NVML / DCGM `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS` 位掩码规范（`0x04 SwPowerCap` vs `0x08/0x20/0x40/0x80` 硬件过热与 `PWRBRK#` 电源刹车）构建原创合成千卡集群慢卡诊断与 MFU 恢复评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
