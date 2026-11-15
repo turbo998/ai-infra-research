@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 291 · LLM Serving Tokenizer &amp; Incremental Detokenizer CPU Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 291 · LLM Serving Tokenizer (`128K` BPE) &amp; Incremental Detokenizer Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Tokenizer &amp; Streaming Detokenizer Architecture</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Single-Thread Regex BPE + O(N²) Full decode(all_ids)</option>
+          <option value="t2">Tier 2: Naive Single-Token decode([new_id]) (UTF-8 Corruption)</option>
+          <option value="t3">Tier 3: In-Loop Rust Fast Tokenizer + Sliding-Window Detok</option>
+          <option value="t4" selected>Tier 4: ZMQ Chunked Rust Pool + O(1) 6-Token UTF-8 Window</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>128K Prompt Tokenize Latency</label>
+        <div id="tok" class="kpi">11.5 ms (55.7x Faster)</div>
+      </div>
+      <div class="card">
+        <label>BS=256 Step Detok / UTF-8 Fidelity</label>
+        <div id="det" class="kpi">0.08 ms / 100.0% CJK</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Splitting `128K` prompts into boundary-aligned `32KB` chunks across a disaggregated ZMQ Rust pool and running an $O(1)$ 6-token sliding-window detokenizer cuts tokenization to `11.5 ms` and per-step detokenization to `0.08 ms` with `100.0%` CJK/UTF-8 fidelity.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { tok: "640.0 ms (Regex Stall! ✕)", det: "4.80 ms / 100.0% ✕", bad: true, msg: "⛔ 512KB unspaced JSON triggers regex backtracking (640ms), and O(N²) full-history decode burns 4.80ms every step!" },
+      t2: { tok: "185.0 ms ⚠️", det: "0.12 ms / 81.5% (Garbled! ✕)", bad: true, msg: "⛔ Decoding 1 token at a time corrupts multi-byte CJK/Emoji split across two byte-level BPE tokens into !" },
+      t3: { tok: "42.0 ms ✅", det: "0.65 ms / 100.0% ✅", bad: false, msg: "✅ Preserves UTF-8 fidelity, but running 42ms BPE inside the main engine process blocks GPU kernel scheduling." },
+      t4: { tok: "11.5 ms (55.7x Faster) 🏆", det: "0.08 ms / 100.0% CJK 🏆", bad: false, msg: "🏆 ZMQ 32KB chunked Rust BPE pool + O(1) 6-token UTF-8 state machine achieves 11.5ms tokenization and 0.08ms/step detokenization." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('tok');
+      el.textContent = d.tok;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('det').textContent = d.det;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

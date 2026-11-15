@@ -408,6 +408,8 @@ Round 289 基于公开发布的 GPU 瞬态电学峰值功率（`EDPp: Electrical
 
 Round 290 基于公开发布的 `1F1B` 流水线并行 `P:1` 首尾激活显存不平衡原理、Megatron-LM `Interleaved 1F1B` 虚拟流水线通信与显存开销模型以及 `Zero-Bubble V-Schedule (ZB-V)` / `DualPipe` V 型双向折叠均衡机制构建原创合成显存峰值与流水线空泡评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 291 基于公开发布的 Byte-level BPE 正则预分词在超长无空格 JSON 上的回溯开销、按换行边界 `32KB` 分块并行分词机制以及流式输出中跨 Token 多字节 UTF-8 字符的 $O(1)$ 滑动窗口增量反分词（`Prefix-Offset Sliding Window Detokenizer`）原理构建原创合成延迟与保真度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
