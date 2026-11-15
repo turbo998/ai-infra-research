@@ -284,6 +284,8 @@ Round 227 基于公开发布的 NVIDIA NVML / DCGM `DCGM_FI_DEV_CLOCK_THROTTLE_R
 
 Round 228 基于公开发布的 `Ring Attention`、`Striped Attention` 与 `ZigZag Ring Attention`（`2P` 首尾互补配对及 `cu_seqlens` 多文档逐段切分）因果下三角掩码负载均衡原理构建原创合成超长上下文并行算力利用率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 229 基于公开发布的 `Prompt Lookup Decoding (PLD)`、`Medusa`、`EAGLE-3` 多层特征自回归草稿树及 GPU 屋脊线算术强度拐点（`Roofline Ridge Point` 高并发验证负加速边界）原理构建原创合成投机解码选型与动态树限流评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
