@@ -336,6 +336,8 @@ Round 253 基于公开发布的 NVIDIA `TransformerEngine DelayedScaling (amax_h
 
 Round 254 基于公开发布的 NVIDIA `Multi-Instance GPU (MIG)` 硅片级物理隔离规范、`CUDA Multi-Process Service (MPS)` 共享虚拟地址上下文故障传播语义与 Kubernetes `Time-Slicing` 上下文切换原理构建原创合成多租户尾延迟与爆炸半径评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 255 基于公开发布的 `XGrammar / llguidance` 上下文无关词表分离机制、紧凑 `int32` 位掩码（`Adaptive Token Bitmask`）与 `SGLang Jump-Forward Decoding` 确定性语法段快进原理构建原创合成结构化输出编译与解码延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
