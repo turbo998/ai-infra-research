@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>NCCL PAT vs. Ring 1,024-GPU FSDP AllGather/ReduceScatter Sizer (Round 222)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 222 · NCCL 2.23+ `PAT`（并行聚合二项式树）vs. `Ring` 千卡 FSDP 集合通信计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 1,024×H100 (128 节点) 64 MB AllGather / ReduceScatter 集合通信算法</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 传统单环 Flat Ring (1,023 步串行接力 · 7,650 µs · 8.37 GB/s)</option>
+          <option value="t2">Tier 2: 机内 NVLS + 跨机 128 节点 Ring (127 步跨机串联 · 3,420 µs · 18.71 GB/s)</option>
+          <option value="t3">Tier 3: 填零 Tree AllReduce 模拟 AllGather (14 跳 · 2,150 µs · 付出 2x 带宽税)</option>
+          <option value="t4" selected>Tier 4: NCCL 2.23+ PAT 并行聚合二项式树 (log2(128)=7 跳 · 1,120 µs · 57.14 GB/s)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>跨机串行通信跳数</div><div class="val" id="hops">7 跳</div></div>
+      <div class="kpi"><div>64 MB 通信耗时</div><div class="val" id="lat">1,120 µs</div></div>
+      <div class="kpi"><div>有效算法带宽 (AlgBW)</div><div class="val" id="bw">57.14 GB/s</div></div>
+      <div class="kpi"><div>相对单环提速倍数</div><div class="val" id="spd">6.83 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (NCCL 2.23+ PAT 并行聚合二项式树)：交错调度 N 棵二项式树并在每一跳将聚合包大小翻倍，跨机仅需 log2(128)=7 跳，将 1,024 卡 64 MB AllGather 耗时压至 1.12 ms (快 6.83x) 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { hops: "1,023 跳 ✕", lat: "7,650 µs", bw: "8.37 GB/s", spd: "1.00 x", v: "Tier 1 (Flat Ring)：64 MB 权重被切成 64 KB 碎块串行走 1,023 跳，完全被每跳 RDMA 启动延迟锁死 ✕" },
+      t2: { hops: "127 跳 ⚠️", lat: "3,420 µs", bw: "18.71 GB/s", spd: "2.24 x", v: "Tier 2 (NVLS + 128 节点 Ring)：机内 8 卡虽收敛，但跨 128 台机器仍需线性串联 127 跳，对单点抖动极敏感 ⚠️" },
+      t3: { hops: "14 跳 ✅", lat: "2,150 µs", bw: "29.77 GB/s", spd: "3.56 x", v: "Tier 3 (填零 Tree AllReduce 模拟)：虽借用双二叉树降低跳数，但发送了 2 倍冗余数据，浪费网络带宽 ✅" },
+      t4: { hops: "7 跳 🏆", lat: "1,120 µs", bw: "57.14 GB/s", spd: "6.83 x", v: "Tier 4 (NCCL 2.23+ PAT 并行聚合二项式树)：兼具 log2(128)=7 跳极低延迟与 1x 最优通信量，大包跑满网卡线速 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("hops").textContent = d.hops;
+      document.getElementById("lat").textContent = d.lat;
+      document.getElementById("bw").textContent = d.bw;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>

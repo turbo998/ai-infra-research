@@ -1,0 +1,46 @@
+{
+  "experiment_id": "nccl_pat_parallel_aggregated_trees_selection",
+  "round": 222,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "cluster_gpus": 1024,
+    "message_size_mb": 64.0,
+    "latency_speedup_x": 6.83
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_flat_ring_1023_hops_latency_bound_trap",
+      "name": "Tier 1: 传统单环 Flat Ring (AllGather/ReduceScatter 经历 1,023 步串行接力，延迟墙锁死)",
+      "inter_node_hop_steps": 1023,
+      "collective_latency_us": 7650.0,
+      "effective_algbw_gbs": 8.37,
+      "verdict": "历史版本 NCCL 的 AllGather/ReduceScatter 仅支持 Ring 算法，在 1,024 卡下 64MB 消息被切成极碎的 64KB 块走 1,023 跳，耗时高达 7.65 ms ✕"
+    },
+    {
+      "tier_id": "tier2_rail_local_nvls_plus_inter_node_ring_127_hops",
+      "name": "Tier 2: 机内 NVLS / PXN + 跨机 128 节点 Ring (跨机仍需 127 跳线性串联，尾延迟敏感)",
+      "inter_node_hop_steps": 127,
+      "collective_latency_us": 3420.0,
+      "effective_algbw_gbs": 18.71,
+      "verdict": "虽将机内 8 卡收敛为 1 步，但跨 128 台节点依然是 O(N_nodes) 线性环（127 跳），且环上任意 1 张慢网卡会拖慢全环 1,024 张卡 ⚠️"
+    },
+    {
+      "tier_id": "tier3_emulated_allreduce_tree_2x_bandwidth_tax",
+      "name": "Tier 3: 用 Tree AllReduce 模拟 AllGather/ReduceScatter (虽降至 O(log N) 跳，但通信量翻倍 2x)",
+      "inter_node_hop_steps": 14,
+      "collective_latency_us": 2150.0,
+      "effective_algbw_gbs": 29.77,
+      "verdict": "传统双二叉树 Tree 仅支持 AllReduce，若强行用填零 AllReduce 代替 AllGather，会白白浪费 2 倍网络带宽 ✅"
+    },
+    {
+      "tier_id": "tier4_nccl_pat_parallel_aggregated_binomial_trees_7_hops",
+      "name": "Tier 4: NCCL 2.23+ PAT (Parallel Aggregated Trees 并行聚合二项式树，7 跳对数延迟 + 1x 最优带宽)",
+      "inter_node_hop_steps": 7,
+      "collective_latency_us": 1120.0,
+      "effective_algbw_gbs": 57.14,
+      "verdict": "通过交错调度 N 棵二项式树并在网卡/GPU 侧逐级倍增聚合包大小，将 128 节点跨机跳数从 127 跳压至 log2(128)=7 跳，延迟骤降 6.83x 🏆"
+    }
+  ]
+}

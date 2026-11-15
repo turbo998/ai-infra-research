@@ -270,6 +270,8 @@ Round 220 基于公开发布的 NVIDIA CUDA `cudaHostAlloc / cudaMemcpyAsync` �
 
 Round 221 基于公开发布的 PyTorch `FSDP2 (fully_shard)`、`DTensor` 逐参数第 0 维分片与零 `record_stream` 确定性双流释放架构文档及 `TorchTitan` 混合并行原理构建原创合成显存与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 222 基于公开发布的 NVIDIA NCCL 2.23+ `PAT (Parallel Aggregated Trees)` 并行聚合二项式树算法文档与千卡 FSDP `AllGather / ReduceScatter` 对数跳数通信原理构建原创合成集合通信延迟与带宽评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
