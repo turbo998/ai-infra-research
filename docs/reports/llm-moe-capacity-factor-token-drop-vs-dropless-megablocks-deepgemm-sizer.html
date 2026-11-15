@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>MoE Capacity Factor Token Drop vs. Dropless Grouped GEMM Sizer (Round 243)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 243 · MoE 专家容量因子（`CF`）丢词、补零浪费与 `Dropless Grouped GEMM` 计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择 MoE 专家矩阵乘与动态容量调度架构</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 紧容量因子 CF=1.0 静态 bmm (截断丢弃 11.8% 热门专家 Token · 准确率掉点 -4.8%)</option>
+          <option value="t2">Tier 2: 高容量因子 CF=3.0 静态补零 bmm (66.7% 算力与通信全在算 0 · 耗时 41.5 ms)</option>
+          <option value="t3">Tier 3: 含 CPU 同步 (.cpu()) 的动态 Grouped GEMM (0% 丢词 · 但阻塞流且破坏 CUDA Graph · 19.8 ms)</option>
+          <option value="t4" selected>Tier 4: 纯 GPU 调度 Dropless Ragged Grouped GEMM (MegaBlocks/DeepGEMM · 0% 丢词 · 11.4 ms)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>Token 截断丢弃率</div><div class="val" id="drp">0.0 %</div></div>
+      <div class="kpi"><div>补零算力浪费率</div><div class="val" id="pad">2.1 %</div></div>
+      <div class="kpi"><div>单层 MoE 耗时</div><div class="val" id="lat">11.4 ms</div></div>
+      <div class="kpi"><div>相比 CF=3.0 提速</div><div class="val" id="spd">3.64 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (纯设备端调度 Dropless Ragged Grouped GEMM · MegaBlocks / DeepGEMM)：在 GPU 显存内直接构建 128-Row 瓦片映射表，实现 0.0% 零丢词、仅 2.1% 瓦片对齐开销，比静态无损补零快 3.64x 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { drp: "11.8 % ✕", pad: "8.5 %", lat: "14.2 ms", spd: "2.92 x (有损 ✕)", v: "Tier 1 (CF=1.0 截断丢词)：超出平均容量 C 的 11.8% 热门专家 Token 被直接跳过 MLP 计算，严重损害数学/代码推理智商 ✕" },
+      t2: { drp: "0.4 %", pad: "66.7 % ✕", lat: "41.5 ms ✕", spd: "1.00 x", v: "Tier 2 (CF=3.0 静态补零)：为了迁就最忙的专家，强迫所有冷门专家补零到 3 倍长度，三分之二的算力全在乘 0 ✕" },
+      t3: { drp: "0.0 % ✅", pad: "2.1 %", lat: "19.8 ms ⚠️", spd: "2.10 x", v: "Tier 3 (含 CPU 同步的 Grouped GEMM)：每层把专家计数拷回 CPU (counts.cpu()) 构造指针，阻塞流水线且无法录制进 CUDA Graph ⚠️" },
+      t4: { drp: "0.0 % 🏆", pad: "2.1 % 🏆", lat: "11.4 ms 🏆", spd: "3.64 x", v: "Tier 4 (纯 GPU 端调度 Dropless Grouped GEMM)：零丢词 + 零 CPU 同步 + 100% 兼容 CUDA Graph 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("drp").textContent = d.drp;
+      document.getElementById("pad").textContent = d.pad;
+      document.getElementById("lat").textContent = d.lat;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>

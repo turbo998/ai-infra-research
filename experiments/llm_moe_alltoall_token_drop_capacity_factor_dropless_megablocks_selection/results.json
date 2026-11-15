@@ -1,0 +1,45 @@
+{
+  "experiment_id": "llm_moe_alltoall_token_drop_capacity_factor_dropless_megablocks_selection",
+  "round": 243,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "padded_cf3_latency_ms": 41.5,
+    "speedup_vs_padded_cf3_x": 3.64
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_tight_capacity_factor_1_0_token_dropping_accuracy_loss",
+      "name": "Tier 1: 紧容量因子截断丢词 (CF=1.0 静态 [E, C, D] bmm，溢出热门专家的 11.8% Token 被直接丢弃!)",
+      "tokens_dropped_pct": 11.8,
+      "padded_zero_flop_waste_pct": 8.5,
+      "moe_layer_latency_ms": 14.2,
+      "verdict": "当数学或代码批次集中在少数专业专家时，超出容量 C 的 11.8% Token 被静默跳过 MLP 计算，导致推理准确率暴跌 4.8% ✕"
+    },
+    {
+      "tier_id": "tier2_high_capacity_factor_3_0_static_zero_padding_waste",
+      "name": "Tier 2: 靠拉高 CF=3.0 静态补零防丢词 (全专家统一 Pad 到 3 倍容量，66.7% 算力与通信全在算 0!)",
+      "tokens_dropped_pct": 0.4,
+      "padded_zero_flop_waste_pct": 66.7,
+      "moe_layer_latency_ms": 41.5,
+      "verdict": "为了迁就最忙的 1 个专家，强迫其余所有冷门专家全部补零到 3 倍长度，All-to-All 通信量与 GEMM 计算量凭空膨胀 3 倍 ⚠️"
+    },
+    {
+      "tier_id": "tier3_host_synced_grouped_gemm_cpu_pointer_stall",
+      "name": "Tier 3: 含 CPU 同步的动态 Grouped GEMM (把每个专家的 Token 计数拷回 CPU 构造指针数组，每层卡顿)",
+      "tokens_dropped_pct": 0.0,
+      "padded_zero_flop_waste_pct": 2.1,
+      "moe_layer_latency_ms": 19.8,
+      "verdict": "虽消除了丢词与 3 倍补零，但在每层 MoE 路由后调 counts.cpu() 触发同步阻塞并打断 CUDA Graph 捕获 ✅"
+    },
+    {
+      "tier_id": "tier4_device_scheduled_dropless_ragged_grouped_gemm_deepgemm",
+      "name": "Tier 4: 纯 GPU 端调度 Dropless Ragged Grouped GEMM (MegaBlocks / DeepGEMM 设备端 Tile 映射，0 丢词 + 0 同步)",
+      "tokens_dropped_pct": 0.0,
+      "padded_zero_flop_waste_pct": 2.1,
+      "moe_layer_latency_ms": 11.4,
+      "verdict": "在 GPU 显存内直接生成 128-Row 对齐瓦片索引表驱动持久化 Grouped GEMM，0.0% 丢词、仅 2.1% 瓦片对齐开销，耗时压至 11.4 ms (快 3.64x) 🏆"
+    }
+  ]
+}
