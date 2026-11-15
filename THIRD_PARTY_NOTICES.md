@@ -314,6 +314,8 @@ Round 242 基于公开发布的 `Mooncake / NVIDIA Dynamo NIXL` Prefill-Decode (
 
 Round 243 基于公开发布的 MoE `Capacity Factor (CF)` 截断丢词/静态补零机制与 `MegaBlocks / DeepGEMM / CUTLASS 3.x` 纯设备端瓦片调度 `Dropless Ragged Grouped GEMM` 原理构建原创合成 MoE 算子效率与无损性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 244 基于公开发布的 `GQA / MQA / DeepSeek-V3 MLA` 注意力头切分规则（当 `TP_SIZE > num_key_value_heads` 时触发的跨卡 KV Cache 复制机制）与 `DP-Attention / Decode Context Parallelism (DCP)` 解耦并行原理构建原创合成显存容量与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

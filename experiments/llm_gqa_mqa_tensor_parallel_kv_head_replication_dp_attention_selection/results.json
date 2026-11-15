@@ -1,0 +1,46 @@
+{
+  "experiment_id": "llm_gqa_mqa_tensor_parallel_kv_head_replication_dp_attention_selection",
+  "round": 244,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "cluster_gpus": 8,
+    "kv_capacity_gain_x": 8.0,
+    "throughput_speedup_x": 3.85
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_naive_tp8_exceeding_kv_heads_8x_kv_cache_replication",
+      "name": "Tier 1: 盲目开启 TP=8 (当 num_kv_heads=1 [MLA] 或 2 时，每张卡被迫完整复制相同 KV 头，浪费 4x~8x 显存!)",
+      "kv_cache_replication_factor_x": 8.0,
+      "max_concurrent_16k_requests": 18,
+      "serving_throughput_tok_per_sec": 1420,
+      "verdict": "因为单个 KV 头(或 MLA 压缩潜向量 c_KV)无法再按头切分，TP=8 会把同一份 KV Cache 复制 8 份塞满 8 张卡，扩容 GPU 却不增加任何 KV 容量 ✕"
+    },
+    {
+      "tier_id": "tier2_head_dim_sharding_extra_qk_score_allgather_tax",
+      "name": "Tier 2: 强行沿 head_dim (128维) 内部切分单 KV 头 (破坏点积完整性，每次 Softmax 前需额外 AllGather QK 分数)",
+      "kv_cache_replication_factor_x": 1.0,
+      "max_concurrent_16k_requests": 112,
+      "serving_throughput_tok_per_sec": 2150,
+      "verdict": "由于 Softmax(q·k) 需要完整的内积和，切分 head_dim 迫使每层在计算 Softmax 权重前先对注意力分数做跨卡通信，拖慢解码延迟 ⚠️"
+    },
+    {
+      "tier_id": "tier3_cap_tp_at_num_kv_heads_plus_pipeline_parallelism",
+      "name": "Tier 3: 严守 TP <= num_kv_heads 红线 + 流水线并行 PP (消除 KV 复制浪费，但小 Batch 下存在 PP 微批气泡)",
+      "kv_cache_replication_factor_x": 1.0,
+      "max_concurrent_16k_requests": 136,
+      "serving_throughput_tok_per_sec": 3680,
+      "verdict": "将 TP 锁死在 <= num_kv_heads 并改用 PP 跨卡切分模型层数，实现 1.0x 零冗余 KV 显存，并发容量飙升 7.5 倍 ✅"
+    },
+    {
+      "tier_id": "tier4_decoupled_dp_attention_or_sequence_dcp_plus_tp_ep_ffn",
+      "name": "Tier 4: 注意力与 FFN 并行度解耦 (DP-Attention / 序列维 DCP 切 KV + FFN/MoE 满血 TP8/EP8)",
+      "kv_cache_replication_factor_x": 1.0,
+      "max_concurrent_16k_requests": 144,
+      "serving_throughput_tok_per_sec": 5460,
+      "verdict": "在 Attention 层采用 DP-Attention (或沿序列维切分 KV 的 DCP) 彻底消灭 8x KV 复制，在 MLP/MoE 层保持 8 卡并行，吞吐飙升 3.85 倍 🏆"
+    }
+  ]
+}
