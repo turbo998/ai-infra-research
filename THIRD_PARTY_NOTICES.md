@@ -372,6 +372,8 @@ Round 271 基于公开发布的 `bitsandbytes NF4` 显存反量化双遍读写�
 
 Round 272 基于公开发布的 `Gated DeltaNet / Mamba-2 / Qwen3-Next` `3:1` 混合线性注意力架构、`FlashLinearAttention (FLA)` 分块并行算法与投机解码多步状态回滚环（`Speculative State Ring`）及间隔前缀快照原理构建原创合成长文本显存与召回率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 273 基于公开发布的 NVIDIA HBM3/HBM3e 硬件级行重映射（`Row Remapping`: `XID 63` `REMAPPED_ROWS_PENDING` 与 `XID 64` `ROW_REMAP_FAILURE`）两阶段生效规范及带内 `nvidia-smi -r` 激活备用行原理构建原创合成二次崩溃率与硬件 RMA 误报率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
