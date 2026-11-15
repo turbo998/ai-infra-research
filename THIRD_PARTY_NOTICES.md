@@ -410,6 +410,8 @@ Round 290 基于公开发布的 `1F1B` 流水线并行 `P:1` 首尾激活显存�
 
 Round 291 基于公开发布的 Byte-level BPE 正则预分词在超长无空格 JSON 上的回溯开销、按换行边界 `32KB` 分块并行分词机制以及流式输出中跨 Token 多字节 UTF-8 字符的 $O(1)$ 滑动窗口增量反分词（`Prefix-Offset Sliding Window Detokenizer`）原理构建原创合成延迟与保真度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 292 基于公开发布的 NCCL RoCEv2 `NCCL_IB_GID_INDEX` (`RoCEv1` vs `RoCEv2`) 寻址机制、`NCCL_IB_TC` (`DSCP` 与 IPv4 `ToS` 字节映射无损队列) 分类规则以及 `NCCL_SOCKET_IFNAME` 虚拟网桥过滤与 `NET/Socket` 退化拦截原理构建原创合成通信带宽与重传评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
