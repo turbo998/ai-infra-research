@@ -282,6 +282,8 @@ Round 226 基于公开发布的大参数 MoE 专家激活幂律分布特性与�
 
 Round 227 基于公开发布的 NVIDIA NVML / DCGM `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS` 位掩码规范（`0x04 SwPowerCap` vs `0x08/0x20/0x40/0x80` 硬件过热与 `PWRBRK#` 电源刹车）构建原创合成千卡集群慢卡诊断与 MFU 恢复评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 228 基于公开发布的 `Ring Attention`、`Striped Attention` 与 `ZigZag Ring Attention`（`2P` 首尾互补配对及 `cu_seqlens` 多文档逐段切分）因果下三角掩码负载均衡原理构建原创合成超长上下文并行算力利用率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
