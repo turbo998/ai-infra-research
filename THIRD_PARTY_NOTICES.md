@@ -376,6 +376,8 @@ Round 273 基于公开发布的 NVIDIA HBM3/HBM3e 硬件级行重映射（`Row R
 
 Round 274 基于公开发布的 `FlashInfer / Hydragen Cascade Attention`（共享前缀矩阵乘与在线 `LSE` 合并）、`PagedAttention Copy-on-Write (CoW)` 页表分叉与过程奖励模型（`PRM`）树搜索剪枝原理构建原创合成显存带宽与测试时扩展延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 275 基于公开发布的 `Meta Llama-3 / ByteDance MegaScale` 大规模集群慢节点（`Straggler` 集合通信等待时间反转效应）`CUDA Event` 拆解诊断与静默数据损坏（`Silent Data Corruption, SDC`）跨 DP 副本权重哈希校验原理构建原创合成故障定位准确率与耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

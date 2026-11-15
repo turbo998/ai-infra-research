@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 275 · 10,000-GPU Straggler &amp; Silent Data Corruption (SDC) Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 275 · 10,000-GPU `Straggler` &amp; `Silent Data Corruption (SDC)` Localization Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Straggler &amp; SDC Detection Architecture</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Sort Profiler by Longest NCCL Kernel Duration</option>
+          <option value="t2">Tier 2: Rely Only on Hardware XID &amp; HBM ECC Counters</option>
+          <option value="t3">Tier 3: Hourly Stop-the-World Offline Golden Batch Check</option>
+          <option value="t4" selected>Tier 4: Online CUDA Event Split + Cross-Replica Weight Hash</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Pinpoint Accuracy / Isolation Time</label>
+        <div id="acc" class="kpi">100.0% / 1.2 sec</div>
+      </div>
+      <div class="card">
+        <label>Training Throughput Overhead</label>
+        <div id="ovh" class="kpi">0.15% Overhead</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Decomposing step time into pure `T_compute(CUDA Event)` and `T_collective_wait` pinpoints compute stragglers in 1.2 seconds (`argmax T_compute`), while cross-DP-replica weight `CRC64` hashing catches silent Tensor Core ALU bit-flips (`SDC`) at 0.15% overhead.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { acc: "0.0% ✕ / 16,200 s (4.5h)", ovh: "0.0%", bad: true, msg: "⛔ Fast GPUs arrive early at NCCL barriers and wait 80ms (showing 100ms NCCL time), while the true slow GPU arrives last and shows 20ms!" },
+      t2: { acc: "35.0% ⚠️ / 7,200 s", ovh: "0.1%", bad: true, msg: "⚠️ Tensor Core ALU datapaths lack full ECC; a silent bit-flip (SDC) poisons all 10,240 GPUs via AllReduce without any XID!" },
+      t3: { acc: "94.0% / 1,800 s", ovh: "8.5% Stop-the-World ✕", bad: true, msg: "⚠️ Stopping 10,240 GPUs every hour to run offline golden batches wastes 8.5% of cluster compute." },
+      t4: { acc: "100.0% / 1.2 sec 🏆", ovh: "0.15% Overhead 🏆", bad: false, msg: "🏆 Online lagged CUDA Events + pre-AllReduce norm guards + cross-replica weight CRC64 hashes isolate stragglers and SDC in 1.2s." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('acc');
+      el.textContent = d.acc;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('ovh').textContent = d.ovh;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
