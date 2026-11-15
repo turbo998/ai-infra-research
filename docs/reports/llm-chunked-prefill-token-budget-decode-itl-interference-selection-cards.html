@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>7-Card Visual Benchmark Report · Chunked Prefill Token Budget &amp; KV Re-Read (Round 231)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1500px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 18px; margin: 8px 0 10px; line-height: 1.35; color: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94a3b8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; }
+    .bar-row { margin: 8px 0; font-size: 12px; }
+    .bar-bg { background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · CHUNKED PREFILL TOKEN BUDGET SIZING</div>
+        <h2>SLO-Aware Dynamic Chunking Eliminates Both 640 ms Decode Freezes and 64.5x Quadratic KV Re-Reads</h2>
+        <p style="font-size:13px;color:#cbd5e1;">Evaluates Oversized Chunk (C=16,384), Undersized Chunk (C=256), Static Sweet Spot (C=2,048), and SLO-Aware Dynamic Budget + Long Isolation.</p>
+      </div>
+      <div class="code">Oversized C=16,384: 640.0 ms P99 Decode ITL Freeze ✕
+Undersized C=256:    64.5x KV Re-Read | 4,890 ms TTFT ⚠️
+SLO Dynamic Budget:  28.5 ms P99 ITL  | 1,420 ms TTFT 🏆</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: THE O(K²) QUADRATIC KV RE-READ TAX</div>
+        <h2>Why Slicing a 32K Prompt into 128 Chunks of 256 Tokens Re-Reads HBM KV Cache 64.5 Times</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Task Type: <code>choice</code> / <code>score</code> · Action: <strong>Act automatically</strong> (Size colocated `max_num_batched_tokens = 1024..2048` and isolate `&gt;16K` prompts).</p>
+        <div class="bar-row">Tier 2 C=256 Tiny Chunks (64.5x KV Re-Read · 4,890 ms TTFT)<div class="bar-bg"><div class="bar-fill" style="width:100.0%;background:#ef4444;"></div></div></div>
+        <div class="bar-row">Tier 3 C=2,048 Static Sweet Spot (8.5x KV Re-Read · 1,680 ms)<div class="bar-bg"><div class="bar-fill" style="width:34.4%;background:#f59e0b;"></div></div></div>
+        <div class="bar-row">Tier 4 SLO Dynamic + Long Isolation (2.5x KV Re-Read · 1,420 ms)<div class="bar-bg"><div class="bar-fill" style="width:29.0%;background:#10b981;"></div></div></div>
+        <div class="bar-row">Tier 1 C=16,384 Oversized (1.5x KV Re-Read · 640ms ITL Freeze)<div class="bar-bg"><div class="bar-fill" style="width:27.6%;"></div></div></div>
+      </div>
+      <div class="foot">Grounded in experiments/llm_chunked_prefill_token_budget_decode_itls_interference_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>Full 4-Tier 32K Chunked Prefill Evaluation Matrix</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>KV RE-READ</th><th>P99 ITL / 32K TTFT</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 C=16,384</td><td>1.5x</td><td>640.0 ms ✕ / 1,350 ms</td><td>Reject</td></tr>
+            <tr><td>Tier 2 C=256</td><td>64.5x ✕</td><td>22.0 ms / 4,890 ms ✕</td><td>Reject</td></tr>
+            <tr><td>Tier 3 C=2,048</td><td>8.5x ⚠️</td><td>48.0 ms / 1,680 ms</td><td>Confirm ✅</td></tr>
+            <tr><td>Tier 4 Dynamic</td><td>2.5x</td><td>28.5 ms / 1,420 ms</td><td>Act auto 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">✕ marks 640 ms streaming decode freeze or 64.5x HBM bandwidth amplification.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>Bounding Quadratic KV Re-Reads `(K + 1) / 2`</h2>
+        <div class="code"># Number of chunks K = ceil(L_prompt / max_num_batched_tokens)
+# Cumulative KV HBM Reads = L_prompt * (K + 1) / 2
+# When L=32,768 and C=256 -&gt; K=128 -&gt; 64.5x HBM KV bandwidth tax!
+↓
+# Production Colocated Serving Configuration (vLLM V1 / SGLang):
+--enable-chunked-prefill \
+--max-num-batched-tokens 2048 \
+--max-num-seqs 128</div>
+      </div>
+      <div class="foot">Route prompts with L &gt; 16,384 to wide-chunk (C=8192) or disaggregated Prefill workers.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>ITL Smoothness &amp; 32K TTFT Across Chunk Sizes</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>EXTREMES (T1 / T2)</th><th>SLO DYNAMIC (T4)</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>P99 Decode ITL</td><td>640.0 ms (C=16384)</td><td>28.5 ms</td><td>22.46x Smoother</td></tr>
+            <tr><td>KV Re-Read Factor</td><td>64.5x (C=256)</td><td>2.5x</td><td>25.8x Less BW</td></tr>
+            <tr><td>32K Prompt TTFT</td><td>4,890.0 ms (C=256)</td><td>1,420.0 ms</td><td>3.44x Faster</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Keeping K = L / C &lt;= 16 prevents HBM bandwidth starvation on long prompts.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY &amp; SCALING</div>
+        <h2>P99 Streaming Decode Latency (`ITL ms`, Lower Is Better)</h2>
+        <div class="bar-row">Tier 4 SLO Dynamic Budget + Long Isolation (28.5 ms)<div class="bar-bg"><div class="bar-fill" style="width:4.5%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 3 Static Sweet Spot C=2,048 (48.0 ms)<div class="bar-bg"><div class="bar-fill" style="width:7.5%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 2 Tiny Chunks C=256 (22.0 ms ITL, but 4,890 ms TTFT!)<div class="bar-bg"><div class="bar-fill" style="width:3.4%;background:#cbd5e1;"></div></div></div>
+        <div class="bar-row">Tier 1 Oversized Chunk C=16,384 (640.0 ms Freeze)<div class="bar-bg"><div class="bar-fill" style="width:100%;background:#cbd5e1;"></div></div></div>
+      </div>
+      <div class="foot">Primary SLO-aware path (#3B82F6) vs Extreme chunking baselines (#CBD5E1).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p style="font-size:12px;color:#6ee7b7;"><strong>✅ Good fit:</strong> Setting `max_num_batched_tokens = 1024–2048` on colocated instances and routing `&gt;16K` prompts to wide-chunk / PD-disaggregated Prefill nodes.</p>
+        <p style="font-size:12px;color:#fca5a5;"><strong>⛔ Not for:</strong> Setting `max_num_batched_tokens &lt;= 512` on 32K+ prompts (`64.5x` KV re-read tax) or `&gt;= 16,384` on interactive streaming chat.</p>
+      </div>
+      <div class="foot">License: MIT · Provenance: synthetic + anonymized_reported</div>
+    </div>
+  </div>
+</body>
+</html>

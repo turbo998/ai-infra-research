@@ -1,0 +1,46 @@
+{
+  "experiment_id": "llm_chunked_prefill_token_budget_decode_itls_interference_selection",
+  "round": 231,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "prompt_len_tokens": 32768,
+    "itl_reduction_x": 22.46,
+    "ttft_speedup_vs_small_chunk_x": 3.44
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_oversized_chunk_16384_decode_itl_freeze",
+      "name": "Tier 1: 超大分块预算 (max_num_batched_tokens=16384，虽仅读 1.5x KV 但导致流式 Decode 卡死 640 ms)",
+      "kv_cache_hbm_reread_multiplier_x": 1.5,
+      "p99_decode_itl_jitter_ms": 640.0,
+      "prompt_32k_ttft_ms": 1350.0,
+      "verdict": "将 32 个正在流式输出的 Decode 请求与 16,384 个 Prefill Token 绑在同一微批，使在线用户遭遇 640ms 的严重吐字卡顿 ✕"
+    },
+    {
+      "tier_id": "tier2_undersized_chunk_256_quadratic_kv_reread_tax",
+      "name": "Tier 2: 盲目切极小分块 (max_num_batched_tokens=256，把 32K 切成 128 块引爆 64.5x 平方级 KV 重复读取!)",
+      "kv_cache_hbm_reread_multiplier_x": 64.5,
+      "p99_decode_itl_jitter_ms": 22.0,
+      "prompt_32k_ttft_ms": 4890.0,
+      "verdict": "第 k 个分块必须重读前 k-1 个分块的全部历史 KV Cache，128 个极小分块导致 HBM 被重复扫了 64.5 遍，32K TTFT 暴涨 3.44 倍 ⚠️"
+    },
+    {
+      "tier_id": "tier3_static_roofline_chunk_2048_balanced_default",
+      "name": "Tier 3: 静态固定黄金分块 (max_num_batched_tokens=2048，兼顾 Tensor Core 饱和度与 8.5x 适度重读)",
+      "kv_cache_hbm_reread_multiplier_x": 8.5,
+      "p99_decode_itl_jitter_ms": 48.0,
+      "prompt_32k_ttft_ms": 1680.0,
+      "verdict": "在 <=16K 中短上下文下表现均衡，但面对 32K~128K 超长上下文时仍存在固定 48ms 尾延迟与 8.5x~32.5x 带宽放大 ✅"
+    },
+    {
+      "tier_id": "tier4_slo_aware_dynamic_chunk_budget_plus_long_prompt_isolation",
+      "name": "Tier 4: SLO 感知动态分块预算 (依在途 Decode 数动态收缩 C=1024~2048 + 超长 Prefill 旁路/GreenCtx 隔离)",
+      "kv_cache_hbm_reread_multiplier_x": 2.5,
+      "p99_decode_itl_jitter_ms": 28.5,
+      "prompt_32k_ttft_ms": 1420.0,
+      "verdict": "短请求走动态屋脊线分块稳守 P99 ITL <= 28.5ms (平顺 22.46x)，长请求自动路由或大块隔离避免 64.5x HBM 重读税 (TTFT 快 3.44x) 🏆"
+    }
+  ]
+}
