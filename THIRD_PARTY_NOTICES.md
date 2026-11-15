@@ -300,6 +300,8 @@ Round 235 基于公开发布的 CPython `PyObject` 引用计数（`ob_refcnt`）
 
 Round 236 基于公开发布的 `vLLM / SGLang` `PagedAttention` 页块粒度（`block_size = 1/16/64/256`）与 Hopper/Blackwell `WGMMA / TMA` 64-Token 瓦片对齐、`FlashMLA` 分页约束及 `Mooncake` RDMA 连续块传输原理构建原创合成带宽与碎片率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 237 基于公开发布的 NVIDIA NCCL `NCCL_IB_QPS_PER_CONNECTION`、`NCCL_IB_SPLIT_DATA_ON_QPS` 多队列对分流机制与 RDMA 网卡片上 `QPC / ICM (Interconnect Context Memory)` 硬件缓存容量边界原理构建原创合成 RoCEv2 负载均衡评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

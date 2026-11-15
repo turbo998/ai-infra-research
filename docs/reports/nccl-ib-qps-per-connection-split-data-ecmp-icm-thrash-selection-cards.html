@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>7-Card Visual Benchmark Report · NCCL_IB_QPS_PER_CONNECTION &amp; ICM Thrashing (Round 237)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1500px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 18px; margin: 8px 0 10px; line-height: 1.35; color: #f8fafc; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94a3b8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; }
+    .bar-row { margin: 8px 0; font-size: 12px; }
+    .bar-bg { background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · NCCL_IB_QPS_PER_CONNECTION &amp; ICM CACHE</div>
+        <h2>`QPS = 4` + `SPLIT_DATA = 1` Unlocks 372 Gbps RoCEv2 Without Triggering 32-QP RNIC ICM Cache Thrashing</h2>
+        <p style="font-size:13px;color:#cbd5e1;">Evaluates Single-QP ECMP Collision (`QPS=1`), Round-Robin (`QPS=4, SPLIT=0`), Over-Provisioned `QPS=32` ICM Thrashing, and `QPS=4, SPLIT=1`.</p>
+      </div>
+      <div class="code">QPS = 1 (ECMP Collision):  218.0 Gbps |  0.1% ICM Miss ✕
+QPS = 32 (ICM Thrashing):  164.0 Gbps | 68.5% ICM Miss ✕
+QPS = 4 + SPLIT_DATA = 1:  372.0 Gbps |  0.4% ICM Miss 🏆</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: THE INVERTED-U MULTI-QP CURVE</div>
+        <h2>Why Setting QPS_PER_CONNECTION=32 Overflows On-Chip RNIC SRAM and Collapses Bandwidth to 164 Gbps</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Task Type: <code>choice</code> / <code>score</code> · Action: <strong>Act automatically</strong> (Set `NCCL_IB_QPS_PER_CONNECTION=4` and `NCCL_IB_SPLIT_DATA_ON_QPS=1` on ECMP RoCEv2).</p>
+        <div class="bar-row">Tier 3 Over-Provisioned QPS=32 ICM Thrash (164.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:44.1%;background:#ef4444;"></div></div></div>
+        <div class="bar-row">Tier 1 Single QP=1 Elephant Collision (218.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:58.6%;background:#f59e0b;"></div></div></div>
+        <div class="bar-row">Tier 2 Multi-QP=4 Without Split (295.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:79.3%;"></div></div></div>
+        <div class="bar-row">Tier 4 Golden QPS=4 + SPLIT_DATA=1 (372.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:100.0%;background:#10b981;"></div></div></div>
+      </div>
+      <div class="foot">Grounded in experiments/nccl_ib_qps_per_connection_tc_sl_roce_ecmp_entropy_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>Full 4-Tier 400G RoCEv2 Multi-QP Matrix</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>QPS / ICM MISS</th><th>EFFECTIVE BUSBW</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 QPS=1</td><td>1 / 0.1%</td><td>218.0 Gbps ✕</td><td>Reject</td></tr>
+            <tr><td>Tier 2 SPLIT=0</td><td>4 / 0.4%</td><td>295.0 Gbps ⚠️</td><td>Enable Split</td></tr>
+            <tr><td>Tier 3 QPS=32</td><td>32 / 68.5% ✕</td><td>164.0 Gbps ✕</td><td>Reject</td></tr>
+            <tr><td>Tier 4 QPS=4+Split</td><td>4 / 0.4%</td><td>372.0 Gbps</td><td>Act auto 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">✕ marks Spine ECMP hash collision (`QPS=1`) or RNIC QPC/ICM cache thrashing (`QPS=32`).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>Production RoCEv2 Multi-QP Environment Guard</h2>
+        <div class="code"># 1. Standard 5-Tuple ECMP RoCEv2 Fabric (Ring / Tree / PAT):
+export NCCL_IB_QPS_PER_CONNECTION=4
+export NCCL_IB_SPLIT_DATA_ON_QPS=1
+↓
+# 2. Active QP Budget Formula (MUST stay &lt; 2,048 QPs / NIC):
+# Active_QPs = 2 * num_channels * num_peers * QPS_PER_CONNECTION
+# For 256-GPU All-to-All (DeepEP), keep QPS_PER_CONNECTION = 1..2!</div>
+      </div>
+      <div class="foot">On InfiniBand (Adaptive Routing) or Spectrum-X (Packet Spraying), keep default QPS=1.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>ECMP Balance &amp; NIC Cache Hit Rate</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>QPS=1 / QPS=32</th><th>QPS=4 + SPLIT=1</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>Effective 400G BusBW</td><td>218.0 / 164.0 Gbps</td><td>372.0 Gbps</td><td>Up to 2.27x</td></tr>
+            <tr><td>QPC/ICM Cache Miss</td><td>68.5% (at QPS=32)</td><td>0.4%</td><td>-68.1 pt</td></tr>
+            <tr><td>Sub-Flow Granularity</td><td>1×400G Elephant</td><td>4×100G Striped</td><td>4x Entropy</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Splitting each chunk into 4 concurrent 100G sub-flows prevents single-uplink PFC head-of-line blocking.</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY &amp; BANDWIDTH</div>
+        <h2>Effective 400G RoCEv2 Collective Bus Bandwidth (`Gbps`, Higher Is Better)</h2>
+        <div class="bar-row">Tier 4 Golden QPS=4 + SPLIT_DATA_ON_QPS=1 (372.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:100%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 2 QPS=4 Without Data Split (295.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:79.3%;background:#3b82f6;"></div></div></div>
+        <div class="bar-row">Tier 1 Default Single QP=1 (218.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:58.6%;background:#cbd5e1;"></div></div></div>
+        <div class="bar-row">Tier 3 Over-Provisioned QPS=32 ICM Thrash (164.0 Gbps)<div class="bar-bg"><div class="bar-fill" style="width:44.1%;background:#cbd5e1;"></div></div></div>
+      </div>
+      <div class="foot">Primary 4-QP split path (#3B82F6) vs Single-QP &amp; ICM-thrash baselines (#CBD5E1).</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p style="font-size:12px;color:#6ee7b7;"><strong>✅ Good fit:</strong> Setting `NCCL_IB_QPS_PER_CONNECTION=4` and `NCCL_IB_SPLIT_DATA_ON_QPS=1` on standard 5-tuple ECMP RoCEv2 fabrics.</p>
+        <p style="font-size:12px;color:#fca5a5;"><strong>⛔ Not for:</strong> Setting `QPS_PER_CONNECTION &gt;= 16` (causes RNIC QPC cache thrashing) or applying high QP multipliers to full-mesh All-to-All.</p>
+      </div>
+      <div class="foot">License: MIT · Provenance: synthetic + anonymized_reported</div>
+    </div>
+  </div>
+</body>
+</html>
