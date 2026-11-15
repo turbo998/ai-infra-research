@@ -1,0 +1,59 @@
+{
+  "experiment_id": "llm_multi_token_prediction_mtp_training_aux_head_memory_selection",
+  "round": 280,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "vocab_size": 151936,
+    "tokens_per_microbatch": 32768,
+    "mtp_depth_d": 3,
+    "hidden_size": 7168
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_naive_parallel_independent_mtp_heads_full_logits",
+      "name": "Naive Parallel Independent MTP Heads (Materialize All D+1 Logits in HBM)",
+      "peak_logits_hbm_gb": 39.8,
+      "speculative_accept_rate_pct": 61.0,
+      "decode_speedup_x": 1.48,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Materializes 4 x [32768, 151936] FP16/FP32 logits (39.8 GB) simultaneously -> OOM! Independent heads lack causal token conditioning (61.0% accept)."
+    },
+    {
+      "tier_id": "tier2_sequential_causal_mtp_unshared_lm_head",
+      "name": "Sequential Causal MTP Chaining (Unshared LM Head & Unfused CE)",
+      "peak_logits_hbm_gb": 14.2,
+      "speculative_accept_rate_pct": 86.5,
+      "decode_speedup_x": 2.24,
+      "action": "Send to a human",
+      "status": "warn",
+      "note": "Conditions depth k on h_{k-1} + Emb(t_{i+k}), lifting accept rate to 86.5%, but unshared LM heads add 3.7B params and unfused CE holds 14.2 GB."
+    },
+    {
+      "tier_id": "tier3_deepseek_v3_causal_mtp_shared_emb_lmhead_sequential_ce",
+      "name": "DeepSeek-V3 Causal MTP + Shared Emb/LM Head + Sequential Per-Depth CE Release",
+      "peak_logits_hbm_gb": 3.2,
+      "speculative_accept_rate_pct": 88.0,
+      "decode_speedup_x": 2.38,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Shares Embedding & Output Head across PP/FSDP and frees each depth's logits immediately after backward before computing depth k+1 (3.2 GB)."
+    },
+    {
+      "tier_id": "tier4_causal_mtp_shared_head_plus_fused_linear_ce_plus_tree_verify",
+      "name": "Causal MTP + Shared Emb/Head + Fused Linear-CE (0.3 GB) + Eagle/MTP Tree SpecDecode",
+      "peak_logits_hbm_gb": 0.3,
+      "speculative_accept_rate_pct": 88.5,
+      "decode_speedup_x": 2.45,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Fuses Linear + Cross-Entropy in 2048-token SRAM chunks (0.3 GB peak logits, 132.7x reduction) and runs 1-block MTP self-speculation (2.45x speedup)."
+    }
+  ],
+  "summary": {
+    "logits_memory_reduction_x": 132.7,
+    "recommended_decode_speedup_x": 2.45,
+    "recommended_accept_rate_pct": 88.5,
+    "recommended_tier": "tier4_causal_mtp_shared_head_plus_fused_linear_ce_plus_tree_verify"
+  }
+}

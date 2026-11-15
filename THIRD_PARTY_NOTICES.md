@@ -386,6 +386,8 @@ Round 278 基于公开发布的 `vLLM / SGLang` `PreemptionMode (RECOMPUTE vs. S
 
 Round 279 基于公开发布的 SONiC / RoCEv2 `PFC Watchdog (action=drop vs. action=forward)` 硬件看门狗机制、ConnectX-7 `pfc_stall_prevention` 网卡侧超时保护与 Clos 拓扑 BGP `Valley-Free` 防折返环路死锁原理构建原创合成风暴爆炸半径与隔离耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 280 基于公开发布的 DeepSeek-V3 顺序因果多 Token 预测（`Sequential Causal Multi-Token Prediction, MTP`）机制、双路 `RMSNorm` 特征拼接、共享 `Embedding / LM Head` 与逐深度 `Fused Linear Cross-Entropy` 原理构建原创合成显存峰值与自投机解码提速评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

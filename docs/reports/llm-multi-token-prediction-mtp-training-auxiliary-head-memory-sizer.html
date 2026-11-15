@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 280 · Multi-Token Prediction (MTP) Memory &amp; Self-Speculation Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 280 · Multi-Token Prediction (`MTP`) Training Memory &amp; Self-Speculative Decoding Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">MTP Architecture &amp; Cross-Entropy Strategy (S=32K, V=151,936, D=3)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Naive Parallel Independent Heads (Full D+1 Logits)</option>
+          <option value="t2">Tier 2: Sequential Causal MTP (Unshared Head &amp; Unfused CE)</option>
+          <option value="t3">Tier 3: Causal MTP + Shared Emb/Head + Sequential CE Release</option>
+          <option value="t4" selected>Tier 4: Causal MTP + Shared Head + Fused Linear-CE (Recommended)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Peak Logits HBM Memory</label>
+        <div id="mem" class="kpi">0.3 GB (132.7x Lower)</div>
+      </div>
+      <div class="card">
+        <label>SpecDecode Acceptance / Speedup</label>
+        <div id="spd" class="kpi">88.5% / 2.45x</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: DeepSeek-V3 Sequential Causal MTP with shared `Embedding/LM Head` and chunked `Fused Linear-CE` slashes peak logits memory from 39.8 GB to 0.3 GB while delivering 88.5% self-speculative acceptance (2.45x decoding speedup).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { mem: "39.8 GB (OOM! ✕)", spd: "61.0% / 1.48x ✕", bad: true, msg: "⛔ Materializing 4 × [32768, 151936] logits consumes 39.8 GB HBM, and non-causal heads drop acceptance to 61.0%." },
+      t2: { mem: "14.2 GB ⚠️", spd: "86.5% / 2.24x", bad: true, msg: "⚠️ Causal chaining lifts acceptance to 86.5%, but unshared LM heads and unfused CE still waste 14.2 GB." },
+      t3: { mem: "3.2 GB ✅", spd: "88.0% / 2.38x ✅", bad: false, msg: "✅ Sharing Embedding/LM Head and freeing each depth's logits immediately cuts peak memory to 3.2 GB." },
+      t4: { mem: "0.3 GB (132.7x Lower) 🏆", spd: "88.5% / 2.45x 🏆", bad: false, msg: "🏆 Fusing Linear + Cross-Entropy in 2048-token SRAM chunks keeps peak logits HBM at 0.3 GB with 2.45x self-speculative speedup." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('mem');
+      el.textContent = d.mem;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('spd').textContent = d.spd;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
