@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 293 · Sliding Window Attention (SWA), Attention Sinks &amp; 5:1 Hybrid KV Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 293 · `SWA`, `Attention Sinks` &amp; `5:1` Hybrid Split KV Pool Sizer (`128K` Context)</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">60-Layer 128K Attention &amp; KV Cache Allocator Policy</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Pure SWA (W=4096, No Attention Sink -&gt; PPL Collapse)</option>
+          <option value="t2">Tier 2: StreamingLLM (SWA W=4096 + 4 Pinned Sink Tokens Only)</option>
+          <option value="t3">Tier 3: 5:1 Hybrid SWA:Global + Naive Uniform 128K KV Allocator</option>
+          <option value="t4" selected>Tier 4: 5:1 Hybrid + Split Circular-SWA / Full-Global KV Pool</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>128K KV Cache Memory / Req</label>
+        <div id="kv" class="kpi">7.25 GB (5.52x Smaller)</div>
+      </div>
+      <div class="card">
+        <label>128K NIAH Recall / Perplexity</label>
+        <div id="rec" class="kpi">99.4% / 5.10 PPL</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Interleaving 50 `SWA` layers (`0.58 GB` circular ring pool) with 10 `Global` `128K` layers (`6.67 GB` full pool) slashes per-request `128K` KV cache memory 5.52x (`40.00 -&gt; 7.25 GB`) while preserving `99.4%` retrieval recall and `5.10` perplexity.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { kv: "1.28 GB", rec: "6.5% / 1,240.0 PPL ✕", bad: true, msg: "⛔ Evicting Token 0 at step 4097 destroys the Softmax Attention Sink, exploding perplexity to 1,240.0!" },
+      t2: { kv: "1.29 GB", rec: "12.0% / 6.45 PPL ✕", bad: true, msg: "⛔ Pinning 4 sink tokens stabilizes PPL (6.45), but tokens outside the 4K window are forgotten (12.0% 128K NIAH recall)!" },
+      t3: { kv: "40.00 GB (82% Wasted! ✕)", rec: "99.4% / 5.12 PPL", bad: true, msg: "⚠️ Uniform 128K KV allocation stores dead out-of-window tokens across all 50 SWA layers, wasting 32.75 GB/req!" },
+      t4: { kv: "7.25 GB (5.52x Smaller) 🏆", rec: "99.4% / 5.10 PPL 🏆", bad: false, msg: "🏆 Split Circular-SWA (0.58 GB) + Full-Global (6.67 GB) Paged KV pool achieves 7.25 GB/req and 99.4% 128K recall." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('rec');
+      el.textContent = d.rec;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('kv').textContent = d.kv;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

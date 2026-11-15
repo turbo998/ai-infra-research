@@ -412,6 +412,8 @@ Round 291 基于公开发布的 Byte-level BPE 正则预分词在超长无空格
 
 Round 292 基于公开发布的 NCCL RoCEv2 `NCCL_IB_GID_INDEX` (`RoCEv1` vs `RoCEv2`) 寻址机制、`NCCL_IB_TC` (`DSCP` 与 IPv4 `ToS` 字节映射无损队列) 分类规则以及 `NCCL_SOCKET_IFNAME` 虚拟网桥过滤与 `NET/Socket` 退化拦截原理构建原创合成通信带宽与重传评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 293 基于公开发布的 `StreamingLLM` 注意力汇聚点（`Attention Sinks`）机制、`Gemma-3 / Mistral` `5:1` 局部滑动窗口与全局注意力交错架构以及 `vLLM V1 / SGLang` 分离式环形 SWA 页池与全局全量页池（`Split Circular-SWA / Full-Global Paged KV Pool`）原理构建原创合成显存开销与长文召回率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
