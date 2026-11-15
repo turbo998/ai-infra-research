@@ -406,6 +406,8 @@ Round 288 基于公开发布的 `vLLM APC / SGLang RadixAttention` 链式块前�
 
 Round 289 基于公开发布的 GPU 瞬态电学峰值功率（`EDPp: Electrical Design Point Peak`）、PSU `#PROCHOT / 0x80 HW_POWER_BRAKE_SLOWDOWN` 触发机制以及 CMOS 动态功耗三次方电压-频率定律（$P \propto V^2 f \propto f^3$）与同构锁频（`nvidia-smi -pl / -lgc`）原理构建原创合成峰值功率与集群吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 290 基于公开发布的 `1F1B` 流水线并行 `P:1` 首尾激活显存不平衡原理、Megatron-LM `Interleaved 1F1B` 虚拟流水线通信与显存开销模型以及 `Zero-Bubble V-Schedule (ZB-V)` / `DualPipe` V 型双向折叠均衡机制构建原创合成显存峰值与流水线空泡评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
