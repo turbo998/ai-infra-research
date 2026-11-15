@@ -404,6 +404,8 @@ Round 287 基于公开发布的 DeepSeek-V3 节点受限路由（`Node-Limited R
 
 Round 288 基于公开发布的 `vLLM APC / SGLang RadixAttention` 链式块前缀哈希原理、System Prompt 动态时间戳与滑动窗口位移导致的缓存失效机制以及推理模型 `<think>` 模板剥离边界对齐规范构建原创合成多轮 Agent 命中率与首字延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 289 基于公开发布的 GPU 瞬态电学峰值功率（`EDPp: Electrical Design Point Peak`）、PSU `#PROCHOT / 0x80 HW_POWER_BRAKE_SLOWDOWN` 触发机制以及 CMOS 动态功耗三次方电压-频率定律（$P \propto V^2 f \propto f^3$）与同构锁频（`nvidia-smi -pl / -lgc`）原理构建原创合成峰值功率与集群吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

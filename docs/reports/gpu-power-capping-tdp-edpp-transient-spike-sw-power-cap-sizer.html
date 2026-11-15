@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 289 · GPU EDPp Transient Power Spike &amp; V-F Sweet-Spot Power Capping Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 289 · GPU `EDPp` Transient Power Spikes (`960W`) &amp; `V-F` Sweet-Spot Capping Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">1,024-GPU Power &amp; Clock Policy (H100 700W Nominal)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Uncapped 700W + Serial Square-Wave EDPp Spikes</option>
+          <option value="t2">Tier 2: Asymmetric Cap (1 Hot Rack at 500W, 15 Racks at 700W)</option>
+          <option value="t3">Tier 3: Uniform Cluster-Wide 600W Cap (-14.3% Power)</option>
+          <option value="t4" selected>Tier 4: Uniform 620W + Locked 1,665 MHz + Overlapped Comm/GEMM</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>100us Transient EDPp Peak</label>
+        <div id="pk" class="kpi">665.0 W (-295 W Reduction)</div>
+      </div>
+      <div class="card">
+        <label>Cluster Speed / Perf per Watt</label>
+        <div id="spd" class="kpi">98.6% / 1.16x (+16%)</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Combining a uniform `620W` cap (`nvidia-smi -pl 620`) with a locked `1,665 MHz` ceiling (`-lgc 300,1665`) and overlapped Comm/GEMM cuts `100 μs` `EDPp` peaks from `960W` to `665W`, retains `98.6%` training speed, and boosts Perf/Watt by `+16.0%`.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { pk: "960.0 W (Breaker/0x80! ✕)", spd: "100.0% / 1.00x ✕", bad: true, msg: "⛔ Simultaneous 180W -> 960W EDPp spikes across 64 GPUs/rack trip PDU breakers or fire PSU 0x80 Power Brake!" },
+      t2: { pk: "890.0 W ⚠️", spd: "78.0% / 0.79x ✕", bad: true, msg: "⛔ Capping 1 rack to 500W slows its GEMM by 22%, forcing all other 15 racks to wait at every NCCL barrier!" },
+      t3: { pk: "715.0 W ✅", spd: "97.2% / 1.13x (+13%) ✅", bad: false, msg: "✅ Cubic V-F scaling (P ~ f^3): cutting power -14.3% (700W->600W) loses only -2.8% training throughput." },
+      t4: { pk: "665.0 W (-295 W) 🏆", spd: "98.6% / 1.16x (+16%) 🏆", bad: false, msg: "🏆 Locking max Boost clock at 1,665 MHz eliminates idle voltage overshoot and holds EDPp peaks <= 665W at 98.6% speed." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('pk');
+      el.textContent = d.pk;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('spd').textContent = d.spd;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

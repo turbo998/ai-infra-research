@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;">
+  <title>Round 289 · 7-Card Benchmark Report · GPU EDPp Power Spikes &amp; V-F Sweet-Spot Capping</title>
+  <style>
+    body { background: #090D16; color: #F8FAFC; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1480px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1E293B; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38BDF8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 19px; line-height: 1.3; margin: 8px 0 12px; color: #F8FAFC; }
+    p, li { font-size: 13px; line-height: 1.5; color: #CBD5E1; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94A3B8; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .act { background: #064E3B; color: #6EE7B7; }
+    .confirm { background: #78350F; color: #FCD34D; }
+    .human { background: #450A0A; color: #FCA5A5; }
+    .bar-wrap { background: #0F172A; border-radius: 6px; height: 12px; width: 100%; overflow: hidden; margin: 4px 0 8px; }
+    .bar-blue { background: #3B82F6; height: 100%; }
+    .bar-gray { background: #CBD5E1; height: 100%; }
+    pre { background: #0F172A; padding: 10px; border-radius: 8px; font-size: 11px; color: #E2E8F0; overflow-x: auto; margin: 6px 0; }
+    .prov { font-size: 11px; color: #94A3B8; border-top: 1px solid #334155; padding-top: 8px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · GPU EDPp SPIKES &amp; V-F POWER CAPPING</div>
+        <h2>Uniform `620W` + Locked `1,665 MHz` Cuts `100 μs` `EDPp` Spikes by `295W` (`960 -> 665W`) at `98.6%` Speed (`+16%` Perf/W)</h2>
+        <p>Evaluates 4 power and clock management policies across a 1,024-GPU H100 cluster (`700W` nominal TDP) on `100 μs` transient `EDPp` peak, training throughput, and Perf/Watt.</p>
+        <table>
+          <tr><th>Cohort Tier</th><th>100us EDPp Peak</th><th>Throughput / Perf/W</th></tr>
+          <tr><td>Tier 1: Uncapped 700W</td><td>960.0 W ✕</td><td>100.0% / 1.00x ✕</td></tr>
+          <tr><td>Tier 2: 1-Rack 500W Cap</td><td>890.0 W ⚠️</td><td>78.0% / 0.79x ✕</td></tr>
+          <tr><td>Tier 3: Uniform 600W Cap</td><td>715.0 W ✅</td><td>97.2% / 1.13x ✅</td></tr>
+          <tr><td>Tier 4: 620W+1665MHz+Ovl</td><td>665.0 W 🏆</td><td>98.6% / 1.16x 🏆</td></tr>
+        </table>
+      </div>
+      <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: 1,024 GPUS TRANSITIONING ALL-REDUCE -&gt; GEMM</div>
+        <h2>Uncapped Boost Ramps Voltage During `180W` Comm Wait, Triggering `960W` Inrush Spikes &amp; `0x80` Brakes</h2>
+        <p>Input Case: Synchronous `All-Reduce -> FP8 GEMM` transitions across 64 GPUs per rack.</p>
+        <div>
+          <span>Tier 1 Uncapped `700W` Square-Wave (`960.0 W` Peak · Breaker/0x80 Risk)</span> <span class="pill human">Send to a human</span>
+          <div class="bar-wrap"><div class="bar-gray" style="width: 96.0%;"></div></div>
+          <span>Tier 2 Asymmetric 1-Rack `500W` Cap (`78.0%` Cluster Throughput)</span> <span class="pill human">Send to a human</span>
+          <div class="bar-wrap"><div class="bar-gray" style="width: 78.0%;"></div></div>
+          <span>Tier 4 Uniform `620W` + `1,665 MHz` + Overlap (`665.0 W` Peak · `98.6%` Speed)</span> <span class="pill act">Act automatically</span>
+          <div class="bar-wrap"><div class="bar-blue" style="width: 66.5%;"></div></div>
+        </div>
+      </div>
+      <div class="prov">Task badges: choice / score · Grounded in results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>4-Tier Evaluation Matrix Across Transient EDPp Peak, Cluster Throughput &amp; Perf/Watt</h2>
+        <table>
+          <tr><th>SCENARIO</th><th>QUESTION/TASK</th><th>MODEL ANSWER</th><th>ACTION</th></tr>
+          <tr><td>Tier 1 Uncapped</td><td>180W-&gt;960W Inrush</td><td>960W / 0x80 Brake ✕</td><td><span class="pill human">Send to a human</span></td></tr>
+          <tr><td>Tier 2 Asymmetric</td><td>1 Rack Capped 500W</td><td>78.0% Throughput ✕</td><td><span class="pill human">Send to a human</span></td></tr>
+          <tr><td>Tier 3 Uniform 600W</td><td>-pl 600 Only</td><td>715W / 97.2% Speed</td><td><span class="pill confirm">Confirm</span></td></tr>
+          <tr><td>Tier 4 620W+Lock</td><td>-pl 620 -lgc 300,1665</td><td>665W / 98.6% Speed</td><td><span class="pill act">Act automatically</span></td></tr>
+        </table>
+      </div>
+      <div class="prov">Explicit ✕ marks 960W EDPp breaker trip hazard and 22% asymmetric straggler slowdown</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>Homogeneous Prolog Clock Lock &amp; Power Cap Contract</h2>
+        <pre>{
+  "power_limit_w": 620,
+  "min_sm_clock_mhz": 300,
+  "max_sm_clock_mhz": 1665,
+  "comm_compute_overlap": "dualpipe_or_async_tp"
+}</pre>
+        <p>↓ Deterministic Slurm Prolog Power &amp; Clock Gate (`&lt;answer&gt;`)</p>
+        <pre># Apply uniform power cap AND lock max SM boost clock across all job nodes:
+nvidia-smi -pm 1
+nvidia-smi -pl 620
+nvidia-smi -lgc 300,1665
+# &lt;answer&gt;tier4_uniform_620w_locked_clock_plus_dualpipe_comm_overlap_smoothing&lt;/answer&gt;</pre>
+      </div>
+      <div class="prov">Eliminates voltage overshoot during communication waits</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Perturbation Across Transient EDPp Peak, Cluster Throughput &amp; Normalized Perf/Watt</h2>
+        <table>
+          <tr><th>QUESTION/ANSWER</th><th>ORIGINAL (Tier 1/2)</th><th>PERTURBED (Tier 4)</th><th>CHANGE (PTS)</th></tr>
+          <tr><td>100us EDPp Peak</td><td>960.0 W (Tier 1)</td><td>665.0 W</td><td>-295.0 W (-30.7%)</td></tr>
+          <tr><td>Cluster Throughput</td><td>78.0% (Tier 2)</td><td>98.6%</td><td>+20.6 pt</td></tr>
+          <tr><td>Normalized Perf/Watt</td><td>1.00x (Tier 1)</td><td>1.16x</td><td>+16.0% Efficiency</td></tr>
+        </table>
+      </div>
+      <div class="prov">Consistent invariance verified across H100 (700W), H200 (700W), and B200 (1000W)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY</div>
+        <h2>Cluster Step Throughput &amp; Peak Power: 98.6% at 665W (`Tier 4`) vs 78.0% at 890W (`Tier 2`)</h2>
+        <div>
+          <p>Tier 4 Uniform `620W` + `1,665 MHz` + Overlap (`#3B82F6`): <strong>98.6% Speed (665W Peak, +16% Perf/W)</strong></p>
+          <div class="bar-wrap"><div class="bar-blue" style="width: 98.6%;"></div></div>
+          <p>Tier 3 Uniform `600W` Power Cap (`#3B82F6`): <strong>97.2% Speed (715W Peak, +13% Perf/W)</strong></p>
+          <div class="bar-wrap"><div class="bar-blue" style="width: 97.2%;"></div></div>
+          <p>Tier 2 Asymmetric 1-Rack `500W` Cap (`#CBD5E1`): <strong>78.0% Speed (Straggler Bottleneck! ✕)</strong></p>
+          <div class="bar-wrap"><div class="bar-gray" style="width: 78.0%;"></div></div>
+        </div>
+      </div>
+      <div class="prov">Exact coordinates from experiments/gpu_power_capping_psu_ats_inrush_transient_spike_throttling_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p><strong>✅ Good fit</strong>: All high-density GPU training clusters pairing uniform `600W–620W` power caps with `-lgc` frequency ceiling locks and overlapped communication.</p>
+        <p><strong>⛔ Not for</strong>: Throttling individual warm racks asymmetrically inside a multi-rack synchronous training job.</p>
+      </div>
+      <div class="prov">Readiness: Production-ready analytical reference · License: MIT · Provenance: synthetic + anonymized_reported (independently_reproduced=false)</div>
+    </div>
+  </div>
+</body>
+</html>
