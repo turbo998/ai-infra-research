@@ -1,0 +1,58 @@
+{
+  "experiment_id": "llm_cross_node_speculative_decoding_eagle3_draft_placement_selection",
+  "round": 285,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "target_model": "Llama-3.3-70B-TP8",
+    "vanilla_tpot_ms": 11.2,
+    "draft_steps_gamma": 5
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_standalone_7b_draft_sharded_tp8_280_allreduces",
+      "name": "Standalone 7B Draft Model Sharded Across TP=8 (280 Tiny All-Reduces / Cycle)",
+      "draft_5step_latency_ms": 11.8,
+      "mean_accepted_tokens": 3.1,
+      "effective_tpot_ms": 8.45,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "5 draft steps x 28 layers x 2 All-Reduces = 280 tiny latency-bound NVLink syncs (11.8ms draft + 14.4ms verify = 26.2ms / 3.1 tok = 8.45ms, barely 1.33x)!"
+    },
+    {
+      "tier_id": "tier2_disaggregated_remote_draft_node_rpc",
+      "name": "Disaggregated Standalone Draft GPU Pool Over Network RPC",
+      "draft_5step_latency_ms": 14.5,
+      "mean_accepted_tokens": 3.1,
+      "effective_tpot_ms": 9.32,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Network serialization + KV state sync between Target and Draft nodes every 20ms adds 6.3ms RPC jitter, slowing effective TPOT to 9.32ms!"
+    },
+    {
+      "tier_id": "tier3_eagle1_single_top_layer_feature_head",
+      "name": "EAGLE-1/2 1-Layer Feature Head (Top-Layer Hidden State Only, Full 128K Vocab)",
+      "draft_5step_latency_ms": 2.4,
+      "mean_accepted_tokens": 3.85,
+      "effective_tpot_ms": 4.36,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Replaces 28-layer 7B draft with 1-layer feature head (2.40ms for 5 steps), reaching 3.85 accepted tokens and 4.36ms effective TPOT (2.57x)."
+    },
+    {
+      "tier_id": "tier4_eagle3_multilayer_fusion_pruned_32k_vocab_joint_cudagraph",
+      "name": "EAGLE-3 (Low/Mid/High Feature Fusion + 32K Freq Vocab + Joint 5-Step CUDAGraph)",
+      "draft_5step_latency_ms": 1.15,
+      "mean_accepted_tokens": 4.85,
+      "effective_tpot_ms": 3.21,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Fuses multi-layer features + training-time test (4.85 accepted tokens) and trims draft LM Head to Top-32K vocab inside 1 CUDAGraph (1.15ms draft, 3.21ms TPOT = 3.49x)!"
+    }
+  ],
+  "summary": {
+    "draft_latency_speedup_x": 10.26,
+    "end_to_end_tpot_speedup_vs_vanilla_x": 3.49,
+    "recommended_accepted_tokens": 4.85,
+    "recommended_tier": "tier4_eagle3_multilayer_fusion_pruned_32k_vocab_joint_cudagraph"
+  }
+}

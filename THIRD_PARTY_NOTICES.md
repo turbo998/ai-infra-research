@@ -396,6 +396,8 @@ Round 283 基于公开发布的 `QLoRA / PEFT merge_and_unload()` 双重量化�
 
 Round 284 基于公开发布的 PCIe Gen5 (`32.0 GT/s x16`) `LTSSM` 静默降宽降速机制（`LnkSta < LnkCap`）、Retimer 信号完整性眼图闭合导致的 `LTSSM Recovery` 重训练风暴与 PCIe 5.0 硬件接收端眼图测试（`Lane Margining at the Receiver`）规范构建原创合成带宽与千卡通信效率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 285 基于公开发布的 `EAGLE-3` 多层隐状态特征融合与训练时自回归测试（`Training-Time Test`）、草稿词表高频裁剪（`Top-32K Draft Vocabulary Pruning`）以及 `TP=8` 下多层独立草稿模型通信瓶颈原理构建原创合成起草延迟与解码吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

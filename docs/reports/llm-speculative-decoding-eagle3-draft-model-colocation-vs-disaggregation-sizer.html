@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 285 · Speculative Decoding (EAGLE-3 vs. Standalone 7B Draft) Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 285 · Speculative Decoding (`EAGLE-3` vs. Standalone `7B` Draft) on `TP=8` Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Draft Model Architecture &amp; TP=8 Placement (70B Target, 11.2ms Vanilla)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Standalone 28-Layer 7B Draft Sharded on TP=8</option>
+          <option value="t2">Tier 2: Disaggregated Remote Draft Pool Over Network RPC</option>
+          <option value="t3">Tier 3: EAGLE-1/2 1-Layer Head (Full 128K Vocab)</option>
+          <option value="t4" selected>Tier 4: EAGLE-3 (Multi-Layer Fusion + Top-32K Vocab + CUDAGraph)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Effective TPOT (Speedup vs 11.2ms)</label>
+        <div id="tpot" class="kpi">3.21 ms (3.49x Faster)</div>
+      </div>
+      <div class="card">
+        <label>5-Step Draft Latency / Accepted τ</label>
+        <div id="drf" class="kpi">1.15 ms / 4.85 tok</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: `EAGLE-3` fuses low/mid/high target features into a 1-layer head with a pruned `Top-32K` draft vocabulary and 5-step `CUDAGraph` capture, cutting draft time to `1.15 ms` and achieving `4.85` accepted tokens (`3.21 ms` effective TPOT = `3.49x` speedup).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { tpot: "8.45 ms (Only 1.33x! ✕)", drf: "11.80 ms / 3.10 tok ✕", bad: true, msg: "⛔ 5 steps × 28 layers × 2 = 280 tiny NVLink All-Reduces burn 11.80 ms just to draft 5 tokens!" },
+      t2: { tpot: "9.32 ms (Only 1.20x! ✕)", drf: "14.50 ms / 3.10 tok ✕", bad: true, msg: "⛔ Disaggregating Draft and Target across network RPC adds +6.3 ms jitter every 20ms cycle." },
+      t3: { tpot: "4.36 ms (2.57x Faster) ✅", drf: "2.40 ms / 3.85 tok ✅", bad: false, msg: "✅ 1-layer EAGLE-1/2 head eliminates deep layer barriers (2.40 ms draft, 3.85 accepted tokens)." },
+      t4: { tpot: "3.21 ms (3.49x Faster) 🏆", drf: "1.15 ms / 4.85 tok 🏆", bad: false, msg: "🏆 Multi-layer feature fusion + Top-32K pruned draft LM Head + 5-step CUDAGraph hits 1.15 ms draft and 3.49x end-to-end speedup." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('tpot');
+      el.textContent = d.tpot;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('drf').textContent = d.drf;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
