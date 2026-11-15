@@ -1,0 +1,47 @@
+{
+  "experiment_id": "ai_cluster_rocev2_pfc_headroom_cable_length_xoff_xon_selection",
+  "round": 252,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "link_speed_gbps": 400,
+    "fiber_length_m": 150,
+    "inflight_skid_kb": 156.0,
+    "recommended_headroom_kb": 192.0
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_legacy_48kb_headroom_overflow_drop_under_150m_fec",
+      "name": "Tier 1: 沿用 100G 时代默认 48KB Headroom (400G 150m 光纤 + RS-FEC 刹车距离需 156KB，溢包丢帧!)",
+      "headroom_drop_rate_pct": 1.85,
+      "shared_mmu_pool_available_pct": 92.0,
+      "nccl_allreduce_busbw_gbps": 88.0,
+      "verdict": "发出 XOFF 后光纤在途与 RS-FEC 流水线仍有 156KB 数据涌入，瞬间冲垮 48KB 死区导致“开了 PFC 依然狂丢包” ✕"
+    },
+    {
+      "tier_id": "tier2_static_512kb_per_port_dedicated_headroom_mmu_starvation",
+      "name": "Tier 2: 粗暴静态预留 512KB/端口独占 Headroom (虽不溢包，但吞噬 48% 芯片 MMU 共享池引发过早 XOFF 风暴)",
+      "headroom_drop_rate_pct": 0.0,
+      "shared_mmu_pool_available_pct": 51.5,
+      "nccl_allreduce_busbw_gbps": 265.0,
+      "verdict": "128 个端口静态锁死 64MB 片上缓存，导致吸收多对一 Incast 微突发的主共享池腰斩，频繁触发级联反压 ⚠️"
+    },
+    {
+      "tier_id": "tier3_calibrated_headroom_but_low_xon_threshold_link_underflow",
+      "name": "Tier 3: 精准定容 192KB Headroom，但 XON 恢复阈值过低 (队列排空后远端重发尚未到达，产生光纤断流气泡)",
+      "headroom_drop_rate_pct": 0.0,
+      "shared_mmu_pool_available_pct": 82.0,
+      "nccl_allreduce_busbw_gbps": 318.0,
+      "verdict": "XON 设得太靠近 0，等对端收到解除暂停帧并飞过 150m 光纤时本端队列早已排空，链路利用率白白损失 15% ✅"
+    },
+    {
+      "tier_id": "tier4_cable_fec_calibrated_shared_headroom_pool_plus_dynamic_alpha",
+      "name": "Tier 4: 按线长+RS-FEC 精算的共享 Headroom 池 (192KB 上限) + Dynamic Alpha + 满パイプライン XON 阈值",
+      "headroom_drop_rate_pct": 0.0,
+      "shared_mmu_pool_available_pct": 82.0,
+      "nccl_allreduce_busbw_gbps": 374.0,
+      "verdict": "精准容纳 156KB 物理刹车距离 (0 溢包) + 共享 Headroom 池保住 82% 动态缓存 + 无断流 XON 跑满 374.0 GB/s 🏆"
+    }
+  ]
+}

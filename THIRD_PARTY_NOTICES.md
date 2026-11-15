@@ -330,6 +330,8 @@ Round 250 基于公开发布的 `FlashAttention-2/3 flash_attn_varlen_func (cu_s
 
 Round 251 基于公开发布的 Megatron-LM `Tensor Parallelism (TP)` 与 `Sequence Parallelism (SP)`（`AllReduce ≡ ReduceScatter + AllGather` 恒等拆解与 `save_for_backward` 分片保存）及 NVIDIA `TransformerEngine Userbuffers (Async-TP)` 分块流水线重叠原理构建原创合成激活显存与单步延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 252 基于公开发布的 IEEE 802.1Qbb `Priority Flow Control (PFC)` 物理传输方程、400G/800G PAM4 `RS-FEC (544,514)` 编解码延迟与交换机 MMU `Shared Headroom Pool` / `Dynamic Alpha` 定容原理构建原创合成无损缓存与刹车距离评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
