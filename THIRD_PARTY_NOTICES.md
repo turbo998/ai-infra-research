@@ -304,6 +304,8 @@ Round 237 基于公开发布的 NVIDIA NCCL `NCCL_IB_QPS_PER_CONNECTION`、`NCCL
 
 Round 238 基于公开发布的 `FlashAttention-2 / FlashAttention-3` 反向传播跨 `K/V` 块并行切分、`dQ_accum` 硬件 `atomicAdd` 浮点非结合律漂移与 `deterministic=True` 有序信号量/SM 有界分片累加原理构建原创合成确定性训练评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 239 基于公开发布的 `verl / DeepSeek-R1 GRPO` 长思维链 RL 变长轨迹动态微批（`use_dynamic_bsz=True`、`ppo_max_token_len_per_gpu`）与跨 DP `LPT / Karmarkar-Karp` 贪心装箱（`balance_batch`）及全局有效 Token 归约原理构建原创合成 RL 更新阶段负载均衡评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
