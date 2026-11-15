@@ -360,6 +360,8 @@ Round 265 基于公开发布的 NVIDIA `GPUDirect Storage (GDS / cuFile)` `4KB` 
 
 Round 266 基于公开发布的 `DeepSeek EPLB (Expert Parallelism Load Balancer)` 三级层次化装箱算法（`Group-to-Node Packing`、机内冗余热门专家复制 `256 -> 320` 与 `Replica-to-GPU LPT Packing`）及后台双缓冲无感权重切表原理构建原创合成 MoE 负载均衡与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 267 基于公开发布的 PyTorch `torch.cuda.CUDAGraph` 显存虚拟地址绑定语义、常量参数槽（Constant Parameter Bank）捕获规则与 `PhiloxCudaState` 设备端伪随机数偏移自增原理构建原创合成算子图发射延迟与正确性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

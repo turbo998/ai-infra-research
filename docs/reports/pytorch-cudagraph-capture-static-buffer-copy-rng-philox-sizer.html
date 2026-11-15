@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 267 · PyTorch CUDAGraph Capture Pitfalls &amp; Philox RNG Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 267 · PyTorch `CUDAGraph` Capture Pitfalls &amp; `Philox RNG` State Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">CUDAGraph Execution &amp; State Pattern (450 Kernels)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Eager Mode Without CUDAGraph (450 Launches)</option>
+          <option value="t2">Tier 2: CUDAGraph With Variable Rebind (x = new_x) &amp; Scalars</option>
+          <option value="t3">Tier 3: Static .copy_() With Frozen Host Triton RNG Seed</option>
+          <option value="t4" selected>Tier 4: Static .copy_() + 0D GPU Tensor Scalars + Device Philox RNG</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Step Latency (450 Kernels)</label>
+        <div id="lat" class="kpi">5.52 ms (+48.6%)</div>
+      </div>
+      <div class="card">
+        <label>Output Correctness / RNG Entropy</label>
+        <div id="cor" class="kpi">100.0% / 100.0%</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Updating pre-allocated static buffers via `.copy_()`, passing dynamic scalars as 0D GPU Tensors, and auto-incrementing custom kernel `Philox RNG` offsets on the GPU eliminates 2.68 ms of CPU launch overhead (+48.6% speedup) with 100% correctness.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { lat: "8.20 ms (2.7ms CPU Tax) ✕", cor: "100.0% / 100.0%", bad: true, msg: "⛔ Launching 450 small kernels individually in Eager mode wastes 2.70 ms of CPU driver overhead per step." },
+      t2: { lat: "5.52 ms", cor: "0.0% Correct ✕ / 0.0% RNG", bad: true, msg: "⛔ Rebinding `static_x = new_x` in Python does NOT update the hardcoded 64-bit GPU pointer baked into the CUDA Graph!" },
+      t3: { lat: "5.52 ms", cor: "92.5% / 0.0% RNG ✕", bad: true, msg: "⚠️ Passing a Python `int` seed into custom Triton kernels freezes the random mask across all replays!" },
+      t4: { lat: "5.52 ms (+48.6%) 🏆", cor: "100.0% / 100.0% 🏆", bad: false, msg: "🏆 In-place `.copy_()` + 0D GPU tensor scalars + device-side RNG offset increment achieves 5.52 ms with zero silent bugs." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      document.getElementById('lat').textContent = d.lat;
+      const el = document.getElementById('cor');
+      el.textContent = d.cor;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
