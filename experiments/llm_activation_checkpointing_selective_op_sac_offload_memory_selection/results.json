@@ -1,0 +1,58 @@
+{
+  "experiment_id": "llm_activation_checkpointing_selective_op_sac_offload_memory_selection",
+  "round": 298,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "model": "Llama-3-70B-SwiGLU",
+    "seq_len": 8192,
+    "layers": 80
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_no_activation_checkpointing_oom",
+      "name": "No Activation Checkpointing (Store All Layer Activations in HBM)",
+      "activation_memory_gb": 68.0,
+      "recompute_flops_overhead_pct": 0.0,
+      "effective_training_tflops": 0.0,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Storing all 80 layers of SwiGLU + Norm + Attention activations demands 68.0 GB/GPU (+18GB weights/states = 86GB > 80GB) -> Instant OOM!"
+    },
+    {
+      "tier_id": "tier2_full_layer_activation_checkpointing_33pct_flops_tax",
+      "name": "Full-Layer Activation Checkpointing (Recompute All GEMMs & Attention in Backward)",
+      "activation_memory_gb": 5.2,
+      "recompute_flops_overhead_pct": 33.3,
+      "effective_training_tflops": 395.0,
+      "action": "Send to a human",
+      "status": "warn",
+      "note": "Shrinks activations to 5.2 GB (only layer boundaries), but re-executes 100% of forward GEMMs & FlashAttention (+33.3% FLOPs tax -> 395 effective TFLOPS)!"
+    },
+    {
+      "tier_id": "tier3_legacy_recompute_attention_only_swiglu_bloat",
+      "name": "Legacy Attention-Only Recompute (Still Stores Huge SwiGLU & Norm Activations)",
+      "activation_memory_gb": 44.5,
+      "recompute_flops_overhead_pct": 4.2,
+      "effective_training_tflops": 465.0,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "FlashAttention already stores only O(N) LSE + output, while un-checkpointed SwiGLU (gate + up projections) + RMSNorm still eat 44.5 GB!"
+    },
+    {
+      "tier_id": "tier4_op_level_sac_must_save_mm_flash_recompute_swiglu_norm_rope",
+      "name": "Op-Level SAC (MUST_SAVE Expensive GEMM/FA Outputs, Recompute SwiGLU/Norm/RoPE + 50% MM)",
+      "activation_memory_gb": 18.7,
+      "recompute_flops_overhead_pct": 2.4,
+      "effective_training_tflops": 514.0,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Saves expensive aten.mm / flash_attn outputs and recomputes memory-heavy elementwise SwiGLU/RMSNorm/RoPE -> 18.7 GB (-72.5%) at only +2.4% FLOPs (514 TFLOPS, 1.30x)!"
+    }
+  ],
+  "summary": {
+    "memory_reduction_vs_no_ckpt_pct": 72.5,
+    "throughput_speedup_vs_full_ckpt_x": 1.3,
+    "recompute_flops_overhead_pct": 2.4,
+    "recommended_tier": "tier4_op_level_sac_must_save_mm_flash_recompute_swiglu_norm_rope"
+  }
+}
