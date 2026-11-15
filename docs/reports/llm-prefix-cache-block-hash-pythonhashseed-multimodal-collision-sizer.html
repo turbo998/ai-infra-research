@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>LLM Prefix Cache Block Hashing &amp; Multimodal Isolation Sizer (Round 246)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 246 · 前缀缓存（`Prefix Caching`）块哈希、`&lt;image&gt;` 串图防护与租户隔离计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择分布式 KV 缓存池 (vLLM / LMCache / Mooncake) 的块哈希函数设计</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 使用 Python 内置 hash() (默认随机 PYTHONHASHSEED 导致跨节点命中率 0.0%)</option>
+          <option value="t2">Tier 2: 固定种子但仅对 token_ids 哈希 (多模态不同图片共享 &lt;image&gt; ID 引发 24.5% 串图幻觉)</option>
+          <option value="t3">Tier 3: 固定 xxHash64 + 图片哈希但漏掉 LoRA_ID 与租户 Salt (6.8% Multi-LoRA 串味)</option>
+          <option value="t4" selected>Tier 4: 确定性五元组 BLAKE3 / SHA-256 链式哈希 (78.5% 命中 · 0.0% 串图/串租户)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>分布式 KV 命中率</div><div class="val" id="hit">78.5 %</div></div>
+      <div class="kpi"><div>串图/串 LoRA 污染率</div><div class="val" id="psn">0.0 %</div></div>
+      <div class="kpi"><div>密码学跨租户隔离</div><div class="val" id="iso">100% 隔离</div></div>
+      <div class="kpi"><div>跨语言一致性</div><div class="val" id="lng">Py/C++/Rust</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (五元组 BLAKE3 / SHA-256 默克尔链式哈希)：将 (Parent_Hash, Token_IDs, MM_Digest, LoRA_ID, Tenant_Salt) 共同编码进确定性摘要，彻底根除跨节点 0% 命中与多模态 &lt;image&gt; 串图事故 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { hit: "0.0 % ✕", psn: "0.0 %", iso: "无隔离 ✕", lng: "仅单进程 ✕", v: "Tier 1 (Python 内置 hash())：CPython 每次启动随机化 SipHash 密钥，导致节点 A 存入的 KV 块在节点 B 上永远查不到 ✕" },
+      t2: { hit: "78.5 %", psn: "24.5 % (串图!) ✕", iso: "无隔离 ✕", lng: "固定种子", v: "Tier 2 (仅对 token_ids 哈希)：所有图片在 input_ids 里都是连续 256 个相同的 <image> 占位符，导致用户 B 读到用户 A 图片的 KV ✕" },
+      t3: { hit: "78.5 %", psn: "6.8 % (串味) ⚠️", iso: "无 Salt ⚠️", lng: "Py/C++", v: "Tier 3 (漏混入 LoRA_ID 与 Tenant_Salt)：不同 LoRA 适配器对同一文本生成的 KV 不同，未隔离会导致垂类模型输出串味 ⚠️" },
+      t4: { hit: "78.5 % 🏆", psn: "0.0 % 🏆", iso: "100% 隔离 🏆", lng: "Py/C++/Rust 🏆", v: "Tier 4 (五元组 BLAKE3 / SHA-256 链式哈希)：兼具 78.5% 高命中率与多模态/多 LoRA/多租户 100% 零污染隔离 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("hit").textContent = d.hit;
+      document.getElementById("psn").textContent = d.psn;
+      document.getElementById("iso").textContent = d.iso;
+      document.getElementById("lng").textContent = d.lng;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>

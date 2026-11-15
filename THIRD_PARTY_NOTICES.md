@@ -318,6 +318,8 @@ Round 244 基于公开发布的 `GQA / MQA / DeepSeek-V3 MLA` 注意力头切分
 
 Round 245 基于公开发布的 NVIDIA `XID Errors` 官方诊断规范（区分用户态非法寻址 `XID 13/31/43`、硬件进程级毒药隔离 `XID 94 Contained ECC` 与全局失控 `XID 95 Uncontained ECC`）及带内 `nvidia-smi -r` 热重置原理构建原创合成集群自愈评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 246 基于公开发布的 `vLLM V1 Automatic Prefix Caching (APC) / LMCache / Mooncake` 默克尔链式块哈希机制、CPython `PYTHONHASHSEED` 跨进程随机化特性与多模态 `<image>` 占位符内容哈希及多租户 `cache_salt` 隔离原理构建原创合成前缀缓存安全与命中率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
