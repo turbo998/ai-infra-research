@@ -398,6 +398,8 @@ Round 284 基于公开发布的 PCIe Gen5 (`32.0 GT/s x16`) `LTSSM` 静默降宽
 
 Round 285 基于公开发布的 `EAGLE-3` 多层隐状态特征融合与训练时自回归测试（`Training-Time Test`）、草稿词表高频裁剪（`Top-32K Draft Vocabulary Pruning`）以及 `TP=8` 下多层独立草稿模型通信瓶颈原理构建原创合成起草延迟与解码吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 286 基于公开发布的 Linux `cgroup v2` 内存记账规范、Kubernetes Kubelet `workingSetBytes = memory.current - inactive_file` 驱逐公式、`Safetensors mmap` 多进程 `active_file` 晋升、`POSIX_FADV_DONTNEED` 页缓存释放与 `O_DIRECT` 异步落盘机制构建原创合成容器防 `OOMKilled` 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
