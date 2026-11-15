@@ -366,6 +366,8 @@ Round 268 基于公开发布的 `Qwen2.5-VL / InternVL` 原生动态分辨率 `V
 
 Round 269 基于公开发布的 Kubernetes `Device Plugin`、`Topology Manager (single-numa-node)` 与 `Dynamic Resource Allocation (DRA) / Containerd NRI` 交换芯片级（`PIX`）联合资源分配原理构建原创合成跨插槽 `SYS` 绕行与 Pod 准入率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 270 基于公开发布的 `Punica (SGMV / BGMV 分段聚集矩阵乘)` 与 `S-LoRA (Unified Paged Memory Pool 统一分页显存池)` 多租户并发 `Multi-LoRA` 推理原理构建原创合成算子发射次数与单步延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
