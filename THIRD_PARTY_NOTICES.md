@@ -328,6 +328,8 @@ Round 249 基于公开发布的 PyTorch `torch.autograd.graph.saved_tensors_hook
 
 Round 250 基于公开发布的 `FlashAttention-2/3 flash_attn_varlen_func (cu_seqlens)` 块对角跳块机制、逐子文档 `position_ids` 归零规则与跨文档交界处 `shift_labels` 忽略索引（`labels[b] = -100`）原理构建原创合成序列打包精度与算子延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 251 基于公开发布的 Megatron-LM `Tensor Parallelism (TP)` 与 `Sequence Parallelism (SP)`（`AllReduce ≡ ReduceScatter + AllGather` 恒等拆解与 `save_for_backward` 分片保存）及 NVIDIA `TransformerEngine Userbuffers (Async-TP)` 分块流水线重叠原理构建原创合成激活显存与单步延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 251 · TP=8 vs TP+SP Activation Memory &amp; Async-TP Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 251 · `TP = 8` Activation Memory vs `TP + SP` (`AllReduce = RS + AG`) &amp; `Async-TP` Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">TP / Sequence Parallelism Tier</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Pure TP=8 (AllReduce, sequence_parallel=False)</option>
+          <option value="t2">Tier 2: TP+SP Without Discarding Gathered [S, H] Input</option>
+          <option value="t3">Tier 3: Standard Megatron TP+SP (Bulk NCCL AG/RS)</option>
+          <option value="t4" selected>Tier 4: TP+SP + TransformerEngine Userbuffers (Async-TP)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Activation HBM per GPU (32K)</label>
+        <div id="hbm" class="kpi">19.2 GB (-70.0%)</div>
+      </div>
+      <div class="card">
+        <label>Step Latency / Extra Comm Bytes</label>
+        <div id="step" class="kpi">114.0 ms / 0.0%</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Splitting `AllReduce` into `ReduceScatter` + `AllGather` (`--sequence-parallel`) saves 44.8 GB (-70.0%) of activation HBM per GPU with 0 extra communication bytes, while `Userbuffers` (`--tp-comm-overlap`) overlaps chunked AG/RS with Tensor Core GEMMs (114.0 ms).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { hbm: "64.0 GB (8x Dup) ✕", step: "148.0 ms / 0.0%", bad: true, msg: "⛔ Pure TP=8 replicates RMSNorm, Residual, and Linear input tensors across all 8 GPUs (64.0 GB)." },
+      t2: { hbm: "41.6 GB ⚠️", step: "142.0 ms / 0.0%", bad: true, msg: "⚠️ Keeping the AllGathered [B, S, H] input in HBM for backward dW wastes 22.4 GB per GPU." },
+      t3: { hbm: "19.2 GB (-70.0%) ✅", step: "142.0 ms / 0.0%", bad: false, msg: "✅ Saving only local [B, S/8, H] shards cuts activation memory to 19.2 GB, though bulk NCCL AG/RS remains serialized." },
+      t4: { hbm: "19.2 GB (-70.0%) 🏆", step: "114.0 ms / 0.0% 🏆", bad: false, msg: "🏆 19.2 GB activation HBM + zero-SM P2P Userbuffers pipelined overlap (+24.6% faster step time)." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const h = document.getElementById('hbm');
+      h.textContent = d.hbm;
+      h.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('step').textContent = d.step;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
