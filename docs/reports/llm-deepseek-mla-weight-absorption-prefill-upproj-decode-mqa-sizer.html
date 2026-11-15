@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 259 · DeepSeek MLA Execution Duality (Prefill Up-Proj vs Decode FlashMLA) Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 259 · DeepSeek `MLA` Execution Duality (`Prefill Up-Proj` vs `Decode FlashMLA`) Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">MLA Execution Architecture</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Always Explicit Up-Projection MHA (Prefill &amp; Decode)</option>
+          <option value="t2">Tier 2: Always Weight-Absorbed MQA (Prefill &amp; Decode)</option>
+          <option value="t3">Tier 3: Dual-Path (Unfused 576/512 Decode Kernel)</option>
+          <option value="t4" selected>Tier 4: Dual-Path (Prefill Up-Proj FA3 + Decode Absorbed FlashMLA)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>32K Prefill Latency</label>
+        <div id="pf" class="kpi">210.0 ms (3.05x)</div>
+      </div>
+      <div class="card">
+        <label>Decode Step Latency (64K)</label>
+        <div id="dec" class="kpi">6.2 ms (13.5x)</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Using Explicit Up-Projection (`head_dim = 192/128`) in compute-bound Prefill cuts $O(S^2)$ FLOPs by 3.4x (210.0 ms), while switching to Weight Absorption (`1-KV-head MQA, dim = 576/512`) via `FlashMLA` in bandwidth-bound Decode cuts HBM reads by 56x (6.2 ms/step).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { pf: "210.0 ms ✅", dec: "84.0 ms (56x Bloat) ✕", bad: true, msg: "⛔ Up-projecting all cached c_KV vectors into 128-head K/V on every Decode step destroys HBM bandwidth (84.0 ms)." },
+      t2: { pf: "640.0 ms (3.4x FLOPs) ✕", dec: "6.2 ms ✅", bad: true, msg: "⚠️ Weight Absorption widens per-head dot products from 320 to 1,088 dims, slowing compute-bound Prefill by 3.05x." },
+      t3: { pf: "210.0 ms ✅", dec: "18.5 ms ⚠️", bad: false, msg: "⚠️ Without a dedicated 576/512 asymmetric Split-KV kernel (FlashMLA), absorbed Decode loses 3x bandwidth efficiency." },
+      t4: { pf: "210.0 ms (3.05x) 🏆", dec: "6.2 ms (13.5x) 🏆", bad: false, msg: "🏆 Dual-Path (Prefill Up-Proj FA3 + Decode Absorbed FlashMLA) achieves optimal roofline speed in both phases." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      document.getElementById('pf').textContent = d.pf;
+      const el = document.getElementById('dec');
+      el.textContent = d.dec;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

@@ -344,6 +344,8 @@ Round 257 基于公开发布的 `GPipe / 1F1B / Interleaved 1F1B` 流水线并�
 
 Round 258 基于公开发布的 `KIVI`（`Key` 按通道离群值与 `Value` 按 Token 分布不对称性）、`QuaRot / SpinQuant` 快速阿达玛正交旋转（`Fast Walsh-Hadamard Transform`）与 `Attention Sink` 保留原理构建原创合成长上下文 `KV Cache` 量化精度与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 259 基于公开发布的 `DeepSeek-V2/V3 Multi-head Latent Attention (MLA)` 解耦 RoPE 数学公式、Prefill 显式升维（`Up-Projection MHA`）算力方程与 Decode 矩阵吸收（`Weight Absorption MQA` + `FlashMLA` `576/512` 异构核）原理构建原创合成双态执行延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
