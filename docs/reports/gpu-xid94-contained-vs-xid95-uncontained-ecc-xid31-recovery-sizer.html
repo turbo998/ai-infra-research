@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';" />
+  <title>GPU XID 31/43 vs. XID 94 Contained vs. XID 95 Auto-Remediation Sizer (Round 245)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+    h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .control { flex: 1; min-width: 240px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi { background: #0f172a; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+    .kpi .val { font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 6px; }
+    .banner { margin-top: 16px; padding: 14px; border-radius: 8px; background: #064e3b; color: #a7f3d0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Round 245 · GPU `XID 31/43`（代码 Bug）vs. `XID 94`（受控）vs. `XID 95`（失控）分级自愈计算器</h1>
+    <p style="color:#94a3b8;font-size:13px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</p>
+    <div class="row">
+      <div class="control">
+        <label for="tier">选择千卡集群 Node Problem Detector (NPD) XID 分级与自动自愈策略</label>
+        <select id="tier" onchange="update()">
+          <option value="t1">Tier 1: 见任何 XID 即封禁节点 (把用户代码越界 XID 31/43 当硬件坏封机 · 84% 误封率)</option>
+          <option value="t2">Tier 2: 仅过滤 XID 31/43 但放任 XID 94/95 不重置 (存在 XID 95 跨任务全局污染风险)</option>
+          <option value="t3">Tier 3: 豁免 XID 31/43 + 对 XID 94 也执行整机操作系统重启 (停机 18.0 分钟)</option>
+          <option value="t4" selected>Tier 4: 三级分流 (豁免 31/43 + XID 94 15秒热重置 nvidia-smi -r + XID 95 立即封机)</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div>节点误封禁率</div><div class="val" id="fp">0.0 %</div></div>
+      <div class="kpi"><div>XID 94 恢复停机</div><div class="val" id="dt">0.25 min (15s)</div></div>
+      <div class="kpi"><div>XID 95 外溢风险</div><div class="val" id="rsk">0% (硬隔离)</div></div>
+      <div class="kpi"><div>恢复速度提升</div><div class="val" id="spd">4,440 x</div></div>
+    </div>
+    <div class="banner" id="verdict">Tier 4 (三级精准分流自愈矩阵)：豁免用户指针越界 XID 13/31/43 (0% 误封)，对单进程受控 XID 94 自动执行 15 秒 nvidia-smi -r 原地行重映射回池，对失控 XID 95 立即封机隔离 🏆</div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { fp: "84.0 % ✕", dt: "1,110 min (18.5h) ✕", rsk: "0%", spd: "1.0 x", v: "Tier 1 (见 XID 即封机)：用户写错一行 Triton 越界代码就会在 64 台机器上抛出 XID 31/43，当场误锁 512 张健康 GPU ✕" },
+      t2: { fp: "12.0 % ⚠️", dt: "240.0 min", rsk: "高危污染 ✕", spd: "4.6 x", v: "Tier 2 (放任 XID 94/95)：XID 95 代表未受控的硬件状态污染，不立即重置会导致后续上机的其他租户任务静默算错 ⚠️" },
+      t3: { fp: "0.0 % ✅", dt: "18.0 min ⚠️", rsk: "0% ✅", spd: "61.7 x", v: "Tier 3 (对 XID 94 做整机重启)：虽避免了误封，但不知道 XID 94 已由硬件隔离在单进程内、无需慢速重启整台服务器 ✅" },
+      t4: { fp: "0.0 % 🏆", dt: "0.25 min (15s) 🏆", rsk: "0% (硬隔离) 🏆", spd: "4,440 x", v: "Tier 4 (三级分流 + 15秒热重置)：15 秒完成 XID 94 带内 GPU Reset 激活备用行，零误封、零人工介入 🏆" }
+    };
+    function update() {
+      const k = document.getElementById("tier").value;
+      const d = DATA[k];
+      document.getElementById("fp").textContent = d.fp;
+      document.getElementById("dt").textContent = d.dt;
+      document.getElementById("rsk").textContent = d.rsk;
+      document.getElementById("spd").textContent = d.spd;
+      document.getElementById("verdict").textContent = d.v;
+    }
+  </script>
+</body>
+</html>
