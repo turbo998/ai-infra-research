@@ -1,0 +1,60 @@
+{
+  "experiment_id": "llm_embeddings_reranker_bidirectional_attention_varlen_batching_selection",
+  "round": 297,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "model": "Qwen3-Embedding-8B / BGE-M3",
+    "batch_requests": 64,
+    "real_tokens": 24320,
+    "padded_tokens_tier1": 524288
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_rectangular_padded_batching_bs64_x_8192",
+      "name": "Standard Rectangular Padded Batching ([64, 8192] = 524,288 Padded Tokens)",
+      "p99_batch_latency_ms": 1420.0,
+      "throughput_real_tok_s": 17126.0,
+      "padding_compute_waste_pct": 95.4,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "1 long 8,192-token chunk forces all 63 short 256-token chunks to pad to 8,192 (95.4% waste, 30x attention FLOP inflation -> 1,420ms)!"
+    },
+    {
+      "tier_id": "tier2_length_sorted_micro_bucketing_padded",
+      "name": "Length-Sorted Micro-Bucketing (4 Sub-Batches, Still Padded Within Buckets)",
+      "p99_batch_latency_ms": 385.0,
+      "throughput_real_tok_s": 63168.0,
+      "padding_compute_waste_pct": 34.0,
+      "action": "Send to a human",
+      "status": "warn",
+      "note": "Reduces padding to 34.0%, but launches 4 serial forward passes per batch (4x weight HBM reads -> 385.0ms)."
+    },
+    {
+      "tier_id": "tier3_varlen_cu_seqlens_with_unused_default_kv_cache_pool",
+      "name": "1D Ragged Varlen Packing (cu_seqlens) + Default Unused 45GB KV Cache Allocation",
+      "p99_batch_latency_ms": 145.0,
+      "throughput_real_tok_s": 148000.0,
+      "padding_compute_waste_pct": 0.0,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Eliminates 100% of padding (24,320 real tokens in 1 pass = 145ms), but leaving default KV cache enabled wastes 45GB HBM and caps max_num_batched_tokens."
+    },
+    {
+      "tier4_id": "tier4_varlen_cu_seqlens_plus_zero_kv_embed_or_query_prefix_rerank_fp8",
+      "tier_id": "tier4_varlen_cu_seqlens_plus_zero_kv_embed_or_query_prefix_rerank_fp8",
+      "name": "1D Varlen (cu_seqlens) + Token-Budget Batching + Zero-KV Pool (or Shared-Query Prefix Rerank)",
+      "p99_batch_latency_ms": 112.0,
+      "throughput_real_tok_s": 184500.0,
+      "padding_compute_waste_pct": 0.0,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "0.0% padding via flash_attn_varlen_func + reclaims 45GB HBM for 64K token-budget batching + shared-query prefix caching on 1x100 reranking -> 112ms (12.7x faster)!"
+    }
+  ],
+  "summary": {
+    "latency_speedup_x": 12.68,
+    "throughput_speedup_x": 10.77,
+    "padding_eliminated_pct": 95.4,
+    "recommended_tier": "tier4_varlen_cu_seqlens_plus_zero_kv_embed_or_query_prefix_rerank_fp8"
+  }
+}

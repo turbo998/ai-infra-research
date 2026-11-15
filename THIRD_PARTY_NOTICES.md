@@ -420,6 +420,8 @@ Round 295 基于公开发布的 `FlashAttention-3 (FA3) FP8` `64x128` 块缩放�
 
 Round 296 基于公开发布的并行文件系统（`Lustre / BeeGFS / GPFS`）元数据服务（`MDS / MDT`）与对象存储目标（`OST`）分离架构、`100M` 小文件 `LDLM` 锁风暴机理以及 `WebDataset / MosaicML MDS` `512MB` 连续分片与 `lfs setstripe -c 1` 条带对齐原理构建原创合成读取带宽与 GPU 空转率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 297 基于公开发布的 `vLLM / SGLang / HuggingFace TEI` 一维去填充变长拼包（`1D Ragged Token Packing` + `flash_attn_varlen_func (cu_seqlens)`）、向量化任务零 KV Cache 显存池回收以及 `1 Query × 100 Docs` 重排序共享 Query 前缀缓存原理构建原创合成延迟与有效吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

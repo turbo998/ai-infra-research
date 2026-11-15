@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 297 · RAG Embedding &amp; Reranker 1D Varlen vs. Padded Batching Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 297 · RAG Embedding &amp; Reranker (`padding=True` vs. `1D Varlen cu_seqlens`) Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Batching &amp; Attention Strategy (63×256 + 1×8192 Chunks = 24,320 Real Tok)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Rectangular Padded [64, 8192] = 524,288 Padded Tokens</option>
+          <option value="t2">Tier 2: Length-Sorted Micro-Bucketing (4 Serial Sub-Batches)</option>
+          <option value="t3">Tier 3: 1D Ragged Varlen (cu_seqlens) + Default Unused 45GB KV Pool</option>
+          <option value="t4" selected>Tier 4: 1D Varlen (cu_seqlens) + Reclaimed KV + Prefix Rerank</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>P99 Batch Latency</label>
+        <div id="lat" class="kpi">112.0 ms (12.7x Faster)</div>
+      </div>
+      <div class="card">
+        <label>Real Throughput / Padding Waste</label>
+        <div id="tput" class="kpi">184,500 tok/s / 0.0% Pad</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Flattening variable-length inputs into a 1D tensor `[24320, D]` with `cu_seqlens` eliminates `100%` of padding waste, reclaims `45 GB` of unused KV cache, and cuts P99 latency 12.7x (`1,420 -&gt; 112 ms`).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { lat: "1,420.0 ms (12.7x Slower! ✕)", tput: "17,126 tok/s / 95.4% Waste ✕", bad: true, msg: "⛔ 1 long 8,192-token chunk forces all 63 short 256-token chunks to pad to 8,192 (524,288 padded tokens, 95.4% waste)!" },
+      t2: { lat: "385.0 ms ⚠️", tput: "63,168 tok/s / 34.0% Waste", bad: true, msg: "⚠️ Micro-bucketing cuts padding to 34%, but executes 4 serial forward passes (reading 16GB weights 4 times)." },
+      t3: { lat: "145.0 ms ✅", tput: "148,000 tok/s / 0.0% Pad ✅", bad: false, msg: "✅ flash_attn_varlen_func eliminates 100% of padding in 1 pass, though default generative KV cache wastes 45GB HBM." },
+      t4: { lat: "112.0 ms (12.7x Faster) 🏆", tput: "184,500 tok/s / 0.0% Pad 🏆", bad: false, msg: "🏆 1D Varlen cu_seqlens + zero-KV pool reclamation + shared-query prefix caching delivers 184,500 real tok/s at 112ms." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('lat');
+      el.textContent = d.lat;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('tput').textContent = d.tput;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
