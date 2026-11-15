@@ -374,6 +374,8 @@ Round 272 基于公开发布的 `Gated DeltaNet / Mamba-2 / Qwen3-Next` `3:1` �
 
 Round 273 基于公开发布的 NVIDIA HBM3/HBM3e 硬件级行重映射（`Row Remapping`: `XID 63` `REMAPPED_ROWS_PENDING` 与 `XID 64` `ROW_REMAP_FAILURE`）两阶段生效规范及带内 `nvidia-smi -r` 激活备用行原理构建原创合成二次崩溃率与硬件 RMA 误报率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 274 基于公开发布的 `FlashInfer / Hydragen Cascade Attention`（共享前缀矩阵乘与在线 `LSE` 合并）、`PagedAttention Copy-on-Write (CoW)` 页表分叉与过程奖励模型（`PRM`）树搜索剪枝原理构建原创合成显存带宽与测试时扩展延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

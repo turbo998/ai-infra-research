@@ -1,0 +1,46 @@
+{
+  "experiment_id": "llm_reasoning_test_time_compute_prm_tree_search_kv_fork_selection",
+  "round": 274,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "num_samples_n": 64,
+    "prompt_tokens": 16384,
+    "speedup_vs_naive_cow_x": 9.23
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_independent_n64_sequences_duplicate_prompt_kv_and_reads",
+      "name": "Tier 1: 64 路独立序列无共享 (将 16K Prompt 的 KV Cache 在显存里硬存 64 份占 128GB，且每步重复读 64 遍)",
+      "prompt_kv_hbm_capacity_gb": 128.0,
+      "decode_step_latency_ms": 54.0,
+      "reasoning_benchmark_accuracy_pct": 84.5,
+      "verdict": "单条 16K 代码库 Prompt 开 Best-of-64 直接吃光 128GB 显存当场 OOM，且 Prefill 白白重复算 64 遍 ✕"
+    },
+    {
+      "tier_id": "tier2_cow_paged_kv_sharing_with_naive_per_sequence_paged_attention",
+      "name": "Tier 2: 开启 PagedAttention 写时复制 (CoW 显存降至 2.0GB)，但普通 Decode 算子仍按 64 条序列分头读 64 遍 HBM (48.0ms)",
+      "prompt_kv_hbm_capacity_gb": 2.0,
+      "decode_step_latency_ms": 48.0,
+      "reasoning_benchmark_accuracy_pct": 84.5,
+      "verdict": "这是最隐蔽的陷阱！虽然物理显存只存了 1 份 2.0GB Prompt，但超过 50MB L2 缓存后 64 个 CTA 仍去 HBM 重复读了 64 遍 (128GB 流量!) ⚠️"
+    },
+    {
+      "tier_id": "tier3_two_stage_cascade_attention_root_prefix_reuse_blind_best_of_n",
+      "name": "Tier 3: 两阶段级联注意力 (Cascade Attention 将 64 个 Query 拼成矩阵只读 1 遍共享 Prompt，11.5ms，但盲跑到底浪费算力)",
+      "prompt_kv_hbm_capacity_gb": 2.0,
+      "decode_step_latency_ms": 11.5,
+      "reasoning_benchmark_accuracy_pct": 84.5,
+      "verdict": "把 64 条分支的 Query 打包喂给 Tensor Core 共享 1 次 Prompt KV 读取 (提速 4.2x)，但早期算错的 50 条废分支仍傻跑到 8K 结尾 ✅"
+    },
+    {
+      "tier_id": "tier4_multi_level_cascade_tree_attention_plus_prm_cow_fork_and_prune",
+      "name": "Tier 4: 多级树状 Cascade Attention (FlashInfer) + PRM 过程奖励中途剪枝与零拷贝 CoW 分叉 (5.2ms，准确率 89.4%)",
+      "prompt_kv_hbm_capacity_gb": 2.0,
+      "decode_step_latency_ms": 5.2,
+      "reasoning_benchmark_accuracy_pct": 89.4,
+      "verdict": "在根节点与中间推理分叉点均共享 1 次 KV 读取，配合 PRM 淘汰死胡同并零拷贝克隆高分分支，快 9.2x 且答题准确率升至 89.4% 🏆"
+    }
+  ]
+}
