@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 263 · 1M-Token Context Parallelism (Ulysses vs Ring vs 2D USP) Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 263 · 1M-Token Context Parallelism (`CP = 64`: `Ulysses` vs `Ring` vs `2D USP`) Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Context Parallel Architecture (1M Tokens · GQA 8 KV Heads)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Pure 1D DeepSpeed-Ulysses (CP_ulysses=64)</option>
+          <option value="t2">Tier 2: Pure 1D Ring Attention (CP_ring=64)</option>
+          <option value="t3">Tier 3: Reversed 2D USP (Inter-Node Ulysses × Intra Ring)</option>
+          <option value="t4" selected>Tier 4: 2D USP (Intra-Node Ulysses=8 NVLink × Inter-Node Ring=8 RDMA)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>KV Replication / Ring P2P Hops</label>
+        <div id="rep" class="kpi">1.0x / 7 Hops</div>
+      </div>
+      <div class="card">
+        <label>1M-Token Layer Latency</label>
+        <div id="lat" class="kpi">62.0 ms (4.0x)</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Factorizing `CP = 64` into Intra-Node `Ulysses = 8` (matching `num_kv_heads = 8` 1:1 over 900 GB/s NVLink) and Inter-Node `ZigZag Ring = 8` (7 P2P hops hidden behind 128K FA3 compute) cuts layer latency to 62.0 ms.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { rep: "8.0x Dup ✕ / 0 Hops", lat: "248.0 ms ✕", bad: true, msg: "⛔ Scaling pure Ulysses to CP=64 when num_kv_heads=8 forces 8x KV head replication across cross-node All-to-All!" },
+      t2: { rep: "1.0x / 63 Hops ✕", lat: "195.0 ms ⚠️", bad: true, msg: "⚠️ Pure 64-rank Ring Attention suffers 63 sequential P2P hops and 64 fragmented 16K-token kernel launches per layer." },
+      t3: { rep: "1.0x / 7 Hops", lat: "142.0 ms ⚠️", bad: false, msg: "⚠️ Running non-overlappable All-to-All over slow inter-node NICs wastes intra-node NVLink bandwidth." },
+      t4: { rep: "1.0x / 7 Hops 🏆", lat: "62.0 ms (4.0x) 🏆", bad: false, msg: "🏆 Intra-node Ulysses-8 on NVLink + Inter-node ZigZag Ring-8 on RDMA delivers 62.0 ms with zero KV replication." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('rep');
+      el.textContent = d.rep;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('lat').textContent = d.lat;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

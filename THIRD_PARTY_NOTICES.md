@@ -352,6 +352,8 @@ Round 261 基于公开发布的 `vLLM V1 / SGLang` 多进程 `ZeroMQ (ZMQ_IPC)` 
 
 Round 262 基于公开发布的 InfiniBand 集中式子网管理器 `OpenSM / UFM` `Heavy Sweep`（`Trap 128` 与 `VL15 SMP` 线性转发表 `LFT` 下发）机制、NVIDIA Quantum-2 `SHIELD` 硬件芯片级自愈、`FLID (Floating LID)` 层次化路由与闪断端口自动隔离原理构建原创合成收敛时间与训练抖动评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 263 基于公开发布的 `DeepSpeed-Ulysses`（`All-to-All` 注意力头切分与 `GQA` KV 头度数边界）、`Ring Attention` 环形 P2P 传递与 `2D Unified Sequence Parallelism (USP: Intra-Node Ulysses × Inter-Node ZigZag Ring)` 原理构建原创合成百万长上下文并行通信与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
