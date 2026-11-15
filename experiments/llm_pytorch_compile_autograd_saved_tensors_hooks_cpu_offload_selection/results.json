@@ -1,0 +1,45 @@
+{
+  "experiment_id": "llm_pytorch_compile_autograd_saved_tensors_hooks_cpu_offload_selection",
+  "round": 249,
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload": {
+    "no_offload_baseline_ms": 1090.0,
+    "speedup_vs_naive_save_on_cpu_x": 3.04
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_naive_save_on_cpu_blocks_in_unpack_and_offloads_weights",
+      "name": "Tier 1: 直接套用原生 save_on_cpu(pin_memory=True) (误卸载权重视图 + unpack_hook 临阵同步拉取卡死)",
+      "activation_hbm_saved_gb": 32.0,
+      "pcie_transfer_overlap_pct": 0.0,
+      "step_latency_ms": 3420.0,
+      "verdict": "C++ Autograd 直到算子执行前 1 微秒才调用 unpack_hook，导致计算流 100% 停工死等 PCIe H2D，且未过滤权重张量导致步耗时暴涨 3.14 倍 ✕"
+    },
+    {
+      "tier_id": "tier2_filter_params_but_offload_all_intra_layer_tensors",
+      "name": "Tier 2: 过滤 Parameter 但卸载层内全部 12 个中间算子张量 (PCIe 传输量超出计算时间 4 倍，无法掩盖)",
+      "activation_hbm_saved_gb": 32.0,
+      "pcie_transfer_overlap_pct": 24.0,
+      "step_latency_ms": 2180.0,
+      "verdict": "每层卸载 Q/K/V/MLP 等十几个中间激活值导致单层 PCIe 传输量高达数 GB，远超 54 GB/s PCIe 带宽在单层计算时间内能搬完的上限 ⚠️"
+    },
+    {
+      "tier_id": "tier3_checkpoint_boundary_only_offload_without_lookahead",
+      "name": "Tier 3: 结合重算仅卸载每层入口单一张量 h_in (PCIe 流量砍 10 倍，但 unpack_hook 仍无提前预取)",
+      "activation_hbm_saved_gb": 32.0,
+      "pcie_transfer_overlap_pct": 48.0,
+      "step_latency_ms": 1420.0,
+      "verdict": "只把每层输入 h_in [B,S,D] 卸载到 CPU Pinned 池、层内其余激活靠重算恢复，使 PCIe 传输耗时小于计算耗时，但读取时仍被动等待 ✅"
+    },
+    {
+      "tier_id": "tier4_checkpoint_boundary_offload_plus_layer_ahead_h2d_prefetch",
+      "name": "Tier 4: 仅卸载层入口 h_in + 反向传播跨层提前预取 (算第 L+1 层时通过 stream_h2d 预取第 L 层 h_in)",
+      "activation_hbm_saved_gb": 32.0,
+      "pcie_transfer_overlap_pct": 98.5,
+      "step_latency_ms": 1125.0,
+      "verdict": "当 unpack_hook 被调用时第 L 层的 h_in 早已提前躺在 GPU 双缓冲槽位中，净省 32GB 显存且仅比不卸载慢 3.2% (比原生 save_on_cpu 快 3.04x) 🏆"
+    }
+  ]
+}

@@ -324,6 +324,8 @@ Round 247 基于公开发布的 PyTorch `FSDP / FSDP2` 反向传播 `ReduceScatt
 
 Round 248 基于公开发布的 NVIDIA GPU System Processor (`GSP`) 固件超时规范（`XID 119 / XID 120`）、Linux 内核 `TASK_UNINTERRUPTIBLE (D-State)` 互斥锁机制与用户态 `flock -n` 单飞熔断及带外 BMC 硬重置原理构建原创合成节点防假死自愈评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 249 基于公开发布的 PyTorch `torch.autograd.graph.saved_tensors_hooks (save_on_cpu)` 执行时机语义、`nn.Parameter` 视图（`_base`）过滤规则与重算边界跨层 `stream_h2d` 提前预取（`Lookahead Prefetch`）原理构建原创合成激活值卸载重叠率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
