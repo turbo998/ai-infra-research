@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 283 · LoRA / QLoRA Quantized Merge Drift &amp; Recovery Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 283 · `LoRA / QLoRA` Quantized Merge (`merge_and_unload()`) Drift &amp; Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">LoRA Merge &amp; Quantization Deployment Path</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Naive merge_and_unload() Into NF4 + Re-Quant INT4</option>
+          <option value="t2">Tier 2: Merge Into Clean BF16 Master (Deploy Unquantized BF16)</option>
+          <option value="t3">Tier 3: Unmerged Quantized Base + BF16 SGMV LoRA Bypass</option>
+          <option value="t4" selected>Tier 4: Merge Into Clean BF16 + SFT-Calibrated FP8 / AWQ (Recommended)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Domain Benchmark Accuracy</label>
+        <div id="acc" class="kpi">78.5% (+8.3 pt Recovered)</div>
+      </div>
+      <div class="card">
+        <label>ΔW Survival / Decode Throughput</label>
+        <div id="spd" class="kpi">99.2% / 2,890 tok/s</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4 / Tier 3)</strong>: Merging `ΔW` into the clean `BF16` master checkpoint followed by SFT-calibrated `1x128 FP8 / AWQ` preserves 99.2% of fine-tuned updates (`78.5%` accuracy) at `2,890 tok/s`, or use Tier 3 unmerged `BF16 SGMV` bypass for 100% exact QLoRA graph parity (`78.6%`).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { acc: "70.2% (-8.4 pt Collapse! ✕)", spd: "18.0% / 2,840 tok/s ✕", bad: true, msg: "⛔ 82% of fine-tuned ΔW updates are smaller than 1 INT4 grid step and get rounded back to zero during re-quantization!" },
+      t2: { acc: "78.4% ✅", spd: "99.5% / 1,120 tok/s ⚠️", bad: true, msg: "⚠️ Preserves accuracy in BF16, but doubles HBM footprint (140 GB) and cuts throughput 2.58x." },
+      t3: { acc: "78.6% (Exact Parity) 🏆", spd: "100.0% / 2,650 tok/s ✅", bad: false, msg: "✅ Keeping the quantized base unmerged and computing y = Dequant(W_q)x + B(Ax) via BF16 SGMV guarantees 100% update survival." },
+      t4: { acc: "78.5% (+8.3 pt Recovered) 🏆", spd: "99.2% / 2,890 tok/s 🏆", bad: false, msg: "🏆 Clean BF16 master merge + SFT-calibrated 1x128 FP8 / AWQ avoids double quantization and hits 2,890 tok/s." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('acc');
+      el.textContent = d.acc;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('spd').textContent = d.spd;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

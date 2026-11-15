@@ -392,6 +392,8 @@ Round 281 基于公开发布的 OCP 高密冷板液冷（`Direct-to-Chip Liquid 
 
 Round 282 基于公开发布的 `AReaL / THUDM Slime / verl` 异步强化学习训推解耦架构、Ray 控制面与 `NCCL / Mooncake RDMA` 数据面分离、可中断部分采样续写（`Interruptible Partial Rollout`）以及有界策略陈旧度（`τ <= 1`）与 `Dual-Clip` 重要性采样原理构建原创合成吞吐与收敛稳定性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 283 基于公开发布的 `QLoRA / PEFT merge_and_unload()` 双重量化死区吞噬原理、`Punica SGMV` 激活空间 `BF16` 旁路计算、原始 `BF16` 母版合并与 `SFT` 领域校准集 `AWQ / Block-FP8` 量化及 `LoftQ` 残差补偿机制构建原创合成精度留存与吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

@@ -1,0 +1,58 @@
+{
+  "experiment_id": "llm_lora_merge_fp8_nf4_quantization_drift_dequant_refit_selection",
+  "round": 283,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "model": "70B-QLoRA-r64",
+    "lora_rank": 64,
+    "lora_alpha": 128,
+    "baseline_qlora_eval_accuracy_pct": 78.6
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_naive_peft_merge_into_nf4_requant_int4",
+      "name": "Naive merge_and_unload() Into Dequantized NF4 + Re-Quantize to INT4",
+      "domain_accuracy_pct": 70.2,
+      "lora_update_survival_pct": 18.0,
+      "decode_throughput_tok_s": 2840.0,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Double-quantization trap: 82% of fine-tuned ΔW = (α/r)BA updates are smaller than 1 INT4 bin step and get rounded away to 0 (-8.4 pt drop)!"
+    },
+    {
+      "tier_id": "tier2_merge_into_original_bf16_master_no_quant",
+      "name": "Merge Into Original Unquantized BF16 Master (Deploy Unquantized BF16)",
+      "domain_accuracy_pct": 78.4,
+      "lora_update_survival_pct": 99.5,
+      "decode_throughput_tok_s": 1120.0,
+      "action": "Send to a human",
+      "status": "warn",
+      "note": "Preserves ΔW in BF16 (78.4% accuracy), but requires 2x GPUs (140 GB HBM) and drops decode throughput by 2.54x (1,120 tok/s)."
+    },
+    {
+      "tier_id": "tier3_unmerged_quant_base_plus_bf16_sgmv_lora_bypass",
+      "name": "Unmerged Quantized Base (Marlin INT4 / FP8) + BF16 LoRA SGMV Side-Branch",
+      "domain_accuracy_pct": 78.6,
+      "lora_update_survival_pct": 100.0,
+      "decode_throughput_tok_s": 2650.0,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Matches exact QLoRA training graph y = Dequant(W_q)x + B(Ax) in BF16 (100% survival, 78.6% accuracy) with only 6.7% SGMV overhead."
+    },
+    {
+      "tier_id": "tier4_loftq_or_bf16_master_merge_plus_sft_calibrated_awq_fp8",
+      "name": "Merge Into BF16 Master + SFT-Calibrated Block-FP8 / AWQ + Residual Rank-16 Adapter",
+      "domain_accuracy_pct": 78.5,
+      "lora_update_survival_pct": 99.2,
+      "decode_throughput_tok_s": 2890.0,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Merges ΔW into clean BF16 master, runs SFT-calibrated 1x128 FP8 / AWQ quantization, and absorbs quantization residual -> 78.5% accuracy & 2,890 tok/s!"
+    }
+  ],
+  "summary": {
+    "accuracy_recovery_pt": 8.3,
+    "throughput_speedup_vs_bf16_x": 2.58,
+    "recommended_tier": "tier4_loftq_or_bf16_master_merge_plus_sft_calibrated_awq_fp8"
+  }
+}
