@@ -388,6 +388,8 @@ Round 279 基于公开发布的 SONiC / RoCEv2 `PFC Watchdog (action=drop vs. ac
 
 Round 280 基于公开发布的 DeepSeek-V3 顺序因果多 Token 预测（`Sequential Causal Multi-Token Prediction, MTP`）机制、双路 `RMSNorm` 特征拼接、共享 `Embedding / LM Head` 与逐深度 `Fused Linear Cross-Entropy` 原理构建原创合成显存峰值与自投机解码提速评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 281 基于公开发布的 OCP 高密冷板液冷（`Direct-to-Chip Liquid Cooling, DLC`）机柜热力学规范、`HBM3e` `85°C` 热降频阈值（`0x40`）、`RDHx` 背门热交换器对 `800G` 光模块的余热回收以及两级漏液检测联动 `BMC` 异步 `DCP` 优雅排空机制构建原创合成评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
