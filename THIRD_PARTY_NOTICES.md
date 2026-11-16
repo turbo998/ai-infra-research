@@ -480,6 +480,9 @@ Round 325 基于公开发布的 `vLLM V1 Piecewise CUDAGraph / SGLang CudaGraphR
 
 Round 326 基于公开发布的变长序列梯度累积与数据并行损失归一化数学分析（`HuggingFace num_items_in_batch / Unsloth / Dr.GRPO`）、微批次 `reduction="sum"` 与跨微步/跨 DP 卡全局有效 Token 总数（`N_global`）单标量 `All-Reduce` 对齐原理构建原创合成长短样本梯度偏置与长文准确率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 327 基于公开发布的大模型推理引擎（`vLLM V1 StopChecker / SGLang Incremental Detokenizer`）BPE 分词边界合并（`":\n"`, `".\n"`）导致的停止词漏判机理、增量 `Aho-Corasick` 有限状态自动机与动态前缀重叠流式暂存区（`Dynamic Prefix-Overlap Holdback`）原理构建原创合成停止词匹配延迟与 ReAct 智能体循环成功率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

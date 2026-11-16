@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7-Card Report · Stop-String BPE Split &amp; Incremental Aho-Corasick</title>
+<style>
+  body { background: #090D16; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 24px; max-width: 1440px; margin: 0 auto; }
+  .card { aspect-ratio: 4 / 5; background: #0F172A; border: 1px solid #334155; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+  .meta { font-size: 12px; font-weight: 700; color: #38BDF8; letter-spacing: 1px; }
+  h2 { font-size: 20px; margin: 8px 0 12px 0; line-height: 1.3; color: #F8FAFC; }
+  .box { background: #1E293B; border: 1px solid #334155; border-radius: 10px; padding: 12px; margin-bottom: 10px; font-size: 13px; }
+  .code { background: #090D16; border: 1px solid #1E293B; border-radius: 8px; padding: 10px; font-family: Consolas, monospace; font-size: 12px; color: #A7F3D0; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border-bottom: 1px solid #334155; padding: 7px 5px; text-align: left; }
+  th { color: #94A3B8; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .act { background: #065F46; color: #6EE7B7; }
+  .conf { background: #78350F; color: #FDE68A; }
+  .hum { background: #7F1D1D; color: #FCA5A5; }
+  .bar-row { margin: 8px 0; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .bar-bg { background: #1E293B; height: 12px; border-radius: 6px; overflow: hidden; }
+  .bar-fill-blue { background: #3B82F6; height: 100%; }
+  .bar-fill-gray { background: #CBD5E1; height: 100%; }
+  .foot { font-size: 11px; color: #64748B; border-top: 1px solid #1E293B; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <!-- Card 1 -->
+  <div class="card">
+    <div>
+      <div class="meta">1 / 7 · HANDS-ON · LLM SERVING STOP-STRING ENGINE</div>
+      <h2>Incremental Aho-Corasick + Dynamic Holdback Eliminates 31.4% Missed Stops &amp; Cuts CPU Scan 153.3x</h2>
+      <div class="box">
+        <strong>3-Column Workbench Preview</strong><br>
+        • <strong>Workload</strong>: B = 256 streaming ReAct requests, k = 8 stop strings/req, L = 4,096 chars<br>
+        • <strong>Token-ID Stop Failure</strong>: BPE merges <code>":\n"</code> into token 510, missing <code>31.4%</code> of stops<br>
+        • <strong>Full-String Scan Stall</strong>: <code>18.40 ms/step</code> + <code>100%</code> partial stop leak to SSE
+      </div>
+      <div class="box">
+        <strong>Top Decision</strong>: Advance a per-request Aho-Corasick DFA on new token bytes only (<code>0.12 ms/step</code>) and hold back only the matched prefix overlap <code>p</code>.
+      </div>
+    </div>
+    <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  </div>
+
+  <!-- Card 2 -->
+  <div class="card">
+    <div>
+      <div class="meta">2 / 7 · SCENARIO: B=256 REACT AGENT STREAMING</div>
+      <h2>0.0% Missed Stops, 0.0% SSE Prefix Leak &amp; 0.12 ms CPU Match</h2>
+      <div class="box">Input: <code>stop=["\nObservation:", "&lt;/tool_call&gt;"], stream=True, include_stop_str_in_output=False</code></div>
+      <div class="box">
+        <div><strong>Tier 1: Token-ID Stop Only</strong> · <span class="pill hum">Send to a human</span></div>
+        <div>Missed Stops: <code>31.4%</code> | ReAct Success: <code>64.2%</code></div>
+        <div class="bar-bg" style="margin-top:6px"><div class="bar-fill-gray" style="width:64.2%"></div></div>
+      </div>
+      <div class="box">
+        <div><strong>Tier 2: Full-String .find() (No Holdback)</strong> · <span class="pill hum">Send to a human</span></div>
+        <div>CPU Match: <code>18.40 ms</code> | SSE Leak: <code>100.0%</code></div>
+        <div class="bar-bg" style="margin-top:6px"><div class="bar-fill-gray" style="width:72.5%"></div></div>
+      </div>
+      <div class="box">
+        <div><strong>Tier 4: Incremental Aho-Corasick + Holdback</strong> · <span class="pill act">Act automatically</span></div>
+        <div>CPU Match: <code>0.12 ms</code> | ReAct Success: <code>99.6%</code></div>
+        <div class="bar-bg" style="margin-top:6px"><div class="bar-fill-blue" style="width:99.6%"></div></div>
+      </div>
+    </div>
+    <div class="foot">Sealed source: experiments/llm_serving_stop_string_bpe_boundary_split_streaming_holdback_aho_corasick_selection/results.json</div>
+  </div>
+
+  <!-- Card 3 -->
+  <div class="card">
+    <div>
+      <div class="meta">3 / 7 · WHAT I TESTED</div>
+      <h2>Full 4-Tier Stop-String Matching Evaluation Matrix</h2>
+      <table>
+        <thead>
+          <tr><th>SCENARIO</th><th>TASK</th><th>MODEL ANSWER</th><th>ACTION</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1</td><td>Token-ID Stop Only</td><td>✕ 31.4% Missed Stops</td><td><span class="pill hum">Send to a human</span></td></tr>
+          <tr><td>Tier 2</td><td>Full-String .find()</td><td>✕ 18.40 ms / 100% Leak</td><td><span class="pill hum">Send to a human</span></td></tr>
+          <tr><td>Tier 3</td><td>Blind Max Holdback</td><td>1.45 ms / Constant Lag</td><td><span class="pill conf">Confirm</span></td></tr>
+          <tr><td>Tier 4</td><td>Aho-Corasick + Overlap</td><td>0.12 ms / 0.0% Leak</td><td><span class="pill act">Act automatically</span></td></tr>
+        </tbody>
+      </table>
+      <div class="box" style="margin-top:12px">
+        <strong>Failure Analysis</strong>: BPE merges across stop-string edges (<code>".\n"</code>, <code>":\n"</code>) alter token IDs in <code>31.4%</code> of ReAct turns.
+      </div>
+    </div>
+    <div class="foot">Explicit ✕ marks missed stop triggers and SSE prefix leaks.</div>
+  </div>
+
+  <!-- Card 4 -->
+  <div class="card">
+    <div>
+      <div class="meta">4 / 7 · UNDER THE HOOD</div>
+      <h2>Incremental Aho-Corasick DFA State &amp; Prefix-Overlap Holdback</h2>
+      <div class="code">// 1. Advance DFA only on newly decoded token text delta
+for ch in new_token_str:
+    dfa_state = ac_automaton.step(dfa_state, ch)
+    if ac_automaton.is_match(dfa_state):
+        return truncate_at_stop(pending_buf + new_token_str)</div>
+      <div style="text-align:center; margin:4px 0; color:#38BDF8">↓ Dynamic Prefix-Overlap Holdback (&lt;answer&gt;)</div>
+      <div class="code">// 2. Hold back ONLY longest stop-string prefix overlap p
+p = ac_automaton.depth(dfa_state)  # p == 0 on normal text!
+candidate = pending_buf + new_token_str
+emit_to_sse = candidate[:len(candidate) - p]
+pending_buf = candidate[len(candidate) - p:]</div>
+    </div>
+    <div class="foot">Zero lag when p == 0; zero partial leak when p &gt; 0.</div>
+  </div>
+
+  <!-- Card 5 -->
+  <div class="card">
+    <div>
+      <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>BPE Token-Boundary Split Perturbation Across 4 Contexts</h2>
+      <table>
+        <thead>
+          <tr><th>BPE CONTEXT</th><th>TOKEN-ID MATCH</th><th>DFA TAIL MATCH</th><th>CHANGE</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Standalone <code>\nObservation:</code></td><td>Matched (True)</td><td>Matched (True)</td><td>Exact</td></tr>
+          <tr><td>Merged Prefix <code>.\nObservation:</code></td><td>✕ Missed (False)</td><td>Matched (True)</td><td>Fixed</td></tr>
+          <tr><td>Merged Suffix <code>\nObservation:\n</code></td><td>✕ Missed (False)</td><td>Matched (True)</td><td>Fixed</td></tr>
+          <tr><td>Sub-Word <code>&lt;/tool_call&gt;\n</code></td><td>✕ Missed (False)</td><td>Matched (True)</td><td>Fixed</td></tr>
+        </tbody>
+      </table>
+      <div class="box" style="margin-top:10px">
+        Character/byte-level incremental DFA matching is 100% invariant to BPE merge context.
+      </div>
+    </div>
+    <div class="foot">All 4 boundary perturbations verified in run.py.</div>
+  </div>
+
+  <!-- Card 6 -->
+  <div class="card">
+    <div>
+      <div class="meta">6 / 7 · LATENCY</div>
+      <h2>Per-Step Stop Matching CPU Latency &amp; Agent Loop Success</h2>
+      <div class="bar-row">
+        <div class="bar-label"><span>CPU Match Latency (Tier 4: 0.12 ms vs Tier 2: 18.40 ms)</span><strong>153.3x Faster</strong></div>
+        <div class="bar-bg"><div class="bar-fill-blue" style="width:2%"></div></div>
+        <div class="bar-bg" style="margin-top:4px"><div class="bar-fill-gray" style="width:100%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>ReAct Agent Loop Success (Tier 4: 99.6% vs Tier 1: 64.2%)</span><strong>+35.4 pt</strong></div>
+        <div class="bar-bg"><div class="bar-fill-blue" style="width:99.6%"></div></div>
+        <div class="bar-bg" style="margin-top:4px"><div class="bar-fill-gray" style="width:64.2%"></div></div>
+      </div>
+      <div class="box">
+        At L = 4,096 characters, incremental DFA state transition touches only ~4 bytes/token instead of scanning 32,768 bytes per request.
+      </div>
+    </div>
+    <div class="foot">Primary path (#3B82F6) vs naive baseline (#CBD5E1).</div>
+  </div>
+
+  <!-- Card 7 -->
+  <div class="card">
+    <div>
+      <div class="meta">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+      <div class="box" style="border-color:#10B981">
+        <strong style="color:#6EE7B7">✅ Good fit</strong><br>
+        • All OpenAI-compatible LLM servers supporting <code>stop=[...]</code> strings<br>
+        • ReAct, XML/JSON tool-calling, and code-completion streaming endpoints<br>
+        • High-concurrency decode loops where Python string scanning blocks the event loop
+      </div>
+      <div class="box" style="border-color:#EF4444">
+        <strong style="color:#FCA5A5">⛔ Not for</strong><br>
+        • Converting multi-character stop strings solely into <code>stop_token_ids</code><br>
+        • Flushing newly decoded tokens to SSE before checking stop-string prefix overlap
+      </div>
+    </div>
+    <div class="foot">CSP self-contained · Zero external assets · Ready for main branch archive.</div>
+  </div>
+</div>
+</body>
+</html>
