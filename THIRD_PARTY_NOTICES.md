@@ -496,6 +496,9 @@ Round 333 基于公开发布的多机多卡 GPU 集群 `Triton / TorchInductor /
 
 Round 334 基于公开发布的大模型推理 `apply_chat_template`（`Jinja2` vs Rust `minijinja`）AST 渲染开销、双重 `BOS`（`add_special_tokens=True`）及末尾空格 BPE 分词漂移机理与规范化工具 Schema 预分词缓存原理构建原创合成接入延迟与工具调用准确率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 335 基于公开发布的推理大模型（`DeepSeek-R1 / Qwen3 / s1 Budget Forcing`）`<think>` 思维链超长截断机理、软句界过渡短语注入（`Soft-Newline Transition Bridge`）与多轮对话历史 `<think>` 剥离原理构建原创合成空回答截断率、任务完成率与多轮 KV 显存占用评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
