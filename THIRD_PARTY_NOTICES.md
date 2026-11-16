@@ -434,6 +434,9 @@ Round 302 基于公开发布的 `vLLM V1 / SGLang / NVIDIA Dynamo / Mooncake` �
 
 Round 303 基于公开发布的 `PyTorch TorchElastic / C10d TCPStore` 两级节点代理分层协调存储、`DataLoader spawn` 与 `cgroup.kill / PDEATHSIG` 孤儿 CUDA 上下文清理以及 `NVIDIA NVRx / TorchFT` 进程内 `ncclCommAbort` 热恢复原理构建原创合成千卡/万卡恢复延迟与 OOM 失败率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 304 基于公开发布的 `CacheBlend / LMCache` 模块化非前缀 KV Cache 复用机制、相对位移 `RoPE` 重旋转（$R(p_{\text{new}} - p_{\text{old}})$）与第 1 层引导的 `15%` 高偏移 Token 选择性稀疏交叉注意力重计算原理构建原创合成 `32K` RAG 首字延迟（`TTFT`）与多跳推理 `F1` 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
