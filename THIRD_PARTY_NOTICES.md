@@ -528,6 +528,9 @@ Round 349 基于公开发布的 PyTorch `F.scaled_dot_product_attention` (`SDPA`
 
 Round 350 基于公开发布的 PyTorch `torch.utils.checkpoint` 重入式（`use_reentrant=True`）在冻结输入层下丢失内部 `LoRA` 梯度机理、非重入式 `saved_tensors_hooks` (`use_reentrant=False`) 与算子级选择性激活检查点（`create_selective_checkpoint_contexts`）原理构建原创合成梯度存活率、激活显存与重计算耗时开销评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 351 基于公开发布的多 LoRA 推理服务（`vLLM LRUCacheWorkerLoRAManager / S-LoRA`）三级存储架构（`max_loras` GPU 槽位与 `max_cpu_loras` 锁页内存池）、独立 `lora_h2d_stream` 预置就绪准入（`Stage-Before-Admit`）与原地槽位更新原理构建原创合成冷 LoRA 换页 Decode 停顿与 P99 TPOT 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

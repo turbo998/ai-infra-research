@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-LoRA CPU-to-GPU Paging &amp; Stage-Before-Admit Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 28px; }
+  .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #38BDF8; }
+  .prov { font-size: 12px; color: #94A3B8; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #CBD5E1; margin-bottom: 6px; font-weight: 600; }
+  input, select { width: 100%; padding: 8px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; border-radius: 6px; }
+  .results { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .card { background: #0F172A; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+  .card h3 { margin-top: 0; font-size: 15px; }
+  .bad { border-color: #EF4444; }
+  .good { border-color: #10B981; }
+  .metric { font-size: 24px; font-weight: 800; margin: 6px 0; }
+  .sub { font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Multi-LoRA CPU-to-GPU Adapter Paging &amp; Stage-Before-Admit Sizer</h1>
+  <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  <div class="grid">
+    <div class="control">
+      <label>LoRA Rank (r on 70B All-Linear)</label>
+      <select id="loraR" onchange="recalc()">
+        <option value="16">r = 16 (80 MB / Adapter)</option>
+        <option value="32">r = 32 (160 MB / Adapter)</option>
+        <option value="64" selected>r = 64 (320 MB / Adapter)</option>
+        <option value="128">r = 128 (640 MB / Adapter)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>GPU LoRA Slots (max_loras)</label>
+      <input type="number" id="maxGpu" value="8" min="2" max="64" oninput="recalc()">
+    </div>
+    <div class="control">
+      <label>Pinned CPU Slots (max_cpu_loras)</label>
+      <input type="number" id="maxCpu" value="64" min="8" max="512" step="8" oninput="recalc()">
+    </div>
+  </div>
+  <div class="results">
+    <div class="card bad">
+      <h3 style="color:#FCA5A5">⛔ Synchronous Load on Compute Stream</h3>
+      <div class="metric" id="naiveMs" style="color:#EF4444">64.00 ms Decode Freeze</div>
+      <div class="sub" id="naiveSub">P99 TPOT: 78.20 ms | Freezes all 255 active decode requests!</div>
+    </div>
+    <div class="card good">
+      <h3 style="color:#6EE7B7">🏆 Pinned LRU + Stage-Before-Admit Async DMA</h3>
+      <div class="metric" id="optMs" style="color:#10B981">0.08 ms Decode Stall</div>
+      <div class="sub" id="optSub">800.0x Lower Stall | P99 TPOT: 14.28 ms | Pinned RAM: 20.0 GB</div>
+    </div>
+  </div>
+</div>
+<script>
+function recalc() {
+  const r = parseInt(document.getElementById('loraR').value, 10);
+  const cpuSlots = parseInt(document.getElementById('maxCpu').value || '64', 10);
+  const mapStall = {16: [16.0, 0.05], 32: [32.0, 0.06], 64: [64.0, 0.08], 128: [128.0, 0.10]};
+  const [nStall, oStall] = mapStall[r];
+  const mb = r * 5;
+  const cpuGb = (mb * cpuSlots) / 1024.0;
+  document.getElementById('naiveMs').textContent = nStall.toFixed(2) + ' ms Decode Freeze';
+  document.getElementById('naiveSub').textContent = 'P99 TPOT: ' + (14.20 + nStall).toFixed(2) + ' ms | Freezes 255 active requests!';
+  document.getElementById('optMs').textContent = oStall.toFixed(2) + ' ms Decode Stall';
+  document.getElementById('optSub').textContent = (nStall / oStall).toFixed(1) + 'x Lower Stall | P99 TPOT: ' + (14.20 + oStall).toFixed(2) + ' ms | Pinned RAM: ' + cpuGb.toFixed(1) + ' GB';
+}
+recalc();
+</script>
+</body>
+</html>
