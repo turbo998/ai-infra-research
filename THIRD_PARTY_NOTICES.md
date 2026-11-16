@@ -462,6 +462,9 @@ Round 316 基于公开发布的 `vLLM / SGLang` `LogitsProcessor` 提示词对�
 
 Round 317 基于公开发布的 `Megatron-Core TensorParallelRNGTracker` 双轨随机数状态机（区分 `TP` 复制层与分片层）、`cuRAND Philox-4x32-10` 计数器式伪随机数算法与设备端 `16-Byte (seed, offset)` 状态快照原理构建原创合成激活重计算逐比特匹配率与梯度误差评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 318 基于公开发布的 `LiveKit Turn Detector / Pipecat Smart-Turn` 流式声学 `VAD` 与轻量级语义话轮结束分类器（`Semantic End-of-Utterance, EoU`）动态超时门控机制以及停顿窗口投机 LLM 预填充（`Speculative Prefill into Prefix Cache`）原理构建原创合成轮次响应延迟与句中误切率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
