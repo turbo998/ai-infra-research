@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 314 · FlashAttention Logit Soft-Capping (tanh) SFU &amp; Padé FMA Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 314 · `FlashAttention` Logit Soft-Capping (`tanh`) SFU &amp; Padé FMA Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Soft-Capping `cap * tanh(S / cap)` Kernel Execution Strategy</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Unfused Materialized [N, N] torch.tanh Fallback</option>
+          <option value="t2">Tier 2: Inline FlashAttention Using Hardware SFU MUFU.TANH</option>
+          <option value="t3">Tier 3: Crude Hard Clamp clamp(S, -cap, cap) (Distorts Output)</option>
+          <option value="t4" selected>Tier 4: Rational Padé FMA Emulation + Folded (cap * log2e) Scale</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Effective Attention TFLOPS</label>
+        <div id="tflops" class="kpi">585.0 TFLOPS (2.13x)</div>
+      </div>
+      <div class="card">
+        <label>32K Latency / Max Abs Error</label>
+        <div id="lat" class="kpi">64.6 ms / 1.2e-5 Err</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Replacing hardware `MUFU.TANH` (which contends with Online Softmax `MUFU.EX2` on the narrow SFU pipeline) with a **Rational Padé / Minimax Polynomial evaluated on idle FP32 `FFMA` ALU pipelines** and folding `(1 / (cap * sqrt(d)))` into `Q` and `(cap * log2(e))` into the polynomial numerator boosts `FlashAttention` soft-capping throughput `2.13x` (`275 -> 585 TFLOPS`).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { tflops: "78.0 TFLOPS (HBM Bound! ✕)", lat: "485.0 ms / 0.0 Err ✕", bad: true, msg: "⛔ Materializing the [32K, 32K] score matrix in HBM to run torch.tanh drops throughput to 78 TFLOPS and OOMs!" },
+      t2: { tflops: "275.0 TFLOPS (SFU Stall! ✕)", lat: "137.5 ms / 1.0e-5 Err ✕", bad: true, msg: "⛔ Calling hardware MUFU.TANH on every attention element doubles traffic on the Special Function Unit (SFU) already saturated by MUFU.EX2!" },
+      t3: { tflops: "615.0 TFLOPS", lat: "61.5 ms / 4.2e-2 Err (Distorted! ✕)", bad: true, msg: "⛔ Hard clamping instead of smooth hyperbolic tangent introduces a 0.042 attention output error and degrades long-context perplexity!" },
+      t4: { tflops: "585.0 TFLOPS (2.13x) 🏆", lat: "64.6 ms / 1.2e-5 Err 🏆", bad: false, msg: "🏆 FP32 FMA Rational Padé emulation + folded (cap * log2e) scaling achieves 585 TFLOPS (2.13x faster than SFU tanh) with <1.2e-5 error!" }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('tflops');
+      el.innerHTML = d.tflops;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('lat').textContent = d.lat;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

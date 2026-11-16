@@ -454,6 +454,9 @@ Round 312 基于公开发布的无分类器引导（`Classifier-Free Guidance, C
 
 Round 313 基于公开发布的 `vLLM / SGLang` 原位权重热更新（`In-Place Weight Refit`）机制、后台主机 NUMA 锁页内存静默预加载、显存指针保持（免重捕获 `CUDAGraph`）与前缀缓存树原子清空原理构建原创合成模型切换停服窗口与冗余成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 314 基于公开发布的 `Gemma-2/3 / Grok` 注意力软截断（`Attention Logit Soft-Capping`）数学定义、NVIDIA GPU 超越函数单元（`SFU MUFU.TANH` vs `MUFU.EX2`）吞吐竞争机理与 `FP32 FFMA` 有理帕德近似（`Rational Padé Approximant`）及前后缩放因子折叠原理构建原创合成注意力算力与数值精度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

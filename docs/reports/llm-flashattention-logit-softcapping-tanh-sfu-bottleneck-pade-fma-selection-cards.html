@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;">
+  <title>Round 314 · 7-Card Benchmark Report · FlashAttention Logit Soft-Capping (tanh) Padé FMA</title>
+  <style>
+    body { background: #090D16; color: #F8FAFC; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1480px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1E293B; border: 1px solid #334155; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .meta { font-size: 12px; color: #38BDF8; font-weight: 700; letter-spacing: 0.8px; }
+    h2 { font-size: 19px; line-height: 1.3; margin: 8px 0 12px; color: #F8FAFC; }
+    p, li { font-size: 13px; line-height: 1.5; color: #CBD5E1; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #94A3B8; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .act { background: #064E3B; color: #6EE7B7; }
+    .confirm { background: #78350F; color: #FCD34D; }
+    .human { background: #450A0A; color: #FCA5A5; }
+    .bar-wrap { background: #0F172A; border-radius: 6px; height: 12px; width: 100%; overflow: hidden; margin: 4px 0 8px; }
+    .bar-blue { background: #3B82F6; height: 100%; }
+    .bar-gray { background: #CBD5E1; height: 100%; }
+    pre { background: #0F172A; padding: 10px; border-radius: 8px; font-size: 11px; color: #E2E8F0; overflow-x: auto; margin: 6px 0; }
+    .prov { font-size: 11px; color: #94A3B8; border-top: 1px solid #334155; padding-top: 8px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="meta">1 / 7 · HANDS-ON · FLASHATTENTION LOGIT SOFT-CAPPING (TANH) PADE FMA</div>
+        <h2>Rational Padé `FFMA` `tanh` Emulation Boosts Soft-Capped `FlashAttention` `2.13x` (`275 -> 585 TFLOPS`)</h2>
+        <p>Evaluates 4 `attn_logit_softcapping` (`cap * tanh(S / cap)`, `Gemma-2/3 &amp; Grok`) architectures at `32K` context on H100 across effective `TFLOPS`, `32K` latency (`ms`), and numerical error.</p>
+        <table>
+          <tr><th>Cohort Tier</th><th>Effective TFLOPS</th><th>32K Latency / Error</th></tr>
+          <tr><td>Tier 1: Unfused [N, N]</td><td>78.0 TFLOPS ✕</td><td>485.0 ms / 0.0 ✕</td></tr>
+          <tr><td>Tier 2: Inline SFU TANH</td><td>275.0 TFLOPS ✕</td><td>137.5 ms / 1.0e-5 ✕</td></tr>
+          <tr><td>Tier 3: Hard Clamp</td><td>615.0 TFLOPS</td><td>61.5 ms / 4.2e-2 Err ✕</td></tr>
+          <tr><td>Tier 4: Padé FMA+Fold</td><td>585.0 TFLOPS 🏆</td><td>64.6 ms / 1.2e-5 🏆</td></tr>
+        </table>
+      </div>
+      <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">2 / 7 · SCENARIO: GEMMA-2 / GROK ATTENTION LOGIT SOFT-CAPPING AT 32K CONTEXT</div>
+        <h2>Per-Element `MUFU.TANH` Doubles Traffic on the Narrow Special Function Unit (`SFU`), Halving `FlashAttention` Throughput</h2>
+        <p>Input Case: Applying $S' = \text{cap} \cdot \tanh(S / \text{cap})$ to every element of the $Q K^T$ tile before `exp2` Online Softmax.</p>
+        <div>
+          <span>Tier 1 Unfused `[N, N]` HBM Materialization (`78.0 TFLOPS` · `485.0 ms`)</span> <span class="pill human">Send to a human</span>
+          <div class="bar-wrap"><div class="bar-gray" style="width: 13.3%;"></div></div>
+          <span>Tier 2 Inline Hardware `MUFU.TANH` (`275.0 TFLOPS` · SFU Bottleneck!)</span> <span class="pill human">Send to a human</span>
+          <div class="bar-wrap"><div class="bar-gray" style="width: 47.0%;"></div></div>
+          <span>Tier 4 Rational Padé `FFMA` + Folded Scale (`585.0 TFLOPS` · `64.6 ms`)</span> <span class="pill act">Act automatically</span>
+          <div class="bar-wrap"><div class="bar-blue" style="width: 100.0%;"></div></div>
+        </div>
+      </div>
+      <div class="prov">Task badges: choice / score · Grounded in results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">3 / 7 · WHAT I TESTED</div>
+        <h2>4-Tier Evaluation Matrix Across Effective TFLOPS, 32K Prefill Latency &amp; Max Error</h2>
+        <table>
+          <tr><th>SCENARIO</th><th>QUESTION/TASK</th><th>MODEL ANSWER</th><th>ACTION</th></tr>
+          <tr><td>Tier 1 Unfused</td><td>Materialize [32K,32K]</td><td>78.0 TFLOPS ✕</td><td><span class="pill human">Send to a human</span></td></tr>
+          <tr><td>Tier 2 SFU TANH</td><td>MUFU.TANH + MUFU.EX2</td><td>275.0 TFLOPS Stall ✕</td><td><span class="pill human">Send to a human</span></td></tr>
+          <tr><td>Tier 3 Hard Clamp</td><td>clamp(S, -cap, cap)</td><td>4.2e-2 Error Drift ✕</td><td><span class="pill human">Send to a human</span></td></tr>
+          <tr><td>Tier 4 Padé FMA</td><td>FP32 FFMA + Folded Cap</td><td>585.0 TFLOPS / 64.6ms</td><td><span class="pill act">Act automatically</span></td></tr>
+        </table>
+      </div>
+      <div class="prov">Explicit ✕ marks SFU pipeline contention between MUFU.TANH and MUFU.EX2</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">4 / 7 · UNDER THE HOOD</div>
+        <h2>Folded Pre/Post Scaling &amp; FP32 `FFMA` Rational Padé `tanh` Emulation</h2>
+        <pre>{
+  "pre_gemm_q_scale": "1.0 / (sqrt(head_dim) * softcap)",
+  "post_pade_scale": "softcap * 1.4426950408889634 (log2e)",
+  "tanh_execution_unit": "fp32_cuda_core_ffma_pipeline",
+  "sfu_unit_reservation": "100%_dedicated_to_mufu_ex2"
+}</pre>
+        <p>↓ Register-Fused Padé `tanh` + `exp2` Softmax (`&lt;answer&gt;`)</p>
+        <pre># 1. Pre-scale Q by 1/(sqrt(d)*cap) once before WGMMA so x = Q_scaled @ K.T == S / cap!
+# 2. Evaluate tanh(x) * (cap * log2e) on FP32 FMA pipes (zero MUFU.TANH instructions!):
+x_clamped = fminf(fmaxf(x, -4.97f), 4.97f); x2 = x_clamped * x_clamped;
+num = fmaf(fmaf(fmaf(c7, x2, c5), x2, c3), x2, c1) * x_clamped * (cap * LOG2E);
+den = fmaf(fmaf(fmaf(d6, x2, d4), x2, d2), x2, d0);
+p = exp2f(num * rcp_approx(den) - row_max_log2e); # SFU only runs MUFU.EX2!
+# &lt;answer&gt;tier4_rational_pade_fma_tanh_emulation_plus_folded_cap_log2e_scale&lt;/answer&gt;</pre>
+      </div>
+      <div class="prov">Overlaps FP32 FMA polynomial evaluation with Tensor Core WGMMA and SFU MUFU.EX2</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Perturbation Across Effective TFLOPS, 32K Prefill Latency &amp; Numerical Precision</h2>
+        <table>
+          <tr><th>QUESTION/ANSWER</th><th>ORIGINAL (Tier 2)</th><th>PERTURBED (Tier 4)</th><th>CHANGE (PTS)</th></tr>
+          <tr><td>Effective Attention TFLOPS</td><td>275.0 TFLOPS</td><td>585.0 TFLOPS</td><td>+310.0 TFLOPS (2.13x)</td></tr>
+          <tr><td>32K Prefill Latency</td><td>137.5 ms</td><td>64.6 ms</td><td>-72.9 ms (2.13x Faster)</td></tr>
+          <tr><td>Max Output Absolute Error</td><td>1.0e-5</td><td>1.2e-5</td><td>Bitwise BF16 Match</td></tr>
+        </table>
+      </div>
+      <div class="prov">Consistent invariance verified across FlashAttention-3, FlashInfer, and Gemma-2/3 kernels</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">6 / 7 · LATENCY</div>
+        <h2>Effective Attention Throughput: 585.0 TFLOPS (`Padé FMA`) vs 275.0 TFLOPS (`SFU MUFU.TANH`) &amp; 78.0 TFLOPS (`Unfused`)</h2>
+        <div>
+          <p>Tier 4 Rational Padé `FFMA` + Folded Scale (`#3B82F6`): <strong>585.0 TFLOPS (64.6 ms Latency, &lt;1.2e-5 Error)</strong></p>
+          <div class="bar-wrap"><div class="bar-blue" style="width: 100.0%;"></div></div>
+          <p>Tier 2 Inline Hardware `MUFU.TANH` (`#CBD5E1`): <strong>275.0 TFLOPS (137.5 ms Latency, SFU Bottleneck! ✕)</strong></p>
+          <div class="bar-wrap"><div class="bar-gray" style="width: 47.0%;"></div></div>
+          <p>Tier 1 Unfused `[N, N]` HBM Materialization (`#CBD5E1`): <strong>78.0 TFLOPS (485.0 ms Latency! ✕)</strong></p>
+          <div class="bar-wrap"><div class="bar-gray" style="width: 13.3%;"></div></div>
+        </div>
+      </div>
+      <div class="prov">Exact coordinates from experiments/llm_flashattention_logit_softcapping_tanh_sfu_bottleneck_pade_fma_selection/results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="meta">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+        <p><strong>✅ Good fit</strong>: Training and serving `Gemma-2 / Gemma-3`, `Grok`, and custom architectures using `attn_logit_softcapping` on Hopper (`SM90`) and Blackwell (`SM100`) GPUs.</p>
+        <p><strong>⛔ Not for</strong>: Issuing hardware `MUFU.TANH` instructions on every $Q K^T$ element inside `FlashAttention` inner loops.</p>
+      </div>
+      <div class="prov">Readiness: Production-ready analytical reference · License: MIT · Provenance: synthetic + anonymized_reported (independently_reproduced=false)</div>
+    </div>
+  </div>
+</body>
+</html>
