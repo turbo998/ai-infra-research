@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>PyTorch torch.einsum Contraction Order OOM vs. Explicit BMM/Linear Sizer</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .container { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { font-size: 22px; margin-top: 0; color: #38bdf8; }
+  .badge { display: inline-block; background: #0284c7; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+  .control { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #f8fafc; float: right; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  .card.good { border-color: #10b981; background: #06281e; }
+  .card.bad { border-color: #ef4444; }
+  .metric { font-size: 22px; font-weight: 800; margin: 6px 0; }
+  .sub { font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <span class="badge">INTERACTIVE SIZER · ROUND 358 · PYTORCH EINSUM CONTRACTION ORDER VS BMM</span>
+  <h1>PyTorch torch.einsum 32.00 GB Contraction OOM vs. Explicit Associative BMM/Linear</h1>
+  <p style="font-size:13px;color:#94a3b8;">Provenance: <code>synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="grid">
+    <div class="control">
+      <label>Sequence Length (S) <span id="v_s" class="val">8,192</span></label>
+      <input id="s" type="range" min="2048" max="32768" step="2048" value="8192" oninput="update()">
+    </div>
+    <div class="control">
+      <label>Batch Size (B) <span id="v_b" class="val">4</span></label>
+      <input id="b" type="range" min="1" max="16" step="1" value="4" oninput="update()">
+    </div>
+    <div class="control">
+      <label>Attention Heads (H) <span id="v_h" class="val">64</span></label>
+      <input id="h" type="range" min="16" max="128" step="16" value="64" oninput="update()">
+    </div>
+    <div class="control">
+      <label>Head / Bottleneck Dim (D) <span id="v_d" class="val">128</span></label>
+      <input id="d" type="range" min="16" max="256" step="16" value="128" oninput="update()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card bad">
+      <div class="sub">Tier 1: (Q @ K^T) @ V Order</div>
+      <div id="t1_hbm" class="metric" style="color:#f87171;">32.00 GB</div>
+      <div id="t1_sub" class="sub">18.40 ms · 4,398 GFLOPs</div>
+    </div>
+    <div class="card bad">
+      <div class="sub">Tier 2: Permuted einsum Copy</div>
+      <div id="t2_lat" class="metric" style="color:#f87171;">2.85 ms</div>
+      <div id="t2_sub" class="sub">6.40 GB permute copy traffic</div>
+    </div>
+    <div class="card">
+      <div class="sub">Tier 3: Eager Dot einsum</div>
+      <div id="t3_lat" class="metric" style="color:#fbbf24;">1.95 ms</div>
+      <div id="t3_sub" class="sub">2.00 GB intermediate</div>
+    </div>
+    <div class="card good">
+      <div class="sub">Tier 4: Explicit Q @ (K^T @ V)</div>
+      <div id="t4_lat" class="metric" style="color:#34d399;">0.12 ms</div>
+      <div id="t4_sub" class="sub">0.008 GB (8 MB) · 153.3x faster</div>
+    </div>
+  </div>
+</div>
+<script>
+function update() {
+  const s = parseInt(document.getElementById('s').value, 10);
+  const b = parseInt(document.getElementById('b').value, 10);
+  const h = parseInt(document.getElementById('h').value, 10);
+  const d = parseInt(document.getElementById('d').value, 10);
+  document.getElementById('v_s').textContent = s.toLocaleString();
+  document.getElementById('v_b').textContent = b;
+  document.getElementById('v_h').textContent = h;
+  document.getElementById('v_d').textContent = d;
+
+  const bhScale = (b / 4.0) * (h / 64.0);
+  const sScale = s / 8192.0;
+  const dScale = d / 128.0;
+
+  const t1Hbm = 32.00 * bhScale * sScale * sScale;
+  const t1Lat = 18.40 * bhScale * sScale * sScale * dScale;
+  const t2Lat = 2.85 * bhScale * sScale * dScale;
+  const t3Lat = 1.95 * bhScale * sScale * dScale;
+  const t4Hbm = 0.008 * bhScale * dScale * dScale;
+  const t4Lat = 0.12 * bhScale * sScale * dScale * dScale;
+
+  document.getElementById('t1_hbm').textContent = t1Hbm.toFixed(2) + ' GB';
+  document.getElementById('t1_sub').textContent = t1Lat.toFixed(2) + ' ms · ' + (s / d).toFixed(0) + 'x excess FLOPs';
+  document.getElementById('t2_lat').textContent = t2Lat.toFixed(2) + ' ms';
+  document.getElementById('t2_sub').textContent = (6.40 * bhScale * sScale * dScale).toFixed(2) + ' GB permute copy';
+  document.getElementById('t3_lat').textContent = t3Lat.toFixed(2) + ' ms';
+  document.getElementById('t4_lat').textContent = t4Lat.toFixed(2) + ' ms';
+  document.getElementById('t4_sub').textContent = t4Hbm.toFixed(3) + ' GB · ' + (t1Lat / t4Lat).toFixed(1) + 'x faster';
+}
+update();
+</script>
+</body>
+</html>
