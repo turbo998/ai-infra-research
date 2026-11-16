@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>PyTorch register_buffer(persistent=False) RoPE Overwrite &amp; Checkpoint Bloat Sizer</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .container { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { font-size: 22px; margin-top: 0; color: #38bdf8; }
+  .badge { display: inline-block; background: #0284c7; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+  .control { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #f8fafc; float: right; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  .card.good { border-color: #10b981; background: #06281e; }
+  .card.bad { border-color: #ef4444; }
+  .metric { font-size: 22px; font-weight: 800; margin: 6px 0; }
+  .sub { font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <span class="badge">INTERACTIVE SIZER · ROUND 359 · PYTORCH REGISTER_BUFFER PERSISTENT=FALSE</span>
+  <h1>PyTorch register_buffer(persistent=True vs False) RoPE Overwrite &amp; Checkpoint Bloat</h1>
+  <p style="font-size:13px;color:#94a3b8;">Provenance: <code>synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+  <div class="grid">
+    <div class="control">
+      <label>Target Extended rope_theta <span id="v_theta" class="val">500,000</span></label>
+      <input id="theta" type="range" min="10000" max="1000000" step="10000" value="500000" oninput="update()">
+    </div>
+    <div class="control">
+      <label>Transformer Layers (L) <span id="v_l" class="val">80</span></label>
+      <input id="l" type="range" min="32" max="128" step="8" value="80" oninput="update()">
+    </div>
+    <div class="control">
+      <label>Cached Mask / Table Max Sequence Length <span id="v_s" class="val">32,768</span></label>
+      <input id="s" type="range" min="8192" max="65536" step="8192" value="32768" oninput="update()">
+    </div>
+    <div class="control">
+      <label>Base Checkpoint Contains Old inv_freq (10,000)?</label>
+      <select id="old_ckpt" onchange="update()">
+        <option value="yes" selected>Yes (Legacy checkpoint saved with persistent=True)</option>
+        <option value="no">No (Clean checkpoint without inv_freq keys)</option>
+      </select>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card bad">
+      <div class="sub">Tier 1: persistent=True (Default)</div>
+      <div id="t1_ppl" class="metric" style="color:#f87171;">184.60 PPL</div>
+      <div id="t1_sub" class="sub">Overwritten back to 10,000!</div>
+    </div>
+    <div class="card bad">
+      <div class="sub">Tier 2: Persistent Mask/Cache</div>
+      <div id="t2_bloat" class="metric" style="color:#f87171;">+18.40 GB</div>
+      <div class="sub">Checkpoint bloat · strict=True fails</div>
+    </div>
+    <div class="card">
+      <div class="sub">Tier 3: Plain self.inv_freq</div>
+      <div class="metric" style="color:#fbbf24;">100% CRASH</div>
+      <div class="sub">Ignored by .to("cuda") / FSDP!</div>
+    </div>
+    <div class="card good">
+      <div class="sub">Tier 4: persistent=False + Shared</div>
+      <div id="t4_ppl" class="metric" style="color:#34d399;">5.42 PPL</div>
+      <div id="t4_sub" class="sub">0.00 GB bloat · 0% overwrite</div>
+    </div>
+  </div>
+</div>
+<script>
+function update() {
+  const theta = parseInt(document.getElementById('theta').value, 10);
+  const l = parseInt(document.getElementById('l').value, 10);
+  const s = parseInt(document.getElementById('s').value, 10);
+  const old = document.getElementById('old_ckpt').value;
+  document.getElementById('v_theta').textContent = theta.toLocaleString();
+  document.getElementById('v_l').textContent = l;
+  document.getElementById('v_s').textContent = s.toLocaleString();
+
+  const bloat = 18.40 * (l / 80.0) * (s / 32768.0);
+  const t1Ppl = (old === 'yes' && theta > 10000) ? 184.60 : 5.42;
+
+  document.getElementById('t1_ppl').textContent = t1Ppl.toFixed(2) + ' PPL';
+  document.getElementById('t1_sub').textContent = (old === 'yes' && theta > 10000) ? 'Overwritten back to 10,000!' : 'No overwrite';
+  document.getElementById('t2_bloat').textContent = '+' + bloat.toFixed(2) + ' GB';
+  document.getElementById('t4_sub').textContent = '0.00 GB bloat (-' + bloat.toFixed(2) + ' GB) · Theta=' + theta.toLocaleString();
+}
+update();
+</script>
+</body>
+</html>
