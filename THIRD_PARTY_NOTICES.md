@@ -486,6 +486,9 @@ Round 328 基于公开发布的 5D 并行大规模集群通信域初始化（`Py
 
 Round 329 基于公开发布的多租户大模型推理前缀缓存时序侧信道机理（`Prompt Stealing / TTFT Cache Timing Oracle`）、租户加盐密码学复合链式哈希（`vLLM cache_salt + sha256`）与抗单次大扫描污染的 `S3-FIFO` 淘汰原理构建原创合成跨租户侧信道泄露率与缓存命中率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 330 基于公开发布的大模型采样惩罚算子（`Keskar Repetition Penalty / OpenAI Frequency & Presence Penalty`）正负号分支定义、$O(1)$ 步进增量词频累加器与稀疏 `CSR/COO` 唯一已见词索引算子原理构建原创合成 `32K-128K` 采样惩罚延迟与临时显存占用评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
