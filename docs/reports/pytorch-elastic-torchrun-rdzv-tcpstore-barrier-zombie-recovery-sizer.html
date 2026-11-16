@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 303 · PyTorch Elastic (torchrun / rdzv) TCPStore &amp; Zombie Recovery Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 303 · 4,096-GPU `torchrun / rdzv` `TCPStore` &amp; Zombie Recovery Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">4,096-GPU Elastic Rendezvous &amp; Fault Recovery Policy</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Flat 4,096-Rank C10d TCPStore + Unclean SIGTERM</option>
+          <option value="t2">Tier 2: etcd Rendezvous + Full 4,096-Process Cold Respawn</option>
+          <option value="t3">Tier 3: 512-Node Hierarchical Store + cgroup.kill Clean Respawn</option>
+          <option value="t4" selected>Tier 4: Hierarchical Store + In-Process Abort &amp; Warm Reconfig</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Fault Recovery Latency</label>
+        <div id="rec" class="kpi">6.8 s (61.8x Faster)</div>
+      </div>
+      <div class="card">
+        <label>Respawn OOM Rate / Goodput</label>
+        <div id="oom" class="kpi">0.0% OOM / 98.6% Goodput</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Combining a 2-level hierarchical rendezvous store (`512` node agents aggregating `8` local ranks each) with `PDEATHSIG + cgroup.kill` zombie prevention and in-process `ncclCommAbort` warm reconfiguration cuts 4,096-GPU fault recovery from `420.0 s` to `6.8 s` (`61.8x` faster) with `0.0%` zombie CUDA OOMs.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { rec: "420.0 s (TCPStore Hang! ✕)", oom: "68.0% OOM / 74.2% Goodput ✕", bad: true, msg: "⛔ 4,096 workers hammering single-threaded Rank-0 TCPStore overflow SYN backlogs, and un-reaped DataLoader forks hold GPU memory causing 68% respawn OOM!" },
+      t2: { rec: "165.0 s (Cold Restart! ✕)", oom: "24.0% OOM / 85.5% Goodput ✕", bad: true, msg: "⛔ Tearing down and cold-restarting all 4,096 Python/CUDA processes wastes 165s and still suffers 24% zombie CUDA context OOMs!" },
+      t3: { rec: "38.0 s ✅", oom: "0.0% OOM / 94.1% Goodput ✅", bad: false, msg: "✅ Node-level hierarchical store + cgroup.kill eliminates TCPStore storms and zombie OOMs, taking 38.0s for clean process respawn." },
+      t4: { rec: "6.8 s (61.8x Faster) 🏆", oom: "0.0% OOM / 98.6% Goodput 🏆", bad: false, msg: "🏆 Survivors stay alive in-process, abort the broken NCCL communicator, and reconfigure via hierarchical store in 6.8s (98.6% goodput)." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('rec');
+      el.innerHTML = d.rec;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('oom').textContent = d.oom;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

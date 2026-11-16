@@ -432,6 +432,9 @@ Round 301 基于公开发布的 `Liger-Kernel (LigerFusedLinearCrossEntropyLoss)
 
 Round 302 基于公开发布的 `vLLM V1 / SGLang / NVIDIA Dynamo / Mooncake` 端到端请求取消传播（`ASGI Disconnect Watcher -> ZMQ Abort`）、`Chunked Prefill` 分块边界抢占与已完成前缀块保留（`Prefix-Cache Salvage`）以及跨机 RDMA KV 预留块 `Lease-TTL` 自动租约回收原理构建原创合成僵尸算力浪费率与显存泄漏评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 303 基于公开发布的 `PyTorch TorchElastic / C10d TCPStore` 两级节点代理分层协调存储、`DataLoader spawn` 与 `cgroup.kill / PDEATHSIG` 孤儿 CUDA 上下文清理以及 `NVIDIA NVRx / TorchFT` 进程内 `ncclCommAbort` 热恢复原理构建原创合成千卡/万卡恢复延迟与 OOM 失败率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
