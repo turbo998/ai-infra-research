@@ -520,6 +520,9 @@ Round 345 基于公开发布的 PyTorch `torch.device("meta")` 零内存建模�
 
 Round 346 基于公开发布的 PD 分离推理（`vLLM V1 KVConnector / SGLang Mooncake / NVIDIA NIXL`）逐层 `cudaEvent` 流水线异步 KV 推送与双缓冲单层连续块聚合打包原理构建原创合成 Prefill-Decode 交接暴露停顿与 RDMA 网卡带宽利用率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 347 基于公开发布的代码大模型中间补全（`FIM: SPM vs PSM`）前缀缓存复用机理与 BPE 词边界回溯治愈（`guidance Token Healing` + `Marisa-Trie` 前缀位图掩码）原理构建原创合成半截标识符补全准确率与首字延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
