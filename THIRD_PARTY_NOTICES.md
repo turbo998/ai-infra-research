@@ -526,6 +526,9 @@ Round 348 基于公开发布的 PyTorch 混合精度 `GradScaler` 在 `BF16` 下
 
 Round 349 基于公开发布的 PyTorch `F.scaled_dot_product_attention` (`SDPA`) 后端分发约束（`SDPBackend.FLASH_ATTENTION` 拒绝显式 `attn_mask` 与 `EFFICIENT_ATTENTION` 16 字节对齐约束导致静默回退 `MATH`）与 `FlexAttention BlockMask` 块稀疏原理构建原创合成单层注意力耗时与显存工作区评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 350 基于公开发布的 PyTorch `torch.utils.checkpoint` 重入式（`use_reentrant=True`）在冻结输入层下丢失内部 `LoRA` 梯度机理、非重入式 `saved_tensors_hooks` (`use_reentrant=False`) 与算子级选择性激活检查点（`create_selective_checkpoint_contexts`）原理构建原创合成梯度存活率、激活显存与重计算耗时开销评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
