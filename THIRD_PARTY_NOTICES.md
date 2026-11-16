@@ -494,6 +494,9 @@ Round 332 基于公开发布的前后端多进程解耦大模型推理引擎（`
 
 Round 333 基于公开发布的多机多卡 GPU 集群 `Triton / TorchInductor / DeepGEMM` JIT 编译缓存共享 NFS 非原子写竞态（`CUDA_ERROR_INVALID_IMAGE`）、节点本地 `/tmp` 重定向与 `LOCAL_RANK == 0` 单路屏障预热原理构建原创合成冷启动编译耗时与崩溃率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 334 基于公开发布的大模型推理 `apply_chat_template`（`Jinja2` vs Rust `minijinja`）AST 渲染开销、双重 `BOS`（`add_special_tokens=True`）及末尾空格 BPE 分词漂移机理与规范化工具 Schema 预分词缓存原理构建原创合成接入延迟与工具调用准确率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
