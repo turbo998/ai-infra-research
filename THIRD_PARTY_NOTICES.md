@@ -538,6 +538,9 @@ Round 354 基于公开发布的 CUDA 驱动 `cuMemcpyHtoDAsync` 可分页内存�
 
 Round 355 基于公开发布的 PyTorch `torch.distributed.all_gather_object` 与 `_object_to_tensor` 双轮通信及 `.cpu()` 同步机制、预分配定长张量 `all_gather_into_tensor` 与节点内 POSIX 共享内存无锁环（`SHM Broadcast`）原理构建原创合成控制面元数据交换停顿评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 356 基于公开发布的 PyTorch 张量步幅（`stride`）寻址机制、`.transpose(1, 2).contiguous()` 与 `.reshape()` 隐式拷贝行为、`FlashAttention / SDPA` 最内层连续契约（`stride(-1) == 1`）及原地融合 `RoPE` 原理构建原创合成每层显存拷贝流量与耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
