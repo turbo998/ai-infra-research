@@ -456,6 +456,9 @@ Round 313 基于公开发布的 `vLLM / SGLang` 原位权重热更新（`In-Plac
 
 Round 314 基于公开发布的 `Gemma-2/3 / Grok` 注意力软截断（`Attention Logit Soft-Capping`）数学定义、NVIDIA GPU 超越函数单元（`SFU MUFU.TANH` vs `MUFU.EX2`）吞吐竞争机理与 `FP32 FFMA` 有理帕德近似（`Rational Padé Approximant`）及前后缩放因子折叠原理构建原创合成注意力算力与数值精度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 315 基于公开发布的 NVIDIA `nvidia-persistenced --uvm-persistence-mode` 守护进程驱动状态保持机制、`cudaMallocManaged` 统一虚拟内存（`UVM`）按需缺页中断迁移瓶颈与显式 `cudaHostAlloc` 锁页内存双缓冲异步 DMA 原理构建原创合成容器冷启动延迟与 PCIe 有效吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
