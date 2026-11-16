@@ -1,0 +1,58 @@
+{
+  "experiment_id": "llm_serving_prompt_logprobs_chunked_prefill_vocab_oom_streaming_lse_selection",
+  "round": 316,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "batch_size": 8,
+    "prompt_tokens_per_req": 32768,
+    "vocab_size_v": 152064
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_full_prompt_lmhead_logits_materialization_oom",
+      "name": "Full-Prompt `lm_head(hidden_states)` Materialization (`[8 * 32768, 152064]` Logits + Softmax)",
+      "peak_prompt_logits_hbm_gb": 79.7,
+      "batch_eval_latency_ms": 1820.0,
+      "chunk_boundary_logprob_drop": false,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Normally prefill only projects the last token [8, 152064] (2.4MB); enabling prompt_logprobs=1 projects all 262,144 tokens -> 79.7 GB HBM OOM!"
+    },
+    {
+      "tier_id": "tier2_chunked_prefill_naive_per_chunk_slice_boundary_bug",
+      "name": "Naive Chunked Prefill (`2K` Chunks) Without Cross-Chunk Next-Token Label Shift",
+      "peak_prompt_logits_hbm_gb": 4.98,
+      "batch_eval_latency_ms": 940.0,
+      "chunk_boundary_logprob_drop": true,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Evaluates logits[t] against token[t+1] inside each chunk independently, dropping or corrupting the boundary token at every 2,048-token seam!"
+    },
+    {
+      "tier_id": "tier3_prefix_cache_hit_skip_without_hidden_recompute_null_logprobs",
+      "name": "Standard Prefix Cache Hit (`APC`) Returning `None / NaN` for Cached Prompt Logprobs",
+      "peak_prompt_logits_hbm_gb": 1.25,
+      "batch_eval_latency_ms": 620.0,
+      "chunk_boundary_logprob_drop": true,
+      "action": "Confirm",
+      "status": "fail",
+      "note": "Because Prefix Cache stores only K/V (not final-layer hidden states or logits), cache hits cannot compute prompt_logprobs unless handled!"
+    },
+    {
+      "tier_id": "tier4_micro_tiled_streaming_lmhead_lse_plus_cross_chunk_shift_buffer",
+      "name": "`1,024`-Token Micro-Tiled `lm_head` + Fused Triton Target/Top-K `LSE` + Cross-Chunk Shift State",
+      "peak_prompt_logits_hbm_gb": 0.32,
+      "batch_eval_latency_ms": 578.0,
+      "chunk_boundary_logprob_drop": false,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Tiles lm_head into 1,024-token slices (0.32 GB peak, 249x smaller), fuses target logprob extraction in SRAM, and carries boundary hidden state across chunks!"
+    }
+  ],
+  "summary": {
+    "hbm_reduction_x": 249.1,
+    "latency_speedup_x": 3.15,
+    "recommended_hbm_gb": 0.32,
+    "recommended_tier": "tier4_micro_tiled_streaming_lmhead_lse_plus_cross_chunk_shift_buffer"
+  }
+}

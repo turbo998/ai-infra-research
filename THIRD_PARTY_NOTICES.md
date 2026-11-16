@@ -458,6 +458,9 @@ Round 314 基于公开发布的 `Gemma-2/3 / Grok` 注意力软截断（`Attenti
 
 Round 315 基于公开发布的 NVIDIA `nvidia-persistenced --uvm-persistence-mode` 守护进程驱动状态保持机制、`cudaMallocManaged` 统一虚拟内存（`UVM`）按需缺页中断迁移瓶颈与显式 `cudaHostAlloc` 锁页内存双缓冲异步 DMA 原理构建原创合成容器冷启动延迟与 PCIe 有效吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 316 基于公开发布的 `vLLM / SGLang` `LogitsProcessor` 提示词对数概率（`prompt_logprobs / echo=True`）计算机制、`1,024`-Token 微瓦片 `lm_head` 流式在线 `LogSumExp` 归约与 `Chunked Prefill` 跨分块边界尾态传递（`prev_chunk_last_hidden`）原理构建原创合成峰值显存与边界完整性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
