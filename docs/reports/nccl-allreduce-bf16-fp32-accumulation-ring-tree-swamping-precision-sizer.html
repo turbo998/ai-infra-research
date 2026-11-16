@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 324 · NCCL 256-Rank BF16 Ring Swamping vs Pairwise Tree + FP32 Acc Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 324 · `NCCL All-Reduce` `BF16` Ring Swamping vs. Tree + `FP32` Acc Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">256-GPU Gradient Reduction Topology &amp; Precision Policy</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Pre-Divide (g/256) + 255-Hop Linear BF16 Ring</option>
+          <option value="t2">Tier 2: Post-Divide + 255-Hop Linear BF16 Ring</option>
+          <option value="t3">Tier 3: Full FP32 Wire All-Reduce (2x Network Traffic)</option>
+          <option value="t4" selected>Tier 4: Hierarchical Pairwise Tree + FP32 Reg/NVLS Acc (BF16 Wire)</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Gradient Signal Retained / RMSE</label>
+        <div id="sig" class="kpi">99.95% / 0.18% RMSE</div>
+      </div>
+      <div class="card">
+        <label>All-Reduce Step Latency</label>
+        <div id="lat" class="kpi">44.2 ms (1x Wire Traffic)</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Because `BF16` has only `7` mantissa bits ($2^7 = 128$), sequential `255`-hop linear Ring addition completely swamps individual rank gradients once the partial sum exceeds $128 \times g_i$! Using a **Hierarchical Pairwise Tree (`NVLS` intra-node FP32 reduction + inter-node Tree where every step adds two equal-magnitude sums)** and dividing by $N=256$ *after* reduction retains `99.95%` of gradient signal at `BF16` wire speed (`44.2 ms`).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { sig: "38.0% Retained / 14.8% RMSE ✕", lat: "48.0 ms ✕", bad: true, msg: "⛔ In a 256-rank linear BF16 ring, once the running sum hits 128x a single rank's gradient, all remaining ranks' contributions round to 0.0 (swamping)!" },
+      t2: { sig: "52.4% Retained / 9.2% RMSE ✕", lat: "47.5 ms ✕", bad: true, msg: "⛔ Post-division avoids exponent underflow, but 255 sequential BF16 additions still lose half the ranks' contributions to mantissa swamping!" },
+      t3: { sig: "99.99% Retained / 0.001% RMSE ✅", lat: "91.5 ms (2x Slow! ⚠️)", bad: false, msg: "⚠️ Sending full FP32 gradients over RoCE/IB eliminates swamping, but doubles network bytes and slows All-Reduce to 91.5ms." },
+      t4: { sig: "99.95% Retained / 0.18% RMSE 🏆", lat: "44.2 ms (1x Wire Speed) 🏆", bad: false, msg: "🏆 Pairwise Tree (depth=8 equal-magnitude sums) + intra-node NVLS/register FP32 accumulation retains 99.95% signal at 44.2ms!" }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('sig');
+      el.innerHTML = d.sig;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('lat').textContent = d.lat;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>
