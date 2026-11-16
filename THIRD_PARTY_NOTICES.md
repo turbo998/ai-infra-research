@@ -428,6 +428,9 @@ Round 299 基于公开发布的 `Moshi / Qwen2.5-Omni / RQ-Transformer` 双层�
 
 Round 300 基于公开发布的 `DeepSeek-R1 / verl / OpenRLHF` 可验证奖励强化学习（`RLVR`）异步奖励验证流水线、`nsjail / Linux UserNS + Zygote` 预加载轻量沙箱池与按组（$G=16$）就绪 `GRPO` 优势归约原理构建原创合成验证等待延迟与集群有效利用率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 301 基于公开发布的 `Liger-Kernel (LigerFusedLinearCrossEntropyLoss)` 按 Token 分块原位梯度回传机制与 `Apple Cut-Cross-Entropy (CCE)` SRAM 瓦片流式 `Online LogSumExp` 零完整 Logits 落盘原理构建原创合成大词表（`152K–256K`）峰值显存与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
