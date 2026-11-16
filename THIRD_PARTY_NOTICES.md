@@ -460,6 +460,9 @@ Round 315 基于公开发布的 NVIDIA `nvidia-persistenced --uvm-persistence-mo
 
 Round 316 基于公开发布的 `vLLM / SGLang` `LogitsProcessor` 提示词对数概率（`prompt_logprobs / echo=True`）计算机制、`1,024`-Token 微瓦片 `lm_head` 流式在线 `LogSumExp` 归约与 `Chunked Prefill` 跨分块边界尾态传递（`prev_chunk_last_hidden`）原理构建原创合成峰值显存与边界完整性评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 317 基于公开发布的 `Megatron-Core TensorParallelRNGTracker` 双轨随机数状态机（区分 `TP` 复制层与分片层）、`cuRAND Philox-4x32-10` 计数器式伪随机数算法与设备端 `16-Byte (seed, offset)` 状态快照原理构建原创合成激活重计算逐比特匹配率与梯度误差评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
