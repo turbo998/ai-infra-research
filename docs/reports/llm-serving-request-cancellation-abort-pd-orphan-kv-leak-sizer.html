@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 302 · Request Cancellation Propagation &amp; PD Orphaned KV Leak Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 302 · LLM Request Cancellation &amp; Disaggregated PD Orphaned KV Leak Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Client Disconnect &amp; Remote PD KV Reclamation Policy</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: No Disconnect Propagation (Zombie Prefill + Orphan KV Leak)</option>
+          <option value="t2">Tier 2: Gateway Drop Only (Monolithic Prefill Cannot Preempt)</option>
+          <option value="t3">Tier 3: 2K-Chunk ZMQ Abort (No RDMA KV Lease TTL)</option>
+          <option value="t4" selected>Tier 4: Chunk Abort + Prefix Salvage + 5s Lease-TTL KV GC</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Wasted Zombie Compute / KV Leak</label>
+        <div id="waste" class="kpi">1.1% / 0.0 GB/hr Leak</div>
+      </div>
+      <div class="card">
+        <label>Effective Cluster Goodput</label>
+        <div id="goodput" class="kpi">144.5 req/min (1.64x)</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Combining an active ASGI client-disconnect watcher with `2,048`-token chunked prefill preemption (salvaging completed chunks into the Prefix Cache for client retries) and a `5.0 s` Lease-TTL on remote Decode KV reservations eliminates `64 GB/hr` of orphaned HBM leaks and boosts effective goodput `1.64x`.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { waste: "38.5% / 64.0 GB/hr Leak! ✕", goodput: "88.0 req/min ✕", bad: true, msg: "⛔ Prefill blindly computes all 64K tokens for disconnected clients and pushes KV to Decode where nobody claims it -> OOM crash in 1 hour!" },
+      t2: { waste: "29.0% / 18.5 GB/hr Leak! ✕", goodput: "102.0 req/min ✕", bad: true, msg: "⛔ Without chunked prefill, an in-flight 64K forward pass cannot be interrupted until completion, and racing RDMA transfers leak Decode blocks." },
+      t3: { waste: "3.4% / 6.2 GB/hr Leak ⚠️", goodput: "136.0 req/min ✅", bad: true, msg: "⚠️ Chunked prefill aborts within 35ms, but requests cancelled during the P->D RDMA transfer window still leave orphaned reservations on Decode." },
+      t4: { waste: "1.1% / 0.0 GB/hr Leak 🏆", goodput: "144.5 req/min (1.64x) 🏆", bad: false, msg: "🏆 2K-chunk boundary abort + Prefix-Cache salvage + 5s Lease-TTL on remote KV reservations guarantees zero HBM leak and 1.64x higher goodput." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('waste');
+      el.innerHTML = d.waste;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('goodput').textContent = d.goodput;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

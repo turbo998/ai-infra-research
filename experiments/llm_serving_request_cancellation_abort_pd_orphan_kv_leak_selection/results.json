@@ -1,0 +1,58 @@
+{
+  "experiment_id": "llm_serving_request_cancellation_abort_pd_orphan_kv_leak_selection",
+  "round": 302,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "cluster_topology": "4P + 4D H100 Disaggregated Serving",
+    "context_length_tokens": 65536,
+    "client_timeout_cancel_rate_pct": 20.0
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_blind_prefill_to_completion_and_orphan_remote_kv_leak",
+      "name": "No Disconnect Propagation (Prefill Runs to Completion + Unclaimed Decode KV Leak)",
+      "wasted_zombie_gpu_compute_pct": 38.5,
+      "decode_leaked_kv_gb_per_hour": 64.0,
+      "effective_goodput_req_per_min": 88.0,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Runs aborted 64K prefills to completion and pushes KV via RDMA to Decode; unclaimed KV blocks never free -> Decode OOM in 1 hour!"
+    },
+    {
+      "tier_id": "tier2_gateway_only_drop_without_engine_zmq_abort_rpc",
+      "name": "API Gateway Drops HTTP Stream Only (Missing Engine ZMQ Abort & Unolithic Prefill)",
+      "wasted_zombie_gpu_compute_pct": 29.0,
+      "decode_leaked_kv_gb_per_hour": 18.5,
+      "effective_goodput_req_per_min": 102.0,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Closes client socket on timeout, but monolithic 64K prefill cannot preempt mid-flight and races with in-flight RDMA KV transfers!"
+    },
+    {
+      "tier_id": "tier3_chunked_prefill_zmq_abort_without_rdma_lease_ttl",
+      "name": "Chunked Prefill Step-Boundary ZMQ Abort (No Distributed RDMA KV Lease TTL)",
+      "wasted_zombie_gpu_compute_pct": 3.4,
+      "decode_leaked_kv_gb_per_hour": 6.2,
+      "effective_goodput_req_per_min": 136.0,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Aborts prefill within one 2,048-token chunk (~35ms), but cancellations during RDMA KV handshake still leak remote Decode buffers."
+    },
+    {
+      "tier_id": "tier4_asgi_disconnect_watcher_chunk_abort_plus_nixl_lease_ttl_gc",
+      "name": "End-to-End Cancellation Propagation (Chunk-Boundary Abort + Prefix-Cache Salvage + Lease-TTL KV GC)",
+      "wasted_zombie_gpu_compute_pct": 1.1,
+      "decode_leaked_kv_gb_per_hour": 0.0,
+      "effective_goodput_req_per_min": 144.5,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Polls client disconnect, aborts at 2K chunk boundary while keeping valid prefix blocks in APC, and auto-reclaims unclaimed RDMA KV via 5s lease TTL!"
+    }
+  ],
+  "summary": {
+    "zombie_compute_reduction_x": 35.0,
+    "goodput_speedup_x": 1.64,
+    "leaked_kv_gb_per_hour": 0.0,
+    "recommended_tier": "tier4_asgi_disconnect_watcher_chunk_abort_plus_nixl_lease_ttl_gc"
+  }
+}

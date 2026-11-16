@@ -430,6 +430,9 @@ Round 300 基于公开发布的 `DeepSeek-R1 / verl / OpenRLHF` 可验证奖励�
 
 Round 301 基于公开发布的 `Liger-Kernel (LigerFusedLinearCrossEntropyLoss)` 按 Token 分块原位梯度回传机制与 `Apple Cut-Cross-Entropy (CCE)` SRAM 瓦片流式 `Online LogSumExp` 零完整 Logits 落盘原理构建原创合成大词表（`152K–256K`）峰值显存与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 302 基于公开发布的 `vLLM V1 / SGLang / NVIDIA Dynamo / Mooncake` 端到端请求取消传播（`ASGI Disconnect Watcher -> ZMQ Abort`）、`Chunked Prefill` 分块边界抢占与已完成前缀块保留（`Prefix-Cache Salvage`）以及跨机 RDMA KV 预留块 `Lease-TTL` 自动租约回收原理构建原创合成僵尸算力浪费率与显存泄漏评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
