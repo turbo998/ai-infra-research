@@ -502,6 +502,9 @@ Round 336 基于公开发布的线性层反向传播 `dgrad / wgrad` 关键路�
 
 Round 337 基于公开发布的 Ray 分布式强化学习与推理编排（`verl / OpenRLHF / vLLM RayExecutor`）中 `CUDA_VISIBLE_DEVICES` 环境变量单卡遮罩机理、`RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1` 全卡透传、`STRICT_PACK` 放置组与 `(node_ip, phys_gpu_id)` 物理卡号重排原理构建原创合成启动崩溃率与跨机溢出延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 338 基于公开发布的张量并行词表对齐（`Megatron-Core make_vocab_size_divisible_by=128 / vLLM VocabParallelEmbedding`）、越界填充幽灵词（`Ghost Tokens`）`-inf` 掩码与跨流水线首尾 Stage 共享词表梯度 `All-Reduce` 同步原理构建原创合成 `lm_head` GEMM 耗时与越界采样崩溃率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
