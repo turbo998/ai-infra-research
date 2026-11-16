@@ -510,6 +510,9 @@ Round 340 基于公开发布的 Linux 虚拟内存写时复制（`fork() Copy-on
 
 Round 341 基于公开发布的 CUDA 硬件陷阱指令（PTX `trap;` / `cudaErrorAssert = 710`）不可恢复粘性 `CUcontext` 报废机理、CPU 接入层预检门控与 GPU 算子内部无分支寄存器钳位（`Branchless Clamping` + 0 号哑物理页）原理构建原创合成上下文存活率与同步开销评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 342 基于公开发布的大规模分布式训练与推理（`TorchTitan / Megatron-LM / vLLM`）中 CPython 分代循环垃圾回收（`gc.collect()`）跨 Rank 失步慢节点放大效应、`gc.freeze()` 永久代剥离与固定全局 Step 锁步回收原理构建原创合成单次 GC 停顿与 512 卡步进耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
