@@ -440,6 +440,9 @@ Round 305 基于公开发布的 `DeepSpeed ZeRO-Offload / PyTorch FSDP CPUOffloa
 
 Round 306 基于公开发布的 CUDA 遗留默认流（`Legacy Default Stream 0`）隐式全局同步规范、PyTorch `at::cuda::getCurrentCUDAStream()` 与 `cudaStreamNonBlocking` 流隔离、`torch.cuda.set_sync_debug_mode` 同步检测以及 `CUDACachingAllocator::recordStream` 跨流生命周期管理原理构建原创合成通信计算重叠率与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 307 基于公开发布的 `vLLM / SGLang` 流式推理网关异步输出解耦机制、原位 Token 字符串合并有界缓冲（`In-Place Token-Coalescing Ring Buffer`）以及 `TCP ZeroWindow` 慢客户端套接字写超时熔断（`Write-Timeout Eviction`）原理构建原创合成正常用户 `P99 TPOT`、网关内存占用与显存占用时长评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
