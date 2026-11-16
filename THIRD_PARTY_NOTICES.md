@@ -524,6 +524,9 @@ Round 347 基于公开发布的代码大模型中间补全（`FIM: SPM vs PSM`�
 
 Round 348 基于公开发布的 PyTorch 混合精度 `GradScaler` 在 `BF16` 下的冗余 `_amp_foreach_non_finite_check_and_unscale_` 流量与 `found_inf.item()` 同步屏障机理，以及 `FP8` 单张量延迟缩放（`Delayed Scaling`）与细粒度块级在线实时量化（`DeepSeek-V3 1x128 / 128x128 Blockwise JIT Scaling`）原理构建原创合成同步开销与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 349 基于公开发布的 PyTorch `F.scaled_dot_product_attention` (`SDPA`) 后端分发约束（`SDPBackend.FLASH_ATTENTION` 拒绝显式 `attn_mask` 与 `EFFICIENT_ATTENTION` 16 字节对齐约束导致静默回退 `MATH`）与 `FlexAttention BlockMask` 块稀疏原理构建原创合成单层注意力耗时与显存工作区评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

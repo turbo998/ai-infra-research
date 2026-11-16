@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch SDPA Silent Math Fallback &amp; FlexAttention Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 28px; }
+  .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #38BDF8; }
+  .prov { font-size: 12px; color: #94A3B8; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #CBD5E1; margin-bottom: 6px; font-weight: 600; }
+  input, select { width: 100%; padding: 8px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; border-radius: 6px; }
+  .results { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .card { background: #0F172A; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+  .card h3 { margin-top: 0; font-size: 15px; }
+  .bad { border-color: #EF4444; }
+  .good { border-color: #10B981; }
+  .metric { font-size: 24px; font-weight: 800; margin: 6px 0; }
+  .sub { font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>PyTorch `SDPA` Silent `Math` Fallback &amp; `FlexAttention` Sizer</h1>
+  <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  <div class="grid">
+    <div class="control">
+      <label>Sequence Length (S)</label>
+      <select id="seqLen" onchange="recalc()">
+        <option value="4096">4,096 Tokens</option>
+        <option value="8192">8,192 Tokens</option>
+        <option value="16384" selected>16,384 Tokens</option>
+        <option value="32768">32,768 Tokens</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>Attention Heads (H)</label>
+      <input type="number" id="headsH" value="32" min="8" max="128" step="8" oninput="recalc()">
+    </div>
+    <div class="control">
+      <label>Batch Size (B)</label>
+      <input type="number" id="batchB" value="2" min="1" max="32" oninput="recalc()">
+    </div>
+  </div>
+  <div class="results">
+    <div class="card bad">
+      <h3 style="color:#FCA5A5">⛔ Unaligned `attn_mask` (Silent `MATH` Fallback)</h3>
+      <div class="metric" id="naiveHbm" style="color:#EF4444">32.00 GB / Layer (OOM!)</div>
+      <div class="sub" id="naiveSub">Layer Latency: 52.40 ms | Allocates [B, H, S, S] FP32 Matrix</div>
+    </div>
+    <div class="card good">
+      <h3 style="color:#6EE7B7">🏆 `sdpa_kernel(FLASH)` / `FlexAttention BlockMask`</h3>
+      <div class="metric" id="optHbm" style="color:#10B981">0.25 GB / Layer (128x Less)</div>
+      <div class="sub" id="optSub">Layer Latency: 3.80 ms (13.8x Faster) | 0% Silent Fallback</div>
+    </div>
+  </div>
+</div>
+<script>
+function recalc() {
+  const S = parseInt(document.getElementById('seqLen').value, 10);
+  const H = parseInt(document.getElementById('headsH').value || '32', 10);
+  const B = parseInt(document.getElementById('batchB').value || '2', 10);
+  const sRatio = S / 16384;
+  const hRatio = (H / 32) * (B / 2);
+  const mathGb = 32.00 * (sRatio * sRatio) * hRatio;
+  const flashGb = 0.25 * sRatio * hRatio;
+  const mathMs = 52.40 * (sRatio * sRatio) * hRatio;
+  const flashMs = 3.80 * (sRatio * sRatio) * hRatio;
+  document.getElementById('naiveHbm').textContent = mathGb.toFixed(2) + ' GB / Layer' + (mathGb > 20 ? ' (OOM!)' : '');
+  document.getElementById('naiveSub').textContent = 'Layer Latency: ' + mathMs.toFixed(2) + ' ms | O(B * H * S^2) Workspace';
+  document.getElementById('optHbm').textContent = flashGb.toFixed(2) + ' GB / Layer (' + Math.round(mathGb / flashGb) + 'x Less)';
+  document.getElementById('optSub').textContent = 'Layer Latency: ' + flashMs.toFixed(2) + ' ms (' + (mathMs / flashMs).toFixed(1) + 'x Faster) | 0% Fallback';
+}
+recalc();
+</script>
+</body>
+</html>
