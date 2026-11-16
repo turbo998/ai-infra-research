@@ -522,6 +522,9 @@ Round 346 基于公开发布的 PD 分离推理（`vLLM V1 KVConnector / SGLang 
 
 Round 347 基于公开发布的代码大模型中间补全（`FIM: SPM vs PSM`）前缀缓存复用机理与 BPE 词边界回溯治愈（`guidance Token Healing` + `Marisa-Trie` 前缀位图掩码）原理构建原创合成半截标识符补全准确率与首字延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 348 基于公开发布的 PyTorch 混合精度 `GradScaler` 在 `BF16` 下的冗余 `_amp_foreach_non_finite_check_and_unscale_` 流量与 `found_inf.item()` 同步屏障机理，以及 `FP8` 单张量延迟缩放（`Delayed Scaling`）与细粒度块级在线实时量化（`DeepSeek-V3 1x128 / 128x128 Blockwise JIT Scaling`）原理构建原创合成同步开销与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
