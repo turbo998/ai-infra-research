@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg354" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1120"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg354)"/>
+  <text x="45" y="54" fill="#38BDF8" font-family="system-ui, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">ROUND 354 · PYTORCH .TO("CUDA", NON_BLOCKING=TRUE) PAGEABLE FALLBACK VS. PINNED RING BUFFER</text>
+  <text x="45" y="92" fill="#F8FAFC" font-family="system-ui, sans-serif" font-size="27" font-weight="800">Why non_blocking=True Silently Blocks on Pageable Tensors &amp; How Pinned Rings Fix It</text>
+  <text x="45" y="122" fill="#94A3B8" font-family="system-ui, sans-serif" font-size="15">14 Step Tensors (128 MB H2D Payload) · PCIe Gen5 x16 (56 GB/s) · Pre-Allocated Pinned Double-Ring + h2d_stream Event Guard</text>
+
+  <!-- Left Panel: Pitfalls -->
+  <rect x="45" y="148" width="540" height="410" rx="14" fill="#1E1B2E" stroke="#EF4444" stroke-width="2"/>
+  <text x="68" y="182" fill="#F87171" font-family="system-ui, sans-serif" font-size="19" font-weight="700">⛔ Tier 1, 2 &amp; 3: Sync Fallback, Lock Stall &amp; DMA Race</text>
+
+  <rect x="68" y="200" width="494" height="106" rx="10" fill="#0F172A" stroke="#7F1D1D" stroke-width="1.5"/>
+  <text x="84" y="226" fill="#FCA5A5" font-family="system-ui, sans-serif" font-size="15" font-weight="700">1. Tier 1: Pageable .to("cuda", non_blocking=True) (8.40 ms Stall)</text>
+  <text x="84" y="250" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• GPU PCIe DMA engines CANNOT read pageable virtual memory!</text>
+  <text x="84" y="271" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• cuMemcpyHtoDAsync silently ignores non_blocking=True and runs a</text>
+  <text x="84" y="292" fill="#FCA5A5" font-family="system-ui, sans-serif" font-size="13.5">  synchronous CPU memcpy, stalling Python for 8.40 ms (36.5% bubble)!</text>
+
+  <rect x="68" y="318" width="494" height="106" rx="10" fill="#0F172A" stroke="#7F1D1D" stroke-width="1.5"/>
+  <text x="84" y="344" fill="#FCA5A5" font-family="system-ui, sans-serif" font-size="15" font-weight="700">2. Tier 2: Dynamic Per-Step .pin_memory() (24.60 ms Lock Stall!)</text>
+  <text x="84" y="368" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• Calling t.pin_memory().to("cuda", non_blocking=True) in the loop</text>
+  <text x="84" y="389" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">  invokes cudaHostAlloc / mmap_lock syscalls every step, stalling</text>
+  <text x="84" y="410" fill="#FCA5A5" font-family="system-ui, sans-serif" font-size="13.5">  8 ranks for 24.60 ms/step (2.9x slower than pageable!)</text>
+
+  <rect x="68" y="436" width="494" height="102" rx="10" fill="#0F172A" stroke="#7F1D1D" stroke-width="1.5"/>
+  <text x="84" y="462" fill="#FBBF24" font-family="system-ui, sans-serif" font-size="15" font-weight="700">3. Tier 3: Single Pinned Buffer Without Event Guard (14.2% Race!)</text>
+  <text x="84" y="486" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• Reusing 1 persistent pinned buffer across steps without waiting</text>
+  <text x="84" y="507" fill="#FCA5A5" font-family="system-ui, sans-serif" font-size="13.5">  for DMA completion overwrites host data mid-flight (14.2% corrupt)!</text>
+
+  <!-- Right Panel: Golden Architecture -->
+  <rect x="615" y="148" width="540" height="410" rx="14" fill="#0F292A" stroke="#10B981" stroke-width="2"/>
+  <text x="638" y="182" fill="#34D399" font-family="system-ui, sans-serif" font-size="19" font-weight="700">✅ Tier 4: Pre-Allocated Pinned Ring + h2d_stream (0.06 ms)</text>
+
+  <rect x="638" y="200" width="494" height="106" rx="10" fill="#0F172A" stroke="#065F46" stroke-width="1.5"/>
+  <text x="654" y="226" fill="#6EE7B7" font-family="system-ui, sans-serif" font-size="15" font-weight="700">1. Startup-Allocated Double-Buffered Pinned Ring (N_ring = 2)</text>
+  <text x="654" y="250" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• Allocate cpu_ring[2] with pin_memory=True once at engine init</text>
+  <text x="654" y="271" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• Pack all 14 step metadata tensors into 1 contiguous pinned slab</text>
+  <text x="654" y="292" fill="#6EE7B7" font-family="system-ui, sans-serif" font-size="13.5">• Zero runtime cudaHostAlloc syscalls &amp; 1 coalesced PCIe DMA!</text>
+
+  <rect x="638" y="318" width="494" height="106" rx="10" fill="#0F172A" stroke="#065F46" stroke-width="1.5"/>
+  <text x="654" y="344" fill="#6EE7B7" font-family="system-ui, sans-serif" font-size="15" font-weight="700">2. Dedicated h2d_stream + cudaEvent Slot Reuse Guard</text>
+  <text x="654" y="368" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• Before CPU writes slot k = step % 2: h2d_done_evt[k].synchronize()</text>
+  <text x="654" y="389" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• Issue gpu_buf.copy_(cpu_ring[k], non_blocking=True) on h2d_stream</text>
+  <text x="654" y="410" fill="#6EE7B7" font-family="system-ui, sans-serif" font-size="13.5">• Record h2d_done_evt[k] &amp; compute_stream.wait_event(h2d_done_evt[k])!</text>
+
+  <rect x="638" y="436" width="494" height="102" rx="10" fill="#0F172A" stroke="#065F46" stroke-width="1.5"/>
+  <text x="654" y="462" fill="#38BDF8" font-family="system-ui, sans-serif" font-size="15" font-weight="700">3. Quantified End-to-End Gains (128 MB/step, 14 Tensors)</text>
+  <text x="654" y="486" fill="#E2E8F0" font-family="system-ui, sans-serif" font-size="13.5">• Exposed Stall: 8.40 ms (T1) / 24.60 ms (T2) -&gt; 0.06 ms (140x faster)</text>
+  <text x="654" y="507" fill="#6EE7B7" font-family="system-ui, sans-serif" font-size="13.5">• GPU Idle Bubble: 36.5% -&gt; 0.4% · Overwrite Corruption: 0.0%!</text>
+
+  <text x="45" y="600" fill="#64748B" font-family="system-ui, sans-serif" font-size="13">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured) · Round 354</text>
+</svg>
