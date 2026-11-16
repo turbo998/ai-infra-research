@@ -472,6 +472,9 @@ Round 321 基于公开发布的 `FlashAttention-3 Persistent Tile Scheduler / Fl
 
 Round 322 基于公开发布的 CUDA 虚拟内存管理（`VMM: cuMemExportToShareableHandle`）`POSIX_FILE_DESCRIPTOR` 与 `CU_MEM_HANDLE_TYPE_FABRIC` 跨进程共享机制、底层分配大块（Base Slab）单次映射即关 FD 以及运行时字节偏移算术（`BasePtr + ByteOffset`）原理构建原创合成跨进程显存共享延迟与句柄消耗评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 323 基于公开发布的 `AdamW` 一维归一化参数（`RMSNorm / LayerNorm / Bias`）零权重衰减（`weight_decay=0.0`）解耦规范与 `Kimi Moonlight Muon` 二维矩阵 Newton-Schulz 正交化（配合 $0.2\sqrt{\max(A,B)}$ 步长对齐及 `Embedding/lm_head` 分流）原理构建原创合成验证集困惑度与收敛速度评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
