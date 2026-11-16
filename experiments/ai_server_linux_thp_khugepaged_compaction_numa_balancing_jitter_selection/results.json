@@ -1,0 +1,58 @@
+{
+  "experiment_id": "ai_server_linux_thp_khugepaged_compaction_numa_balancing_jitter_selection",
+  "round": 311,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "cluster_gpus": 512,
+    "nodes": 64,
+    "host_ram_per_node_gb": 1024
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_default_numa_balancing_on_plus_thp_always_direct_compaction",
+      "name": "OS Default (`kernel.numa_balancing=1` + `THP=always` + `defrag=always` Direct Compaction)",
+      "cpu_pause_p99_jitter_ms": 620.0,
+      "cluster_step_p99_slowdown_pct": 44.5,
+      "effective_cluster_mfu_pct": 39.8,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Periodic NUMA page unmapping triggers 128-core TLB shootdown storms and THP direct compaction freezes Python kernel launch threads for 620ms!"
+    },
+    {
+      "tier_id": "tier2_disable_thp_completely_4kb_pages_tlb_miss_overhead",
+      "name": "Disable THP Completely (`THP=never` with `4KB` Pages Only, `numa_balancing=1` Left On)",
+      "cpu_pause_p99_jitter_ms": 340.0,
+      "cluster_step_p99_slowdown_pct": 28.0,
+      "effective_cluster_mfu_pct": 46.2,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Eliminates THP compaction stalls, but 4KB pages over 512GB host RAM suffer heavy CPU dTLB misses and NUMA auto-balancing still stalls threads 340ms!"
+    },
+    {
+      "tier_id": "tier3_numa_balancing_off_plus_thp_madvise_defer",
+      "name": "`kernel.numa_balancing=0` + Explicit `numactl` + `THP=madvise` (`defrag=defer+madvise`)",
+      "cpu_pause_p99_jitter_ms": 4.2,
+      "cluster_step_p99_slowdown_pct": 3.5,
+      "effective_cluster_mfu_pct": 56.4,
+      "action": "Confirm",
+      "status": "pass",
+      "note": "Eliminates NUMA TLB shootdown storms and synchronous direct compaction stalls, keeping P99 CPU launch jitter under 4.2ms."
+    },
+    {
+      "tier_id": "tier4_numa_balancing_off_thp_madvise_plus_static_hugetlb_pinned_pool",
+      "name": "`numa_balancing=0` + `THP=madvise` + Pre-Reserved Static `2MB/1GB HugeTLB` for Pinned DMA/RDMA",
+      "cpu_pause_p99_jitter_ms": 0.4,
+      "cluster_step_p99_slowdown_pct": 0.8,
+      "effective_cluster_mfu_pct": 58.9,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Zero runtime page migration, zero direct compaction, and pre-faulted HugeTLB pages for CUDA/RDMA buffers -> 0.4ms P99 jitter (1,550x lower)!"
+    }
+  ],
+  "summary": {
+    "cpu_jitter_reduction_x": 1550.0,
+    "step_slowdown_reduction_x": 55.62,
+    "recommended_mfu_pct": 58.9,
+    "recommended_tier": "tier4_numa_balancing_off_thp_madvise_plus_static_hugetlb_pinned_pool"
+  }
+}

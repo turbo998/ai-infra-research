@@ -448,6 +448,9 @@ Round 309 基于公开发布的 `Qwen2.5-Omni / vLLM EPD Disaggregation` 全模�
 
 Round 310 基于公开发布的 `verl / Slime / OpenRLHF` 混合强化学习引擎（`vLLM` 采样与 `FSDP/Megatron` 训练）算子数值漂移分析、训练端 `torch.no_grad()` 重算 $\log \pi_{\text{old}}$、行为策略截断重要性采样（`TIS`）与 `Dual-Clip PPO` ($c=3.0$) 原理构建原创合成重要性采样比率偏移与数学推理准确率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 311 基于公开发布的 Linux 内核自动 NUMA 平衡（`kernel.numa_balancing`）跨核 `IPI TLB Shootdown` 机理、透明大页同步直接规整（`THP Direct Compaction`）停顿分析与静态 `HugeTLB` 锁页池原理构建原创合成 512 卡同步训练慢节点毛刺与有效 `MFU` 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
