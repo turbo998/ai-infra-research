@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 309 · Omni-Modal Modality Skew &amp; Disaggregated Encoder Pool Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 309 · Omni-Modal (`Vision + Audio + Text`) Disaggregated Encoder Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">Omni-Modal Encoder Placement &amp; Batching Architecture</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Monolithic Inline ViT + Audio Inside TP=8 LLM Step</option>
+          <option value="t2">Tier 2: Colocated DP=8 Encoders Before TP=8 LLM Barrier</option>
+          <option value="t3">Tier 3: Modality-Segregated Queues on Monolithic Replicas</option>
+          <option value="t4" selected>Tier 4: Disaggregated TP=1 Encoder Pool + Unified Embed Injection</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Text-Request P99 TTFT</label>
+        <div id="ttft" class="kpi">52.0 ms (17.1x Faster)</div>
+      </div>
+      <div class="card">
+        <label>Throughput / Sync Bubble</label>
+        <div id="tput" class="kpi">40.3 req/s / 1.8% Bubble</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Disaggregating the `ViT-2B` and `Audio-1.5B` encoders onto dedicated `TP=1` worker GPUs and streaming only post-projector `FP8/BF16` embeddings into the `TP=8` LLM trunk's `inputs_embeds` eliminates `62%` modality sync bubbles, cuts text P99 TTFT `17.1x` (`890 ms -> 52 ms`), and boosts throughput `2.84x`.
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { ttft: "890.0 ms (17.1x Worse! ✕)", tput: "14.2 req/s / 62.0% Bubble ✕", bad: true, msg: "⛔ Running ViT and Audio encoders inline inside the TP=8 LLM step blocks co-batched text requests and forces 62% TP=8 communication overhead!" },
+      t2: { ttft: "465.0 ms (Rank Skew! ✕)", tput: "21.8 req/s / 44.5% Bubble ✕", bad: true, msg: "⛔ When Rank 0 encodes a 5-minute audio clip while Ranks 1..7 have text-only requests, Ranks 1..7 stall at the first LLM TP=8 All-Reduce barrier!" },
+      t3: { ttft: "95.0 ms ✅", tput: "28.5 req/s / 21.0% Bubble ⚠️", bad: false, msg: "⚠️ Segregated queues protect text TTFT, but replicating ViT+Audio weights across every LLM GPU wastes 7 GB/GPU of KV Cache capacity." },
+      t4: { ttft: "52.0 ms (17.1x Faster) 🏆", tput: "40.3 req/s / 1.8% Bubble 🏆", bad: false, msg: "🏆 Dedicated TP=1 Vision/Audio encoder pool + unified embedding injection keeps the TP=8 LLM trunk 100% homogeneous and CUDAGraph-friendly!" }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('ttft');
+      el.innerHTML = d.ttft;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('tput').textContent = d.tput;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

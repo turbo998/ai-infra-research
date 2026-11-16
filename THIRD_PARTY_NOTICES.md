@@ -444,6 +444,9 @@ Round 307 基于公开发布的 `vLLM / SGLang` 流式推理网关异步输出�
 
 Round 308 基于公开发布的 `Megatron-Core IndexedDataset (.bin/.idx)` 内存映射机制、密码学 4 轮循环游走费斯妥网络（`4-Round Cycle-Walking Feistel Cipher`）$\mathcal{O}(1)$ 双射置换算法与 POSIX `madvise(MADV_DONTNEED)` 页缓存主动释放原理构建原创合成十亿级样本洗牌内存占用与启动延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 309 基于公开发布的 `Qwen2.5-Omni / vLLM EPD Disaggregation` 全模态分离推理架构、独立 `TP=1` 视觉/音频编码微池、投影后 `FP8` 特征压缩传输与 `TP=8` 同构 `inputs_embeds` 主干注入原理构建原创合成混合模态请求 `P99 TTFT` 与跨卡同步空泡评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
