@@ -514,6 +514,9 @@ Round 342 基于公开发布的大规模分布式训练与推理（`TorchTitan /
 
 Round 343 基于公开发布的大模型直接偏好优化（`TRL DPOTrainer precompute_ref_log_probs / LigerFusedLinearDPOLoss`）中冻结参考模型对数概率离线预计算、`cu_seqlens` 正负样本紧凑拼接与分块 SRAM 融合线性 DPO 损失原理构建原创合成 70B DPO 峰值显存与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 344 基于公开发布的 PyTorch `c10::TensorImpl` 与 `UntypedStorage` 视图引用计数机理、`lm_head` 前置末位隐状态收集（`logits_to_keep=1`）及跨作用域 `.detach().clone()` 物理存储解绑原理构建原创合成视图钉死显存泄漏与 Prefill 输出头延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
