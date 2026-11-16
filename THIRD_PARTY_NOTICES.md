@@ -504,6 +504,9 @@ Round 337 基于公开发布的 Ray 分布式强化学习与推理编排（`verl
 
 Round 338 基于公开发布的张量并行词表对齐（`Megatron-Core make_vocab_size_divisible_by=128 / vLLM VocabParallelEmbedding`）、越界填充幽灵词（`Ghost Tokens`）`-inf` 掩码与跨流水线首尾 Stage 共享词表梯度 `All-Reduce` 同步原理构建原创合成 `lm_head` GEMM 耗时与越界采样崩溃率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 339 基于公开发布的大模型流式工具调用解析器（`vLLM ToolParser / SGLang FunctionCallParser`）中全量历史正则与 `partial_json_parser` 二次方重解析瓶颈、跨 Token 转义字符暂存与 $O(\Delta l)$ 增量下推词法状态机原理构建原创合成流式工具解析 CPU 耗时与参数流损坏率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
