@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Tenant Prefix Cache Security &amp; S3-FIFO Eviction Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 28px; }
+  .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #38BDF8; }
+  .prov { font-size: 12px; color: #94A3B8; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #CBD5E1; margin-bottom: 6px; font-weight: 600; }
+  input, select { width: 100%; padding: 8px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; border-radius: 6px; }
+  .results { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .card { background: #0F172A; padding: 16px; border-radius: 10px; border: 1px solid #334155; }
+  .card h3 { margin-top: 0; font-size: 15px; }
+  .bad { border-color: #EF4444; }
+  .good { border-color: #10B981; }
+  .metric { font-size: 24px; font-weight: 800; margin: 6px 0; }
+  .sub { font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Multi-Tenant Prefix Cache Security (`cache_salt`) &amp; S3-FIFO Eviction Sizer</h1>
+  <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  <div class="grid">
+    <div class="control">
+      <label>One-Hit 128K Scan Traffic Share (%)</label>
+      <input type="number" id="scanPct" value="35" min="5" max="80" oninput="recalc()">
+    </div>
+    <div class="control">
+      <label>Tenant Namespace Isolation</label>
+      <select id="saltMode" onchange="recalc()">
+        <option value="unsalted">Unsalted Global Hash (Vulnerable)</option>
+        <option value="salted" selected>Tenant-Salted SHA-256 + Public Root</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>Multimodal / Multi-LoRA Traffic (%)</label>
+      <input type="number" id="mmPct" value="25" min="0" max="100" oninput="recalc()">
+    </div>
+  </div>
+  <div class="results">
+    <div class="card bad">
+      <h3 style="color:#FCA5A5">⛔ Unsalted Token-Only Hash + Flat LRU</h3>
+      <div class="metric" id="naiveHit" style="color:#EF4444">41.2% Hit Rate</div>
+      <div class="sub" id="naiveRisk">98.4% Prompt-Stealing Leak | 12.5% LoRA/MM KV Collision</div>
+    </div>
+    <div class="card good">
+      <h3 style="color:#6EE7B7">🏆 Salted Composite SHA-256 + S3-FIFO</h3>
+      <div class="metric" id="optHit" style="color:#10B981">84.6% Hit Rate</div>
+      <div class="sub" id="optRisk">0.0% Cross-Tenant Leak | 0.0% KV Collision (+43.4 pt Hit Gain)</div>
+    </div>
+  </div>
+</div>
+<script>
+function recalc() {
+  const scan = parseInt(document.getElementById('scanPct').value || '35', 10);
+  const mm = parseInt(document.getElementById('mmPct').value || '25', 10);
+  const lruHit = Math.max(15.0, 62.0 - scan * 0.594);
+  const s3Hit = Math.max(65.0, 88.1 - scan * 0.10);
+  const mmErr = (mm * 0.5).toFixed(1);
+  document.getElementById('naiveHit').textContent = lruHit.toFixed(1) + '% Hit Rate';
+  document.getElementById('naiveRisk').textContent = '98.4% Prompt-Stealing Leak | ' + mmErr + '% LoRA/MM KV Collision';
+  document.getElementById('optHit').textContent = s3Hit.toFixed(1) + '% Hit Rate';
+  document.getElementById('optRisk').textContent = '0.0% Cross-Tenant Leak | 0.0% KV Collision (+' + (s3Hit - lruHit).toFixed(1) + ' pt Hit Gain)';
+}
+recalc();
+</script>
+</body>
+</html>

@@ -484,6 +484,9 @@ Round 327 基于公开发布的大模型推理引擎（`vLLM V1 StopChecker / SG
 
 Round 328 基于公开发布的 5D 并行大规模集群通信域初始化（`PyTorch dist.split_group / ncclCommSplit`）、父子通信器物理通道缓冲区共享（`ncclConfig_t.splitShare = 1`）与 `Simple / LL128 / LL` 协议通道显存开销原理构建原创合成集群建组耗时与每卡隐形 `NCCL` HBM 占用评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 329 基于公开发布的多租户大模型推理前缀缓存时序侧信道机理（`Prompt Stealing / TTFT Cache Timing Oracle`）、租户加盐密码学复合链式哈希（`vLLM cache_salt + sha256`）与抗单次大扫描污染的 `S3-FIFO` 淘汰原理构建原创合成跨租户侧信道泄露率与缓存命中率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
