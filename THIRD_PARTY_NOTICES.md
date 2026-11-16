@@ -488,6 +488,9 @@ Round 329 基于公开发布的多租户大模型推理前缀缓存时序侧信�
 
 Round 330 基于公开发布的大模型采样惩罚算子（`Keskar Repetition Penalty / OpenAI Frequency & Presence Penalty`）正负号分支定义、$O(1)$ 步进增量词频累加器与稀疏 `CSR/COO` 唯一已见词索引算子原理构建原创合成 `32K-128K` 采样惩罚延迟与临时显存占用评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 331 基于公开发布的分页注意力（`PagedAttention / vLLM V1 BlockManager`）在并行采样（`n > 1 / GRPO G=16`）下的满块引用计数共享（`ref_count`）与非对齐半满尾块写时复制（`Copy-on-Write, CoW`）分裂原理构建原创合成并行采样首字延迟、KV 显存占用与尾块并发写踩踏率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

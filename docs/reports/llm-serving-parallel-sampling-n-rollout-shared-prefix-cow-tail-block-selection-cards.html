@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7-Card Report · Parallel Sampling Shared Prefix KV &amp; Tail-Block CoW</title>
+<style>
+  body { background: #090D16; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 24px; max-width: 1440px; margin: 0 auto; }
+  .card { aspect-ratio: 4 / 5; background: #0F172A; border: 1px solid #334155; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+  .meta { font-size: 12px; font-weight: 700; color: #38BDF8; letter-spacing: 1px; }
+  h2 { font-size: 20px; margin: 8px 0 12px 0; line-height: 1.3; color: #F8FAFC; }
+  .box { background: #1E293B; border: 1px solid #334155; border-radius: 10px; padding: 12px; margin-bottom: 10px; font-size: 13px; }
+  .code { background: #090D16; border: 1px solid #1E293B; border-radius: 8px; padding: 10px; font-family: Consolas, monospace; font-size: 12px; color: #A7F3D0; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border-bottom: 1px solid #334155; padding: 7px 5px; text-align: left; }
+  th { color: #94A3B8; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .act { background: #065F46; color: #6EE7B7; }
+  .conf { background: #78350F; color: #FDE68A; }
+  .hum { background: #7F1D1D; color: #FCA5A5; }
+  .bar-row { margin: 8px 0; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .bar-bg { background: #1E293B; height: 12px; border-radius: 6px; overflow: hidden; }
+  .bar-fill-blue { background: #3B82F6; height: 100%; }
+  .bar-fill-gray { background: #CBD5E1; height: 100%; }
+  .foot { font-size: 11px; color: #64748B; border-top: 1px solid #1E293B; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <!-- Card 1 -->
+  <div class="card">
+    <div>
+      <div class="meta">1 / 7 · HANDS-ON · PARALLEL SAMPLING &amp; GRPO ROLLOUT KV ENGINE</div>
+      <h2>Shared Full Blocks + Tail-Block Copy-on-Write Cuts n=16 Prompt HBM 15.8x &amp; Prevents 93.75% Write Races</h2>
+      <div class="box">
+        <strong>3-Column Workbench Preview</strong><br>
+        • <strong>Workload</strong>: Prompt L = 4,005 tokens (250 full blocks + 5 tail tokens), n = 16 rollouts<br>
+        • <strong>Unprotected Clone Bug</strong>: All 16 children overwrite slot 5 of block #250 (<code>93.75%</code> corrupted)<br>
+        • <strong>Naive Expansion Waste</strong>: 16x prefill (<code>1,480 ms</code>) &amp; <code>31.36 GB</code> KV HBM
+      </div>
+      <div class="box">
+        <strong>Top Decision</strong>: Share blocks <code>0..249</code> zero-copy (<code>ref_count=16</code>) and trigger Copy-on-Write (<code>CoW</code>) only on partial tail block <code>#250</code> before Decode Step 1.
+      </div>
+    </div>
+    <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  </div>
+
+  <!-- Card 2 -->
+  <div class="card">
+    <div>
+      <div class="meta">2 / 7 · SCENARIO: L=4,005 PROMPT WITH n=16 ROLLOUTS</div>
+      <h2>95.05 ms TTFT, 1.98 GB Prompt KV &amp; 0.0% Tail Race</h2>
+      <div class="box">Input: <code>prompt_tokens=4005 (4005 % 16 = 5), n=16, block_size=16</code></div>
+      <div class="box">
+        <div><strong>Tier 1: Naive n=16 Independent Prefill</strong> · <span class="pill hum">Send to a human</span></div>
+        <div>TTFT: <code>1,480.0 ms</code> | Prompt KV: <code>31.36 GB</code></div>
+        <div class="bar-bg" style="margin-top:6px"><div class="bar-fill-gray" style="width:100%"></div></div>
+      </div>
+      <div class="box">
+        <div><strong>Tier 2: Page-Table Clone Without Tail CoW</strong> · <span class="pill hum">Send to a human</span></div>
+        <div>TTFT: <code>95.0 ms</code> | Tail KV Race Corruption: <code>93.75% (15/16)</code></div>
+        <div class="bar-bg" style="margin-top:6px"><div class="bar-fill-gray" style="width:93.75%"></div></div>
+      </div>
+      <div class="box">
+        <div><strong>Tier 4: Shared Full Blocks + Tail-Block CoW</strong> · <span class="pill act">Act automatically</span></div>
+        <div>TTFT: <code>95.05 ms (15.6x)</code> | Prompt KV: <code>1.98 GB (15.8x)</code> | Race: <code>0.0%</code></div>
+        <div class="bar-bg" style="margin-top:6px"><div class="bar-fill-blue" style="width:6.3%"></div></div>
+      </div>
+    </div>
+    <div class="foot">Sealed source: experiments/llm_serving_parallel_sampling_n_rollout_shared_prefix_cow_tail_block_selection/results.json</div>
+  </div>
+
+  <!-- Card 3 -->
+  <div class="card">
+    <div>
+      <div class="meta">3 / 7 · WHAT I TESTED</div>
+      <h2>Full 4-Tier Parallel Sampling KV Forking Matrix</h2>
+      <table>
+        <thead>
+          <tr><th>SCENARIO</th><th>TASK</th><th>MODEL ANSWER</th><th>ACTION</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1</td><td>16x Independent Prefill</td><td>✕ 1,480 ms / 31.36 GB</td><td><span class="pill hum">Send to a human</span></td></tr>
+          <tr><td>Tier 2</td><td>Clone Without Tail CoW</td><td>✕ 93.75% KV Race Bug</td><td><span class="pill hum">Send to a human</span></td></tr>
+          <tr><td>Tier 3</td><td>Eager Full D2D KV Clone</td><td>137 ms / 31.36 GB</td><td><span class="pill conf">Confirm</span></td></tr>
+          <tr><td>Tier 4</td><td>Shared Full + Tail CoW</td><td>95.05 ms / 1.98 GB / 0% Bug</td><td><span class="pill act">Act automatically</span></td></tr>
+        </tbody>
+      </table>
+      <div class="box" style="margin-top:12px">
+        <strong>Failure Analysis</strong>: Whenever <code>prompt_len % block_size != 0</code>, the last block has empty trailing slots that will be written during decode—requiring CoW if <code>ref_count &gt; 1</code>.
+      </div>
+    </div>
+    <div class="foot">Explicit ✕ marks redundant 16x prefill or silent tail-block write races.</div>
+  </div>
+
+  <!-- Card 4 -->
+  <div class="card">
+    <div>
+      <div class="meta">4 / 7 · UNDER THE HOOD</div>
+      <h2>PagedAttention Tail-Block Copy-on-Write (`CoW`) Protocol</h2>
+      <div class="code">// When appending token at pos = 4005 (block_idx = 250, slot_idx = 5):
+phys_block = seq.block_table[-1]
+if phys_block.ref_count &gt; 1:
+    // Copy-on-Write: allocate private block &amp; copy filled prefix slots 0..4
+    new_block = block_allocator.allocate()
+    copy_kv_slots(src=phys_block, dst=new_block, num_slots=5)
+    phys_block.ref_count -= 1
+    seq.block_table[-1] = new_block</div>
+      <div style="text-align:center; margin:4px 0; color:#38BDF8">↓ Safe Decode Write (&lt;answer&gt;)</div>
+      <div class="code">// Now seq.block_table[-1].ref_count == 1!
+// Write slot 5..15 into private new_block without corrupting siblings!</div>
+    </div>
+    <div class="foot">Copies only 5 slots (0.05 ms) while keeping 4,000 prefix tokens shared.</div>
+  </div>
+
+  <!-- Card 5 -->
+  <div class="card">
+    <div>
+      <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Rollout Group Scaling From n=4 to n=32</h2>
+      <table>
+        <thead>
+          <tr><th>ROLLOUT GROUP (n)</th><th>NAIVE KV HBM</th><th>TAIL-COW KV HBM</th><th>HBM SAVED</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>n = 4 Rollouts</td><td>7.84 GB</td><td>1.97 GB</td><td>-5.87 GB (4.0x)</td></tr>
+          <tr><td>n = 8 Rollouts</td><td>15.68 GB</td><td>1.97 GB</td><td>-13.71 GB (8.0x)</td></tr>
+          <tr><td>n = 16 Rollouts</td><td>31.36 GB</td><td>1.98 GB</td><td>-29.38 GB (15.8x)</td></tr>
+          <tr><td>n = 32 Rollouts</td><td>62.72 GB</td><td>2.00 GB</td><td>-60.72 GB (31.4x)</td></tr>
+        </tbody>
+      </table>
+      <div class="box" style="margin-top:10px">
+        At <code>G = 32</code> GRPO rollouts, Tail-CoW saves 60.72 GB of HBM per prompt group.
+      </div>
+    </div>
+    <div class="foot">All 4 rollout group sizes verified in run.py.</div>
+  </div>
+
+  <!-- Card 6 -->
+  <div class="card">
+    <div>
+      <div class="meta">6 / 7 · LATENCY</div>
+      <h2>TTFT Speedup &amp; Prompt KV Memory Savings (n=16)</h2>
+      <div class="bar-row">
+        <div class="bar-label"><span>TTFT Latency (Tier 4: 95.05 ms vs Tier 1: 1,480.0 ms)</span><strong>15.6x Faster</strong></div>
+        <div class="bar-bg"><div class="bar-fill-blue" style="width:6.4%"></div></div>
+        <div class="bar-bg" style="margin-top:4px"><div class="bar-fill-gray" style="width:100%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Prompt KV HBM (Tier 4: 1.98 GB vs Tier 1: 31.36 GB)</span><strong>15.8x Smaller</strong></div>
+        <div class="bar-bg"><div class="bar-fill-blue" style="width:6.3%"></div></div>
+        <div class="bar-bg" style="margin-top:4px"><div class="bar-fill-gray" style="width:100%"></div></div>
+      </div>
+      <div class="box">
+        Combined with FlashInfer Cascade / Multi-Level Shared-Prefix Attention, decode steps also share L2 cache hits on the 250 common blocks.
+      </div>
+    </div>
+    <div class="foot">Primary path (#3B82F6) vs naive baseline (#CBD5E1).</div>
+  </div>
+
+  <!-- Card 7 -->
+  <div class="card">
+    <div>
+      <div class="meta">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs Not For &amp; Production Readiness</h2>
+      <div class="box" style="border-color:#10B981">
+        <strong style="color:#6EE7B7">✅ Good fit</strong><br>
+        • GRPO / RLOO reinforcement learning rollout generation (<code>G = 8..64</code>)<br>
+        • Best-of-N (`n &gt; 1`), tree-of-thought branching, and beam search serving<br>
+        • Any PagedAttention engine supporting prefix sharing and sequence forking
+      </div>
+      <div class="box" style="border-color:#EF4444">
+        <strong style="color:#FCA5A5">⛔ Not for</strong><br>
+        • Cloning `block_table` for `n` children without Copy-on-Write on unaligned tail blocks<br>
+        • Expanding `n=16` into 16 duplicate prefill passes before prefix deduplication
+      </div>
+    </div>
+    <div class="foot">CSP self-contained · Zero external assets · Ready for main branch archive.</div>
+  </div>
+</div>
+</body>
+</html>
