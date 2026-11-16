@@ -442,6 +442,9 @@ Round 306 基于公开发布的 CUDA 遗留默认流（`Legacy Default Stream 0`
 
 Round 307 基于公开发布的 `vLLM / SGLang` 流式推理网关异步输出解耦机制、原位 Token 字符串合并有界缓冲（`In-Place Token-Coalescing Ring Buffer`）以及 `TCP ZeroWindow` 慢客户端套接字写超时熔断（`Write-Timeout Eviction`）原理构建原创合成正常用户 `P99 TPOT`、网关内存占用与显存占用时长评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 308 基于公开发布的 `Megatron-Core IndexedDataset (.bin/.idx)` 内存映射机制、密码学 4 轮循环游走费斯妥网络（`4-Round Cycle-Walking Feistel Cipher`）$\mathcal{O}(1)$ 双射置换算法与 POSIX `madvise(MADV_DONTNEED)` 页缓存主动释放原理构建原创合成十亿级样本洗牌内存占用与启动延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
