@@ -468,6 +468,9 @@ Round 319 基于公开发布的 `vLLM V1 / SGLang` 投机解码（`EAGLE-3 / Dee
 
 Round 320 基于公开发布的 `Gumbel-Max Trick` 极值分布采样定理、混合贪婪（`T=0.0`）与随机（`T>0.0`）批次中的极小温度除法上溢（`FP16/BF16 Inf -> Softmax NaN`）机理以及零除法乘性 `Gumbel-Max`（$\arg\max_v(L_v + T_b G_v)$）单趟 Triton 归约原理构建原创合成采样延迟与显存流量评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 321 基于公开发布的 `FlashAttention-3 Persistent Tile Scheduler / FlashInfer Ragged Plan` 持久线程块动态窃取机制、因果注意力三角形工作量最长优先排序（`Causal-Cost LPT`）与自适应 `Split-KV` 归约原理构建原创合成长短偏斜变长批次 SM 利用率与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
