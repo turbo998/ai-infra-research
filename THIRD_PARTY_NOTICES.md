@@ -464,6 +464,9 @@ Round 317 基于公开发布的 `Megatron-Core TensorParallelRNGTracker` 双轨�
 
 Round 318 基于公开发布的 `LiveKit Turn Detector / Pipecat Smart-Turn` 流式声学 `VAD` 与轻量级语义话轮结束分类器（`Semantic End-of-Utterance, EoU`）动态超时门控机制以及停顿窗口投机 LLM 预填充（`Speculative Prefill into Prefix Cache`）原理构建原创合成轮次响应延迟与句中误切率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 319 基于公开发布的 `vLLM V1 / SGLang` 投机解码（`EAGLE-3 / DeepSeek-V3 MTP`）PagedAttention 页表管理机制、前瞻 $+K+1$ 影子槽位预留、设备端 `kv_seqlens` 零释放原地回拨与已验证完整块惰性前缀哈希（`Lazy Verified Full-Block Hashing`）原理构建原创合成 CPU 页表管理开销与端到端净加速比评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
