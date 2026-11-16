@@ -452,6 +452,9 @@ Round 311 基于公开发布的 Linux 内核自动 NUMA 平衡（`kernel.numa_ba
 
 Round 312 基于公开发布的无分类器引导（`Classifier-Free Guidance, CFG`）与上下文感知对比解码（`Context-Aware Decoding, CAD`）双分支机制、原子成对 `SequenceGroup` `[2B]` 锁步批处理以及自适应置信度掩码（`Adaptive Plausibility Constraint`）Triton 融合采样原理构建原创合成解码 `TPOT` 与显存占用评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 313 基于公开发布的 `vLLM / SGLang` 原位权重热更新（`In-Place Weight Refit`）机制、后台主机 NUMA 锁页内存静默预加载、显存指针保持（免重捕获 `CUDAGraph`）与前缀缓存树原子清空原理构建原创合成模型切换停服窗口与冗余成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
