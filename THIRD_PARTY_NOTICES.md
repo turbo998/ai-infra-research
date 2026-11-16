@@ -492,6 +492,9 @@ Round 331 基于公开发布的分页注意力（`PagedAttention / vLLM V1 Block
 
 Round 332 基于公开发布的前后端多进程解耦大模型推理引擎（`vLLM V1 AsyncLLM + EngineCore / SGLang`）健康检查假阳性机理、基于 `cudaEventQuery` 的无锁共享内存硬件进度看门狗租约（`Watchdog Lease`）与 `IDLE/BUSY` 动态超时控制原理构建原创合成 GPU 死锁检出率与高峰期 K8s 误杀率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 333 基于公开发布的多机多卡 GPU 集群 `Triton / TorchInductor / DeepGEMM` JIT 编译缓存共享 NFS 非原子写竞态（`CUDA_ERROR_INVALID_IMAGE`）、节点本地 `/tmp` 重定向与 `LOCAL_RANK == 0` 单路屏障预热原理构建原创合成冷启动编译耗时与崩溃率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
