@@ -532,6 +532,9 @@ Round 351 基于公开发布的多 LoRA 推理服务（`vLLM LRUCacheWorkerLoRAM
 
 Round 352 基于公开发布的强化学习 KL 散度蒙特卡洛估计器理论（`John Schulman Approximating KL Divergence k1/k2/k3` 与 `DeepSeekMath / DeepSeek-R1 GRPO`）、全词表解析 KL 显存开销与对称对数比率钳位（`Clamped k3`）原理构建原创合成 KL 显存工作区、负数比例与估计器方差评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 353 基于公开发布的 PyTorch `AdamW` 优化器多张量执行机制（`_multi_tensor_adamw` 中非原地 `torch._foreach_sqrt` 临时显存分配 vs. `_fused_adamw_` 单趟寄存器融合算子）与 `capturable=True` 0-D CUDA 张量学习率机制构建原创合成临时显存尖峰与优化器步耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
