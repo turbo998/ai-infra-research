@@ -490,6 +490,9 @@ Round 330 基于公开发布的大模型采样惩罚算子（`Keskar Repetition 
 
 Round 331 基于公开发布的分页注意力（`PagedAttention / vLLM V1 BlockManager`）在并行采样（`n > 1 / GRPO G=16`）下的满块引用计数共享（`ref_count`）与非对齐半满尾块写时复制（`Copy-on-Write, CoW`）分裂原理构建原创合成并行采样首字延迟、KV 显存占用与尾块并发写踩踏率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 332 基于公开发布的前后端多进程解耦大模型推理引擎（`vLLM V1 AsyncLLM + EngineCore / SGLang`）健康检查假阳性机理、基于 `cudaEventQuery` 的无锁共享内存硬件进度看门狗租约（`Watchdog Lease`）与 `IDLE/BUSY` 动态超时控制原理构建原创合成 GPU 死锁检出率与高峰期 K8s 误杀率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
