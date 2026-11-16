@@ -450,6 +450,9 @@ Round 310 基于公开发布的 `verl / Slime / OpenRLHF` 混合强化学习引�
 
 Round 311 基于公开发布的 Linux 内核自动 NUMA 平衡（`kernel.numa_balancing`）跨核 `IPI TLB Shootdown` 机理、透明大页同步直接规整（`THP Direct Compaction`）停顿分析与静态 `HugeTLB` 锁页池原理构建原创合成 512 卡同步训练慢节点毛刺与有效 `MFU` 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 312 基于公开发布的无分类器引导（`Classifier-Free Guidance, CFG`）与上下文感知对比解码（`Context-Aware Decoding, CAD`）双分支机制、原子成对 `SequenceGroup` `[2B]` 锁步批处理以及自适应置信度掩码（`Adaptive Plausibility Constraint`）Triton 融合采样原理构建原创合成解码 `TPOT` 与显存占用评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
