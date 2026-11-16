@@ -546,6 +546,9 @@ Round 358 基于公开发布的多维张量缩并结合律复杂度理论、PyTo
 
 Round 359 基于公开发布的 PyTorch `nn.Module.register_buffer(persistent=True vs False)` 序列化机制、长上下文扩窗（`ABF / YaRN`）中 `load_state_dict` 对持久化 `inv_freq` 缓冲区的静默覆盖机制及顶层共享 `RotaryEmbedding` 原理构建原创合成长文本困惑度退化与 Checkpoint 体积膨胀评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 360 基于公开发布的自回归循环 `torch.cat` 二次方 $O(S^2)$ 显存重分配与带宽放大原理、HuggingFace `StaticCache` 预分配定长缓冲区机制及 1D GPU 张量 `index_copy_` 对 `CUDAGraph` 录制重放的兼容原理构建原创合成自回归拷贝流量与耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
