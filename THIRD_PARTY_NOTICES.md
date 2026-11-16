@@ -512,6 +512,9 @@ Round 341 基于公开发布的 CUDA 硬件陷阱指令（PTX `trap;` / `cudaErr
 
 Round 342 基于公开发布的大规模分布式训练与推理（`TorchTitan / Megatron-LM / vLLM`）中 CPython 分代循环垃圾回收（`gc.collect()`）跨 Rank 失步慢节点放大效应、`gc.freeze()` 永久代剥离与固定全局 Step 锁步回收原理构建原创合成单次 GC 停顿与 512 卡步进耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 343 基于公开发布的大模型直接偏好优化（`TRL DPOTrainer precompute_ref_log_probs / LigerFusedLinearDPOLoss`）中冻结参考模型对数概率离线预计算、`cu_seqlens` 正负样本紧凑拼接与分块 SRAM 融合线性 DPO 损失原理构建原创合成 70B DPO 峰值显存与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
