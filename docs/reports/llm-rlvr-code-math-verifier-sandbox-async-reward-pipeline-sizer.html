@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 300 · RLVR Code &amp; Math Verifier Sandbox &amp; Async Reward Pipeline Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 300 · RLVR (`DeepSeek-R1 / verl`) Code &amp; Math Verifier Sandbox Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">16,384 Rollout Verifier Execution &amp; Scheduling Policy</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: Sync End-of-Rollout Batch Docker CLI Spawn (Barrier Wait)</option>
+          <option value="t2">Tier 2: Unbounded Local Subprocess Fork on GPU Nodes</option>
+          <option value="t3">Tier 3: Decoupled Remote CPU Ray Pool + Batch-Level Barrier</option>
+          <option value="t4" selected>Tier 4: Streaming Sample-Ready nsjail Pool + Group-Ready GRPO Trigger</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>GPU Verifier Wait Stall / Step</label>
+        <div id="stall" class="kpi">1.6 s (96.7% Hidden)</div>
+      </div>
+      <div class="card">
+        <label>Step Time / Effective GPU Util</label>
+        <div id="step" class="kpi">26.9 s / 89.4% Util</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Streaming each completed rollout immediately upon EOS to a decoupled CPU cluster running pre-forked `nsjail / Linux UserNS` workers (`0.8 ms` spawn overhead) and computing GRPO relative advantages as soon as a prompt group ($G=16$) finishes cuts GPU verifier stall `30.3x` (`48.5 s -> 1.6 s`) and accelerates end-to-end steps `3.42x` (`92.0 s -> 26.9 s`).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { stall: "48.5 s (GPU Idle! ✕)", step: "92.0 s / 41.8% Util ✕", bad: true, msg: "⛔ Waiting for all 16,384 rollouts to finish before launching heavy Docker containers leaves 64x H100 completely idle for 48.5s per step!" },
+      t2: { stall: "31.2 s (PID Exhaustion! ✕)", step: "74.5 s / 51.6% Util ✕", bad: true, msg: "⛔ Forking thousands of pytest/SymPy processes directly on GPU hosts starves vLLM asyncio loops and triggers cgroup PIDs_max crashes!" },
+      t3: { stall: "11.4 s ✅", step: "54.8 s / 70.1% Util ⚠️", bad: true, msg: "⚠️ Remote CPU Ray pool eliminates GPU host interference, but batch-level barrier still waits 11.4s after the slowest rollout finishes." },
+      t4: { stall: "1.6 s (96.7% Hidden) 🏆", step: "26.9 s / 89.4% Util 🏆", bad: false, msg: "🏆 Sample-ready streaming to pre-forked nsjail CPU sandboxes + Group-Ready (G=16) GRPO trigger hides 96.7% of verification behind generation!" }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('stall');
+      el.innerHTML = d.stall;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('step').textContent = d.step;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

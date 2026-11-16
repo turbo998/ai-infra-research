@@ -426,6 +426,9 @@ Round 298 基于公开发布的 PyTorch `create_selective_checkpoint_contexts` (
 
 Round 299 基于公开发布的 `Moshi / Qwen2.5-Omni / RQ-Transformer` 双层自回归（`Hierarchical Dual-AR`: `12.5 Hz` 时间主干 + `Depth Transformer` 残差矢量量化 `RVQ` 生成）机制、`Inner Monologue` 时间对齐文本先导与因果流式声码器卷积缓存原理构建原创合成单帧延迟与首包发声延迟（`TTFA`）评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 300 基于公开发布的 `DeepSeek-R1 / verl / OpenRLHF` 可验证奖励强化学习（`RLVR`）异步奖励验证流水线、`nsjail / Linux UserNS + Zygote` 预加载轻量沙箱池与按组（$G=16$）就绪 `GRPO` 优势归约原理构建原创合成验证等待延迟与集群有效利用率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
