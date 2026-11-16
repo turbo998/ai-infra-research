@@ -518,6 +518,9 @@ Round 344 基于公开发布的 PyTorch `c10::TensorImpl` 与 `UntypedStorage` �
 
 Round 345 基于公开发布的 PyTorch `torch.device("meta")` 零内存建模、`FSDP2 fully_shard()` 先行切分与 `to_empty(device="cuda")` 非持久化 Buffer（如 RoPE `inv_freq`）未初始化 `NaN` 复原原理构建原创合成 70B/405B 节点主机内存占用与初始化耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 346 基于公开发布的 PD 分离推理（`vLLM V1 KVConnector / SGLang Mooncake / NVIDIA NIXL`）逐层 `cudaEvent` 流水线异步 KV 推送与双缓冲单层连续块聚合打包原理构建原创合成 Prefill-Decode 交接暴露停顿与 RDMA 网卡带宽利用率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
