@@ -508,6 +508,9 @@ Round 339 基于公开发布的大模型流式工具调用解析器（`vLLM Tool
 
 Round 340 基于公开发布的 Linux 虚拟内存写时复制（`fork() Copy-on-Write`）与 InfiniBand / RoCE `libibverbs` 网卡硬件 MTT 页表脱钩机理、`2MB` 页对齐 `madvise(MADV_DONTFORK)` (`ibv_fork_init`) 及预启动 `forkserver / posix_spawn` 原理构建原创合成 RDMA 静默数据损坏率与子进程拉起延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 341 基于公开发布的 CUDA 硬件陷阱指令（PTX `trap;` / `cudaErrorAssert = 710`）不可恢复粘性 `CUcontext` 报废机理、CPU 接入层预检门控与 GPU 算子内部无分支寄存器钳位（`Branchless Clamping` + 0 号哑物理页）原理构建原创合成上下文存活率与同步开销评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
