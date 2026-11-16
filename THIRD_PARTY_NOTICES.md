@@ -478,6 +478,9 @@ Round 324 基于公开发布的 IEEE 754 `BF16`（7 位尾数）在线性环状�
 
 Round 325 基于公开发布的 `vLLM V1 Piecewise CUDAGraph / SGLang CudaGraphRunner` 多档位共享物理图内存池（`torch.cuda.graph_pool_handle()` 逆序 `256 -> 1` 录制）、步长 `8` 硬件对齐分桶与分段图捕获原理构建原创合成图显存占用与 Dummy Padding 算力浪费评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 326 基于公开发布的变长序列梯度累积与数据并行损失归一化数学分析（`HuggingFace num_items_in_batch / Unsloth / Dr.GRPO`）、微批次 `reduction="sum"` 与跨微步/跨 DP 卡全局有效 Token 总数（`N_global`）单标量 `All-Reduce` 对齐原理构建原创合成长短样本梯度偏置与长文准确率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 

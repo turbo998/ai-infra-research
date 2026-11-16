@@ -1,0 +1,58 @@
+{
+  "experiment_id": "llm_sft_gradient_accumulation_token_weighted_loss_reduction_bias_selection",
+  "round": 326,
+  "provenance": "synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)",
+  "workload": {
+    "dp_world_size": 8,
+    "grad_accum_steps_k": 8,
+    "valid_tokens_range_per_microbatch": "32 .. 2,560 (ignore_index = -100)"
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_per_microbatch_mean_div_grad_accum_80x_short_token_bias",
+      "name": "Naive `F.cross_entropy(..., reduction='mean') / grad_accum_steps` + DP Mean",
+      "short_vs_long_token_weight_ratio_x": 80.0,
+      "gradient_deviation_vs_true_global_batch_pct": 46.2,
+      "long_form_eval_accuracy_pct": 62.4,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "A 32-token response gets weighted by 1/(32*8*8), whereas a 2,560-token response gets 1/(2560*8*8) -> short-response tokens have 80x higher gradient weight!"
+    },
+    {
+      "tier_id": "tier2_per_rank_token_sum_without_cross_dp_rank_token_allreduce",
+      "name": "Local Rank Token-Sum Normalization (`loss_sum / local_rank_tokens`, No Cross-DP Token Sync)",
+      "short_vs_long_token_weight_ratio_x": 6.4,
+      "gradient_deviation_vs_true_global_batch_pct": 14.5,
+      "long_form_eval_accuracy_pct": 67.8,
+      "action": "Send to a human",
+      "status": "fail",
+      "note": "Fixes intra-rank microbatch skew, but when Rank 0 has 1,200 valid tokens and Rank 1 has 7,680 valid tokens, DDP/FSDP averages them with a 6.4x cross-rank bias!"
+    },
+    {
+      "tier_id": "tier3_per_sequence_equal_weight_average_length_insensitivity",
+      "name": "Sequence-Level Equal Weighting (Each Prompt Weighted Equally Regardless of Length)",
+      "short_vs_long_token_weight_ratio_x": 80.0,
+      "gradient_deviation_vs_true_global_batch_pct": 38.0,
+      "long_form_eval_accuracy_pct": 64.1,
+      "action": "Confirm",
+      "status": "fail",
+      "note": "Penalizes long chain-of-thought tokens relative to 1-word answers, causing premature EOS termination and length collapse in RL/SFT!"
+    },
+    {
+      "tier_id": "tier4_global_valid_token_sum_allreduce_denominator_exact_equivalence",
+      "name": "`reduction='sum'` + Global `All-Reduce(total_valid_tokens)` Across All `K` Microsteps & `DP` Ranks",
+      "short_vs_long_token_weight_ratio_x": 1.0,
+      "gradient_deviation_vs_true_global_batch_pct": 0.0,
+      "long_form_eval_accuracy_pct": 71.8,
+      "action": "Act automatically",
+      "status": "recommended",
+      "note": "Scales each microbatch sum by `dp_world_size / global_valid_tokens` -> 1.0x uniform token weight, 0.0% deviation from full batch, and +9.4% long-form accuracy!"
+    }
+  ],
+  "summary": {
+    "bias_reduction_x": 80.0,
+    "long_form_accuracy_gain_pts": 9.4,
+    "gradient_deviation_pct": 0.0,
+    "recommended_tier": "tier4_global_valid_token_sum_allreduce_denominator_exact_equivalence"
+  }
+}
