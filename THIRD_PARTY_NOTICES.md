@@ -506,6 +506,9 @@ Round 338 基于公开发布的张量并行词表对齐（`Megatron-Core make_vo
 
 Round 339 基于公开发布的大模型流式工具调用解析器（`vLLM ToolParser / SGLang FunctionCallParser`）中全量历史正则与 `partial_json_parser` 二次方重解析瓶颈、跨 Token 转义字符暂存与 $O(\Delta l)$ 增量下推词法状态机原理构建原创合成流式工具解析 CPU 耗时与参数流损坏率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 340 基于公开发布的 Linux 虚拟内存写时复制（`fork() Copy-on-Write`）与 InfiniBand / RoCE `libibverbs` 网卡硬件 MTT 页表脱钩机理、`2MB` 页对齐 `madvise(MADV_DONTFORK)` (`ibv_fork_init`) 及预启动 `forkserver / posix_spawn` 原理构建原创合成 RDMA 静默数据损坏率与子进程拉起延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
