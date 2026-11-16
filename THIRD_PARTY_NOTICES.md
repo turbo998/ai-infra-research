@@ -476,6 +476,9 @@ Round 323 基于公开发布的 `AdamW` 一维归一化参数（`RMSNorm / Layer
 
 Round 324 基于公开发布的 IEEE 754 `BF16`（7 位尾数）在线性环状归约（`Linear Ring All-Reduce`）中的大数吃小数（`Mantissa Swamping`）数值分析、机内 `NVLS` `FP32` 硬件归约与机间成对二叉树归约（`Pairwise Tree Reduction`）及后置缩放原理构建原创合成梯度信号保留率与通信延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 325 基于公开发布的 `vLLM V1 Piecewise CUDAGraph / SGLang CudaGraphRunner` 多档位共享物理图内存池（`torch.cuda.graph_pool_handle()` 逆序 `256 -> 1` 录制）、步长 `8` 硬件对齐分桶与分段图捕获原理构建原创合成图显存占用与 Dummy Padding 算力浪费评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
