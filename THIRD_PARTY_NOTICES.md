@@ -516,6 +516,9 @@ Round 343 基于公开发布的大模型直接偏好优化（`TRL DPOTrainer pre
 
 Round 344 基于公开发布的 PyTorch `c10::TensorImpl` 与 `UntypedStorage` 视图引用计数机理、`lm_head` 前置末位隐状态收集（`logits_to_keep=1`）及跨作用域 `.detach().clone()` 物理存储解绑原理构建原创合成视图钉死显存泄漏与 Prefill 输出头延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 345 基于公开发布的 PyTorch `torch.device("meta")` 零内存建模、`FSDP2 fully_shard()` 先行切分与 `to_empty(device="cuda")` 非持久化 Buffer（如 RoPE `inv_freq`）未初始化 `NaN` 复原原理构建原创合成 70B/405B 节点主机内存占用与初始化耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
