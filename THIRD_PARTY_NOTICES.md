@@ -466,6 +466,9 @@ Round 318 基于公开发布的 `LiveKit Turn Detector / Pipecat Smart-Turn` 流
 
 Round 319 基于公开发布的 `vLLM V1 / SGLang` 投机解码（`EAGLE-3 / DeepSeek-V3 MTP`）PagedAttention 页表管理机制、前瞻 $+K+1$ 影子槽位预留、设备端 `kv_seqlens` 零释放原地回拨与已验证完整块惰性前缀哈希（`Lazy Verified Full-Block Hashing`）原理构建原创合成 CPU 页表管理开销与端到端净加速比评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 320 基于公开发布的 `Gumbel-Max Trick` 极值分布采样定理、混合贪婪（`T=0.0`）与随机（`T>0.0`）批次中的极小温度除法上溢（`FP16/BF16 Inf -> Softmax NaN`）机理以及零除法乘性 `Gumbel-Max`（$\arg\max_v(L_v + T_b G_v)$）单趟 Triton 归约原理构建原创合成采样延迟与显存流量评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
