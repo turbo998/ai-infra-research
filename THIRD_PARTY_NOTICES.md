@@ -498,6 +498,9 @@ Round 334 基于公开发布的大模型推理 `apply_chat_template`（`Jinja2` 
 
 Round 335 基于公开发布的推理大模型（`DeepSeek-R1 / Qwen3 / s1 Budget Forcing`）`<think>` 思维链超长截断机理、软句界过渡短语注入（`Soft-Newline Transition Bridge`）与多轮对话历史 `<think>` 剥离原理构建原创合成空回答截断率、任务完成率与多轮 KV 显存占用评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 336 基于公开发布的线性层反向传播 `dgrad / wgrad` 关键路径拆分（`Megatron-Core gradient_accumulation_fusion / TransformerEngine wgrad_deferral / Zero-Bubble PP`）与 `cublasLtMatmul` `beta=1.0` 原位累加至 `FP32 main_grad` 原理构建原创合成额外梯度显存占用、流水线气泡率与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
