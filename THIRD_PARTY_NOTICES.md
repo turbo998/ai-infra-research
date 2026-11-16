@@ -500,6 +500,9 @@ Round 335 基于公开发布的推理大模型（`DeepSeek-R1 / Qwen3 / s1 Budge
 
 Round 336 基于公开发布的线性层反向传播 `dgrad / wgrad` 关键路径拆分（`Megatron-Core gradient_accumulation_fusion / TransformerEngine wgrad_deferral / Zero-Bubble PP`）与 `cublasLtMatmul` `beta=1.0` 原位累加至 `FP32 main_grad` 原理构建原创合成额外梯度显存占用、流水线气泡率与训练吞吐评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 337 基于公开发布的 Ray 分布式强化学习与推理编排（`verl / OpenRLHF / vLLM RayExecutor`）中 `CUDA_VISIBLE_DEVICES` 环境变量单卡遮罩机理、`RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1` 全卡透传、`STRICT_PACK` 放置组与 `(node_ip, phys_gpu_id)` 物理卡号重排原理构建原创合成启动崩溃率与跨机溢出延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
