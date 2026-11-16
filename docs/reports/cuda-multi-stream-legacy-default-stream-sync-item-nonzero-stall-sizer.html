@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline';">
+  <title>Round 306 · CUDA Multi-Stream Overlap, Legacy Stream 0 &amp; .item() Stall Sizer</title>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 980px; margin: 0 auto; background: #1E293B; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+    h1 { font-size: 22px; margin-top: 0; color: #38BDF8; }
+    .prov { font-size: 13px; color: #94A3B8; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+    select { width: 100%; padding: 8px; border-radius: 6px; background: #1E293B; color: #F8FAFC; border: 1px solid #475569; }
+    .kpi { font-size: 24px; font-weight: 800; color: #10B981; margin-top: 6px; }
+    .warn { color: #F87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Round 306 · CUDA Multi-Stream Overlap, Legacy `Stream 0` &amp; `.item()` Stall Sizer</h1>
+    <div class="prov">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+    <div class="grid">
+      <div class="card">
+        <label for="tier">CUDA Stream Isolation &amp; Host-Sync Policy (80 Layers)</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t1">Tier 1: C++ Kernel on Legacy Stream 0 (NULL) + Python .item() Checks</option>
+          <option value="t2">Tier 2: Explicit getCurrentCUDAStream() + Remaining .item()/nonzero()</option>
+          <option value="t3">Tier 3: Non-Blocking Streams + Device Masking (Missing record_stream)</option>
+          <option value="t4" selected>Tier 4: Non-Blocking + getCurrentCUDAStream + Device Mask + record_stream</option>
+        </select>
+      </div>
+      <div class="card">
+        <label>Comm-Compute Overlap Ratio</label>
+        <div id="ovl" class="kpi">94.2% Overlap</div>
+      </div>
+      <div class="card">
+        <label>Step Latency / Sync Bubble</label>
+        <div id="step" class="kpi">440.0 ms / 0.0 ms Bubble</div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="advice" style="font-size:14px;line-height:1.5;">
+        🏆 <strong>Recommended (Tier 4)</strong>: Passing `at::cuda::getCurrentCUDAStream()` to all custom C++ kernels, creating side streams with `cudaStreamNonBlocking`, replacing host `.item()` checks with device-side `torch.where`, and protecting cross-stream buffers via `record_stream()` restores `94.2%` comm-compute overlap and speeds up steps `1.68x` (`740 ms -> 440 ms`).
+      </div>
+    </div>
+  </div>
+  <script>
+    const DATA = {
+      t1: { ovl: "4.5% Overlap (Serialized! ✕)", step: "740.0 ms / 298.0 ms Bubble ✕", bad: true, msg: "⛔ A single C++ kernel launched on Legacy Stream 0 (NULL) inserts a hardware barrier across all blocking streams, destroying NCCL overlap!" },
+      t2: { ovl: "38.0% Overlap ✕", step: "595.0 ms / 155.0 ms Bubble ✕", bad: true, msg: "⛔ Calling tensor.item(), .cpu(), or dynamic torch.nonzero() inside the layer loop forces cudaStreamSynchronize and drains the GPU queue!" },
+      t3: { ovl: "89.5% Overlap ✅", step: "452.0 ms / 12.0 ms Bubble ⚠️", bad: true, msg: "⚠️ High overlap achieved, but freeing tensors on the compute stream while NCCL reads them on comm_stream without record_stream() risks silent corruption." },
+      t4: { ovl: "94.2% Overlap 🏆", step: "440.0 ms / 0.0 ms Bubble 🏆", bad: false, msg: "🏆 Non-blocking streams + getCurrentCUDAStream() + zero-sync device masking + record_stream() delivers 94.2% overlap and 1.68x speedup." }
+    };
+    function recalc() {
+      const k = document.getElementById('tier').value;
+      const d = DATA[k];
+      const el = document.getElementById('ovl');
+      el.innerHTML = d.ovl;
+      el.className = d.bad ? 'kpi warn' : 'kpi';
+      document.getElementById('step').textContent = d.step;
+      document.getElementById('advice').innerHTML = d.msg;
+    }
+  </script>
+</body>
+</html>

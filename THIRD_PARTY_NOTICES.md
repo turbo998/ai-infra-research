@@ -438,6 +438,9 @@ Round 304 基于公开发布的 `CacheBlend / LMCache` 模块化非前缀 KV Cac
 
 Round 305 基于公开发布的 `DeepSpeed ZeRO-Offload / PyTorch FSDP CPUOffload / ZenFlow` 仅卸载优化器与梯度（保留 `BF16` 工作权重驻留 GPU）、`SIMD AVX-512 / OpenMP` 单趟融合 `CPUAdam` 以及反向传播逐层 `D2H/H2D` 全双工流重叠原理构建原创合成单步训练延迟与有效算力利用率（`MFU`）评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 306 基于公开发布的 CUDA 遗留默认流（`Legacy Default Stream 0`）隐式全局同步规范、PyTorch `at::cuda::getCurrentCUDAStream()` 与 `cudaStreamNonBlocking` 流隔离、`torch.cuda.set_sync_debug_mode` 同步检测以及 `CUDACachingAllocator::recordStream` 跨流生命周期管理原理构建原创合成通信计算重叠率与延迟评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
