@@ -446,6 +446,9 @@ Round 308 基于公开发布的 `Megatron-Core IndexedDataset (.bin/.idx)` 内�
 
 Round 309 基于公开发布的 `Qwen2.5-Omni / vLLM EPD Disaggregation` 全模态分离推理架构、独立 `TP=1` 视觉/音频编码微池、投影后 `FP8` 特征压缩传输与 `TP=8` 同构 `inputs_embeds` 主干注入原理构建原创合成混合模态请求 `P99 TTFT` 与跨卡同步空泡评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 310 基于公开发布的 `verl / Slime / OpenRLHF` 混合强化学习引擎（`vLLM` 采样与 `FSDP/Megatron` 训练）算子数值漂移分析、训练端 `torch.no_grad()` 重算 $\log \pi_{\text{old}}$、行为策略截断重要性采样（`TIS`）与 `Dual-Clip PPO` ($c=3.0$) 原理构建原创合成重要性采样比率偏移与数学推理准确率评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
+
 
 
 
