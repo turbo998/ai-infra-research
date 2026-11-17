@@ -562,6 +562,8 @@ Round 366 基于公开发布的金融政企混合云 AI 着陆区（`Azure/AWS P
 
 Round 367 基于公开发布的主流大模型推理服务引擎（`Ollama/llama.cpp GGUF / NVIDIA TensorRT-LLM / vLLM V1 / SGLang RadixAttention & XGrammar`）在多轮 Agent 与结构化 JSON 负载下的架构原理构建原创合成 64 并发有效吞吐、新模型上线周期与每百万 Token 成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 368 基于公开发布的实时客服与企业 Copilot 低延迟编排架构（`乐观并行安全护栏 Optimistic Parallel Guardrails / 滑动窗口流式输出审查 Sliding-Window Moderation / Pre-EOU 投机预取 Speculative RAG Prefetch / EAGLE-3 投机解码`）构建原创合成端到端 P99 首字延迟与千次交互成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
