@@ -616,6 +616,8 @@ Round 393 基于公开发布的企业级多 LoRA 动态服务（`Multi-LoRA Serv
 
 Round 394 基于公开发布的企业级长效智能体记忆（`Agentic Memory`）基准（`LoCoMo & LongMemEval / Mem0 冲突消解状态机 / Zep & Graphiti 双时态事实知识图谱 Bi-Temporal Fact Graph / 三层认知记忆 Working + Semantic + Episodic`）构建原创合成跨月时序事实准确率、过期事实矛盾率、P95 首字延迟与月度交互成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 395 基于公开发布的企业级智能体代码执行沙箱（`Code Interpreter Sandbox`）基准（`AWS Firecracker MicroVM Memory Snapshot Restore / Google gVisor runsc 用户态内核拦截 / Azure Container Apps Dynamic Sessions & E2B 硬件隔离会话池`）构建原创合成含 Pandas 导包就绪延迟、内核安全隔离度、系统调用 I/O 损耗与月度执行成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
