@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级实时 RAG 同步与 CDC 增量向量入库计算器 (Round 390)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 390 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级知识库实时同步 (Real-Time RAG) 与 CDC 增量向量入库计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-realtime-rag-cdc-incremental-indexing-freshness-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-realtime-rag-cdc-incremental-indexing-freshness-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-realtime-rag-cdc-incremental-indexing-freshness-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级实时 RAG 同步（CDC + 段落 SHA-256 去重 + 权限零重算 + 原子墓碑）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_realtime_rag_cdc_incremental_indexing_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="cdcFreshSelect">1. 业务对数据新鲜度与权限吊销要求 (Freshness SLA):</label>
+          <select id="cdcFreshSelect" onchange="updateCdcSizer()">
+            <option value="near_rt">准实时内部知识库 (允许 10~15 秒同步延迟)</option>
+            <option value="sub_sec" selected>实时价格/库存/风控知识库 + 严苛权限即时吊销 (&lt; 1 秒生效)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="cdcVolSelect">2. 知识库规模与日变更量 (Corpus &amp; Update Volume):</label>
+          <select id="cdcVolSelect" onchange="updateCdcSizer()">
+            <option value="5m" selected>5,000,000 条总切片 · 每日 150,000 次文档与权限变更事件</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>知识库增量同步架构档位</th>
+              <th>P95 数据新鲜度延迟</th>
+              <th>幽灵脏切片残留率</th>
+              <th>重复 Embedding 浪费率</th>
+              <th>月度入库总成本</th>
+            </tr>
+          </thead>
+          <tbody id="cdcSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="cdcDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const CDC_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 每晚定时全量重建索引 (Nightly Cron Full Re-Index)', lag: '50,400 s (14小时) ✕', ghost: '8.4% ✕ (日间脏读)', waste: '98.5% ✕', cost: '$29,500 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 应用层同步双写 + 整篇重算 (无事务补偿)', lag: '3.5 s', ghost: '6.2% ✕ (新旧并存!)', waste: '84.0% ✕', cost: '$11,800 / 月 ✕' },
+      { id: 't3', name: '🟦 Tier 3: 流式 CDC + Kafka + 段落 SHA-256 哈希去重', lag: '12.0 s ✅', ghost: '0.4%', waste: '3.2% ✅', cost: '$2,400 / 月 (-91.9% ✅)' },
+      { id: 't4', name: '🟩 Tier 4: CDC 哈希 Diff + 权限原地 Patch + 原子版本号墓碑 + 热池', lag: '0.8 s 🏆 (快63,000x)', ghost: '0.0% 🏆 (零幽灵切片)', waste: '0.0% 🏆', cost: '$1,850 / 月 (-93.7% 🏆)' }
+    ];
+
+    function updateCdcSizer() {
+      const sla = document.getElementById('cdcFreshSelect').value;
+      const bestId = sla === 'near_rt' ? 't3' : 't4';
+
+      const tbody = document.getElementById('cdcSizerTbody');
+      tbody.innerHTML = CDC_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.lag}</code></td>
+          <td><code>${r.ghost}</code></td>
+          <td><code>${r.waste}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('cdcDecisionCallout');
+      if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（准实时企业知识库基线）</strong>：选用 <strong>Tier 3 (流式 CDC + 段落级 SHA-256 内容哈希去重)</strong>！修改 50 页文档中的 1 句话时只重算那 1 个段落，省去 <code>96.8%</code> 重复 Embedding 算力，月成本降至 <code>$2,400/月 (-91.9%)</code> ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（企业级实时知识中台终局标准）</strong>：强烈首选 <strong>Tier 4 (CDC 段落哈希 Diff + 权限零重算原地更新 + 原子 doc_version 墓碑切换 + 亚秒级热缓冲池)</strong>！实现 <code>0.8 秒</code> 实时生效、<code>150 ms</code> 权限吊销与 <code>0.0%</code> 幽灵脏切片残留，月省 <code>93.7% ($1,850 vs $29,500/月)</code> 🏆！`;
+      }
+    }
+    updateCdcSizer();
+  </script>
+</body>
+</html>
