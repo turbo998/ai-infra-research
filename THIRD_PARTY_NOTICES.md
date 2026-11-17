@@ -574,6 +574,8 @@ Round 372 基于公开发布的企业级多区域高可用容灾与跨区流量�
 
 Round 373 基于公开发布的 Kubernetes 大模型推理弹性伸缩与模型资产极速加载架构（`CNCF KAITO & KEDA KV-Cache Autoscaling / Lazy OCI Artifact Streaming / Node-Local NVMe Run:ai Model Streamer / vLLM Host-DRAM Sleep Mode & P2P RDMA Weight Broadcast`）构建原创合成 70B Pod 扩容就绪耗时、早高峰请求丢包率与月度集群 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 374 基于公开发布的企业级生产 RAG 知识中台架构（`Filtered HNSW Pre-Filtering Roaring Bitmap ACL / 版面感知父子分块 Layout Parent-Child Chunking / BM25+Dense+Reranker 混合检索 / Microsoft LazyGraphRAG 按需子图归纳`）构建原创合成综合准确率、权限饥饿空召回率、检索延迟与百万文档月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
