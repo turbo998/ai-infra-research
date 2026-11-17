@@ -610,6 +610,8 @@ Round 390 基于公开发布的企业级实时 RAG 增量索引与流式同步�
 
 Round 391 基于公开发布的企业级浏览器与电脑操控（`Browser-Use / Computer-Use GUI Agent`）基准（`WebArena & WorkArena & OSWorld / 蒸馏无障碍语义树 Accessibility Tree & Set-of-Marks 视觉标注 / Playwright 确定性选择器缓存回放与按需 LLM 自愈 / 敏感步骤人类移交 HITL Handoff`）构建原创合成 15 步流程成功率、平均耗时、Token 消耗与月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 392 基于公开发布的企业级小模型知识蒸馏（`SLM Knowledge Distillation`）与合成数据飞轮基准（`Distilling Step-by-Step / Best-of-N 执行验证拒绝采样 Execution-Verified Rejection Sampling / 淘汰样本构造 DPO 偏好对齐 / 88-12 对数概率置信度级联回退飞轮`）构建原创合成相对教师模型能力保持率、冷启动周期、初始构建成本与月度推理成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
