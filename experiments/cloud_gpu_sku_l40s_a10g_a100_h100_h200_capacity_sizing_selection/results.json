@@ -1,0 +1,84 @@
+{
+  "experiment_id": "cloud_gpu_sku_l40s_a10g_a100_h100_h200_capacity_sizing_selection",
+  "date": "2026-11-17",
+  "round": 364,
+  "provenance": {
+    "type": "synthetic_analytical_model_calibrated_to_published_cloud_gpu_serving_benchmarks",
+    "independently_reproduced": false,
+    "physical_gpu_cluster_measurement": "not_measured",
+    "calibration_sources": [
+      "NVIDIA H200 (141GB HBM3e) vs. H100 (80GB) vs. A100 (80GB) vs. L40S (48GB) TensorRT-LLM & vLLM Serving Benchmarks",
+      "Azure ND_H200_v5 / NCads_H100_v5 / NC_A100_v4 & AWS p5e / g6e / g5 Cloud Instance Pricing & Roofline Models",
+      "Llama-3.3-70B & Qwen-2.5-32B/72B FP8 KV Cache Memory & Bandwidth Sizing Formulas"
+    ]
+  },
+  "workload": {
+    "enterprise_scenario": "Enterprise Production LLM Serving Sizer across 8B (SLM/Router), 32B (Coding/Agent), and 70B (Flagship Llama-3.3-70B / Qwen-2.5-72B) with 8,192 Context Length",
+    "target_sla": "P99 TTFT <= 800 ms, P99 Decode TPOT <= 20.0 ms (50+ tok/s/user)",
+    "first_principles_sizing_formula": "Total_VRAM >= Model_Weights + (Concurrent_Users * Context_Len * KV_Bytes_Per_Token) + Activation_Overhead; Decode_TPOT ~= Active_Weight_Bytes / Effective_HBM_Bandwidth + AllReduce_Latency"
+  },
+  "tiers": [
+    {
+      "id": "tier1_entry_pcie_a10g_l4_24gb",
+      "name": "Tier 1: 入门级推理卡 A10G / L4 (24GB GDDR6 · AWS g5 / g6 · $1.05/hr)",
+      "name_en": "Tier 1: Entry PCIe GPU A10G / L4 (24GB GDDR6 · 300–600 GB/s · $1.05/hr)",
+      "hardware_profile": "24 GB GDDR6 (600 GB/s on A10G, 300 GB/s on L4), PCIe Gen4, No NVLink",
+      "kv_cache_headroom_70b_gb": 0.0,
+      "max_concurrent_8k_sessions": 12,
+      "p99_ttft_ms": 920.0,
+      "p99_tpot_ms": 34.5,
+      "throughput_tok_s": 310.0,
+      "cost_per_1m_tokens_usd": 1.68,
+      "recommended_for": "7B/8B SLM & Embedding/Reranker serving at low-to-moderate concurrency (<16 sessions); cannot host 70B without 4-GPU PCIe TP=4 bottleneck.",
+      "status": "warn"
+    },
+    {
+      "id": "tier2_legacy_2x_a100_80gb_bf16_trap",
+      "name": "Tier 2: 存量双卡 2×A100 80GB SXM4 跑 70B BF16 (无原生 FP8 · 仅剩 20GB KV 显存陷阱)",
+      "name_en": "Tier 2: Legacy 2x A100 80GB SXM4 Running 70B BF16 (No Hardware FP8 · 20GB KV Trap)",
+      "hardware_profile": "2x A100 80GB (160 GB HBM2e, 2.0 TB/s/GPU, $6.40/hr for 2 GPUs, Lacks Native FP8)",
+      "kv_cache_headroom_70b_gb": 16.0,
+      "max_concurrent_8k_sessions": 18,
+      "p99_ttft_ms": 740.0,
+      "p99_tpot_ms": 22.4,
+      "throughput_tok_s": 725.0,
+      "cost_per_1m_tokens_usd": 2.45,
+      "recommended_for": "Anti-pattern for 70B BF16: 140GB weights consume 87.5% of 160GB VRAM, starving KV cache (only 18 sessions) and inflating token cost to $2.45/1M.",
+      "status": "fail"
+    },
+    {
+      "id": "tier3_midrange_l40s_48gb_ada_fp8_sweetspot",
+      "name": "Tier 3: 中端性价比之王 L40S 48GB PCIe (Ada 原生 FP8 · 8B/32B 黄金机型 · $1.85/hr)",
+      "name_en": "Tier 3: Mid-Range Price-Performance King L40S 48GB PCIe (Ada Native FP8 for 8B & 32B)",
+      "hardware_profile": "1x–2x L40S 48GB GDDR6 (864 GB/s, 733 TFLOPS FP8 Tensor Core, $1.85/GPU-hr)",
+      "kv_cache_headroom_70b_gb": 22.0,
+      "max_concurrent_8k_sessions": 42,
+      "p99_ttft_ms": 460.0,
+      "p99_tpot_ms": 15.2,
+      "throughput_tok_s": 1380.0,
+      "cost_per_1m_tokens_usd": 0.74,
+      "recommended_for": "Best ROI for 7B/8B and 32B FP8/AWQ models (1x L40S fits 32B FP8 with 16GB KV cache at $1.85/hr); avoid TP>=4 across PCIe for 70B.",
+      "status": "pass"
+    },
+    {
+      "id": "tier4_flagship_h200_141gb_or_h100_fp8_70b_king",
+      "name": "Tier 4: 旗舰单卡 H200 141GB (或双卡 H100 FP8) 跑 70B FP8 (4.8 TB/s HBM3e · 71GB KV 巨量池)",
+      "name_en": "Tier 4: Flagship 1x H200 141GB (or 2x H100 FP8) Running 70B FP8 (4.8 TB/s HBM3e · 84 Sessions)",
+      "hardware_profile": "1x H200 141GB HBM3e (4.8 TB/s, 1,979 TFLOPS FP8, $4.50/GPU-hr, Zero TP AllReduce Overhead!)",
+      "kv_cache_headroom_70b_gb": 66.0,
+      "max_concurrent_8k_sessions": 84,
+      "p99_ttft_ms": 340.0,
+      "p99_tpot_ms": 12.8,
+      "throughput_tok_s": 2160.0,
+      "cost_per_1m_tokens_usd": 0.58,
+      "recommended_for": "Enterprise 70B/72B production standard: 1x H200 fits full 70B FP8 (70GB) + 66GB FP8 KV cache on a single GPU with zero cross-GPU TP overhead.",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tier4_vs_tier2_concurrency_gain_x": 4.67,
+    "tier4_vs_tier2_token_cost_reduction_pct": 76.3,
+    "tier3_l40s_vs_tier2_a100_token_cost_reduction_pct": 69.8,
+    "tier4_vs_tier2_throughput_gain_x": 2.98
+  }
+}

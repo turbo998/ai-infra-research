@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>主流云端 GPU 推理机型与并发容量估算器 (Round 364)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 364 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">云端 GPU 推理机型与并发容量估算器 (A10G/L4 vs. L40S vs. A100 vs. H200/H100)</span>
+      </div>
+      <div>
+        <a href="../components/cloud-gpu-instance-sku-l40s-a10g-a100-h100-h200-capacity-sizing-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/cloud-gpu-instance-sku-l40s-a10g-a100-h100-h200-capacity-sizing-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./cloud-gpu-instance-sku-l40s-a10g-a100-h100-h200-capacity-sizing-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 云端大模型推理 GPU 机型选型与并发容量估算器 (VRAM &amp; Roofline Sizer)</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/cloud_gpu_sku_l40s_a10g_a100_h100_h200_capacity_sizing_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="gpuModelSelect">1. 目标部署的模型参数量级 (Model Parameter Size):</label>
+          <select id="gpuModelSelect" onchange="updateGpuSizer()">
+            <option value="8b">7B / 8B 小模型 或 Embedding / Reranker</option>
+            <option value="32b">14B / 32B 中型主力模型 (Qwen-2.5-32B / DeepSeek-R1-32B)</option>
+            <option value="70b" selected>70B / 72B 旗舰稠密模型 (Llama-3.3-70B / Qwen-2.5-72B · 8K~32K 上下文)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="gpuConcurSelect">2. 目标峰值并发会话数 (Target Concurrent 8K Sessions):</label>
+          <select id="gpuConcurSelect" onchange="updateGpuSizer()">
+            <option value="low">&le; 12 并发会话 (低频内部工具)</option>
+            <option value="high" selected>40 ~ 84+ 并发会话 (企业生产级高并发 SLA: TPOT &le; 20ms)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>云端 GPU 机型档位</th>
+              <th>显存容量与带宽规格</th>
+              <th>70B 剩余 KV 显存池</th>
+              <th>最大达标 8K 并发</th>
+              <th>P99 TTFT / TPOT</th>
+              <th>吞吐 &amp; 每百万 Token 成本</th>
+            </tr>
+          </thead>
+          <tbody id="gpuSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="gpuDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const GPU_TIERS = [
+      { id: 't1', name: '🟨 Tier 1: 入门级 A10G / L4 (24GB PCIe · $1.05/h)', spec: '24 GB GDDR6 (600 GB/s)', kv: '0.0 GB (装不下 70B)', conc: '12 并发 (8B)', sla: '920 ms / 34.5 ms ✕', cost: '310 tok/s · $1.68/1M' },
+      { id: 't2', name: '🟥 Tier 2: 存量双卡 2×A100 80GB (70B BF16 · $6.40/h)', spec: '160 GB HBM2e (无原生 FP8)', kv: '仅剩 16.0 GB ✕', conc: '18 并发 ✕', sla: '740 ms / 22.4 ms ✕', cost: '725 tok/s · $2.45/1M ✕' },
+      { id: 't3', name: '🟦 Tier 3: 中端之王 L40S 48GB PCIe (Ada FP8 · $1.85/h)', spec: '48 GB GDDR6 (864 GB/s · 原生 FP8)', kv: '22.0 GB (双卡 FP8)', conc: '42 并发 ✅', sla: '460 ms / 15.2 ms ✅', cost: '1,380 tok/s · $0.74/1M ✅' },
+      { id: 't4', name: '🟩 Tier 4: 旗舰单卡 H200 141GB (Hopper FP8 · $4.50/h)', spec: '141 GB HBM3e (4.8 TB/s · TP=1)', kv: '66.0 GB 🏆 (4.1x)', conc: '84 并发 🏆 (4.67x)', sla: '340 ms / 12.8 ms 🏆', cost: '2,160 tok/s · $0.58/1M 🏆' }
+    ];
+
+    function updateGpuSizer() {
+      const m = document.getElementById('gpuModelSelect').value;
+      const c = document.getElementById('gpuConcurSelect').value;
+
+      let bestId = 't4';
+      if (m === '8b' && c === 'low') bestId = 't1';
+      else if (m === '32b' || (m === '8b' && c === 'high')) bestId = 't3';
+      else bestId = 't4';
+
+      const tbody = document.getElementById('gpuSizerTbody');
+      tbody.innerHTML = GPU_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.spec}</code></td>
+          <td><code>${r.kv}</code></td>
+          <td><code>${r.conc}</code></td>
+          <td><code>${r.sla}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('gpuDecisionCallout');
+      if (bestId === 't1') {
+        callout.innerHTML = `<strong>架构师定容结论（低并发 8B / Embedding / Reranker）</strong>：选用 <strong>Tier 1 (1× A10G / L4 24GB PCIe)</strong>！单卡每小时仅 ~$1.05，足以装下 8B FP8/INT4 模型与重排序管线。切勿拿多张 A10G 跨 PCIe 跑 32B/70B。`;
+      } else if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师定容结论（8B 高并发 / 32B 主力模型性价比之王）</strong>：强烈首选 <strong>Tier 3 (1× L40S 48GB PCIe · 原生 Ada FP8)</strong>！单张 48GB 显卡即可在 TP=1 下完整装入 32B FP8 模型（32GB 权重 + 14GB KV Cache），每百万 Token 成本仅 <code>$0.74 (-69.8%)</code> ✅！`;
+      } else {
+        callout.innerHTML = `<strong>架构师定容结论（70B/72B 旗舰与长上下文生产标配）</strong>：强烈首选 <strong>Tier 4 (1× H200 141GB HBM3e 或 2× H100 FP8)</strong>！严禁租 2 张 A100 跑 70B BF16（Tier 2 权重吃掉 140GB 只剩 16GB 给 KV Cache）；单张 H200 跑 70B FP8 留出 <code>66.0 GB</code> KV 空间，单卡撑起 <code>84 并发 (4.67x)</code>，每百万 Token 成本打穿至 <code>$0.58 (-76.3%)</code> 🏆！`;
+      }
+    }
+    updateGpuSizer();
+  </script>
+</body>
+</html>

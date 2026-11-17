@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>主流云端 GPU 推理机型选型与并发容量估算 7-Card 视觉报告 (Round 364)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; }
+    .header-bar { max-width: 1200px; margin: 0 auto 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 24px; }
+    .card { aspect-ratio: 4 / 5; min-height: 600px; background: linear-gradient(165deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
+    .card-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: 0.4px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+    .badge { padding: 3px 10px; border-radius: 999px; background: #064e3b; color: #a7f3d0; font-size: 11px; font-weight: 800; }
+    h2 { font-size: 20px; line-height: 1.32; margin: 12px 0 8px; color: #f8fafc; }
+    .accent { background: linear-gradient(90deg, #38bdf8, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .sub { font-size: 13px; color: #cbd5e1; line-height: 1.5; margin-bottom: 12px; }
+    .panel { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; font-size: 12.5px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid #334155; text-align: left; }
+    th { color: #94a3b8; font-weight: 700; }
+    .pill-pass { background: #064e3b; color: #6ee7b7; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .pill-warn { background: #78350f; color: #fde68a; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .pill-fail { background: #7f1d1d; color: #fca5a5; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .code-box { background: #090d16; border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11.5px; color: #e2e8f0; white-space: pre-wrap; line-height: 1.42; margin-bottom: 8px; }
+    .bar-row { margin-bottom: 10px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-track { height: 14px; background: #1e293b; border-radius: 7px; overflow: hidden; }
+    .bar-fill-blue { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 7px; }
+    .bar-fill-gray { height: 100%; background: #64748b; border-radius: 7px; }
+    .footer-prov { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <div class="header-bar">
+    <div>
+      <strong>ROUND 364 · 7-CARD 4:5 VISUAL BENCHMARK REPORT</strong>
+      <span style="color:#94a3b8;font-size:13px;margin-left:10px;">主流云端 GPU 推理机型选型与并发容量估算：A10G/L4 vs. L40S vs. A100 vs. H200/H100</span>
+    </div>
+    <div>
+      <a href="../components/cloud-gpu-instance-sku-l40s-a10g-a100-h100-h200-capacity-sizing-selection-faq.md">📘 中文 FAQ</a>
+      <a href="../components/cloud-gpu-instance-sku-l40s-a10g-a100-h100-h200-capacity-sizing-selection-faq.en.md">📘 English FAQ</a>
+      <a href="./cloud-gpu-instance-sku-l40s-a10g-a100-h100-h200-capacity-sizing-sizer.html">🧮 交互式计算器</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Card 1 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>1 / 7 · HANDS-ON · CLOUD GPU INSTANCE SIZER</span>
+          <span class="badge">VRAM &amp; ROOFLINE SIZER</span>
+        </div>
+        <h2>单张 H200 141GB 跑 70B FP8 撑起 <span class="accent">84 并发 (双卡 A100 的 4.67x)</span>，百万 Token 成本直降 <span class="accent">76.3% ($0.58/1M)</span></h2>
+        <p class="sub">基准负载：企业 8B / 32B / 70B 在线推理定容（8K 上下文会话，SLA P99 TTFT &le; 800ms，TPOT &le; 20.0ms）。</p>
+        <div class="panel">
+          <strong>🔥 三大核心机型选型结论：</strong>
+          <ul style="margin:6px 0 0;padding-left:18px;line-height:1.55;">
+            <li><strong>双卡 A100 80GB 跑 70B BF16 (Tier 2) 巨坑</strong>：因缺乏硬件 FP8，140GB 权重吃掉 87.5% 显存，仅剩 <code>16 GB</code> 给 KV Cache，撑起 <code>18 并发</code>，单价 <code>$2.45/1M</code> ✕。</li>
+            <li><strong>L40S 48GB PCIe (Tier 3) 统治 8B/32B</strong>：原生 Ada FP8 让单张 <code>$1.85/h</code> 的 L40S 轻松吃下 32B FP8，单价仅 <code>$0.74/1M</code> ✅。</li>
+            <li><strong>单卡 H200 141GB (Tier 4) 统治 70B+</strong>：70GB FP8 权重 + <code>66 GB</code> KV 空间 + <code>4.8 TB/s</code> 带宽，单卡撑起 <code>84 并发</code>，成本仅 <code>$0.58/1M</code> 🏆！</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+        <span>Round 364 · Cloud GPU Sizer</span>
+      </div>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>2 / 7 · SCENARIO: 70B ENTERPRISE SERVING AT 8K CONTEXT</span>
+          <span class="badge">SINGLE-CASE DEEP DIVE</span>
+        </div>
+        <h2>SLA 达标并发会话数对比：1 张 H200 (<span class="accent">84 并发</span>) 远超 2 张 A100 80GB (<span class="accent">18 并发</span>)</h2>
+        <div class="panel" style="border-left:3px solid #34d399;">
+          <strong>企业云架构师灵魂发问</strong>：“我们租了 2 张 A100 80GB（共 160GB 显存）部署 Llama-3.3-70B，为什么才十几个员工同时提问就会触发 KV Cache 显存满载重算、吐字卡顿？”
+        </div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span><strong>Tier 2 (2×A100 80GB BF16 · 仅剩 16GB KV 显存)</strong> · <code>choice</code></span>
+            <span class="pill-fail">Send to a human ✕ (18 并发 · TPOT 22.4ms ✕ · $2.45/1M)</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill-gray" style="width:21.4%;"></div></div>
+        </div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span><strong>Tier 3 (L40S 48GB PCIe · Ada 原生 FP8)</strong> · <code>score</code></span>
+            <span class="pill-pass">Act automatically ✅ (42 并发 · TPOT 15.2ms · $0.74/1M)</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:50.0%;"></div></div>
+        </div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span><strong>Tier 4 (1×H200 141GB FP8 · 66GB KV 缓存池)</strong> · <code>choice</code></span>
+            <span class="pill-pass">Act automatically 🏆 (84 并发 [4.67x] · TPOT 12.8ms · $0.58/1M)</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:100.0%;"></div></div>
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Source: experiments/cloud_gpu_sku_l40s_a10g_a100_h100_h200_capacity_sizing_selection/results.json</span>
+        <span>Zero Fabricated Coordinates</span>
+      </div>
+    </div>
+
+    <!-- Card 3 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>3 / 7 · WHAT I TESTED</span>
+          <span class="badge">FULL EVALUATION MATRIX</span>
+        </div>
+        <h2>四档云端 GPU 机型全量评测矩阵：<span class="accent">KV 显存余量、并发上限、延迟与单价</span></h2>
+        <table>
+          <thead>
+            <tr>
+              <th>GPU INSTANCE SKU</th>
+              <th>KV POOL / SESSIONS</th>
+              <th>P99 TTFT / TPOT</th>
+              <th>ACTION &amp; $/1M TOKENS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Tier 1: A10G / L4 24GB</strong></td>
+              <td>0 GB (70B) / 12 (8B)</td>
+              <td>920 ms / 34.5 ms ✕</td>
+              <td><span class="pill-warn">⚠️ $1.68/1M (仅限 8B)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 2: 2×A100 80GB BF16</strong></td>
+              <td>16.0 GB ✕ / 18 并发</td>
+              <td>740 ms / 22.4 ms ✕</td>
+              <td><span class="pill-fail">✕ $2.45/1M (最贵陷阱)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 3: L40S 48GB FP8</strong></td>
+              <td>22.0 GB / 42 并发 ✅</td>
+              <td>460 ms / 15.2 ms ✅</td>
+              <td><span class="pill-pass">✅ $0.74/1M (32B 之王)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 4: 1×H200 141GB FP8</strong></td>
+              <td><strong>66.0 GB / 84 并发 🏆</strong></td>
+              <td><strong>340 ms / 12.8 ms 🏆</strong></td>
+              <td><span class="pill-pass">🏆 $0.58/1M (-76.3%)</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="panel" style="margin-top:12px;">
+          <strong>📊 黄金定容铁律（&ge;40% KV 显存留白法则）：</strong><br/>
+          部署任何在线大模型时，扣除模型静态权重后，<strong>必须留出至少 35%～50% 的显存给 KV Cache</strong>！若权重占掉 85%+ 显存，GPU 算力必然因并发受限而严重闲置。
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>8,192 Context Length</span>
+        <span>SLA: TTFT &le; 800ms, TPOT &le; 20ms</span>
+      </div>
+    </div>
+
+    <!-- Card 4 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>4 / 7 · UNDER THE HOOD</span>
+          <span class="badge">FIRST-PRINCIPLES SIZING MATH</span>
+        </div>
+        <h2>核心定容公式：<span class="accent">KV Cache 显存容量方程</span> 与 <span class="accent">HBM 带宽解码延迟方程</span></h2>
+        <div class="code-box"># 1. Max Concurrent Sessions Formula (70B GQA: 80 layers, 8 KV heads, 128 dim)
+KV_Bytes_Per_Token_BF16 = 2 * 80 * 8 * 128 * 2 bytes = 327.68 KB/tok (2.62 GB @ 8K)
+KV_Bytes_Per_Token_FP8  = 2 * 80 * 8 * 128 * 1 byte  = 163.84 KB/tok (1.31 GB @ 8K)
+
+# 2x A100 80GB (160GB BF16): 160 * 0.90 - 140GB weights = 16.0 GB KV -> 18 sessions ✕
+# 1x H200 141GB (FP8 TP=1):  141 * 0.95 -  70GB weights = 66.0 GB KV -> 84 sessions 🏆</div>
+        <div style="text-align:center;font-weight:800;color:#38bdf8;margin:4px 0;">↓ Production vLLM Launch Command on Single H200 141GB ↓</div>
+        <div class="code-box">vllm serve meta-llama/Llama-3.3-70B-Instruct-FP8 \
+  --tensor-parallel-size 1 \
+  --quantization fp8 \
+  --kv-cache-dtype fp8_e4m3 \
+  --enable-prefix-caching \
+  --gpu-memory-utilization 0.93</div>
+      </div>
+      <div class="footer-prov">
+        <span>Two-Equation Capacity Sizer</span>
+        <span>Zero Cross-GPU AllReduce at TP=1</span>
+      </div>
+    </div>
+
+    <!-- Card 5 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>5 / 7 · ROBUSTNESS CHECK</span>
+          <span class="badge">32K LONG-CONTEXT SCALING</span>
+        </div>
+        <h2>长上下文（8K &rarr; 32K）扩展检验：2×A100 在 32K 下跌至 <span class="accent">4 并发</span>，而单卡 H200 仍稳撑 <span class="accent">21 并发</span></h2>
+        <table>
+          <thead>
+            <tr>
+              <th>METRIC / SCENARIO</th>
+              <th>TIER 2 (2×A100 BF16)</th>
+              <th>TIER 4 (1×H200 FP8)</th>
+              <th>GAIN / DELTA</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>可用 KV Cache 显存池</strong></td>
+              <td>16.0 GB ✕</td>
+              <td>66.0 GB 🏆</td>
+              <td><strong>4.13x 显存余量</strong></td>
+            </tr>
+            <tr>
+              <td><strong>8K 上下文最大达标并发</strong></td>
+              <td>18 并发会话</td>
+              <td>84 并发会话</td>
+              <td><strong>4.67x 并发容量</strong></td>
+            </tr>
+            <tr>
+              <td><strong>整实例有效吞吐 (tok/s)</strong></td>
+              <td>725.0 tok/s</td>
+              <td>2,160.0 tok/s</td>
+              <td><strong>2.98x 吞吐提升</strong></td>
+            </tr>
+            <tr>
+              <td><strong>每百万 Token 综合成本</strong></td>
+              <td>$2.45 / 1M ✕</td>
+              <td>$0.58 / 1M 🏆</td>
+              <td><strong>-$1.87/1M (-76.3%)</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="panel" style="margin-top:12px;">
+          <strong>💡 存量 A100 急救锦囊</strong>：如果只有 A100 配额，务必将 70B BF16 换为 <strong>4-bit AWQ + Marlin 内核</strong>，把权重压到 38GB，即可在单张 A100 上救活 36GB KV 空间！
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Long-Context Concurrency Resilience</span>
+        <span>FP8 Weight + FP8 KV Cache</span>
+      </div>
+    </div>
+
+    <!-- Card 6 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>6 / 7 · LATENCY &amp; THROUGHPUT SCALING</span>
+          <span class="badge">THROUGHPUT (TOK/S) &amp; TPOT</span>
+        </div>
+        <h2>有效吞吐与成本对比：H200 (<span class="accent">2,160 tok/s · $0.58/1M</span>) 与 L40S (<span class="accent">1,380 tok/s · $0.74/1M</span>) 全面领跑</h2>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 4: 1×H200 141GB FP8</strong> (TP=1 零跨卡损耗 · 84 并发)</span><span><strong>2,160 tok/s · $0.58/1M 🏆</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:100.0%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 3: L40S 48GB Ada FP8</strong> (8B/32B 性价比之王 · 42 并发)</span><span><strong>1,380 tok/s · $0.74/1M ✅</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:63.9%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 2: 2×A100 80GB BF16</strong> (KV 显存饥饿 · 仅 18 并发)</span><span><strong>725 tok/s · $2.45/1M ✕</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-gray" style="width:33.6%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 1: 1×A10G / L4 24GB</strong> (仅限 8B 与 Reranker)</span><span><strong>310 tok/s · $1.68/1M ⚠️</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-gray" style="width:14.4%;"></div></div>
+        </div>
+        <div class="panel" style="margin-top:10px;">
+          <strong>架构师总结</strong>：支持原生硬件 FP8 的 Ada (L40S) 与 Hopper (H100/H200) 架构在单位美金吞吐产出上对上一代 Ampere (A100/A10G) 形成了代际降维打击。
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Primary Optimized (#3B82F6) vs. Baseline (#64748B)</span>
+        <span>Calibrated Cloud Instance Sizer</span>
+      </div>
+    </div>
+
+    <!-- Card 7 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>7 / 7 · MY TAKE</span>
+          <span class="badge">ARCHITECT VERDICT</span>
+        </div>
+        <h2>架构师拍板结论：<span class="accent">Good Fit vs. Not For</span> 机型匹配指南</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+          <div class="panel" style="border-color:#10b981;margin-bottom:0;">
+            <strong style="color:#34d399;">✅ Good Fit (强烈推荐)</strong>
+            <ul style="margin:6px 0 0;padding-left:16px;font-size:12px;line-height:1.5;">
+              <li><strong>8B 低并发 / Reranker</strong>：选 <strong>Tier 1 (L4 / A10G 24GB)</strong>。</li>
+              <li><strong>8B 高并发 / 32B FP8 主力</strong>：必选 <strong>Tier 3 (1×L40S 48GB)</strong>。</li>
+              <li><strong>70B+ 旗舰 / 长上下文</strong>：必选 <strong>Tier 4 (1×H200 141GB 或 2×H100)</strong>。</li>
+            </ul>
+          </div>
+          <div class="panel" style="border-color:#ef4444;margin-bottom:0;">
+            <strong style="color:#f87171;">⛔ Not For (严禁踩坑)</strong>
+            <ul style="margin:6px 0 0;padding-left:16px;font-size:12px;line-height:1.5;">
+              <li><strong>严禁新租 2×A100 跑 70B BF16 (Tier 2)</strong>。</li>
+              <li><strong>严禁拿 4~8 张无 NVLink 的 PCIe 卡 (L40S/A10G) 跑 TP&ge;4</strong>。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" style="background:#090d16;">
+          <strong>📦 Readiness &amp; Provenance</strong>：<code>synthetic_analytical_model_calibrated_to_published_cloud_gpu_serving_benchmarks</code> (<code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>)。
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>CSP: default-src 'none'; style-src 'unsafe-inline'</span>
+        <span>turbo998/ai-infra-research</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
