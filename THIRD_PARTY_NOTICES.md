@@ -548,6 +548,8 @@ Round 359 基于公开发布的 PyTorch `nn.Module.register_buffer(persistent=Tr
 
 Round 360 基于公开发布的自回归循环 `torch.cat` 二次方 $O(S^2)$ 显存重分配与带宽放大原理、HuggingFace `StaticCache` 预分配定长缓冲区机制及 1D GPU 张量 `index_copy_` 对 `CUDAGraph` 录制重放的兼容原理构建原创合成自回归拷贝流量与耗时评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 361 基于公开发布的企业级大模型云托管按量计费（`Serverless MaaS PAYGO`）、预留吞吐单元（`Azure AI Foundry PTU / AWS Bedrock Provisioned Throughput`）、容器化自托管（`AKS + KAITO / KEDA + vLLM`）与 AI 网关零等待 429 溢出路由（`Hybrid Base + Burst Spillover`）架构规范构建原创合成容量利用率与月度 TCO 拐点评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
