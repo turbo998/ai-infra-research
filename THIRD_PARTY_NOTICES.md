@@ -560,6 +560,8 @@ Round 365 基于公开发布的多团队共享企业级模型服务中台（`Int
 
 Round 366 基于公开发布的金融政企混合云 AI 着陆区（`Azure/AWS Private Link + Zero Data Retention [ZDR] + HSM CMK`）与本地可逆假名化脱敏金库（`Microsoft Presidio Reversible PII Tokenization + L1-L4 Data Classification Router`）架构规范构建原创合成合规违例率、推理质量与月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 367 基于公开发布的主流大模型推理服务引擎（`Ollama/llama.cpp GGUF / NVIDIA TensorRT-LLM / vLLM V1 / SGLang RadixAttention & XGrammar`）在多轮 Agent 与结构化 JSON 负载下的架构原理构建原创合成 64 并发有效吞吐、新模型上线周期与每百万 Token 成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
