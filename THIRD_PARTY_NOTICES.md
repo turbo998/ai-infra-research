@@ -608,6 +608,8 @@ Round 389 基于公开发布的企业级 Kubernetes GPU 切分与小微模型混
 
 Round 390 基于公开发布的企业级实时 RAG 增量索引与流式同步架构（`Debezium CDC & Kafka 保序管道 / 段落级 SHA-256 内容寻址哈希去重 / 权限位图零重算原地更新 Metadata-Only Patch / 原子版本号切换与墓碑位图过滤 MVCC Tombstone`）构建原创合成 P95 新鲜度延迟、幽灵脏切片残留率、重复 Embedding 浪费率与月度入库成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 391 基于公开发布的企业级浏览器与电脑操控（`Browser-Use / Computer-Use GUI Agent`）基准（`WebArena & WorkArena & OSWorld / 蒸馏无障碍语义树 Accessibility Tree & Set-of-Marks 视觉标注 / Playwright 确定性选择器缓存回放与按需 LLM 自愈 / 敏感步骤人类移交 HITL Handoff`）构建原创合成 15 步流程成功率、平均耗时、Token 消耗与月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
