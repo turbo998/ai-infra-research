@@ -586,6 +586,8 @@ Round 378 基于公开发布的企业级智能问数与语义层架构（`Spider
 
 Round 379 基于公开发布的企业级大模型缓存与 KV 感知网关路由架构（`Static-First 提示词前缀工程 / vLLM Automatic Prefix Caching & SGLang RadixAttention / llm-d & vLLM Production Stack KV-Aware Prefix-Tree Routing / LMCache & Mooncake Host-DRAM 二级 KV 卸载 / 实体精确核验租户隔离语义缓存`）构建原创合成多副本集群缓存命中率、误命中率、P95 首字延迟与月度推理成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 380 基于公开发布的企业级大模型评测体系与 LLMOps 发布门禁实践（`MT-Bench 裁判模型偏见消融 / Promptfoo & DeepEval & Ragas 评测流水线 / 二值化原子检查表 Binary Rubric & 双向位置互换消偏 / AI 网关生产影子流量回放 Shadow Replay & 坏例自动飞轮`）构建原创合成发版前回归缺陷捕获率、人类专家 Cohen's Kappa 一致性、发版耗时与月度评测成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
