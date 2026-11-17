@@ -570,6 +570,8 @@ Round 370 基于公开发布的企业级 GPU 四层可观测与 FinOps 治理架
 
 Round 371 基于公开发布的企业级多智能体与 MCP 工具网关架构（`LangGraph/Temporal Durable State Checkpointing / Dynamic Top-K MCP Tool Retrieval / Planner-Executor Small-Large Model Collaboration / Append-Only Prefix Caching`）构建原创合成多步工作流 Token 消耗、完成成功率、端到端延迟与月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 372 基于公开发布的企业级多区域高可用容灾与跨区流量调度架构（`60/40 Active-Active Multi-Region Splitting / Global & DataZone PAYGO Spillover / P95 First-Token Tail-Latency Request Hedging`）构建原创合成年度综合可用性、故障恢复 RTO、亚健康拥塞期 P99 延迟与月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

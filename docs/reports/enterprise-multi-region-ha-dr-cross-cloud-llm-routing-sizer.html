@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级多区域高可用容灾与跨云流量调度计算器 (Round 372)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 372 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级多区域高可用容灾 (HA/DR) 与 P95 尾延迟对冲计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-multi-region-ha-dr-cross-cloud-llm-routing-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-multi-region-ha-dr-cross-cloud-llm-routing-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-multi-region-ha-dr-cross-cloud-llm-routing-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级多区域高可用容灾（60/40 双活 + Global 溢出 + P95 尾延迟对冲）ROI 仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_multi_region_ha_dr_cross_cloud_routing_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="haSlaSelect">1. 业务连续性 SLA 与故障容忍度 (Target Availability SLA):</label>
+          <select id="haSlaSelect" onchange="updateHaSizer()">
+            <option value="std">99.95% 标准企业级高可用 (同云双区容灾，零备机闲置浪费)</option>
+            <option value="crit" selected>99.995% 金融交易/全球核心级 (防跨云故障 + 免疫区域排队灰故障)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="haSpendSelect">2. 单区域稳态基荷月度预算 (Baseline Monthly Reservation):</label>
+          <select id="haSpendSelect" onchange="updateHaSizer()">
+            <option value="base" selected>$28,000 / 月 (400 RPS 峰值 · 18B Tokens/月)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>多区域高可用容灾档位</th>
+              <th>年度综合可用性</th>
+              <th>故障切换 RTO</th>
+              <th>区域拥塞期 P99 TTFT</th>
+              <th>备区闲置浪费率</th>
+              <th>月度平台总成本</th>
+            </tr>
+          </thead>
+          <tbody id="haSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="haDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const HA_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 单区域单端点裸奔部署', sla: '98.850% ✕ (年停100h)', rto: '180,000 ms ✕', ttft: '3,850.0 ms ✕', waste: '0.0%', cost: '$28,000 / 月 (无容灾)' },
+      { id: 't2', name: '🟨 Tier 2: 传统主备 1:1 闲置备机 (Active-Passive)', sla: '99.820%', rto: '45,000 ms ⚠️', ttft: '1,650.0 ms ✕', waste: '50.0% 闲置 ✕', cost: '$56,000 / 月 (翻倍 ✕)' },
+      { id: 't3', name: '🟦 Tier 3: 同云双区 60/40 双活 + Global PAYGO 溢出', sla: '99.950% ✅', rto: '4.5 ms ✅', ttft: '620.0 ms ✅', waste: '0.0% ✅', cost: '$29,400 / 月 (-47.5% ✅)' },
+      { id: 't4', name: '🟩 Tier 4: 跨云/混合双活 + 650ms P95 尾延迟对冲', sla: '99.995% 🏆', rto: '2.0 ms 🏆', ttft: '435.0 ms 🏆 (快8.85x)', waste: '0.0% 🏆', cost: '$30,800 / 月 (-45.0% 🏆)' }
+    ];
+
+    function updateHaSizer() {
+      const s = document.getElementById('haSlaSelect').value;
+      const bestId = s === 'std' ? 't3' : 't4';
+
+      const tbody = document.getElementById('haSizerTbody');
+      tbody.innerHTML = HA_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.sla}</code></td>
+          <td><code>${r.rto}</code></td>
+          <td><code>${r.ttft}</code></td>
+          <td><code>${r.waste}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('haDecisionCallout');
+      if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（零备机闲置的多区域高可用基线）</strong>：选用 <strong>Tier 3 (60/40 双区双活拆分 + Global/DataZone PAYGO 溢出)</strong>！把原本单区的预留预算拆成两区双活（0% 空转浪费），单区故障时 <code>4.5 ms</code> 溢出至 PAYGO，比传统 1:1 冷备每月立省 <code>$26,600 (-47.5%)</code> ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（金融核心级 99.995% SLA 终局标准）</strong>：强烈首选 <strong>Tier 4 (跨云/混合双活 + 650ms P95 首字延迟对冲 Hedging + 向量库双活)</strong>！当主区遭遇队列拥塞灰故障（650ms 未吐出首字）时立即向二区并发发送对冲请求，将抖动期 P99 TTFT 从 3,850ms 压至 <code>435 ms (快 8.85x)</code>，比 1:1 闲置备机每月净省 <code>$25,200 (-45.0%)</code> 🏆！`;
+      }
+    }
+    updateHaSizer();
+  </script>
+</body>
+</html>
