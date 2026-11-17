@@ -566,6 +566,8 @@ Round 368 基于公开发布的实时客服与企业 Copilot 低延迟编排架�
 
 Round 369 基于公开发布的海量离线文档批处理架构（`Azure/AWS Managed Async Batch API / Ray Data Spot GPU Streaming ETL / 二维模板前缀与长度排序分桶 2D Prefix & Length Bucketing`）构建原创合成百万文档跑批耗时、前缀缓存命中率与总成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 370 基于公开发布的企业级 GPU 四层可观测与 FinOps 治理架构（`NVIDIA DCGM Profiling Metrics / vLLM & SGLang KV Cache & Preemption Telemetry / OpenTelemetry GenAI Distributed Tracing / Per-Trace Loop & Budget Circuit Breakers`）构建原创合成故障定位耗时（MTTR）、告警漏报率与月度算力止损评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
