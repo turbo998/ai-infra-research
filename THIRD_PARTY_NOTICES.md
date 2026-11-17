@@ -600,6 +600,8 @@ Round 385 基于公开发布的企业级推理模型（`DeepSeek-R1 / o3-mini / 
 
 Round 386 基于公开发布的企业级机密计算大模型（`Confidential AI`）与硬件 TEE 基准（`AMD SEV-SNP & Intel TDX CPU 飞地 / NVIDIA Hopper H100 & H200 Confidential Computing PCIe SPDM 加密 / 双芯片远程证明 Remote Attestation & HSM 安全密钥释放 SKR / Kata Confidential Containers CoCo`）构建原创合成 70B 推理吞吐损耗、上线交付周期、运行态数据与模型 IP 保护及 3 年期月均 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 387 基于公开发布的企业级大模型结构化输出与约束解码基准（`JSONSchemaBench / XGrammar & llguidance 预编译字节下推自动机 / Reasoning-First 字段顺序思维链消融 / Pydantic 跨字段业务不变量校验`）构建原创合成首轮 JSON 语法合格率、业务语义准确率、单步掩码开销、P99 延迟与月度调用成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

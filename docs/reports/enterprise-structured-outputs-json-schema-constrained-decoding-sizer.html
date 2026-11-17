@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级大模型结构化输出 (Structured Outputs) 与 JSON Schema 约束解码计算器 (Round 387)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 387 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级大模型结构化输出 (Structured Outputs) 与 JSON Schema 约束解码计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-structured-outputs-json-schema-constrained-decoding-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-structured-outputs-json-schema-constrained-decoding-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-structured-outputs-json-schema-constrained-decoding-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级结构化输出（Reasoning-First 字段序 + XGrammar/llguidance + Pydantic 门控）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_structured_outputs_json_schema_constrained_decoding_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="jsonTaskSelect">1. 结构化任务类型 (Structured Task Type):</label>
+          <select id="jsonTaskSelect" onchange="updateJsonSizer()">
+            <option value="decision" selected>含审批/分类/评分判断的业务微服务契约 (需 Reasoning-First 字段序)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="jsonVolSelect">2. 月度 API 调用规模 (Monthly API Calls):</label>
+          <select id="jsonVolSelect" onchange="updateJsonSizer()">
+            <option value="20m" selected>20,000,000 次调用/月 (128K 词表模型)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>结构化输出与约束解码档位</th>
+              <th>首轮 JSON 语法合格率</th>
+              <th>业务语义准确率</th>
+              <th>单词掩码开销 / P99 延迟</th>
+              <th>2,000万次月成本</th>
+            </tr>
+          </thead>
+          <tbody id="jsonSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="jsonDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const JSON_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: Prompt 软提醒 + 正则清洗 + 报错重试', syn: '90.6% ✕ (9.4%解析崩)', sem: '81.2% ✕', lat: '0.00 ms / 4,850 ms ✕', cost: '$18,600 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 传统未缓存 CPU 逐词 CFG 掩码', syn: '100.0% ✅', sem: '84.5%', lat: '+28.00 ms/tok / 3,420 ms ✕', cost: '$24,200 / 月 ✕' },
+      { id: 't3', name: '🟦 Tier 3: XGrammar / llguidance 预编译 (但把结论字段排在推理前)', syn: '100.0% ✅', sem: '84.5% (先盲猜后圆谎)', lat: '0.04 ms/tok / 1,180 ms ✅', cost: '$11,200 / 月 ✅' },
+      { id: 't4', name: '🟩 Tier 4: 推理字段前置 (Reasoning-First) + 扁平化 XGrammar + Pydantic 门控', syn: '100.0% 🏆', sem: '97.8% 🏆 (+13.3pts)', lat: '0.03 ms/tok / 960 ms 🏆', cost: '$9,800 / 月 (-47.3% 🏆)' }
+    ];
+
+    function updateJsonSizer() {
+      const bestId = 't4';
+      const tbody = document.getElementById('jsonSizerTbody');
+      tbody.innerHTML = JSON_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.syn}</code></td>
+          <td><code>${r.sem}</code></td>
+          <td><code>${r.lat}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('jsonDecisionCallout').innerHTML =
+        `<strong>架构师选型结论（企业级微服务数据契约黄金标准）</strong>：强烈首选 <strong>Tier 4 (Reasoning-First 推理字段前置 + XGrammar/llguidance 预编译自动机 + Pydantic 跨字段业务校验)</strong>！单 Token 掩码开销仅 <code>0.03 ms</code>，首轮 JSON 语法合格率 <code>100.0%</code>，且通过将推理字段排在枚举结论前面使业务准确率暴涨 <code>+13.3 pts (97.8%)</code> 🏆！`;
+    }
+    updateJsonSizer();
+  </script>
+</body>
+</html>
