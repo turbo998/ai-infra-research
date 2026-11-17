@@ -632,6 +632,8 @@ Round 401 基于公开发布的企业级联络中心语音质检（`Contact Cent
 
 Round 402 基于公开发布的企业级零售电商智能搜索、双塔推荐与导购 Agent 基准（`离线供给侧多模态商品属性增广 Offline Catalog LLM Enrichment / 8ms TensorRT 槽位过滤提取 + Two-Tower 双塔个性化召回 / Redis 实时尺码库存与价格锚定 + SSE 异步流式导购卡片`）构建原创合成长尾搜索下单转化率（CVR）、价格缺货幻觉率、P95 商品列表延迟与月度基础设施成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 403 基于公开发布的企业级法务合同智能审查与 Word 修订基准（`LegalBench & CUAD & ContractNLI / 法务 AST 首章定义与跨章节引用锚定 Cross-Reference & Defined-Term Pinning / 红黄绿三级 Playbook Fallback 矩阵 + Myers 最小词级 Diff 注入 OpenXML w:ins & w:del`）构建原创合成非标风险条款召回率、过度改写错误率、DOCX 修订格式保真度与月度合同审查成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
