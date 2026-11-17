@@ -596,6 +596,8 @@ Round 383 基于公开发布的企业级高吞吐推理架构（`DistServe / Moo
 
 Round 384 基于公开发布的企业级大模型量化与硬件代际匹配基准（`LLM-Compressor & NeuralMagic 量化精度保持研究 / AWQ & GPTQ Marlin W4A16 仅权重量化 / NVIDIA Hopper & Ada 原生 FP8 W8A8 动态激活缩放与 FP8 KV Cache`）构建原创合成企业业务精度保持率、70B 权重显存占用、单卡吞吐与 200 RPS 集群月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 385 基于公开发布的企业级推理模型（`DeepSeek-R1 / o3-mini / QwQ`）测试时间计算扩展与预算治理基准（`s1 Budget-Forcing 优雅 </think> 收尾注入 / 70-20-10 三档认知难度路由 / DeepSeek 原生 Multi-Token Prediction [MTP] & EAGLE-3 无损投机解码`）构建原创合成思考 Token 消耗、半途截断率、任务准确率、端到端延迟与千万次月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
