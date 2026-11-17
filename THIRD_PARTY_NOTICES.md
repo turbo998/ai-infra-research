@@ -602,6 +602,8 @@ Round 386 基于公开发布的企业级机密计算大模型（`Confidential AI
 
 Round 387 基于公开发布的企业级大模型结构化输出与约束解码基准（`JSONSchemaBench / XGrammar & llguidance 预编译字节下推自动机 / Reasoning-First 字段顺序思维链消融 / Pydantic 跨字段业务不变量校验`）构建原创合成首轮 JSON 语法合格率、业务语义准确率、单步掩码开销、P99 延迟与月度调用成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 388 基于公开发布的企业级超长上下文与分层检索基准（`NVIDIA RULER 有效上下文评测 / Stanford Lost-in-the-Middle 注意力分布研究 / PageIndex & RAPTOR 分层目录树整章检索 / 70B FP8 KV Cache 显存并发模型`）构建原创合成百页长文档多跳条款准确率、P95 TTFT、单卡最大并发与百万次月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
