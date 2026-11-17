@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级千亿 MoE 大模型 (671B/235B) 并行架构与定容计算器 (Round 396)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 396 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级千亿 MoE 大模型 (DeepSeek-671B / Qwen3-235B) 并行策略与机型计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-moe-serving-expert-parallelism-tp-vs-ep-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-moe-serving-expert-parallelism-tp-vs-ep-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-moe-serving-expert-parallelism-tp-vs-ep-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级 671B MoE（单机 8xH200 NVLink vs. 多机 DP-Attention + DeepEP + EPLB）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_moe_serving_expert_parallelism_tp_vs_ep_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="moeScaleSelect">1. 集群规模与硬件条件 (Cluster Scale &amp; SKU):</label>
+          <select id="moeScaleSelect" onchange="updateMoeSizer()">
+            <option value="turnkey_h200">中小规模新采购 (&le; 24 张卡，无专职 RDMA 网络团队，可买 8xH200)</option>
+            <option value="large_ep" selected>存量 80GB H100/H800 多机集群 或 &ge;32 卡大规模算力中心 (具备 400G RDMA)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="moeTargetSelect">2. 业务目标吞吐产能 (Target Output Throughput):</label>
+          <select id="moeTargetSelect" onchange="updateMoeSizer()">
+            <option value="15k" selected>671B-FP8 (激活37B) · 目标产能 15,000 tok/s · SLA P99 TPOT &le; 30ms</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>671B MoE 硬件与并行架构档位</th>
+              <th>单卡有效吞吐 (tok/s/GPU)</th>
+              <th>热点慢卡负载不均比</th>
+              <th>P99 吐字间隔 (TPOT)</th>
+              <th>支撑 15,000 tok/s 月成本</th>
+            </tr>
+          </thead>
+          <tbody id="moeSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="moeDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const MOE_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 双机跨网纯张量并行 (2x 8xH100 TP=16，每字122次跨网同步)', tput: '148 tok/s ✕', strag: '1.00x (切碎专家)', tpot: '82.0 ms ✕ (严重卡顿)', cost: '$96,000 / 月 ✕' },
+      { id: 't2', name: '🟦 Tier 2: 单机 8x H200 (1,128GB) 机内 NVLink (零跨机通信)', tput: '606 tok/s ✅ (提4.1x)', strag: '1.35x', tpot: '23.5 ms ✅', cost: '$54,000 / 月 (免RDMA首选 ✅)' },
+      { id: 't3', name: '🟨 Tier 3: 跨机静态专家并行 (EP=16 无 EPLB 热点复制)', tput: '465 tok/s', strag: '3.40x ✕ (木桶慢卡)', tpot: '36.0 ms', cost: '$64,000 / 月' },
+      { id: 't4', name: '🟩 Tier 4: DP-Attention + 宽 EP + DeepEP 双批重叠 + EPLB 热点专家复制', tput: '738 tok/s 🏆 (提4.99x)', strag: '1.08x 🏆 (全群均衡)', tpot: '19.5 ms 🏆', cost: '$38,000 / 月 (-60.4% 🏆)' }
+    ];
+
+    function updateMoeSizer() {
+      const scale = document.getElementById('moeScaleSelect').value;
+      const bestId = scale === 'turnkey_h200' ? 't2' : 't4';
+
+      const tbody = document.getElementById('moeSizerTbody');
+      tbody.innerHTML = MOE_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.tput}</code></td>
+          <td><code>${r.strag}</code></td>
+          <td><code>${r.tpot}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('moeDecisionCallout');
+      if (bestId === 't2') {
+        callout.innerHTML = `<strong>架构师选型结论（中小规模企业私有化开箱即用首选）</strong>：选用 <strong>Tier 2 (单机 8x H200 1,128GB 显存)</strong>！单台机器完整装下 671B-FP8 权重与 457GB KV 缓存，100% 走机内 900 GB/s NVLink，免去一切跨机 RoCE/IB 网络调优 ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（多机 H100/H800 与大规模算力中心终局标准）</strong>：强烈首选 <strong>Tier 4 (DP-Attention + 宽专家并行 EP + DeepEP 双微批重叠 + EPLB 动态冗余热点专家复制)</strong>！彻底解决跨机 TP=16 碎矩阵与热门专家慢卡瓶颈，单卡有效吞吐飙升 <code>4.99x (738 tok/s/GPU)</code>，月省 <code>60.4% ($38,000/月)</code> 🏆！`;
+      }
+    }
+    updateMoeSizer();
+  </script>
+</body>
+</html>

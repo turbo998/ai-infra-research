@@ -1,0 +1,63 @@
+{
+  "experiment_id": "enterprise_moe_serving_expert_parallelism_tp_vs_ep_selection",
+  "round": 396,
+  "title": "Enterprise 671B/235B MoE Serving & Expert Parallelism (TP vs. EP + EPLB) Architecture Evaluation",
+  "provenance": "synthetic_analytical_model_calibrated_to_published_deepseek_v3_deepep_eplb_and_sglang_vllm_moe_benchmarks",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload_assumptions": {
+    "model_architecture": "671B Total / 37B Active MoE (FP8, 256 Routed Experts)",
+    "cluster_throughput_target_tok_s": 15000,
+    "sla_p99_tpot_ms": 30.0
+  },
+  "headline_findings": {
+    "tier4_per_gpu_tok_s": 738,
+    "throughput_gain_t4_vs_t1_x": 4.99,
+    "throughput_gain_t4_vs_t3_x": 1.59,
+    "cost_savings_t4_vs_t1_pct": 60.4,
+    "tier3_straggler_ratio": 3.4,
+    "tier4_straggler_ratio": 1.08
+  },
+  "architecture_tiers": [
+    {
+      "tier_id": "tier1_naive_dual_node_tp16",
+      "name": "Tier 1: 双机跨节点纯张量并行 (2x 8xH100 TP=16，每层2次跨机AllReduce同步，P99吐字卡至 82ms)",
+      "per_gpu_throughput_tok_s": 148,
+      "p99_tpot_ms": 82.0,
+      "hot_expert_straggler_ratio": 1.0,
+      "monthly_cost_for_15k_tok_s_usd": 96000,
+      "hardware_topology": "2x 8xH100 80GB (Cross-Node TP=16 Bottleneck)",
+      "status": "Severe Cross-Node AllReduce Stall"
+    },
+    {
+      "tier_id": "tier2_single_node_8xh200_intranode_nvlink",
+      "name": "Tier 2: 单机 8x H200 (1,128GB 显存) 机内 NVLink (零跨机通信，中小规模企业 671B 最简首选)",
+      "per_gpu_throughput_tok_s": 606,
+      "p99_tpot_ms": 23.5,
+      "hot_expert_straggler_ratio": 1.35,
+      "monthly_cost_for_15k_tok_s_usd": 54000,
+      "hardware_topology": "Single-Chassis 8x H200 141GB (900 GB/s NVLink)",
+      "status": "Best Turnkey Choice for <= 24 GPUs"
+    },
+    {
+      "tier_id": "tier3_multinode_static_ep16_no_eplb",
+      "name": "Tier 3: 跨机静态专家并行 (EP=16 无热点专家负载均衡，热门专家所在显卡负载高 3.4 倍拖慢全群)",
+      "per_gpu_throughput_tok_s": 465,
+      "p99_tpot_ms": 36.0,
+      "hot_expert_straggler_ratio": 3.4,
+      "monthly_cost_for_15k_tok_s_usd": 64000,
+      "hardware_topology": "2x 8xH100 80GB over RoCEv2/IB (Static EP=16)",
+      "status": "Bottlenecked by Hot-Expert Straggler GPU"
+    },
+    {
+      "tier_id": "tier4_wide_ep_deepep_overlap_plus_eplb",
+      "name": "Tier 4: 宽专家并行 (EP=16/32) + 双微批通信计算重叠 (DeepEP) + 动态冗余热点专家复制 (EPLB)",
+      "per_gpu_throughput_tok_s": 738,
+      "p99_tpot_ms": 19.5,
+      "hot_expert_straggler_ratio": 1.08,
+      "monthly_cost_for_15k_tok_s_usd": 38000,
+      "hardware_topology": "Multi-Node H100/H800/H200 + 400G RDMA + EPLB",
+      "status": "Large-Scale MoE Cluster Gold Standard"
+    }
+  ]
+}

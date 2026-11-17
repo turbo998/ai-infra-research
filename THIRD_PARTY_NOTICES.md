@@ -618,6 +618,8 @@ Round 394 基于公开发布的企业级长效智能体记忆（`Agentic Memory`
 
 Round 395 基于公开发布的企业级智能体代码执行沙箱（`Code Interpreter Sandbox`）基准（`AWS Firecracker MicroVM Memory Snapshot Restore / Google gVisor runsc 用户态内核拦截 / Azure Container Apps Dynamic Sessions & E2B 硬件隔离会话池`）构建原创合成含 Pandas 导包就绪延迟、内核安全隔离度、系统调用 I/O 损耗与月度执行成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 396 基于公开发布的企业级千亿参数稀疏 MoE 大模型推理架构基准（`DeepSeek-V3 & R1 671B 开源推理报告 / 单机 8xH200 1,128GB 机内 NVLink vs. 跨机 DP-Attention + 宽专家并行 EP / DeepEP 双微批通信计算重叠 / EPLB 动态冗余热点专家负载均衡`）构建原创合成单卡有效吞吐、热点专家负载偏斜比、P99 TPOT 与集群月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
