@@ -636,6 +636,8 @@ Round 403 基于公开发布的企业级法务合同智能审查与 Word 修订�
 
 Round 404 基于公开发布的企业级多云主权合规（`Sovereign AI Data Residency`）与跨模型可移植性基准（`GDPR & PIPL & PDPL 法域围栏网关 Geo-Fenced Sovereign Routing / DSPy 预编译分模型提示词配置档 Compiled Prompt Profiles / 开源权重主权锚定底座 Hybrid Open-Weights Sovereign Anchor`）构建原创合成主权数据驻留合规率、跨厂商容灾切换行为一致性、模型迁移改造工期与全球月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 405 基于公开发布的企业级金融支付反欺诈与反洗钱（`AML / FinCEN SAR`）调查基准（`14ms 流式特征 GNN-XGBoost 热路径 / 0.4% 灰区 8B 异步语义二次鉴权温路径 / 3 跳资金环路图数据库子图提取 + SQL 精确汇总 + [TXN_ID] 硬锚点 SAR 报告冷路径`）构建原创合成风控告警误报率（FPR）、支付授权 P99 延迟、AML 单案调查耗时与月度风控总成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
