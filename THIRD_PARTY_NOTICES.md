@@ -634,6 +634,8 @@ Round 402 基于公开发布的企业级零售电商智能搜索、双塔推荐�
 
 Round 403 基于公开发布的企业级法务合同智能审查与 Word 修订基准（`LegalBench & CUAD & ContractNLI / 法务 AST 首章定义与跨章节引用锚定 Cross-Reference & Defined-Term Pinning / 红黄绿三级 Playbook Fallback 矩阵 + Myers 最小词级 Diff 注入 OpenXML w:ins & w:del`）构建原创合成非标风险条款召回率、过度改写错误率、DOCX 修订格式保真度与月度合同审查成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 404 基于公开发布的企业级多云主权合规（`Sovereign AI Data Residency`）与跨模型可移植性基准（`GDPR & PIPL & PDPL 法域围栏网关 Geo-Fenced Sovereign Routing / DSPy 预编译分模型提示词配置档 Compiled Prompt Profiles / 开源权重主权锚定底座 Hybrid Open-Weights Sovereign Anchor`）构建原创合成主权数据驻留合规率、跨厂商容灾切换行为一致性、模型迁移改造工期与全球月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
