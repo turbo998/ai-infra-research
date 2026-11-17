@@ -552,6 +552,8 @@ Round 361 基于公开发布的企业级大模型云托管按量计费（`Server
 
 Round 362 基于公开发布的企业级 AI 网关（`Azure API Management GenAI Gateway / Envoy AI Gateway / Higress / Kong AI Gateway / LiteLLM Proxy`）流式 SSE 尾包 Token 计量、滑动窗口 TPM 配额隔离、Entra ID 托管标识免密鉴权与毫秒级故障切换原理构建原创合成网关转发开销、可用性与 FinOps 成本节省评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 363 基于公开发布的企业大模型定制路径（`Prompt Caching / Modular Hybrid RAG [BM25+Dense+Reranker] / RAFT 检索增强微调 / Teacher-to-SLM 知识蒸馏与 Cascade Router 级联路由`）架构原理构建原创合成领域准确率、事实幻觉率、端到端延迟与月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

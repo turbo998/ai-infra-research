@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业大模型定制路径与 ROI 计算器 (Round 363)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 363 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业大模型定制路径计算器 (Prompt+Cache vs. Hybrid RAG vs. LoRA SFT vs. 蒸馏路由)</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-llm-customization-prompt-rag-sft-distillation-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-llm-customization-prompt-rag-sft-distillation-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-llm-customization-prompt-rag-sft-distillation-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业大模型定制路径（Prompt 缓存 / 混合 RAG / SFT 微调 / 8B 蒸馏级联）ROI 决策仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_llm_customization_prompt_rag_sft_distillation_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="docScaleSelect">1. 企业知识库规模与更新频率 (Knowledge Scale &amp; Freshness):</label>
+          <select id="docScaleSelect" onchange="updateCustSizer()">
+            <option value="small">&le; 50 页静态手册 (几乎不改动，无细粒度权限隔离)</option>
+            <option value="large" selected>1万 ~ 50万+ 篇动态文档 (实时更新，要求 100% 原文引用与 ACL 权限)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="qVolumeSelect">2. 月度调用量与格式/延迟要求 (Monthly Request Volume &amp; SLA):</label>
+          <select id="qVolumeSelect" onchange="updateCustSizer()">
+            <option value="mod">&lt; 500,000 次/月 (第一阶段快速上线，通用问答为主)</option>
+            <option value="high" selected>1,000,000 ~ 3,000,000+ 次/月 (要求严格 JSON/SQL 格式 &amp; P99 &le; 500ms)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>企业定制路径档位</th>
+              <th>核心架构机制</th>
+              <th>领域任务准确率</th>
+              <th>事实幻觉率 &amp; 溯源</th>
+              <th>P99 端到端延迟</th>
+              <th>300 万次/月综合成本</th>
+            </tr>
+          </thead>
+          <tbody id="custSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="custDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const CUST_TIERS = [
+      { id: 't1', name: '🟨 Tier 1: 纯长提示词 + 上下文缓存 (Prompt + Cache)', stack: '32K 静态手册塞入缓存前缀 (无检索/微调)', acc: '78.5%', hall: '8.4% · 0% 溯源', lat: '1,680.0 ms ✕', cost: '$28,500 / 月' },
+      { id: 't2', name: '🟥 Tier 2: 裸 LoRA SFT 微调背诵动态文档 (无 RAG)', stack: '70B SFT 硬背 PDF (14天滞后 · 头号反模式)', acc: '64.2% ✕', hall: '19.6% ✕ · 0% 溯源', lat: '1,450.0 ms ✕', cost: '$34,200 / 月 ✕' },
+      { id: 't3', name: '🟦 Tier 3: 模块化混合检索 RAG + 100% 旗舰大模型', stack: 'BM25+向量+Reranker (<5s更新) + 70B/GPT-4o', acc: '91.8% ✅', hall: '1.8% ✅ · 100% 溯源', lat: '1,320.0 ms', cost: '$24,600 / 月 ✅' },
+      { id: 't4', name: '🟩 Tier 4: 混合 RAG + 大师蒸馏 8B LoRA 与级联路由', stack: 'Hybrid RAG + 82% 流量走蒸馏 8B / 18% 走 70B', acc: '95.4% 🏆', hall: '1.1% 🏆 · 100% 溯源', lat: '490.0 ms 🏆 (快2.69x)', cost: '$6,800 / 月 (-72.4% 🏆)' }
+    ];
+
+    function updateCustSizer() {
+      const docScale = document.getElementById('docScaleSelect').value;
+      const qVol = document.getElementById('qVolumeSelect').value;
+
+      let bestId = 't4';
+      if (docScale === 'small') bestId = 't1';
+      else if (qVol === 'mod') bestId = 't3';
+      else bestId = 't4';
+
+      const tbody = document.getElementById('custSizerTbody');
+      tbody.innerHTML = CUST_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.stack}</code></td>
+          <td><code>${r.acc}</code></td>
+          <td><code>${r.hall}</code></td>
+          <td><code>${r.lat}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('custDecisionCallout');
+      if (bestId === 't1') {
+        callout.innerHTML = `<strong>架构师选型结论（轻量静态规则 PoC）</strong>：选用 <strong>Tier 1 (长系统提示词 + Few-Shot + Prompt Caching)</strong>！当规则手册不足 50 页（&lt;32K Tokens）且无需按用户权限隔离时，直接利用上下文前缀缓存 1 天即可上线，零建库与训练成本。`;
+      } else if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（企业知识库第一阶段上线）</strong>：选用 <strong>Tier 3 (模块化混合检索 RAG + 70B/旗舰大模型)</strong>！切记严禁拿动态文档去做裸 SFT 微调（Tier 2 会导致 19.6% 幻觉）；先用 BM25+向量+Reranker 将准确率拉升至 <code>91.8%</code> 并沉淀线上真实轨迹。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（高并发生产级终局架构 · 300万次/月）</strong>：强烈首选 <strong>Tier 4 (混合 RAG 管实时知识 + 教师模型 RAFT 蒸馏 8B LoRA 小模型 + 级联路由)</strong>！将 <code>82%</code> 常规单跳与结构化 JSON 请求分流给单卡 8B 模型，准确率跃升至 <code>95.4%</code>，P99 延迟压至 <code>490 ms (快 2.69x)</code>，月成本从 <code>$24,600</code> 暴降至 <code>$6,800 (-72.4%)</code> 🏆！`;
+      }
+    }
+    updateCustSizer();
+  </script>
+</body>
+</html>
