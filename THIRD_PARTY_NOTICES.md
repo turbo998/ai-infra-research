@@ -582,6 +582,8 @@ Round 376 基于公开发布的企业级智能语音客服架构（`Semantic EOU
 
 Round 377 基于公开发布的企业级大模型四层纵深安全护栏架构（`Spotlighting 数据水印防间接注入 XPIA / Azure Prompt Shield & Prompt-Guard-86M 乐观并行拦截 / DeBERTa-NLI 流式检索忠实度核验 Groundedness / Open Policy Agent [OPA] 确定性工具策略门控`）构建原创合成越狱拦截率、延迟惩罚、幻觉漏出率与千万轮月度护栏成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 378 基于公开发布的企业级智能问数与语义层架构（`Spider 2.0 & BIRD-SQL 企业数仓基准 / Cube & dbt MetricFlow & Microsoft Fabric IQ 统一语义层指标编译 / SQLGlot AST 静态语法树校验 / 云数仓 EXPLAIN Dry-Run 字节扫描熔断 / OAuth 2.0 On-Behalf-Of 原生 RLS/CLS 权限下推`）构建原创合成业务口径准确率、失控扫表事故率与月度总成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

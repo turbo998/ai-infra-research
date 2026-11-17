@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级智能问数 (Text-to-SQL) 与语义层成本计算器 (Round 378)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 378 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级智能问数 (Text-to-SQL)、语义层 (Semantic Layer) 与数仓成本计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-text-to-sql-semantic-layer-bi-agent-architecture-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-text-to-sql-semantic-layer-bi-agent-architecture-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-text-to-sql-semantic-layer-bi-agent-architecture-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级智能问数（语义层 API + SQLGlot AST + EXPLAIN 熔断 + 原生 RLS）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_text_to_sql_semantic_layer_bi_agent_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="biScopeSelect">1. 业务查询范围 (Query Scope):</label>
+          <select id="biScopeSelect" onchange="updateBiSizer()">
+            <option value="kpi_only">高管固定 KPI 驾驶舱 (100% 预设财务/经营指标)</option>
+            <option value="hybrid" selected>全员自助智能问数 ChatBI (85% 核心指标 + 15% 长尾探索)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="biVolSelect">2. 数仓规模与月查询量 (Warehouse &amp; Query Volume):</label>
+          <select id="biVolSelect" onchange="updateBiSizer()">
+            <option value="500k" selected>300 张生产表 · 500,000 次分析查询/月</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>智能问数 (ChatBI) 架构档位</th>
+              <th>业务指标口径准确率</th>
+              <th>P95 响应延迟</th>
+              <th>失控全表扫描事故率</th>
+              <th>月度总成本 (LLM+数仓)</th>
+            </tr>
+          </thead>
+          <tbody id="biSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="biDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const BI_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 全库 DDL 裸塞 Prompt 直连数仓', acc: '52.0% ✕', lat: '9.8 s ✕', scan: '4.6% ✕ (天价扫表)', cost: '$38,500 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 动态 Schema-RAG + Golden SQL 范例', acc: '73.5% (公式漂移)', lat: '4.2 s', scan: '1.4% ✕', cost: '$14,200 / 月' },
+      { id: 't3', name: '🟦 Tier 3: 统一语义层指标 API 优先 (Cube / MetricFlow / Fabric IQ)', acc: '92.8% ✅ (+19.3pts)', lat: '2.1 s ✅', scan: '0.1% ✅', cost: '$7,600 / 月 (-80.3% ✅)' },
+      { id: 't4', name: '🟩 Tier 4: 语义层 + SQLGlot AST + EXPLAIN 10GB熔断 + 原生 RLS', acc: '96.4% 🏆 (含2步自愈)', lat: '2.3 s 🏆', scan: '0.0% 🏆 (零扫表事故)', cost: '$8,200 / 月 (-78.7% 🏆)' }
+    ];
+
+    function updateBiSizer() {
+      const scope = document.getElementById('biScopeSelect').value;
+      const bestId = scope === 'kpi_only' ? 't3' : 't4';
+
+      const tbody = document.getElementById('biSizerTbody');
+      tbody.innerHTML = BI_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.acc}</code></td>
+          <td><code>${r.lat}</code></td>
+          <td><code>${r.scan}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('biDecisionCallout');
+      if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（高管经营驾驶舱首选）</strong>：选用 <strong>Tier 3 (Cube / dbt MetricFlow / Fabric IQ 语义层指标 API)</strong>！严禁让大模型现场猜财务公式，由语义层 100% 确定性编译 SQL，口径准确率达 <code>92.8%</code>，月成本从 $38.5K 降至 <code>$7,600/月 (-80.3%)</code> ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（全员自助 ChatBI 黄金标准）</strong>：强烈首选 <strong>Tier 4 (85% 语义层 API + 15% 受控 Text-to-SQL + SQLGlot AST 静态校验 + EXPLAIN 10GB 熔断 + OAuth OBO 原生 RLS)</strong>！实现 <code>96.4%</code> 业务口径准确率与 <code>0.0%</code> 失控扫表事故率 🏆！`;
+      }
+    }
+    updateBiSizer();
+  </script>
+</body>
+</html>
