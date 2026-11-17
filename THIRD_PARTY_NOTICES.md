@@ -564,6 +564,8 @@ Round 367 基于公开发布的主流大模型推理服务引擎（`Ollama/llama
 
 Round 368 基于公开发布的实时客服与企业 Copilot 低延迟编排架构（`乐观并行安全护栏 Optimistic Parallel Guardrails / 滑动窗口流式输出审查 Sliding-Window Moderation / Pre-EOU 投机预取 Speculative RAG Prefetch / EAGLE-3 投机解码`）构建原创合成端到端 P99 首字延迟与千次交互成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 369 基于公开发布的海量离线文档批处理架构（`Azure/AWS Managed Async Batch API / Ray Data Spot GPU Streaming ETL / 二维模板前缀与长度排序分桶 2D Prefix & Length Bucketing`）构建原创合成百万文档跑批耗时、前缀缓存命中率与总成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

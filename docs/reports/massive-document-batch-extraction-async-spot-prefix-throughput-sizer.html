@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>海量离线文档批处理与知识抽取吞吐计算器 (Round 369)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 369 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">海量离线文档批处理与知识抽取吞吐计算器 (100 万份文档 / 6.6B Tokens)</span>
+      </div>
+      <div>
+        <a href="../components/massive-document-batch-extraction-async-spot-prefix-throughput-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/massive-document-batch-extraction-async-spot-prefix-throughput-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./massive-document-batch-extraction-async-spot-prefix-throughput-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 海量离线文档批处理（云端 5 折 Batch API vs. Spot+Ray Data vs. 二维前缀分桶填谷）决策仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/massive_document_batch_extraction_async_spot_prefix_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="batchModelSelect">1. 批处理调用的模型与运维偏好 (Model &amp; Ops Preference):</label>
+          <select id="batchModelSelect" onchange="updateBatchSizer()">
+            <option value="cloud">调用闭源商业模型 (GPT-4o / Claude) · 追求 0 运维、24h 内交付即可</option>
+            <option value="open" selected>调用开源主力模型 (Qwen-32B/72B / Llama-70B) 或 含大量 PDF OCR 解析</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="batchSortSelect">2. 队列调度与算力复用策略 (Scheduling &amp; Capacity Strategy):</label>
+          <select id="batchSortSelect" onchange="updateBatchSizer()">
+            <option value="spot">租用独立 3 折 Spot GPU 流式跑批 (未做全局模板与长度排序)</option>
+            <option value="sorted" selected>入队前二维排序 (template_id + length_bucket) + 夜间闲置预留卡填谷</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>离线批处理架构档位</th>
+              <th>对在线业务 429 冲击</th>
+              <th>前缀缓存命中率</th>
+              <th>有效吞吐速率</th>
+              <th>100 万篇完成耗时</th>
+              <th>100 万篇总成本</th>
+            </tr>
+          </thead>
+          <tbody id="batchSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="batchDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const BATCH_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 多线程同步狂刷在线实时 API', imp: '34.5% 429 风暴 ✕', hit: '12.0% ✕', tput: '7.2 篇/秒 ✕', hrs: '38.5 小时 ✕', cost: '$26,400 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 云厂商托管异步 Batch API (.jsonl 官方5折)', imp: '0.0% (独立配额 ✅)', hit: '45.0%', tput: '42.7 篇/秒', hrs: '6.5 小时 ✅', cost: '$13,200 (-50.0% ✅)' },
+      { id: 't3', name: '🟦 Tier 3: 3折 Spot GPU + Ray Data 异构流式管线', imp: '0.0% (独立 Spot 池 ✅)', hit: '58.0%', tput: '99.2 篇/秒 ✅', hrs: '2.8 小时 ✅', cost: '$4,250 (-83.9% ✅)' },
+      { id: 't4', name: '🟩 Tier 4: 二维前缀/长度排序分桶 + 夜间预留底座填谷', imp: '0.0% (闲时 P2 队列 🏆)', hit: '99.9% 🏆', tput: '173.6 篇/秒 🏆', hrs: '1.6 小时 🏆 (快24.1x)', cost: '$1,480 (-94.4% 🏆)' }
+    ];
+
+    function updateBatchSizer() {
+      const m = document.getElementById('batchModelSelect').value;
+      const s = document.getElementById('batchSortSelect').value;
+
+      let bestId = 't4';
+      if (m === 'cloud') bestId = 't2';
+      else if (s === 'spot') bestId = 't3';
+      else bestId = 't4';
+
+      const tbody = document.getElementById('batchSizerTbody');
+      tbody.innerHTML = BATCH_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.imp}</code></td>
+          <td><code>${r.hit}</code></td>
+          <td><code>${r.tput}</code></td>
+          <td><code>${r.hrs}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('batchDecisionCallout');
+      if (bestId === 't2') {
+        callout.innerHTML = `<strong>架构师选型结论（闭源模型免运维跑批）</strong>：选用 <strong>Tier 2 (Azure Global Batch / Bedrock Batch 异步 JSONL 接口)</strong>！完全隔离在线生产配额，零服务器运维，直接享受官方 <code>50%</code> 半价折扣（<code>$13,200 / 1M 篇</code>）✅。`;
+      } else if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（PDF OCR + 弹性 Spot GPU 流水线）</strong>：选用 <strong>Tier 3 (Spot GPU + Ray Data 异构管线)</strong>！利用 2,000 篇分片 Parquet 断点续传安全驾驭 3 折 Spot GPU，<code>2.8 小时</code> 跑完百万文档，成本降至 <code>$4,250 (-83.9%)</code> ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（百万级文档抽取终局标准）</strong>：强烈首选 <strong>Tier 4 (入队前按 template_id 与 length_bucket 二维排序 + 夜间闲置预留底座填谷)</strong>！将 2,500 词抽取规则的前缀缓存命中率拉升至 <code>99.9%</code>（少算 25 亿 Token），<code>1.6 小时</code> 极速跑完，总成本从 <code>$26,400</code> 暴降至 <code>$1,480 (-94.4%)</code> 🏆！`;
+      }
+    }
+    updateBatchSizer();
+  </script>
+</body>
+</html>
