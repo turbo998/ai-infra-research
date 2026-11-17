@@ -638,6 +638,8 @@ Round 404 基于公开发布的企业级多云主权合规（`Sovereign AI Data 
 
 Round 405 基于公开发布的企业级金融支付反欺诈与反洗钱（`AML / FinCEN SAR`）调查基准（`14ms 流式特征 GNN-XGBoost 热路径 / 0.4% 灰区 8B 异步语义二次鉴权温路径 / 3 跳资金环路图数据库子图提取 + SQL 精确汇总 + [TXN_ID] 硬锚点 SAR 报告冷路径`）构建原创合成风控告警误报率（FPR）、支付授权 P99 延迟、AML 单案调查耗时与月度风控总成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 406 基于公开发布的企业级医疗诊室环境语音病历（`Ambient Clinical Scribe`）与医保编码基准（`专科医学热词 ASR + RxNorm 药典剂量极值门禁 / HL7 FHIR R4 阳性与阴性症状隔离 Schema / 两阶段 ICD-10-CM & SNOMED-CT 本体树受限检索与句级原声溯源`）构建原创合成药品剂量与否定词临床准确率、ICD-10 医保编码合格率、医生审阅签字耗时与月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
