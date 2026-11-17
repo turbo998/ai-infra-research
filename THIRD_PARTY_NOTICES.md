@@ -598,6 +598,8 @@ Round 384 基于公开发布的企业级大模型量化与硬件代际匹配基�
 
 Round 385 基于公开发布的企业级推理模型（`DeepSeek-R1 / o3-mini / QwQ`）测试时间计算扩展与预算治理基准（`s1 Budget-Forcing 优雅 </think> 收尾注入 / 70-20-10 三档认知难度路由 / DeepSeek 原生 Multi-Token Prediction [MTP] & EAGLE-3 无损投机解码`）构建原创合成思考 Token 消耗、半途截断率、任务准确率、端到端延迟与千万次月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 386 基于公开发布的企业级机密计算大模型（`Confidential AI`）与硬件 TEE 基准（`AMD SEV-SNP & Intel TDX CPU 飞地 / NVIDIA Hopper H100 & H200 Confidential Computing PCIe SPDM 加密 / 双芯片远程证明 Remote Attestation & HSM 安全密钥释放 SKR / Kata Confidential Containers CoCo`）构建原创合成 70B 推理吞吐损耗、上线交付周期、运行态数据与模型 IP 保护及 3 年期月均 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
