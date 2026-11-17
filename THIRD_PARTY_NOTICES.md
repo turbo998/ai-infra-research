@@ -620,6 +620,8 @@ Round 395 基于公开发布的企业级智能体代码执行沙箱（`Code Inte
 
 Round 396 基于公开发布的企业级千亿参数稀疏 MoE 大模型推理架构基准（`DeepSeek-V3 & R1 671B 开源推理报告 / 单机 8xH200 1,128GB 机内 NVLink vs. 跨机 DP-Attention + 宽专家并行 EP / DeepEP 双微批通信计算重叠 / EPLB 动态冗余热点专家负载均衡`）构建原创合成单卡有效吞吐、热点专家负载偏斜比、P99 TPOT 与集群月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 397 基于公开发布的企业级智能工单（`ITSM ServiceNow / Jira`）与 AIOps 自动排障基准（`IBM ITBench / 拓扑依赖告警风暴聚合 Alert Correlation / 历史已结工单案例推理 Case-Based Reasoning / 只读取证全自动预取与受控参数化 Runbook 一键人类审批`）构建原创合成工单自动化闭环率、平均故障恢复时间（MTTR）、生产误变更事故率与月度运营成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
