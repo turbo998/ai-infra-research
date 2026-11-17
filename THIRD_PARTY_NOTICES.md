@@ -604,6 +604,8 @@ Round 387 基于公开发布的企业级大模型结构化输出与约束解码�
 
 Round 388 基于公开发布的企业级超长上下文与分层检索基准（`NVIDIA RULER 有效上下文评测 / Stanford Lost-in-the-Middle 注意力分布研究 / PageIndex & RAPTOR 分层目录树整章检索 / 70B FP8 KV Cache 显存并发模型`）构建原创合成百页长文档多跳条款准确率、P95 TTFT、单卡最大并发与百万次月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 389 基于公开发布的企业级 Kubernetes GPU 切分与小微模型混部基准（`NVIDIA GPU Operator Time-Slicing vs. Multi-Instance GPU [MIG] vs. CUDA Multi-Process Service [MPS] / Kubernetes Dynamic Resource Allocation [DRA]`）构建原创合成 28 个辅助模型所需 GPU 卡数、平均 SM 算力利用率、邻居 OOM 连坐率、P99 延迟与月度集群成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

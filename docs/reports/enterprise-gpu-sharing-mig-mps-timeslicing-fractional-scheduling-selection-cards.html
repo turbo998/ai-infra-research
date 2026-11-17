@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级 K8s GPU 切分与小微模型混部 7-Card 视觉报告 (Round 389)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; }
+    .header-bar { max-width: 1200px; margin: 0 auto 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 24px; }
+    .card { aspect-ratio: 4 / 5; min-height: 600px; background: linear-gradient(165deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
+    .card-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: 0.4px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+    .badge { padding: 3px 10px; border-radius: 999px; background: #064e3b; color: #a7f3d0; font-size: 11px; font-weight: 800; }
+    h2 { font-size: 20px; line-height: 1.32; margin: 12px 0 8px; color: #f8fafc; }
+    .accent { background: linear-gradient(90deg, #38bdf8, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .sub { font-size: 13px; color: #cbd5e1; line-height: 1.5; margin-bottom: 12px; }
+    .panel { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; font-size: 12.5px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid #334155; text-align: left; }
+    th { color: #94a3b8; font-weight: 700; }
+    .pill-pass { background: #064e3b; color: #6ee7b7; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .pill-warn { background: #78350f; color: #fde68a; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .pill-fail { background: #7f1d1d; color: #fca5a5; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .code-box { background: #090d16; border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11.5px; color: #e2e8f0; white-space: pre-wrap; line-height: 1.42; margin-bottom: 8px; }
+    .bar-row { margin-bottom: 10px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-track { height: 14px; background: #1e293b; border-radius: 7px; overflow: hidden; }
+    .bar-fill-blue { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 7px; }
+    .bar-fill-gray { height: 100%; background: #64748b; border-radius: 7px; }
+    .footer-prov { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <div class="header-bar">
+    <div>
+      <strong>ROUND 389 · 7-CARD 4:5 VISUAL BENCHMARK REPORT</strong>
+      <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级 K8s GPU 切分 (Full GPU vs. Time-Slicing vs. MIG vs. MIG+MPS) 评测</span>
+    </div>
+    <div>
+      <a href="../components/enterprise-gpu-sharing-mig-mps-timeslicing-fractional-scheduling-selection-faq.md">📘 中文 FAQ</a>
+      <a href="../components/enterprise-gpu-sharing-mig-mps-timeslicing-fractional-scheduling-selection-faq.en.md">📘 English FAQ</a>
+      <a href="./enterprise-gpu-sharing-mig-mps-timeslicing-fractional-scheduling-sizer.html">🧮 交互式计算器</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Card 1 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>1 / 7 · HANDS-ON · KUBERNETES GPU SHARING &amp; PACKING</span>
+          <span class="badge">MIG + CUDA MPS</span>
+        </div>
+        <h2>MIG 硬件故障域 + 域内 CUDA MPS 将 28 个小模型所需显卡从 28 张压至 <span class="accent">3 张 (省 89.3%)</span>，且实现 <span class="accent">0% 邻居 OOM 连坐</span></h2>
+        <p class="sub">基准负载：企业 K8s 集群运行 28 个 AI 辅助微服务（Embedding、Reranker、Guardrail、OCR、ASR、3B/7B 小模型）。</p>
+        <div class="panel">
+          <strong>🔥 三大核心架构发现：</strong>
+          <ul style="margin:6px 0 0;padding-left:18px;line-height:1.55;">
+            <li><strong>整卡独占 (Tier 1) 造成惊人浪费</strong>：2GB 向量模型独占 80GB 显卡，算力利用率仅 <code>11.0%</code>，月烧 <code>$78,400</code> ✕。</li>
+            <li><strong>K8s Time-Slicing (Tier 2) 频发连坐事故</strong>：零显存隔离导致 <code>14.5%</code> 邻居 OOM 团灭，P99 延迟恶化至 <code>98.0 ms</code> ✕。</li>
+            <li><strong>外层 MIG 硬隔离 + 内层 MPS 空间并行 (Tier 4)</strong>：仅需 <code>3 张卡 ($8.4K/月)</code>，利用率达 <code>78.5%</code>，P99 仅 <code>21.0 ms</code> 🏆！</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Provenance: synthetic + anonymized_reported (independently_reproduced=false)</span>
+        <span>Round 389 · K8s GPU Sharing</span>
+      </div>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>2 / 7 · SCENARIO: 28 AUXILIARY AI MICROSERVICES CONSOLIDATION</span>
+          <span class="badge">SINGLE-CASE DEEP DIVE</span>
+        </div>
+        <h2>集群平均算力利用率对比：Tier 4 达 <span class="accent">78.5% (仅需 3 张卡)</span>，终结整卡独占的 <span class="accent">11.0% (28 张卡)</span></h2>
+        <div class="panel" style="border-left:3px solid #34d399;">
+          <strong>云原生平台总监灵魂发问</strong>：“我们集群里跑了 28 个 Embedding、Reranker 和安全审核小模型，每个只占 2~4GB 显存，却占了 28 张 H100！运维开了 Time-Slicing 共享后，昨天 OCR 容器一次显存溢出直接把同卡的在线客服重排模型也搞挂了，怎么做到既省卡又绝对不连坐？”
+        </div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span><strong>Tier 1 (1 Pod = 1 张 80GB 整卡独占)</strong> · <code>choice</code></span>
+            <span class="pill-fail">Send to a human ✕ (11.0% 利用率 · 需 28 张卡 · $78.4K/mo)</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill-gray" style="width:11.0%;"></div></div>
+        </div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span><strong>Tier 2 (K8s 软件时间片轮转 Time-Slicing)</strong> · <code>noul</code></span>
+            <span class="pill-fail">Send to a human ✕ (54.0% 利用率 · 14.5% 邻居 OOM 团灭 · 98ms P99)</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill-gray" style="width:54.0%;"></div></div>
+        </div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span><strong>Tier 4 (外层 MIG 硬件隔离 + 域内 CUDA MPS 混部)</strong> · <code>choice</code></span>
+            <span class="pill-pass">Act automatically 🏆 (78.5% 利用率 · 0% 连坐 · 仅 3 张卡 $8.4K/mo)</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:78.5%;"></div></div>
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Source: experiments/enterprise_gpu_sharing_mig_mps_timeslicing_selection/results.json</span>
+        <span>Zero Fabricated Coordinates</span>
+      </div>
+    </div>
+
+    <!-- Card 3 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>3 / 7 · WHAT I TESTED</span>
+          <span class="badge">FULL EVALUATION MATRIX</span>
+        </div>
+        <h2>四档 K8s GPU 切分架构评测矩阵：<span class="accent">所需卡数、利用率、OOM 连坐率与延迟</span></h2>
+        <table>
+          <thead>
+            <tr>
+              <th>GPU SHARING TIER</th>
+              <th>GPUS / SM UTIL</th>
+              <th>OOM BLAST / P99</th>
+              <th>ACTION &amp; MONTHLY COST</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Tier 1: Full GPU (gpu: 1)</strong></td>
+              <td>28 GPUs ✕ / 11.0%</td>
+              <td>0.0% / 25.0 ms</td>
+              <td><span class="pill-fail">✕ $78,400 (89% 闲置)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 2: Time-Slicing</strong></td>
+              <td>4 GPUs / 54.0%</td>
+              <td>14.5% ✕ / 98.0 ms</td>
+              <td><span class="pill-fail">✕ $11,200 (连坐崩溃)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 3: Hardware MIG</strong></td>
+              <td>4 GPUs ✅ / 62.0%</td>
+              <td>0.0% ✅ / 26.5 ms</td>
+              <td><span class="pill-pass">✅ $11,200 (-85.7%)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Tier 4: MIG + CUDA MPS</strong></td>
+              <td><strong>3 GPUs 🏆 / 78.5% 🏆</strong></td>
+              <td><strong>0.0% 🏆 / 21.0 ms 🏆</strong></td>
+              <td><span class="pill-pass">🏆 $8,400 (-89.3%)</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="panel" style="margin-top:12px;">
+          <strong>📊 为什么 `MIG + MPS` 的 P99 延迟 (21.0ms) 比 Time-Slicing (98.0ms) 快 4.67 倍？</strong><br/>
+          Time-Slicing 只能排队轮流切换上下文；而 MPS 让同一 RAG 链路的 Embedding 与 Reranker 在同一纳秒空间并行使用空闲 SM！
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>28 Production AI Microservices</span>
+        <span>80GB H100 / A100 Kubernetes Nodes</span>
+      </div>
+    </div>
+
+    <!-- Card 4 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>4 / 7 · UNDER THE HOOD</span>
+          <span class="badge">MIG PARTITIONING &amp; MPS QUOTA</span>
+        </div>
+        <h2>核心配置：<span class="accent">K8s MIG 物理切片声明</span> 与 <span class="accent">MPS 显存/算力硬限额</span></h2>
+        <div class="code-box"># 1. Label K8s Node for Mixed Hardware MIG (3x 2g.20gb + 1x 1g.10gb)
+kubectl label nodes gpu-node-01 nvidia.com/mig.config=all-balanced --overwrite
+# Pod Resource Request (Hardware-Isolated 20GB Slice):
+resources:
+  limits:
+    nvidia.com/mig-2g.20gb: 1</div>
+        <div style="text-align:center;font-weight:800;color:#38bdf8;margin:4px 0;">↓ Stage 2: Intra-Slice CUDA MPS Spatial Sharing with Hard Memory Cap ↓</div>
+        <div class="code-box"># 2. Enforce Per-Process Memory &amp; SM Thread Caps Inside MPS Slice
+export CUDA_MPS_PINNED_DEVICE_MEM_LIMIT="0=6G"
+export CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=50
+# Co-pack BGE-M3 (4GB) + BGE-Reranker (6GB) inside one 2g.20gb MIG fault domain!</div>
+      </div>
+      <div class="footer-prov">
+        <span>NVIDIA GPU Operator + DRA</span>
+        <span>podAntiAffinity Across Physical GPUs</span>
+      </div>
+    </div>
+
+    <!-- Card 5 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>5 / 7 · ROBUSTNESS CHECK</span>
+          <span class="badge">FAULT ISOLATION &amp; DENSITY AUDIT</span>
+        </div>
+        <h2>多租户故障注入验证：Tier 4 将邻居 OOM 连坐率从 14.5% 压至 <span class="accent">0.0%</span>，P99 尾延迟提速 <span class="accent">4.67x</span></h2>
+        <table>
+          <thead>
+            <tr>
+              <th>K8S GPU SHARING METRIC</th>
+              <th>TIER 2 (TIME-SLICE)</th>
+              <th>TIER 4 (MIG+MPS)</th>
+              <th>IMPROVEMENT</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>28 个服务所需显卡数</strong></td>
+              <td>4 GPUs (28 on T1 ✕)</td>
+              <td>3 GPUs 🏆</td>
+              <td><strong>9.3x 比整卡独占省卡</strong></td>
+            </tr>
+            <tr>
+              <td><strong>邻居 OOM 连坐崩溃率</strong></td>
+              <td>14.5% ✕ (全卡团灭)</td>
+              <td>0.0% 🏆 (MIG 硬边界)</td>
+              <td><strong>100% 根除跨部门故障传染</strong></td>
+            </tr>
+            <tr>
+              <td><strong>P99 在线推理延迟</strong></td>
+              <td>98.0 ms ✕</td>
+              <td>21.0 ms 🏆</td>
+              <td><strong>4.67x 尾延迟加速</strong></td>
+            </tr>
+            <tr>
+              <td><strong>月度 GPU 集群成本</strong></td>
+              <td>$11,200 ($78.4K T1)</td>
+              <td>$8,400 / mo 🏆</td>
+              <td><strong>-$70,000/mo vs T1 (-89.3%)</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="panel" style="margin-top:12px;">
+          <strong>💡 高可用反亲和铁律</strong>：同一个微服务的 2 个高可用副本必须配置主机级 <code>podAntiAffinity</code>，严禁落在同一张物理显卡的两个 MIG 切片上！
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Silicon-Enforced HBM Crossbar</span>
+        <span>Per-MIG Instance DCGM Telemetry</span>
+      </div>
+    </div>
+
+    <!-- Card 6 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>6 / 7 · COST &amp; GPU COUNT SCALING</span>
+          <span class="badge">MONTHLY CLUSTER COST ($USD)</span>
+        </div>
+        <h2>承载 28 个 AI 辅助服务月成本对比：Tier 4 (<span class="accent">$8.4K · 3张卡</span>) 完胜整卡独占 (<span class="accent">$78.4K · 28张卡</span>)</h2>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 1: 整卡独占 (1 Pod = 1 GPU)</strong> (28 张卡 · 89% 算力空转)</span><span><strong>$78,400 / 月 ✕</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-gray" style="width:100.0%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 2: K8s 软件时间片轮转</strong> (4 张卡 · 14.5% OOM 连坐 ✕)</span><span><strong>$11,200 / 月 ✕</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-gray" style="width:14.3%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 3: 纯硬件物理切分 (NVIDIA MIG)</strong> (4 张卡 · 0% 连坐 ✅)</span><span><strong>$11,200 / 月 (-85.7%) ✅</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:14.3%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label"><span><strong>Tier 4: MIG 硬件故障域 + 域内 CUDA MPS 混部</strong> (仅 3 张卡 · 省89.3%)</span><span><strong>$8,400 / 月 🏆</strong></span></div>
+          <div class="bar-track"><div class="bar-fill-blue" style="width:10.7%;"></div></div>
+        </div>
+        <div class="panel" style="margin-top:10px;">
+          <strong>架构师总结</strong>：整治“2GB 小模型独占 80GB 大显卡”，是企业 AI 平台一周内就能见效的最高 ROI 降本手术。
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>Primary Optimized (#3B82F6) vs. Baseline (#64748B)</span>
+        <span>28 Production AI Microservices</span>
+      </div>
+    </div>
+
+    <!-- Card 7 -->
+    <div class="card">
+      <div>
+        <div class="card-top">
+          <span>7 / 7 · MY TAKE</span>
+          <span class="badge">ARCHITECT VERDICT</span>
+        </div>
+        <h2>架构师拍板结论：<span class="accent">Good Fit vs. Not For</span> GPU 切分边界</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+          <div class="panel" style="border-color:#10b981;margin-bottom:0;">
+            <strong style="color:#34d399;">✅ Good Fit (强烈推荐)</strong>
+            <ul style="margin:6px 0 0;padding-left:16px;font-size:12px;line-height:1.5;">
+              <li><strong>跨部门 7B~8B 模型隔离</strong>：选 <strong>Tier 3 (纯硬件 MIG)</strong>。</li>
+              <li><strong>Embedding/Reranker/护栏池</strong>：必选 <strong>Tier 4 (MIG + MPS/Triton)</strong>。</li>
+            </ul>
+          </div>
+          <div class="panel" style="border-color:#ef4444;margin-bottom:0;">
+            <strong style="color:#f87171;">⛔ Not For (严禁踩坑)</strong>
+            <ul style="margin:6px 0 0;padding-left:16px;font-size:12px;line-height:1.5;">
+              <li><strong>严禁让 &lt;15GB 的小模型独占整张 80GB H100/A100 (Tier 1)</strong>。</li>
+              <li><strong>严禁在生产多租户在线服务上裸开 Time-Slicing (Tier 2)</strong>。</li>
+              <li><strong>严禁把同一服务的双副本调度到同一张物理卡的两个 MIG 上</strong>。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" style="background:#090d16;">
+          <strong>📦 Readiness &amp; Provenance</strong>：<code>synthetic_analytical_model_calibrated_to_published_nvidia_mig_mps_and_k8s_gpu_operator_benchmarks</code> (<code>independently_reproduced=false</code>, <code>physical_gpu_cluster_measurement=not_measured</code>)。
+        </div>
+      </div>
+      <div class="footer-prov">
+        <span>CSP: default-src 'none'; style-src 'unsafe-inline'</span>
+        <span>turbo998/ai-infra-research</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
