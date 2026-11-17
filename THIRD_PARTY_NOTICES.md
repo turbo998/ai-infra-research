@@ -578,6 +578,8 @@ Round 374 基于公开发布的企业级生产 RAG 知识中台架构（`Filtere
 
 Round 375 基于公开发布的企业级代码助手与 SWE-Agent 架构（`7B/14B FP8 + Prompt Lookup Decoding [PLD] 行间补全池 / Tree-sitter AST & LSP PageRank Repo-Map 符号图谱 / Firecracker 隔离沙箱编译器与单测自愈闭环`）构建原创合成 FIM P99 延迟、Tab 采纳率、跨文件编译通过率与 2,000 人研发团队月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 376 基于公开发布的企业级智能语音客服架构（`Semantic EOU 语义端点断句 / 流式 ASR 声学副语言情绪标签 Paralinguistic Emotion Tagging / 首子句文本门控流式 WebSocket TTS / 双工附和词过滤与真打断状态机`）构建原创合成端到端首音延迟（TTFA）、合规话术受控度、打断准确率与 250 万分钟月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
