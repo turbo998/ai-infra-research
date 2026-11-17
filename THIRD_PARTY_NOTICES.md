@@ -628,6 +628,8 @@ Round 399 基于公开发布的企业级端云协同（`Edge-Cloud Hybrid AI`）
 
 Round 400 基于公开发布的企业级 Embedding 与 Reranker 双阶段检索管线基准（`MTEB & C-MTEB / BGE-M3 & Qwen3-Embedding 俄罗斯套娃降维 Matryoshka Representation Learning [MRL] / 分数裕度早停 Margin Early-Exit / TensorRT FP8 Top-30 Cross-Encoder 重排与相关性阈值截断`）构建原创合成 NDCG@10 排序精度、P95 检索延迟、向量维度内存占比与月度检索成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 401 基于公开发布的企业级联络中心语音质检（`Contact Center Speech Analytics & QA`）与合规审计基准（`SIP 双声道立体声物理分轨 Stereo Dual-Channel Recording / Whisper-large-v3-turbo 词级时间戳与声学冷场抢话事件检测 / 8B-70B 二元量表级联 Binary Rubric Cascade`）构建原创合成合规违规召回率、说话人归属准确率、班长告警延迟与月度质检成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
