@@ -594,6 +594,8 @@ Round 382 基于公开发布的企业级向量数据库与十亿级混合检索�
 
 Round 383 基于公开发布的企业级高吞吐推理架构（`DistServe / Mooncake / NVIDIA Dynamo / vLLM & SGLang 混部分块预填充 Chunked Prefill vs. 预填充-解码分离 PD Disaggregation / GPUDirect RDMA NIXL 逐层流水线 FP8 KV 传输`）构建原创合成双 SLA 约束下的有效吞吐（Goodput）、P95 TTFT、P99 TPOT 与集群月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 384 基于公开发布的企业级大模型量化与硬件代际匹配基准（`LLM-Compressor & NeuralMagic 量化精度保持研究 / AWQ & GPTQ Marlin W4A16 仅权重量化 / NVIDIA Hopper & Ada 原生 FP8 W8A8 动态激活缩放与 FP8 KV Cache`）构建原创合成企业业务精度保持率、70B 权重显存占用、单卡吞吐与 200 RPS 集群月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

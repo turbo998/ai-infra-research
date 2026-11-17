@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级大模型量化与硬件代际匹配定容计算器 (Round 384)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 384 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级大模型量化 (BF16 vs. FP8 W8A8 vs. INT4 AWQ) 与硬件代际匹配计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-llm-quantization-bf16-fp8-int4-awq-hardware-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-llm-quantization-bf16-fp8-int4-awq-hardware-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-llm-quantization-bf16-fp8-int4-awq-hardware-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级 70B 大模型量化精度与 GPU 架构匹配（Hopper/Ada FP8 vs. Ampere AWQ）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_llm_quantization_bf16_fp8_int4_hardware_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="quantGpuSelect">1. 目标 GPU 硬件架构代际 (GPU Generation):</label>
+          <select id="quantGpuSelect" onchange="updateQuantSizer()">
+            <option value="ampere">NVIDIA Ampere 架构 (A100 80GB / A10G 24GB — 无原生硬件 FP8)</option>
+            <option value="hopper_ada" selected>NVIDIA Hopper / Ada 架构 (H200 141GB / H100 80GB / L40S 48GB — 原生 FP8 Tensor Core)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="quantLoadSelect">2. 模型与并发规模 (Model &amp; Concurrency):</label>
+          <select id="quantLoadSelect" onchange="updateQuantSizer()">
+            <option value="70b" selected>70B-Instruct 模型 · 4,096 输入 / 512 输出 · 200 RPS 峰值</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>量化方案与位宽档位</th>
+              <th>业务精度得分 (保持率)</th>
+              <th>70B 权重显存</th>
+              <th>单卡吞吐 (tok/s/GPU)</th>
+              <th>200 RPS 集群月成本</th>
+            </tr>
+          </thead>
+          <tbody id="quantSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="quantDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const QUANT_TIERS = [
+      { id: 't1', name: '⬜ Tier 1: 原生无损 BF16 (W16A16KV16)', acc: '86.0分 (100.0% 基准)', vram: '140.0 GB ✕ (需跨卡)', tput: '340 tok/s ✕', cost: '$48,000 / 月 ✕' },
+      { id: 't2', name: '🟥 Tier 2: 无校准朴素 INT4 (RTN W4A16)', acc: '80.2分 (93.3% ✕ 降智)', vram: '38.0 GB', tput: '590 tok/s', cost: '$16,500 / 月 (精度不达标 ✕)' },
+      { id: 't3', name: '🟦 Tier 3: 激活感知领域校准 INT4 (AWQ / GPTQ Marlin W4A16)', acc: '84.2分 (97.9% ✅)', vram: '38.5 GB ✅ (单张A100装下)', tput: '610 tok/s ✅', cost: '$18,000 / 月 (A100首选 ✅)' },
+      { id: 't4', name: '🟩 Tier 4: 硬件原生 FP8 全量化 (W8A8 + FP8 KV Cache)', acc: '85.7分 (99.7% 🏆 无损级)', vram: '70.0 GB 🏆 (单张H200装下)', tput: '762 tok/s 🏆 (提2.24x)', cost: '$21,400 / 月 (-55.4% 🏆)' }
+    ];
+
+    function updateQuantSizer() {
+      const gpu = document.getElementById('quantGpuSelect').value;
+      const bestId = gpu === 'ampere' ? 't3' : 't4';
+
+      const tbody = document.getElementById('quantSizerTbody');
+      tbody.innerHTML = QUANT_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.acc}</code></td>
+          <td><code>${r.vram}</code></td>
+          <td><code>${r.tput}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('quantDecisionCallout');
+      if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（Ampere A100/A10G 存量硬件最佳匹配）</strong>：选用 <strong>Tier 3 (领域校准 INT4 AWQ/GPTQ + Marlin W4A16 内核)</strong>！注意：A100 没有硬件 FP8 单元，严禁在 A100 上跑 FP8 W8A8；采用 AWQ INT4 可将 70B 权重缩至 <code>38.5 GB</code> 塞入单张 80GB A100，保持 <code>97.9%</code> 精度 ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（Hopper H200/H100 与 Ada L40S 生产黄金标准）</strong>：强烈首选 <strong>Tier 4 (硬件原生 FP8 W8A8 + FP8 KV Cache)</strong>！发挥原生 FP8 Tensor Core 双倍算力与减半显存带宽，业务精度保持率高达 <code>99.7% (85.7 vs 86.0)</code>，单卡吞吐暴涨 <code>2.24x (762 tok/s)</code>，集群月成本省 <code>55.4% ($21,400/月)</code> 🏆！`;
+      }
+    }
+    updateQuantSizer();
+  </script>
+</body>
+</html>
