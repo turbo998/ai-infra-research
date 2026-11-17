@@ -630,6 +630,8 @@ Round 400 基于公开发布的企业级 Embedding 与 Reranker 双阶段检索�
 
 Round 401 基于公开发布的企业级联络中心语音质检（`Contact Center Speech Analytics & QA`）与合规审计基准（`SIP 双声道立体声物理分轨 Stereo Dual-Channel Recording / Whisper-large-v3-turbo 词级时间戳与声学冷场抢话事件检测 / 8B-70B 二元量表级联 Binary Rubric Cascade`）构建原创合成合规违规召回率、说话人归属准确率、班长告警延迟与月度质检成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 402 基于公开发布的企业级零售电商智能搜索、双塔推荐与导购 Agent 基准（`离线供给侧多模态商品属性增广 Offline Catalog LLM Enrichment / 8ms TensorRT 槽位过滤提取 + Two-Tower 双塔个性化召回 / Redis 实时尺码库存与价格锚定 + SSE 异步流式导购卡片`）构建原创合成长尾搜索下单转化率（CVR）、价格缺货幻觉率、P95 商品列表延迟与月度基础设施成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
