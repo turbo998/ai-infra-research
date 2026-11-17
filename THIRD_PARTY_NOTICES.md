@@ -580,6 +580,8 @@ Round 375 基于公开发布的企业级代码助手与 SWE-Agent 架构（`7B/1
 
 Round 376 基于公开发布的企业级智能语音客服架构（`Semantic EOU 语义端点断句 / 流式 ASR 声学副语言情绪标签 Paralinguistic Emotion Tagging / 首子句文本门控流式 WebSocket TTS / 双工附和词过滤与真打断状态机`）构建原创合成端到端首音延迟（TTFA）、合规话术受控度、打断准确率与 250 万分钟月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 377 基于公开发布的企业级大模型四层纵深安全护栏架构（`Spotlighting 数据水印防间接注入 XPIA / Azure Prompt Shield & Prompt-Guard-86M 乐观并行拦截 / DeBERTa-NLI 流式检索忠实度核验 Groundedness / Open Policy Agent [OPA] 确定性工具策略门控`）构建原创合成越狱拦截率、延迟惩罚、幻觉漏出率与千万轮月度护栏成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
