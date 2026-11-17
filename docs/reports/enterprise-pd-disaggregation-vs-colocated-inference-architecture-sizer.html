@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级混部推理 (Colocated) vs. PD 分离 (PD Disaggregation) 定容计算器 (Round 383)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 383 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级混部连续批处理 (Colocated) vs. 预填充-解码分离 (PD Disaggregation) 计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-pd-disaggregation-vs-colocated-inference-architecture-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-pd-disaggregation-vs-colocated-inference-architecture-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-pd-disaggregation-vs-colocated-inference-architecture-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级 PD 分离准入与 SLA 有效吞吐（Goodput @ TTFT &amp; TPOT）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_pd_disaggregation_vs_colocated_inference_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="pdEnvSelect">1. 集群规模与网络基础设施条件 (Cluster &amp; Network):</label>
+          <select id="pdEnvSelect" onchange="updatePdSizer()">
+            <option value="small_tcp">&le; 8 张 GPU 或仅具备普通 10G/25G TCP 以太网</option>
+            <option value="large_rdma" selected>&ge; 16 张 GPU 且具备 200G/400G RoCEv2 / InfiniBand RDMA (8K 长上下文)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="pdSlaSelect">2. 业务 SLA 约束目标 (Dual Latency SLA):</label>
+          <select id="pdSlaSelect" onchange="updatePdSizer()">
+            <option value="strict" selected>70B-FP8 (8K输入/512输出) · P95 TTFT &le; 800ms 且 P99 TPOT &le; 35ms</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>推理服务调度架构档位</th>
+              <th>16卡达标有效吞吐 (Goodput)</th>
+              <th>P95 首字延迟 (TTFT)</th>
+              <th>P99 吐字间隔 (TPOT)</th>
+              <th>支撑 5,000 tok/s 达标月成本</th>
+            </tr>
+          </thead>
+          <tbody id="pdSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="pdDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const PD_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统混部 (无分块 Prefill，长输入抢占阻塞)', gp: '1,150 tok/s ✕', ttft: '620 ms', tpot: '148.0 ms ✕ (严重卡顿)', cost: '$92,000 / 月 ✕' },
+      { id: 't2', name: '🟦 Tier 2: 混部 + 动态分块预填充 (Colocated + Chunked Prefill)', gp: '2,480 tok/s ✅', ttft: '740 ms ✅', tpot: '46.0 ms', cost: '$46,000 / 月 (免RDMA首选 ✅)' },
+      { id: 't3', name: '🟨 Tier 3: 普通 25G TCP 网络强推跨机 PD 分离 (反模式)', gp: '1,820 tok/s ✕', ttft: '1,050 ms ✕ (网卡堵死)', tpot: '24.0 ms', cost: '$58,000 / 月 ✕' },
+      { id: 't4', name: '🟩 Tier 4: RDMA 异构预填充-解码分离 (10P:6D + FP8 KV 流水线)', gp: '5,420 tok/s 🏆 (2.19x vs T2)', ttft: '490 ms 🏆', tpot: '21.5 ms 🏆 (恒定丝滑)', cost: '$25,000 / 月 (-45.7% 🏆)' }
+    ];
+
+    function updatePdSizer() {
+      const env = document.getElementById('pdEnvSelect').value;
+      const bestId = env === 'small_tcp' ? 't2' : 't4';
+
+      const tbody = document.getElementById('pdSizerTbody');
+      tbody.innerHTML = PD_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.gp}</code></td>
+          <td><code>${r.ttft}</code></td>
+          <td><code>${r.tpot}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('pdDecisionCallout');
+      if (bestId === 't2') {
+        callout.innerHTML = `<strong>架构师选型结论（中小集群或无 RDMA 环境首选）</strong>：选用 <strong>Tier 2 (Colocated + Chunked Prefill 动态分块预填充)</strong>！严禁在普通 25G TCP 网络上强拆跨机 PD 分离（Tier 3 会因搬运 1.34GB KV 缓存导致 TTFT 暴增至 1.05s）✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（16卡+ 长上下文 RAG/Agent 生产集群终局）</strong>：强烈首选 <strong>Tier 4 (10P:6D 异构 PD 分离 + 200G/400G GPUDirect RDMA 逐层流水线传输 FP8 KV)</strong>！彻底消除 Prefill 与 Decode 打架，P99 TPOT 压至 <code>21.5 ms</code>，达标有效吞吐提升 <code>2.19x (5,420 tok/s)</code>，硬件成本立省 <code>45.7% ($25,000/月)</code> 🏆！`;
+      }
+    }
+    updatePdSizer();
+  </script>
+</body>
+</html>

@@ -592,6 +592,8 @@ Round 381 基于公开发布的企业级多模态文档智能（IDP）与复杂�
 
 Round 382 基于公开发布的企业级向量数据库与十亿级混合检索引擎架构（`ANN-Benchmarks & VectorDBBench / Microsoft DiskANN NVMe 图索引 / Milvus 2.5 & Qdrant 二值与标量量化过采样重排 / Azure AI Search 托管混合检索 / Partition-Key 多租户子索引与冷热三级对象存储分层`）构建原创合成亿级向量集群内存占用、Recall@10、P95 延迟与月度基础设施成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 383 基于公开发布的企业级高吞吐推理架构（`DistServe / Mooncake / NVIDIA Dynamo / vLLM & SGLang 混部分块预填充 Chunked Prefill vs. 预填充-解码分离 PD Disaggregation / GPUDirect RDMA NIXL 逐层流水线 FP8 KV 传输`）构建原创合成双 SLA 约束下的有效吞吐（Goodput）、P95 TTFT、P99 TPOT 与集群月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
