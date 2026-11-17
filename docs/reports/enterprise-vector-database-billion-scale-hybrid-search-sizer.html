@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级向量数据库与亿级混合检索定容计算器 (Round 382)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 382 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级向量数据库与亿级混合检索引擎内存及 TCO 定容计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-vector-database-billion-scale-hybrid-search-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-vector-database-billion-scale-hybrid-search-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-vector-database-billion-scale-hybrid-search-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级亿级向量检索（BQ/SQ8 量化重排 + DiskANN 三级分层 + Partition-Key 隔离）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_vector_database_billion_scale_hybrid_search_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="vecOpsSelect">1. 团队基础设施运维能力与访问特征 (Ops &amp; Access Pattern):</label>
+          <select id="vecOpsSelect" onchange="updateVecSizer()">
+            <option value="zero_ops">无专职分布式存储 SRE · 追求全托管云 PaaS 免运维</option>
+            <option value="all_hot">具备 K8s 运维能力 · 100% 数据高频热访问 (要求 P95 &le; 16ms)</option>
+            <option value="tiered" selected>具备 K8s 运维能力 · 1亿+ 向量多租户冷热分层 (追求极致 TCO)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="vecScaleSelect">2. 向量库规模与租户数 (Vector Scale &amp; Tenants):</label>
+          <select id="vecScaleSelect" onchange="updateVecSizer()">
+            <option value="100m" selected>100,000,000 条向量 (1536维) · 5,000 个企业租户 · 300 QPS</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>向量数据库与检索架构档位</th>
+              <th>集群内存需求 (RAM)</th>
+              <th>混合检索 Recall@10</th>
+              <th>P95 检索延迟</th>
+              <th>1亿向量月度成本</th>
+            </tr>
+          </thead>
+          <tbody id="vecSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="vecDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const VEC_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 全量 FP32 纯内存 HNSW + 每租户独立建表', ram: '920 GB ✕ (内存墙)', rec: '94.5%', lat: '68.0 ms ✕ (元数据抖动)', cost: '$28,400 / 月 ✕' },
+      { id: 't2', name: '🟦 Tier 2: 全托管云原生企业搜索 PaaS (Azure AI Search / Elastic)', ram: '240 GB (内置标量量化)', rec: '95.2% ✅', lat: '24.0 ms ✅', cost: '$13,500 / 月 (免运维 ✅)' },
+      { id: 't3', name: '🟪 Tier 3: 自建量化集群 (Milvus 2.5 / Qdrant + BQ/SQ8 + Partition-Key)', ram: '110 GB ✅ (降8.4x)', rec: '96.0% ✅', lat: '16.0 ms ✅ (全热最快)', cost: '$5,800 / 月 (-79.6% ✅)' },
+      { id: 't4', name: '🟩 Tier 4: 内存-NVMe(DiskANN)-对象存储三级分层 + 鲸鱼租户分片', ram: '48 GB 🏆 (降19.2x)', rec: '96.5% 🏆 (3x过采样重排)', lat: '19.0 ms 🏆', cost: '$2,400 / 月 (-91.5% 🏆)' }
+    ];
+
+    function updateVecSizer() {
+      const ops = document.getElementById('vecOpsSelect').value;
+      const bestId = ops === 'zero_ops' ? 't2' : (ops === 'all_hot' ? 't3' : 't4');
+
+      const tbody = document.getElementById('vecSizerTbody');
+      tbody.innerHTML = VEC_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.ram}</code></td>
+          <td><code>${r.rec}</code></td>
+          <td><code>${r.lat}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('vecDecisionCallout');
+      if (bestId === 't2') {
+        callout.innerHTML = `<strong>架构师选型结论（免运维云原生 PaaS 首选）</strong>：选用 <strong>Tier 2 (Azure AI Search / Elastic Cloud)</strong>！开箱即用混合检索（BM25+Vector）与标量量化，免去专职分布式存储 SRE 运维负担 ✅。`;
+      } else if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（全热数据超低延迟首选）</strong>：选用 <strong>Tier 3 (Milvus 2.5 / Qdrant + Binary/SQ8 内存量化 + Partition-Key 隔离)</strong>！内存从 920GB 降至 <code>110 GB</code>，P95 延迟低至 <code>16.0 ms</code>，月成本省 <code>79.6% ($5,800/月)</code> ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（亿级~十亿级多租户 TCO 终局标准）</strong>：强烈首选 <strong>Tier 4 (热内存 BQ + 温 NVMe DiskANN + 冷对象存储 S3/Blob 三级分层 + Partition-Key/鲸鱼租户混合隔离)</strong>！集群内存需求从 920GB 暴降至 <code>48 GB (降 19.2x)</code>，月成本仅 <code>$2,400 (-91.5%)</code> 且 Recall@10 达 <code>96.5%</code> 🏆！`;
+      }
+    }
+    updateVecSizer();
+  </script>
+</body>
+</html>

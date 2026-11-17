@@ -590,6 +590,8 @@ Round 380 基于公开发布的企业级大模型评测体系与 LLMOps 发布�
 
 Round 381 基于公开发布的企业级多模态文档智能（IDP）与复杂表格解析架构（`OmniDocBench / Docling & MinerU 版面检测与阅读顺序重建 / Qwen2.5-VL-7B & olmOCR 局部疑难区域精读路由 / 跨页断裂表格表头状态机缝合 / 确定性会计恒等式行列加总自愈校验`）构建原创合成复杂表格 TEDS 准确率、财务合计不平率、单页耗时与千万页月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 382 基于公开发布的企业级向量数据库与十亿级混合检索引擎架构（`ANN-Benchmarks & VectorDBBench / Microsoft DiskANN NVMe 图索引 / Milvus 2.5 & Qdrant 二值与标量量化过采样重排 / Azure AI Search 托管混合检索 / Partition-Key 多租户子索引与冷热三级对象存储分层`）构建原创合成亿级向量集群内存占用、Recall@10、P95 延迟与月度基础设施成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
