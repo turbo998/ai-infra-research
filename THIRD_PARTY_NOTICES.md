@@ -568,6 +568,8 @@ Round 369 基于公开发布的海量离线文档批处理架构（`Azure/AWS Ma
 
 Round 370 基于公开发布的企业级 GPU 四层可观测与 FinOps 治理架构（`NVIDIA DCGM Profiling Metrics / vLLM & SGLang KV Cache & Preemption Telemetry / OpenTelemetry GenAI Distributed Tracing / Per-Trace Loop & Budget Circuit Breakers`）构建原创合成故障定位耗时（MTTR）、告警漏报率与月度算力止损评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 371 基于公开发布的企业级多智能体与 MCP 工具网关架构（`LangGraph/Temporal Durable State Checkpointing / Dynamic Top-K MCP Tool Retrieval / Planner-Executor Small-Large Model Collaboration / Append-Only Prefix Caching`）构建原创合成多步工作流 Token 消耗、完成成功率、端到端延迟与月度 TCO 评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
