@@ -588,6 +588,8 @@ Round 379 基于公开发布的企业级大模型缓存与 KV 感知网关路由
 
 Round 380 基于公开发布的企业级大模型评测体系与 LLMOps 发布门禁实践（`MT-Bench 裁判模型偏见消融 / Promptfoo & DeepEval & Ragas 评测流水线 / 二值化原子检查表 Binary Rubric & 双向位置互换消偏 / AI 网关生产影子流量回放 Shadow Replay & 坏例自动飞轮`）构建原创合成发版前回归缺陷捕获率、人类专家 Cohen's Kappa 一致性、发版耗时与月度评测成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 381 基于公开发布的企业级多模态文档智能（IDP）与复杂表格解析架构（`OmniDocBench / Docling & MinerU 版面检测与阅读顺序重建 / Qwen2.5-VL-7B & olmOCR 局部疑难区域精读路由 / 跨页断裂表格表头状态机缝合 / 确定性会计恒等式行列加总自愈校验`）构建原创合成复杂表格 TEDS 准确率、财务合计不平率、单页耗时与千万页月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
