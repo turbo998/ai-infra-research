@@ -584,6 +584,8 @@ Round 377 基于公开发布的企业级大模型四层纵深安全护栏架构�
 
 Round 378 基于公开发布的企业级智能问数与语义层架构（`Spider 2.0 & BIRD-SQL 企业数仓基准 / Cube & dbt MetricFlow & Microsoft Fabric IQ 统一语义层指标编译 / SQLGlot AST 静态语法树校验 / 云数仓 EXPLAIN Dry-Run 字节扫描熔断 / OAuth 2.0 On-Behalf-Of 原生 RLS/CLS 权限下推`）构建原创合成业务口径准确率、失控扫表事故率与月度总成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 379 基于公开发布的企业级大模型缓存与 KV 感知网关路由架构（`Static-First 提示词前缀工程 / vLLM Automatic Prefix Caching & SGLang RadixAttention / llm-d & vLLM Production Stack KV-Aware Prefix-Tree Routing / LMCache & Mooncake Host-DRAM 二级 KV 卸载 / 实体精确核验租户隔离语义缓存`）构建原创合成多副本集群缓存命中率、误命中率、P95 首字延迟与月度推理成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

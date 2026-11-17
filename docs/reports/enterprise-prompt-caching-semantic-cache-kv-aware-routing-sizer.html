@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级大模型缓存 (Prompt Cache vs. Semantic Cache) 与 KV 感知路由计算器 (Round 379)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 379 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级大模型缓存 (Prompt Cache vs. Semantic Cache) 与 KV 感知网关路由计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-prompt-caching-semantic-cache-kv-aware-routing-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-prompt-caching-semantic-cache-kv-aware-routing-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-prompt-caching-semantic-cache-kv-aware-routing-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级缓存架构（Static-First 前缀工程 + KV 感知路由 + 实体核验语义缓存）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_prompt_caching_semantic_cache_kv_aware_routing_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="cacheDeploySelect">1. 底层部署架构 (Deployment Mode):</label>
+          <select id="cacheDeploySelect" onchange="updateCacheSizer()">
+            <option value="cloud_api">100% 商用云 API (OpenAI / Azure Foundry / Anthropic / DeepSeek)</option>
+            <option value="k8s_cluster" selected>自建多副本 K8s GPU 集群 (8 副本 vLLM / SGLang + AI 网关)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="cacheVolSelect">2. 月请求量与上下文长度 (Traffic &amp; Context):</label>
+          <select id="cacheVolSelect" onchange="updateCacheSizer()">
+            <option value="15m" selected>15,000,000 次请求/月 · 平均 16,000 Tokens 输入上下文</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>缓存与网关路由架构档位</th>
+              <th>有效缓存命中率</th>
+              <th>张冠李戴误命中率</th>
+              <th>16K 上下文 P95 TTFT</th>
+              <th>1,500万次月总成本</th>
+            </tr>
+          </thead>
+          <tbody id="cacheSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="cacheDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const CACHE_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 动态时间戳置顶 Prompt + 传统 Round-Robin 轮询网关', hit: '18.5% ✕', fp: '0.0%', ttft: '1,420 ms ✕', cost: '$68,000 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 网关层朴素纯向量语义缓存 (Cosine >= 0.90 无实体核验)', hit: '42.0%', fp: '4.8% ✕ (张冠李戴)', ttft: '680 ms', cost: '$41,500 / 月 ✕' },
+      { id: 't3', name: '🟦 Tier 3: Static-First 提示词工程 + 云端/单机 Exact Prefix Cache', hit: '58.0% ✅', fp: '0.0% ✅', ttft: '510 ms ✅', cost: '$31,200 / 月 (-54.1% ✅)' },
+      { id: 't4', name: '🟩 Tier 4: Static-First + KV 感知网关路由 + 实体核验语义缓存 + 二级 KV 池', hit: '89.4% 🏆 (+70.9pts)', fp: '0.0% 🏆 (实体核验)', ttft: '210 ms 🏆 (快6.76x)', cost: '$18,400 / 月 (-72.9% 🏆)' }
+    ];
+
+    function updateCacheSizer() {
+      const deploy = document.getElementById('cacheDeploySelect').value;
+      const bestId = deploy === 'cloud_api' ? 't3' : 't4';
+
+      const tbody = document.getElementById('cacheSizerTbody');
+      tbody.innerHTML = CACHE_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.hit}</code></td>
+          <td><code>${r.fp}</code></td>
+          <td><code>${r.ttft}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('cacheDecisionCallout');
+      if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（商用云 API 零风险降本首选）</strong>：选用 <strong>Tier 3 (Static-First 提示词排序工程 + 云端 Prompt Caching)</strong>！把时间戳和动态变量移到 Prompt 末尾、固定 Tool JSON 排序，零误报立省 <code>54.1% ($31,200/月)</code> ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（自建多副本 K8s 推理集群终局标准）</strong>：强烈首选 <strong>Tier 4 (Static-First + KV-Aware 前缀树网关路由 + LMCache 主机内存二级 KV 池 + 实体核验语义缓存)</strong>！集群整体命中率达 <code>89.4%</code>，P95 首字延迟快 <code>6.76x (210ms)</code>，月省 <code>72.9% ($18,400/月)</code> 🏆！`;
+      }
+    }
+    updateCacheSizer();
+  </script>
+</body>
+</html>
