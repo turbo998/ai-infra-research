@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级多 LoRA 动态服务 (Multi-LoRA) 与百租户装箱计算器 (Round 393)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 393 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级多 LoRA 动态服务 (Multi-LoRA Serving) 与百租户定制模型共享底座计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-multi-lora-serving-hundred-tenant-adapter-architecture-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-multi-lora-serving-hundred-tenant-adapter-architecture-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-multi-lora-serving-hundred-tenant-adapter-architecture-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级 120 个微调模型（lora_id 亲和路由 + Pinned DRAM 驻留 + S-LoRA 混合 Batch）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_multi_lora_serving_hundred_tenant_adapter_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="loraCountSelect">1. 定制微调模型 (LoRA Adapter) 数量:</label>
+          <select id="loraCountSelect" onchange="updateLoraSizer()">
+            <option value="few">少量部门定制微调模型 (&le; 16 个 LoRA 适配器)</option>
+            <option value="hundred" selected>规模化多租户 MaaS 中台 (120 个租户/业务线定制 LoRA 适配器)</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="loraRpsSelect">2. 集群聚合流量与秩规格 (Traffic &amp; Rank):</label>
+          <select id="loraRpsSelect" onchange="updateLoraSizer()">
+            <option value="250rps" selected>250 RPS 集群总流量 · LoRA rank=16 (160MB/适配器)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>多微调模型部署与调度架构档位</th>
+              <th>承载 120 模型需 GPU 数</th>
+              <th>适配器切换停顿</th>
+              <th>P99 首字延迟 (TTFT)</th>
+              <th>月度 GPU 成本</th>
+            </tr>
+          </thead>
+          <tbody id="loraSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="loraDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const LORA_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 每模型 merge_and_unload 独立部署整套底座', gpus: '120 张 ✕ (8.5%利用率)', swap: '0.0 ms', ttft: '240.0 ms', cost: '$336,000 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 合并权重按需从磁盘卸载/重载热切', gpus: '8 张', swap: '18,200 ms (18.2s) ✕', ttft: '18,500 ms ✕', cost: '$22,400 / 月 (卡死不可用 ✕)' },
+      { id: 't3', name: '🟦 Tier 3: 基础 Multi-LoRA (vLLM/SGLang) + 随机轮询网关', gpus: '12 张 ✅', swap: '420.0 ms (磁盘驱逐)', ttft: '680.0 ms ✅', cost: '$33,600 / 月 (-90.0% ✅)' },
+      { id: 't4', name: '🟩 Tier 4: lora_id 亲和路由 + 锁页内存 (Pinned DRAM) 全驻留 + 混合 Batch', gpus: '8 张 🏆 (减15.0x)', swap: '1.8 ms 🏆 (零磁盘IO)', ttft: '215.0 ms 🏆 (快3.16x)', cost: '$22,400 / 月 (-93.3% 🏆)' }
+    ];
+
+    function updateLoraSizer() {
+      const cnt = document.getElementById('loraCountSelect').value;
+      const bestId = cnt === 'few' ? 't3' : 't4';
+
+      const tbody = document.getElementById('loraSizerTbody');
+      tbody.innerHTML = LORA_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.gpus}</code></td>
+          <td><code>${r.swap}</code></td>
+          <td><code>${r.ttft}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      const callout = document.getElementById('loraDecisionCallout');
+      if (bestId === 't3') {
+        callout.innerHTML = `<strong>架构师选型结论（&le;16 个微调适配器标准基线）</strong>：选用 <strong>Tier 3 (vLLM / SGLang 动态 Multi-LoRA)</strong>！全部 16 个适配器可直接常驻 GPU HBM 显存槽 ✅。`;
+      } else {
+        callout.innerHTML = `<strong>架构师选型结论（百租户 MaaS 平台终局标准）</strong>：强烈首选 <strong>Tier 4 (网关 lora_id 亲和路由 + Pinned DRAM 19.2GB 全量锁页常驻 + S-LoRA/Punica 跨租户混合 Batch)</strong>！将 120 个定制微调模型从 120 张卡压缩至仅需 <code>8 张卡 (减 15.0x)</code>，切换停顿仅 <code>1.8 ms</code>，每月净省 <code>$313,600 (-93.3%)</code> 🏆！`;
+      }
+    }
+    updateLoraSizer();
+  </script>
+</body>
+</html>
