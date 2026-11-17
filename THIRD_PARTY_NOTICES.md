@@ -550,6 +550,8 @@ Round 360 基于公开发布的自回归循环 `torch.cat` 二次方 $O(S^2)$ �
 
 Round 361 基于公开发布的企业级大模型云托管按量计费（`Serverless MaaS PAYGO`）、预留吞吐单元（`Azure AI Foundry PTU / AWS Bedrock Provisioned Throughput`）、容器化自托管（`AKS + KAITO / KEDA + vLLM`）与 AI 网关零等待 429 溢出路由（`Hybrid Base + Burst Spillover`）架构规范构建原创合成容量利用率与月度 TCO 拐点评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 362 基于公开发布的企业级 AI 网关（`Azure API Management GenAI Gateway / Envoy AI Gateway / Higress / Kong AI Gateway / LiteLLM Proxy`）流式 SSE 尾包 Token 计量、滑动窗口 TPM 配额隔离、Entra ID 托管标识免密鉴权与毫秒级故障切换原理构建原创合成网关转发开销、可用性与 FinOps 成本节省评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
