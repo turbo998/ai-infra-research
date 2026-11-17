@@ -624,6 +624,8 @@ Round 397 基于公开发布的企业级智能工单（`ITSM ServiceNow / Jira`�
 
 Round 398 基于公开发布的企业级大模型成本治理（`AI FinOps`）与多模型级联路由基准（`LMSYS RouteLLM & Stanford FrugalGPT 语义复杂度级联 / 80% 部门预算水位优雅软降级 Graceful Soft Downgrade / 单 Trace 死循环成本硬熔断 / OpenTelemetry 四维 Token 分账`）构建原创合成业务质量保持率、服务连续可用性、死循环浪费率与月度总支出评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 399 基于公开发布的企业级端云协同（`Edge-Cloud Hybrid AI`）与端侧 NPU 路由基准（`Apple Intelligence & Windows Copilot+ 端云混合架构 / 首词对数概率熵不确定性门控 Uncertainty-Routed SLM-LLM Cascade / MLX & ONNX Runtime GenAI & llama.cpp 端侧 3B INT4 推理与本地隐私脱敏`）构建原创合成综合任务准确率、弱网可用性、混合 P95 首字延迟与 5 万台终端月度云成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
