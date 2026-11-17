@@ -626,6 +626,8 @@ Round 398 基于公开发布的企业级大模型成本治理（`AI FinOps`）�
 
 Round 399 基于公开发布的企业级端云协同（`Edge-Cloud Hybrid AI`）与端侧 NPU 路由基准（`Apple Intelligence & Windows Copilot+ 端云混合架构 / 首词对数概率熵不确定性门控 Uncertainty-Routed SLM-LLM Cascade / MLX & ONNX Runtime GenAI & llama.cpp 端侧 3B INT4 推理与本地隐私脱敏`）构建原创合成综合任务准确率、弱网可用性、混合 P95 首字延迟与 5 万台终端月度云成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 400 基于公开发布的企业级 Embedding 与 Reranker 双阶段检索管线基准（`MTEB & C-MTEB / BGE-M3 & Qwen3-Embedding 俄罗斯套娃降维 Matryoshka Representation Learning [MRL] / 分数裕度早停 Margin Early-Exit / TensorRT FP8 Top-30 Cross-Encoder 重排与相关性阈值截断`）构建原创合成 NDCG@10 排序精度、P95 检索延迟、向量维度内存占比与月度检索成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
