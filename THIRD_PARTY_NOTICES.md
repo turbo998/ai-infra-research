@@ -614,6 +614,8 @@ Round 392 基于公开发布的企业级小模型知识蒸馏（`SLM Knowledge D
 
 Round 393 基于公开发布的企业级多 LoRA 动态服务（`Multi-LoRA Serving`）基准（`S-LoRA & Punica 跨适配器混合批处理 Segmented Gather-GEMM / vLLM & SGLang 动态 LoRA 槽位管理 / 锁页主机内存 Pinned Host-DRAM 全量驻留与网关 lora_id 亲和路由`）构建原创合成 120 个定制微调模型所需 GPU 卡数、切换停顿耗时、P99 首字延迟与月度集群成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 394 基于公开发布的企业级长效智能体记忆（`Agentic Memory`）基准（`LoCoMo & LongMemEval / Mem0 冲突消解状态机 / Zep & Graphiti 双时态事实知识图谱 Bi-Temporal Fact Graph / 三层认知记忆 Working + Semantic + Episodic`）构建原创合成跨月时序事实准确率、过期事实矛盾率、P95 首字延迟与月度交互成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 
