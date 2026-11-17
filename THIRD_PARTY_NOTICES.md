@@ -640,6 +640,8 @@ Round 405 基于公开发布的企业级金融支付反欺诈与反洗钱（`AML
 
 Round 406 基于公开发布的企业级医疗诊室环境语音病历（`Ambient Clinical Scribe`）与医保编码基准（`专科医学热词 ASR + RxNorm 药典剂量极值门禁 / HL7 FHIR R4 阳性与阴性症状隔离 Schema / 两阶段 ICD-10-CM & SNOMED-CT 本体树受限检索与句级原声溯源`）构建原创合成药品剂量与否定词临床准确率、ICD-10 医保编码合格率、医生审阅签字耗时与月度成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
 
+Round 407 基于公开发布的企业级供应链控制塔（`Supply Chain Control Tower`）与神经符号优化基准（`LLM 非结构化断供与航运外生协变量提取 / Chronos & LightGBM 概率分位数时序预测 / OR-Tools & Gurobi MILP 混合整数规划起订量与整托盘约束求解`）构建原创合成需求预测准确率（1-WAPE）、MOQ/容量约束违规率、断供重调度耗时与月度运营总成本评估模型（`independently_reproduced=false`, `physical_gpu_cluster_measurement=not_measured`），无第三方受保护实现代码拷贝。
+
 
 
 

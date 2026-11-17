@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级供应链控制塔与断供调度 Agent 定容计算器 (Round 407)</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 407 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级供应链控制塔、需求预测与断供调度 Agent 定容计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-supply-chain-forecasting-control-tower-agent-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-supply-chain-forecasting-control-tower-agent-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-supply-chain-forecasting-control-tower-agent-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 企业级供应链神经符号控制塔（LLM 扰动特征 + Chronos/LightGBM + OR-Tools MILP 求解器）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_supply_chain_control_tower_agent_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="scSlaSelect">1. 预测精度与运筹学约束要求 (Supply Chain SLA):</label>
+          <select id="scSlaSelect" onchange="updateScSizer()">
+            <option value="prod" selected>需求预测准确率 (1-WAPE) &gt;= 90% · 0.0% 违反起订量(MOQ)/整托盘约束</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="scVolSelect">2. 供应链网络规模 (Network Scale):</label>
+          <select id="scVolSelect" onchange="updateScSizer()">
+            <option value="250k" selected>250,000 个在售 SKU · 40 个区域分拨中心 · 月均 15,000 张采购/调拨单</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>供应链控制塔与需求预测架构档位</th>
+              <th>预测准确率 (1-WAPE)</th>
+              <th>违反 MOQ/容量约束率</th>
+              <th>断供重调度耗时</th>
+              <th>月度缺货加急与运营成本</th>
+            </tr>
+          </thead>
+          <tbody id="scSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="scDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const SC_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统 ERP 静态移动平均 + 计划员手工 Excel 催货', acc: '68.5% ✕ (无视突发事件)', vio: '4.2%', rec: '72.0 小时 ✕ (3天滞后)', cost: '$145,000 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 纯生成式文本 LLM 直接预测销量数字与开采购单', acc: '62.0% ✕ (比均值还差)', vio: '18.5% ✕ (违反MOQ废单)', rec: '1.5 小时', cost: '$210,000 / 月 ✕' },
+      { id: 't3', name: '🟦 Tier 3: Chronos/LightGBM 时序模型 + 裸 LLM 凑单推荐', acc: '85.4% ✅', vio: '6.8% ✕ (缺MILP求解)', rec: '2.0 小时', cost: '$64,000 / 月' },
+      { id: 't4', name: '🟩 Tier 4: LLM 外生扰动特征提取 + Chronos/LightGBM + OR-Tools MILP 求解器', acc: '91.2% 🏆 (+22.7pts)', vio: '0.0% 🏆 (MILP严格求解)', rec: '0.25 小时 (15分钟 🏆)', cost: '$22,000 / 月 (-84.8% 🏆)' }
+    ];
+
+    function updateScSizer() {
+      const bestId = 't4';
+      const tbody = document.getElementById('scSizerTbody');
+      tbody.innerHTML = SC_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td style="font-weight:700;color:${isBest ? '#7dd3fc' : '#f8fafc'};">${isBest ? '🏆 ' : ''}${r.name}</td>
+          <td><code>${r.acc}</code></td>
+          <td><code>${r.vio}</code></td>
+          <td><code>${r.rec}</code></td>
+          <td><strong style="color:${isBest ? '#34d399' : '#cbd5e1'};">${r.cost}</strong></td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('scDecisionCallout').innerHTML =
+        `<strong>架构师选型结论（企业级供应链控制塔黄金标准）</strong>：强烈首选 <strong>Tier 4 (LLM 非结构化断供/天气情报特征提取 + Chronos/LightGBM 概率时序预测 + OR-Tools MILP 混合整数规划求解器)</strong>！彻底告别让文本 LLM 瞎猜销量数字的误区，预测准确率跃升至 <code>91.2%</code>，起订量/整托盘违规率压至 <code>0.0%</code>，月度总成本仅 <code>$22,000 (-84.8%)</code> 🏆！`;
+    }
+    updateScSizer();
+  </script>
+</body>
+</html>
