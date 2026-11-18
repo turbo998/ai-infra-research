@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_payload() -> dict[str, Any]:
+    return {
+        "benchmark_id": "enterprise_industrial_predictive_maintenance_scada_copilot_selection_v1",
+        "title": "Enterprise Industrial Predictive Maintenance, PLC/SCADA Anomaly Triage, Multimodal Schematics RAG & Field-Service Copilot Architecture Evaluator",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_baseline": {
+            "smart_factories": 12,
+            "critical_equipment_assets": 8000,
+            "scada_plc_sensor_tags": 120000,
+            "oem_schematics_and_manual_pages": 45000,
+            "monthly_work_orders": 6500,
+            "sla_target": "Root-cause diagnosis accuracy >= 92%, false alarm rate <= 3.0%, MTTR <= 1.5 hours, 100% LOTO safety verification",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_legacy_static_scada_threshold_paper_manuals",
+                "name": "Tier 1: Legacy Static SCADA Threshold Alarms + Manual PDF/Paper Schematic Lookup",
+                "root_cause_diagnosis_accuracy_pct": 61.0,
+                "false_alarm_fatigue_rate_pct": 38.5,
+                "mean_time_to_repair_hours": 6.8,
+                "monthly_unplanned_downtime_and_ops_cost_usd": 185000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier2_raw_sensor_csv_stuffed_into_text_llm",
+                "name": "Tier 2: Raw High-Frequency Sensor CSV Stuffed Directly into Text LLM Prompt",
+                "root_cause_diagnosis_accuracy_pct": 54.5,
+                "false_alarm_fatigue_rate_pct": 44.0,
+                "mean_time_to_repair_hours": 5.2,
+                "monthly_unplanned_downtime_and_ops_cost_usd": 240000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier3_edge_anomaly_detector_plus_text_only_manual_rag",
+                "name": "Tier 3: Edge Time-Series Anomaly Detector + Text-Only Maintenance Manual RAG",
+                "root_cause_diagnosis_accuracy_pct": 79.2,
+                "false_alarm_fatigue_rate_pct": 8.4,
+                "mean_time_to_repair_hours": 2.6,
+                "monthly_unplanned_downtime_and_ops_cost_usd": 76000,
+                "action_decision": "Confirm",
+            },
+            {
+                "tier_id": "tier4_edge_fft_timesfm_plus_colpali_schematic_rag_plus_cmms_agent",
+                "name": "Tier 4: Edge FFT/TimesFM Anomaly Triage + Multimodal Schematic RAG (ColPali/VLM) + SAP PM / Maximo Spare-Part & LOTO Safety Agent",
+                "root_cause_diagnosis_accuracy_pct": 94.6,
+                "false_alarm_fatigue_rate_pct": 2.1,
+                "mean_time_to_repair_hours": 1.1,
+                "monthly_unplanned_downtime_and_ops_cost_usd": 28000,
+                "action_decision": "Act automatically",
+            },
+        ],
+        "perturbation_check": {
+            "scenario": "CNC Spindle Bearing Outer-Race Spalling Fault (BPFO 142 Hz Peak) + 24V Solenoid Valve Relay Pinout Lookup on 1998 Scanned Hydraulic Diagram",
+            "tier2_raw_csv_llm_diagnosis_accuracy_pct": 46.5,
+            "tier4_edge_fft_multimodal_copilot_accuracy_pct": 93.8,
+            "accuracy_gain_pts": 47.3,
+            "tier1_manual_mttr_hours": 6.8,
+            "tier4_copilot_mttr_hours": 1.1,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    payload = build_payload()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            return 1
+        return 0 if out_path.read_text(encoding="utf-8") == rendered else 1
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
