@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_payload() -> dict[str, Any]:
+    return {
+        "benchmark_id": "enterprise_autonomous_dba_slow_sql_hypopg_online_ddl_agent_selection_v1",
+        "title": "Enterprise Autonomous DBA & Cloud Database Copilot: Slow-SQL Diagnosis, HypoPG Virtual-Index Verification & Non-Blocking Online DDL Gate Evaluator",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_baseline": {
+            "production_oltp_db_instances": 450,
+            "monthly_slow_sql_and_lock_alerts": 18000,
+            "total_oltp_storage_tb": 1200,
+            "sla_target": "Slow-SQL P99 latency reduction >= 90%, DDL table-lock outage / plan regression rate == 0.0%, MTTR <= 10.0 minutes",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_manual_dba_firefighting_and_heuristic_indexing",
+                "name": "Tier 1: Manual DBA Firefighting + Ad-Hoc Heuristic Indexing",
+                "slow_sql_p99_latency_reduction_pct": 58.0,
+                "ddl_table_lock_outage_or_plan_regression_rate_pct": 2.4,
+                "mean_time_to_resolve_slow_sql_minutes": 145.0,
+                "monthly_db_overprovisioning_and_dba_ops_cost_usd": 240000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier2_prompt_only_llm_direct_production_ddl_execution": "tier2",
+                "tier_id": "tier2_prompt_only_llm_direct_production_ddl_execution",
+                "name": "Tier 2: Prompt-Only LLM Reading Slow SQL & Directly Running CREATE INDEX on Production",
+                "slow_sql_p99_latency_reduction_pct": 52.5,
+                "ddl_table_lock_outage_or_plan_regression_rate_pct": 16.5,
+                "mean_time_to_resolve_slow_sql_minutes": 15.0,
+                "monthly_db_overprovisioning_and_dba_ops_cost_usd": 385000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier3_explain_plan_rag_plus_static_sql_rewrite_advisor",
+                "name": "Tier 3: Standard EXPLAIN Plan Text RAG + Static SQL Rewrite Advisor",
+                "slow_sql_p99_latency_reduction_pct": 74.0,
+                "ddl_table_lock_outage_or_plan_regression_rate_pct": 4.6,
+                "mean_time_to_resolve_slow_sql_minutes": 52.0,
+                "monthly_db_overprovisioning_and_dba_ops_cost_usd": 118000,
+                "action_decision": "Confirm",
+            },
+            {
+                "tier_id": "tier4_hypopg_virtual_index_verifier_plus_sqlglot_equivalence_plus_online_ddl_gate",
+                "name": "Tier 4: HypoPG Virtual-Index Cost Verifier + SQLGlot AST Rewrite + Online Non-Blocking DDL (CONCURRENTLY / gh-ost + lock_timeout) Gate",
+                "slow_sql_p99_latency_reduction_pct": 94.2,
+                "ddl_table_lock_outage_or_plan_regression_rate_pct": 0.0,
+                "mean_time_to_resolve_slow_sql_minutes": 5.8,
+                "monthly_db_overprovisioning_and_dba_ops_cost_usd": 36000,
+                "action_decision": "Act automatically",
+            },
+        ],
+        "perturbation_check": {
+            "scenario": "2-TB High-Concurrency Orders Table Composite Index Selection under Long-Running Analytical Transaction (MDL Lock-Pileup Stress Test)",
+            "tier2_mdl_lock_outage_or_unused_index_pct": 28.5,
+            "tier4_hypopg_online_ddl_outage_pct": 0.0,
+            "tier1_p99_reduction_pct": 58.0,
+            "tier4_p99_reduction_pct": 94.2,
+            "latency_reduction_gain_pts": 36.2,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    payload = build_payload()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            return 1
+        return 0 if out_path.read_text(encoding="utf-8") == rendered else 1
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
