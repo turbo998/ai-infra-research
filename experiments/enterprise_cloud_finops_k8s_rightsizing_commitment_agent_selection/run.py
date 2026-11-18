@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_payload() -> dict[str, Any]:
+    return {
+        "benchmark_id": "enterprise_cloud_finops_k8s_rightsizing_commitment_agent_selection_v1",
+        "title": "Enterprise Multi-Cloud FinOps (FOCUS 1.0), JVM-Aware Kubernetes Rightsizing, LP Commitment Portfolio & Terraform GitOps Agent Evaluator",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_baseline": {
+            "monthly_multicloud_spend_usd": 2500000,
+            "managed_k8s_clusters_eks_aks_gke": 120,
+            "running_production_pods": 65000,
+            "sla_target": "Effective cloud bill savings >= 35%, OOMKilled / stranded commitment rate == 0.0%, cost-anomaly remediation <= 1.0 hour",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_monthly_excel_finops_review_and_manual_ri_buying",
+                "name": "Tier 1: Monthly Spreadsheet Bill Review + Manual Ad-Hoc RI/Savings-Plan Buying",
+                "effective_cloud_bill_savings_pct": 11.5,
+                "rightsizing_oomkilled_or_stranded_commitment_rate_pct": 1.2,
+                "anomaly_detection_to_remediation_hours": 168.0,
+                "net_monthly_waste_and_finops_ops_cost_usd": 640000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier2_naive_avg_utilization_llm_auto_rightsizing_and_3yr_ri",
+                "name": "Tier 2: Naive Average-Utilization LLM Directly Cutting K8s Limits & Buying 3-Year RIs",
+                "effective_cloud_bill_savings_pct": 19.0,
+                "rightsizing_oomkilled_or_stranded_commitment_rate_pct": 14.8,
+                "anomaly_detection_to_remediation_hours": 2.5,
+                "net_monthly_waste_and_finops_ops_cost_usd": 580000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier3_cloud_cost_explorer_rag_plus_vanilla_k8s_vpa",
+                "name": "Tier 3: Cloud Cost Explorer RAG + Vanilla K8s VPA Recommendations",
+                "effective_cloud_bill_savings_pct": 23.4,
+                "rightsizing_oomkilled_or_stranded_commitment_rate_pct": 4.2,
+                "anomaly_detection_to_remediation_hours": 24.0,
+                "net_monthly_waste_and_finops_ops_cost_usd": 310000,
+                "action_decision": "Confirm",
+            },
+            {
+                "tier_id": "tier4_focus_semantic_layer_plus_jvm_aware_p999_rightsizing_plus_lp_commitment_ladder_agent",
+                "name": "Tier 4: FinOps FOCUS 1.0 Semantic Layer + Runtime-Aware (JVM/Go P99.9) Safe K8s Rightsizing + LP Commitment Ladder + Terraform GitOps Agent",
+                "effective_cloud_bill_savings_pct": 38.6,
+                "rightsizing_oomkilled_or_stranded_commitment_rate_pct": 0.0,
+                "anomaly_detection_to_remediation_hours": 0.5,
+                "net_monthly_waste_and_finops_ops_cost_usd": 95000,
+                "action_decision": "Act automatically",
+            },
+        ],
+        "perturbation_check": {
+            "scenario": "JVM Microservice with -Xmx6G Pre-Allocated Heap (Avg Container Working Set 2.1GB, Month-End GC Spike 6.4GB) + SKU Migration from m6i to m7g Graviton",
+            "tier2_avg_rightsizing_oomkilled_or_stranded_ri_pct": 26.5,
+            "tier4_jvm_aware_p999_and_compute_sp_error_pct": 0.0,
+            "tier1_savings_pct": 11.5,
+            "tier4_savings_pct": 38.6,
+            "savings_gain_pts": 27.1,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    payload = build_payload()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            return 1
+        return 0 if out_path.read_text(encoding="utf-8") == rendered else 1
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
