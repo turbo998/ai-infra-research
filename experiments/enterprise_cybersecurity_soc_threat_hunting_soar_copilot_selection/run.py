@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_payload() -> dict[str, Any]:
+    return {
+        "benchmark_id": "enterprise_cybersecurity_soc_threat_hunting_soar_copilot_selection_v1",
+        "title": "Enterprise Cybersecurity SOC Threat Hunting, MITRE ATT&CK Entity Graph Correlation, KQL/SPL Sandbox & SOAR Blast-Radius Gate Evaluator",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_baseline": {
+            "daily_siem_edr_waf_alerts": 150000,
+            "managed_endpoints_and_cloud_workloads": 65000,
+            "monthly_true_security_incidents": 4200,
+            "sla_target": "MITRE ATT&CK attribution accuracy >= 95%, critical-asset false isolation / log-injection rate == 0.0%, MTTC <= 10.0 minutes",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_legacy_siem_sigma_rules_and_manual_l1_triage",
+                "name": "Tier 1: Legacy Static SIEM Sigma Rules + Manual L1 Analyst Triage",
+                "attack_chain_attribution_accuracy_pct": 68.0,
+                "critical_asset_false_isolation_or_log_injection_rate_pct": 0.5,
+                "mean_time_to_investigate_and_contain_minutes": 180.0,
+                "monthly_soc_ops_and_breach_exposure_cost_usd": 320000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier2_raw_log_prompt_llm_with_autonomous_soar_isolation",
+                "name": "Tier 2: Raw Log-Stuffed LLM with Unconstrained Autonomous SOAR Host/IP Isolation",
+                "attack_chain_attribution_accuracy_pct": 61.5,
+                "critical_asset_false_isolation_or_log_injection_rate_pct": 14.2,
+                "mean_time_to_investigate_and_contain_minutes": 12.0,
+                "monthly_soc_ops_and_breach_exposure_cost_usd": 450000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier3_threat_intel_rag_plus_unvalidated_kql_spl_copilot",
+                "name": "Tier 3: Standard Threat-Intel RAG + Unvalidated KQL/SPL Query Copilot",
+                "attack_chain_attribution_accuracy_pct": 82.4,
+                "critical_asset_false_isolation_or_log_injection_rate_pct": 2.8,
+                "mean_time_to_investigate_and_contain_minutes": 42.0,
+                "monthly_soc_ops_and_breach_exposure_cost_usd": 135000,
+                "action_decision": "Confirm",
+            },
+            {
+                "tier_id": "tier4_ocsf_entity_attack_graph_plus_kql_sandbox_plus_soar_blast_radius_gate",
+                "name": "Tier 4: OCSF Entity Attack-Graph Correlation + AST-Validated Read-Only KQL/SPL Sandbox + Crown-Jewel Blast-Radius SOAR Gate",
+                "attack_chain_attribution_accuracy_pct": 96.2,
+                "critical_asset_false_isolation_or_log_injection_rate_pct": 0.0,
+                "mean_time_to_investigate_and_contain_minutes": 6.5,
+                "monthly_soc_ops_and_breach_exposure_cost_usd": 46000,
+                "action_decision": "Act automatically",
+            },
+        ],
+        "perturbation_check": {
+            "scenario": "Adversarial HTTP User-Agent Log Prompt Injection Attempting to Spoof Benign Status & Trigger SOAR Quarantine on Production Active Directory DC",
+            "tier2_log_injection_compromise_or_self_dos_pct": 34.5,
+            "tier4_data_plane_isolated_soar_gate_compromise_pct": 0.0,
+            "tier1_mttc_minutes": 180.0,
+            "tier4_mttc_minutes": 6.5,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    payload = build_payload()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            return 1
+        return 0 if out_path.read_text(encoding="utf-8") == rendered else 1
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
