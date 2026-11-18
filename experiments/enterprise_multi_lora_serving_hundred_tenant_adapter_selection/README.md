@@ -1,4 +1,4 @@
-# Enterprise Multi-LoRA Serving & 120-Tenant Adapter Consolidation Evaluator (Round 393)
+# Enterprise Multi-LoRA Serving & 120-Tenant Adapter Consolidation Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise serving architectures for hosting `120` customized fine-tuned tenant models (`LoRA rank=16`, `160 MB` each, `250 RPS` aggregate traffic):
 

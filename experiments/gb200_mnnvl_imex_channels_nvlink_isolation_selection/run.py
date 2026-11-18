@@ -1,4 +1,4 @@
-"""Deterministic evaluator for GB200 / B200 Multi-Node NVLink (MNNVL), IMEX Cross-Node Memory Channels & Multi-Tenant Fabric Isolation Selection (Round 182).
+"""Deterministic evaluator for GB200 / B200 Multi-Node NVLink (MNNVL), IMEX Cross-Node Memory Channels & Multi-Tenant Fabric Isolation Selection .
 
 Models cross-node collective bus bandwidth (GB/s per GPU), cross-tenant HBM memory leak / XID blast radius (%),
 72-GPU MoE All-to-All dispatch latency (us), K8s pod startup / partition reconfiguration latency (seconds),

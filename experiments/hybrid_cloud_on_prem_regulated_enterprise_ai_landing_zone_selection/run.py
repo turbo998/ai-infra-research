@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Hybrid Cloud & On-Premises Regulated Enterprise AI Landing Zone Architecture Selection (Round 366).
+"""Deterministic evaluator for Hybrid Cloud & On-Premises Regulated Enterprise AI Landing Zone Architecture Selection .
 
 Models sensitive PII/Crown-Jewel data leakage risk (%), complex reasoning task quality (%),
 peak burst throttling rate (%), deployment time-to-production (weeks), and monthly total TCO (USD)

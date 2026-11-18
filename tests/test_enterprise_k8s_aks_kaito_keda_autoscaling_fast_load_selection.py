@@ -1,4 +1,4 @@
-"""Unit tests for Round 373 Enterprise Kubernetes (AKS/EKS) LLM Autoscaling, KAITO/KEDA & Model Asset Fast Cold-Start Evaluator."""
+"""Unit tests for Enterprise Kubernetes (AKS/EKS) LLM Autoscaling, KAITO/KEDA & Model Asset Fast Cold-Start Evaluator."""
 
 from __future__ import annotations
 

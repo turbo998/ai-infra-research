@@ -1,4 +1,4 @@
-"""Unit tests for Round 44 Video DiT USP + TeaCache + SageAttention Serving Selection Evaluator."""
+"""Unit tests for Video DiT USP + TeaCache + SageAttention Serving Selection Evaluator."""
 
 from __future__ import annotations
 

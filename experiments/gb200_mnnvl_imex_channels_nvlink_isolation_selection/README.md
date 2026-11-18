@@ -1,6 +1,6 @@
 # GB200 / B200 Multi-Node NVLink (`MNNVL`), `IMEX` Cross-Node Memory Channels & Multi-Tenant Fabric Isolation Selection (`gb200_mnnvl_imex_channels_nvlink_isolation_selection`)
 
-Deterministic Python 3.12 analytical evaluator for **Round 182**: comparing `Unmounted IMEX Silent NIC Fallback` (Tier 1), `Shared Global channel0 + Single Rack Partition` (Tier 2), `K8s DRA Per-Job Ephemeral IMEX channelN Isolation` (Tier 3), and `K8s DRA Ephemeral IMEX + NMX-C Hardware NVSwitch Partitioning` (Tier 4).
+Deterministic Python 3.12 analytical evaluator for **SA Guide**: comparing `Unmounted IMEX Silent NIC Fallback` (Tier 1), `Shared Global channel0 + Single Rack Partition` (Tier 2), `K8s DRA Per-Job Ephemeral IMEX channelN Isolation` (Tier 3), and `K8s DRA Ephemeral IMEX + NMX-C Hardware NVSwitch Partitioning` (Tier 4).
 
 ## Reproduction
 

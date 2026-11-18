@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Long-Context (128K-1M) vs. Hierarchical RAG & KV Cache Selection (Round 388)
+    # Analytical model for Enterprise Long-Context (128K-1M) vs. Hierarchical RAG & KV Cache Selection 
     # Workload: 1,000,000 queries/month over 300-page enterprise manuals & contracts (~150,000 tokens per document).
     monthly_queries = 1_000_000
 

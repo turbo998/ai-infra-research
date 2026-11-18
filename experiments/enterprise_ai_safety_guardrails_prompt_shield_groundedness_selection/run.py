@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise AI Safety Guardrails, Prompt Shield & Streaming Groundedness Architecture Selection (Round 377).
+"""Deterministic evaluator for Enterprise AI Safety Guardrails, Prompt Shield & Streaming Groundedness Architecture Selection .
 
 Models jailbreak & Indirect Prompt Injection (XPIA) interception rate (%),
 added P99 first-token latency penalty (ms), ungrounded hallucination leakage rate (%),

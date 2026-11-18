@@ -1,4 +1,4 @@
-"""Unit tests for Round 54 LLM Request Scheduling, Chunked Prefill & SLO Preemption Selection Evaluator."""
+"""Unit tests for LLM Request Scheduling, Chunked Prefill & SLO Preemption Selection Evaluator."""
 
 from __future__ import annotations
 

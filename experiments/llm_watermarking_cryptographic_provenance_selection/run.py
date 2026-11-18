@@ -1,4 +1,4 @@
-"""Deterministic evaluator for LLM Output Watermarking, Distortion-Free Provenance (SynthID) & Entropy-Gated Code-Safe Sampling Selection (Round 56).
+"""Deterministic evaluator for LLM Output Watermarking, Distortion-Free Provenance (SynthID) & Entropy-Gated Code-Safe Sampling Selection .
 
 Models the True Positive Detection Rate at 0.1% False Positive Rate (TPR @ 0.1% FPR %),
  robustness after 30% synonym/LLM paraphrasing attack (TPR %), HumanEval/MBPP Code Pass@1 retention (%),

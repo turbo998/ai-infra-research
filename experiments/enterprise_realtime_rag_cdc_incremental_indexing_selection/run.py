@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Real-Time RAG Freshness, CDC Incremental Indexing & Ghost-Chunk Prevention (Round 390)
+    # Analytical model for Enterprise Real-Time RAG Freshness, CDC Incremental Indexing & Ghost-Chunk Prevention 
     # Workload: 5,000,000 total knowledge chunks across SharePoint/Confluence/DB,
     # 150,000 document & permission updates per day (only 3.2% of chunks inside an edited doc actually change text).
 

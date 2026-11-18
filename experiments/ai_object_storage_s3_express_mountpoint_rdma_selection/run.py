@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Cloud-Native Object Storage High-Throughput Streaming (boto3 vs. Mountpoint FUSE vs. s5cmd/aws-crt vs. S3 Express + S3-over-RDMA) Selection (Round 183).
+"""Deterministic evaluator for AI Cloud-Native Object Storage High-Throughput Streaming (boto3 vs. Mountpoint FUSE vs. s5cmd/aws-crt vs. S3 Express + S3-over-RDMA) Selection .
 
 Models single-node S3-to-GPU read throughput (GB/s on a 400Gbps cloud node),
 Time-To-First-Byte (TTFB, ms) per object, 500 GB distributed checkpoint save/load time (seconds),

@@ -71,7 +71,7 @@
    - `KTransformers` 将 CPU 工作线程设为**常驻自旋轮询（Spin-Wait on Pinned Memory Flag）**，并在 GPU 侧定义一个通过 `cudaHostAllocMapped` 映射的触发算子 `CPUInferOp`。这样整整 61 层的 `GPU MLA + CPU AMX Expert + GPU 残差相加` 被完整录制进**全模型仅 1 个 `CUDA Graph`** 中！每生成一个 Token 只需 `1 次` CUDA Graph 发射，速度从 `14.2 tok/s` 直接飙至 **`26.8 tok/s`（`+88.7%`）**！
 2. **GPU 剩余显存驻留 Top-16 热门专家 + 双端并发掩盖（CPU 负载直降 `24.5%`）**：
    - 在 `48GB` 显卡上，放完 `MLA + KV-Cache + 共享专家`（约 `22 GB`）后还剩 `~24 GB` 显存。
-   - 根据我们在 Round 80 验证过的 MoE 路由幂律分布（Zipf 偏斜），每层最热门的 **Top-16 专家（仅占 256 个专家的 `6.25%`）** 实际上吸收了高达 **`24.5%`** 的 Token 路由流量！
+   - 根据MoE 路由幂律分布（Zipf 偏斜），每层最热门的 **Top-16 专家（仅占 256 个专家的 `6.25%`）** 实际上吸收了高达 **`24.5%`** 的 Token 路由流量！
    - 将这 `6.25%` 的热门专家直接放进 GPU 剩余显存，并与 `Shared Expert` 一起在 GPU 流上执行，**同时**让 CPU 通过 AMX 计算剩余的冷门激活专家，不仅白捡了 `24.5%` 的 CPU 内存带宽减负，还实现了 GPU 与 CPU 的跨设备流水线重叠！
 
 ---

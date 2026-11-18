@@ -1,4 +1,4 @@
-"""Unit tests for Round 362 Enterprise AI Gateway Selection Evaluator."""
+"""Unit tests for Enterprise AI Gateway Selection Evaluator."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# Enterprise Structured Outputs & JSON Schema Constrained Decoding Evaluator (Round 387)
+# Enterprise Structured Outputs & JSON Schema Constrained Decoding Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise structured output and JSON Schema enforcement architectures across `20,000,000` microservice API calls/month:
 

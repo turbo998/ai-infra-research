@@ -1,4 +1,4 @@
-"""Unit tests for Round 51 AI Cluster Day-0 Burn-In, Acceptance & Straggler Isolation Selection Evaluator."""
+"""Unit tests for AI Cluster Day-0 Burn-In, Acceptance & Straggler Isolation Selection Evaluator."""
 
 from __future__ import annotations
 

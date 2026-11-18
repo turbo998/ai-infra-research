@@ -1,4 +1,4 @@
-# Enterprise ITSM (ServiceNow / Jira) & AIOps Incident Triage Agent Evaluator (Round 397)
+# Enterprise ITSM (ServiceNow / Jira) & AIOps Incident Triage Agent Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise ITSM helpdesk and AIOps incident triage architectures across `50,000` tickets/month:
 

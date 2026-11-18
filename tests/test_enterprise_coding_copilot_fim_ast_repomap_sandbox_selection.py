@@ -1,4 +1,4 @@
-"""Unit tests for Round 375 Enterprise Coding Copilot, FIM Dual-Track Serving, AST Repo-Map & Sandboxed SWE-Agent Evaluator."""
+"""Unit tests for Enterprise Coding Copilot, FIM Dual-Track Serving, AST Repo-Map & Sandboxed SWE-Agent Evaluator."""
 
 from __future__ import annotations
 

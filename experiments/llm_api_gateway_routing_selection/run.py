@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 25: Enterprise LLM API Gateway, Semantic Cache & Cascade Routing Selection.
+"""Deterministic evaluator for Enterprise LLM API Gateway, Semantic Cache & Cascade Routing Selection.
 
 Compares 4 LLM API gateway, caching, and multi-model routing architectures across 10,000,000
 monthly enterprise requests (4,096 input + 512 output tokens/req = 46.08B tokens/mo across 8 replicas):
@@ -156,7 +156,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 25 LLM API gateway & cascade routing model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide LLM API gateway & cascade routing model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

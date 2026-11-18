@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Kubernetes (AKS/EKS) LLM Autoscaling, KAITO/KEDA & Model Asset Fast Cold-Start Architecture Selection (Round 373).
+"""Deterministic evaluator for Enterprise Kubernetes (AKS/EKS) LLM Autoscaling, KAITO/KEDA & Model Asset Fast Cold-Start Architecture Selection .
 
 Models pod scale-out time-to-ready (seconds for 70B model + 18GB runtime),
 morning burst request drop/timeout rate (%), required idle GPU buffer over-provisioning (%),

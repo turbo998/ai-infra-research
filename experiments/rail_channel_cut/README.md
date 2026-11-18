@@ -2,7 +2,7 @@
 
 原创 Python 标准库、CPU/offline 算例；不运行 NCCL、GPU、NVLink、PCIe、RDMA 或模型。
 固定的 NCCL `search.cc` / `rings.cc` / `connect.cc` 静态代码证据见
-[NCCL 图搜索与 Channel 映射正文](../../docs/components/nccl-graph-channel-mapping.md)。
+[NCCL 图搜索与 Channel 映射正文](../../docs/components/ai-cluster-rdma-network-topology-rail-optimized-fat-tree-dragonfly-selection-faq.md)。
 
 ## 为什么需要扩展 `ring_cut`
 

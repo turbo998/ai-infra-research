@@ -1,4 +1,4 @@
-"""Unit tests for Round 370 Enterprise GPU Observability, SLO Alerting & FinOps Governance Evaluator."""
+"""Unit tests for Enterprise GPU Observability, SLO Alerting & FinOps Governance Evaluator."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Unit tests for Round 182 GB200 / B200 Multi-Node NVLink (MNNVL), IMEX Channels & Multi-Tenant Fabric Isolation Evaluator."""
+"""Unit tests for GB200 / B200 Multi-Node NVLink (MNNVL), IMEX Channels & Multi-Tenant Fabric Isolation Evaluator."""
 
 from __future__ import annotations
 

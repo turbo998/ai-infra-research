@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Cluster RoCEv2 Congestion Control, PFC Storm Deadlock Prevention & Adaptive Routing Selection (Round 43).
+"""Deterministic evaluator for AI Cluster RoCEv2 Congestion Control, PFC Storm Deadlock Prevention & Adaptive Routing Selection .
 
 Models the end-to-end effective AllReduce / All-to-All bus bandwidth (GB/s per NIC),
 ECMP hash collision drop, PFC pause storm deadlock probability, Incast tail latency,

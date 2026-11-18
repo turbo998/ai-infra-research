@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Cluster Synchronous Power Transients (dP/dt), Supercapacitor CBU & Grid BESS Smoothing Selection (Round 57).
+"""Deterministic evaluator for AI Cluster Synchronous Power Transients (dP/dt), Supercapacitor CBU & Grid BESS Smoothing Selection .
 
 Models the grid-seen sub-second power swing amplitude (% of 20MW peak),
 annual UPS/breaker trip outages, training MFU throughput loss (%),

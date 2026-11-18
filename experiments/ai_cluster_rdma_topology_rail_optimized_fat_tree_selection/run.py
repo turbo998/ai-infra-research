@@ -1,4 +1,4 @@
-"""Deterministic evaluator for 4,096-GPU AI Cluster RDMA Network Topology Selection (Round 75).
+"""Deterministic evaluator for 4,096-GPU AI Cluster RDMA Network Topology Selection .
 
 Models effective per-node collective bandwidth (GB/s out of 400 GB/s line rate across 8x400G NICs),
 cross-node collective switch hop count & latency (us), optical transceiver count, network switch+optics power (MW),

@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Multi-Tenant LLM Fair Queuing (VTC Virtual Token Counter) & Work-Conserving Rate Limiting (Round 74).
+"""Deterministic evaluator for Multi-Tenant LLM Fair Queuing (VTC Virtual Token Counter) & Work-Conserving Rate Limiting .
 
 Models interactive tenant P99 TTFT under heavy batch-tenant flooding (ms), Jain's Fairness Index (0.0-1.0 across GPU service time),
 cluster-wide GPU utilization (%), batch throughput (tokens/s), and annual 64-GPU cluster effective cost (USD/yr)

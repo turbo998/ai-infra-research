@@ -139,4 +139,4 @@ sequenceDiagram
 - [ ] **2. Batch by Total Token Budget (`--max-batch-tokens 16384`) Instead of Fixed Request Count**: Guarantee predictable VRAM bounds and maximum GPU saturation regardless of document length skew.
 - [ ] **3. Offload Tokenization to Multi-Threaded Rust (`tokenizers`) Overlapped with GPU Execution**: Prevent Python GIL tokenization from bottlenecking 18,500 docs/sec GPU pipelines.
 - [ ] **4. Slice Matryoshka (MRL) Embeddings to `256d`, Re-Normalize L2 Norm, and Quantize to `INT8` for Stage-1 ANN**: Cut vector database RAM by `16×` and recover full precision via Stage-2 Top-50 FP8 Reranking.
-- [ ] **5. Co-Locate Embedding + Reranker Inside a Single `1g.20gb` MIG Slice via `CUDA MPS` (Round 34)**: Keep end-to-end RAG retrieval + reranking latency under `< 25 ms`.
+- [ ] **5. Co-Locate Embedding + Reranker Inside a Single `1g.20gb` MIG Slice via `CUDA MPS` **: Keep end-to-end RAG retrieval + reranking latency under `< 25 ms`.

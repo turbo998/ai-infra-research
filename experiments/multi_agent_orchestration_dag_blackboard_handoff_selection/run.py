@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Multi-Agent Orchestration, StateGraph DAG & Typed Blackboard Handoff Selection (Round 65).
+"""Deterministic evaluator for Enterprise Multi-Agent Orchestration, StateGraph DAG & Typed Blackboard Handoff Selection .
 
 Models end-to-end multi-agent workflow completion accuracy (%), infinite-loop/deadlock
 termination rate (%), average tokens consumed per 6-agent workflow, end-to-end wall-clock

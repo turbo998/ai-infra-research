@@ -1,4 +1,4 @@
-"""Unit tests for Round 368 Real-Time Customer Service & Enterprise Copilot Sub-400ms Low-Latency Architecture Evaluator."""
+"""Unit tests for Real-Time Customer Service & Enterprise Copilot Sub-400ms Low-Latency Architecture Evaluator."""
 
 from __future__ import annotations
 

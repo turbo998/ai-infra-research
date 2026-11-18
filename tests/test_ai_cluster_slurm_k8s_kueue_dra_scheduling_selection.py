@@ -1,4 +1,4 @@
-"""Unit tests for Round 77 AI Cluster Scheduler (Slurm vs Vanilla K8s vs Kueue/Volcano vs Kueue TAS + K8s DRA + Sunk) Evaluator."""
+"""Unit tests for AI Cluster Scheduler (Slurm vs Vanilla K8s vs Kueue/Volcano vs Kueue TAS + K8s DRA + Sunk) Evaluator."""
 
 from __future__ import annotations
 

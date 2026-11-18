@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Document Intelligence (IDP), Layout Parsing & VLM Pipeline Selection (Round 381)
+    # Analytical model for Enterprise Document Intelligence (IDP), Layout Parsing & VLM Pipeline Selection 
     # Workload: 10,000,000 PDF/scanned pages per month across financial reports, contracts, customs invoices, and engineering specs.
     monthly_pages = 10_000_000
 

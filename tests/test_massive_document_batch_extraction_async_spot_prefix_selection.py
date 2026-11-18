@@ -1,4 +1,4 @@
-"""Unit tests for Round 369 Massive Offline Document Batch Processing & Knowledge Extraction Throughput Evaluator."""
+"""Unit tests for Massive Offline Document Batch Processing & Knowledge Extraction Throughput Evaluator."""
 
 from __future__ import annotations
 

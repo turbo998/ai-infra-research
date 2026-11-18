@@ -1,4 +1,4 @@
-"""Deterministic evaluator for 128K–1M Long-Context KV Cache Quantization & Dynamic Query-Aware Sparse Attention Selection (Round 53).
+"""Deterministic evaluator for 128K–1M Long-Context KV Cache Quantization & Dynamic Query-Aware Sparse Attention Selection .
 
 Models the 128K single-request stored KV footprint (GB), active HBM bytes read per Decode token (GB),
 128K Decode streaming speed (tokens/s/req), Multi-Turn RULER Needle-in-a-Haystack recall (%),

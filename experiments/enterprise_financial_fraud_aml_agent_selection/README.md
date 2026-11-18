@@ -1,4 +1,4 @@
-# Enterprise Financial Fraud Detection, AML Investigation & Real-Time Transaction Risk Agent Evaluator (Round 405)
+# Enterprise Financial Fraud Detection, AML Investigation & Real-Time Transaction Risk Agent Evaluator 
 
 Deterministic evaluator comparing four financial transaction fraud and Anti-Money Laundering (`AML / SAR`) agent architectures across 100,000,000 monthly transactions (3,000 TPS peak) and 120,000 monthly AML alerts:
 - **Tier 1**: Legacy Static SQL Velocity Rules + Manual 8-System AML Investigation (`94.2%` false positive rate, `12.0 ms` P99 auth latency, `45.0 min` case review, `$185,000/mo`)

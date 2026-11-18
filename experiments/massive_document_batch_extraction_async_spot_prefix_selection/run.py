@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Massive Offline Document Batch Processing & Knowledge Extraction Throughput Architecture Selection (Round 369).
+"""Deterministic evaluator for Massive Offline Document Batch Processing & Knowledge Extraction Throughput Architecture Selection .
 
 Models total batch completion time (hours for 1,000,000 documents / 6.6B tokens),
 online production HTTP 429 interference rate (%), KV prefix cache hit rate (%),

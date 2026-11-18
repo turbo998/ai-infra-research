@@ -1,4 +1,4 @@
-"""Unit tests for Round 62 AI Cluster Grey Failure / Runtime Straggler Telemetry & Mitigation Selection Evaluator."""
+"""Unit tests for AI Cluster Grey Failure / Runtime Straggler Telemetry & Mitigation Selection Evaluator."""
 
 from __future__ import annotations
 

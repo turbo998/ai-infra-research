@@ -1,82 +1,112 @@
-# End-to-End AI Infrastructure Reference Architecture: 1024-GPU Training & Disaggregated Prefill/Decode (P/D) Serving Cluster
+# End-to-End AI Infrastructure Reference Architecture: 1,024-GPU Training & Disaggregated Prefill/Decode (PD) Serving Cluster
 
-> **Language / 语言**: [中文 (Chinese)](end-to-end-ai-infra-case.md) | **English**
+> **Language / 语言**: [简体中文](./end-to-end-ai-infra-case.md) | **English** · [Full Catalog](../full-catalog-en.md) · [Interactive Architect Workbench](../reports/ai-infra-architect-workbench.html)
 
-- **Status**: Complete full-stack reference architecture spanning GPU/HBM, Scale-Up/Scale-Out fabrics, 6D parallel training, online inference SLOs, asynchronous checkpointing, topology-aware orchestration, Token/TCO economics, and rack-scale liquid cooling (`specification` / `implementation` / `own-offline`). Every quantitative budget is backed by deterministic Python 3.12 standard-library experiments in this repository (`--check`).
-- **Component & Prerequisite Chain**:
-  - **Hardware & Interconnect Foundation**: [GPU & HBM Architecture](../components/gpu-hbm.md) → [Interconnect & Network Stack](../components/interconnect-network.md) → [RDMA Verbs Lifecycle](../components/rdma-lifecycle.md) → [NCCL Topology & Transport](../components/nccl-topology-transport.md) → [NCCL Graph Search & Channel Mapping](../components/nccl-graph-channel-mapping.md) → [NCCL IB Port-Failover Invariants](../components/nccl-port-recovery-invariants.md) → [Tensor Layout & SM100 Kernel Dispatch](../components/kernel-dispatch-layout.md) → [NCCL Device API & `ncclGin` Symmetric Collectives](../components/nccl-device-gin-symmetric-collectives.en.md) → [DeepGEMM SM100 `MegaMoE` & `MegaMHC`](../components/deepgemm-sm100-mega-moe-mhc-hyperconnection.en.md) → [FlashInfer Frost DS4.1 Mixed `MXFP8/FP4` Decode & `Green Context`](../components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.en.md) → [FlashInfer Cake SM100/SM103 Fused GEMM + Lamport All-Reduce & `tcgen05` Sync](../components/flashinfer-cake-sm100-gemm-lamport-allreduce-tmem-drain.en.md) → [TE Blackwell FP8 Block-Scaling to MXFP8 Grouped GEMM Swizzle](../components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.en.md) → [FA4 SM100 `hdim=256` Bwd `M=64` TMEM & `AccumTileOrder`](../components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.en.md) → [FlashMLA SM100 V4.1 Fused `Norm+RoPE+Attn` & `KVBlockDequantizer`](../components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.en.md) → [Mooncake 7-Class Auto-GID Re-Probing & Bounded Scatter Resharding](../components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.en.md) → [NIXL UCX VRAM `mem_type` Hinting & `cuMemCreate` Libfabric Fallback](../components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.en.md).
-  - **Workloads & Systems Engineering**: [6D Distributed Training Parallelism](../components/training-parallelism.md) → [TorchTitan `FlexShard` (`BlockShard`/`Owned`) & GB200 `HybridEP`](../components/torchtitan-flexshard-distmuon-hybridep.en.md) → [TorchTitan Kimi K3 MXFP4 Adapter, DeepSeek-V3 Index Filtering & `SimpleFSDP` Meta Guard](../components/torchtitan-kimi-k3-mxfp4-adapter-graph-fsdp-meta-inspect.en.md) → [veRL Low-Precision QAT Zero-Copy FP4 Refit & `forward_kl_topk_tail` OPD](../components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.en.md) → [Megatron `CheckpointWithoutOutput` & `Megatron-FSDP` Delayed Frozen Hooks](../components/megatron-checkpoint-without-output-mfsdp-frozen-grad.en.md) → [Inference Scheduling & P/D Disaggregation](../components/inference-slo.md) → [vLLM V1 Sparse MLA, `HiSparse` & `GDN`](../components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.en.md) → [vLLM V1 UMBP Shared KV Connector & THUDM/slime Straw In-Place Rewind](../components/vllm-v1-umbp-kv-connector-slime-straw-rewind.en.md) → [SGLang Zero-Realloc PD Role Switch & `PPConsensusStore`](../components/sglang-pd-role-switch-pp-consensus-offload.en.md) → [SGLang `KVShard` PD Transfer & Uncached-Token Bucket Routing](../components/sglang-kvshard-pd-transfer-uncached-bucket-routing.en.md) → [LMCache Device-DAX Offset Partitioning, APC Attribution & Dynamo Relay](../components/lmcache-devdax-offset-apc-attribution-dynamo-relay.en.md) → [Storage GDS & Async Checkpointing](../components/storage-checkpoint.md) → [Cluster Orchestration & Elastic Recovery](../components/cluster-orchestration.md) → [Capacity & Token Economics](../components/capacity-economics.md) → [Rack Power & Liquid Cooling](../components/rack-power-cooling.md) → [100K-GPU AI Factory TCO Pareto](../components/ai-factory-tco-pareto.md).
-- **Queue ID**: `architecture-case` (priority 10); prerequisites `cluster-orchestration`, `capacity-economics`, and `rack-power-cooling` are all `done`.
-- **Mastery**: `not-assessed` (see [Competency Matrix](../learning/competency-matrix.md)).
+> **Executive Summary**: This reference architecture provides a production blueprint for Cloud & AI Infrastructure Solution Architects delivering a **hybrid ~1,000-GPU enterprise AI factory** combining synchronous pre-training/post-training with low-latency online LLM serving. By co-designing an **8-rail lossless network fabric**, **two-phase asynchronous checkpointing + GDS parallel storage**, **Dynamo/Mooncake Prefill-Decode (PD) disaggregation with prefix-aware routing**, **Kueue TAS + DRA topology-aware gang scheduling**, and **>45 kW/rack cold-plate liquid cooling with busbar ramp-rate limiting**, enterprises meet **P95 TTFT ≤ 1.5 s / P99 TPOT ≤ 25 ms** and **≥ 90% training goodput** while cutting bursty online serving GPU count by **26.5%–34.2%** and shrinking 9 TB checkpoint stalls to **under 3.1 s**.
 
 ---
 
-## 1. Business Objectives, Workload Contracts & SLO Guardrails
+## 1. Business Scenario, Workload Contracts & Hard Guardrails
 
-This reference architecture targets Cloud and AI Infrastructure Solution Architects designing a **512-GPU pre-training/post-training cluster + 256-GPU low-latency disaggregated inference cluster (768 primary GPUs across 12 liquid/air-cooled rack domains, plus wafer/SRAM accelerator tiering)**:
+Consider an enterprise building a **768–1,024 flagship GPU AI infrastructure platform** (`512+ GPUs` for continual pre-training / RLHF post-training + `256 GPUs` for low-latency production inference + warm-spare / tidal capacity). Four non-negotiable SLA contracts govern every architectural choice:
 
-| Dimension | Workload A: MoE / Dense Pre-Training & Long-Context Post-Training | Workload B: High-Concurrency Online Serving (P/D Disaggregation + Speculative Decoding) |
-|---|---|---|
-| **Representative Models & Precision** | 70B Dense (`BF16` / `FP8` compute + `FP32` master weights) & 671B/37B-Active Sparse MoE (`MXFP8FP4` / `NVFP4`) | 70B Dense & 671B Sparse MLA (`FP8` / `NVFP4` KV Cache), input $I=4096$–$131072$ tokens, output $O=512$ tokens |
-| **Throughput & Latency SLOs** | 512-GPU effective step time $\le 4.8\,\text{s}$, Cluster Goodput (ETTR) $\ge 90\%$, $1\,\text{T}$ tokens wall-clock $\le 14.5$ days | Mean arrival rate $Q=24\,\text{req/s}$ (Gamma burstiness $CV_a^2=2.0$), **P95 TTFT $\le 1.5\,\text{s}$**, **TPOT $\le 25\,\text{ms/tok}$**, SLO Goodput $\ge 95\%$ |
-| **Recovery & Fault Tolerance RTO** | $1\,\text{TiB}$ distributed checkpoint stall $T_{\text{stall}} \le 2.5\,\text{s}$ (`0.048 s` with cached `StateDictStager`); single-node/NIC recovery $\le 90\,\text{s}$ (`19.8 s` with NVRx in-process restart) | Sub-second faulty P/D instance eviction via Dynamo/Mooncake KV-aware routing; `< 5 ms` TPOT sub-flows routed to SRAM tier (`8B Draft + 70B Verifier`) |
-| **Rack Power & Thermal Guardrails** | Liquid-cooled rack wall power $P_{\text{wall}} \le 130\,\text{kW}$, secondary inlet $T_{\text{in}} \le 35^\circ\text{C}$, GPU junction $T_j < 83^\circ\text{C}$ (0% thermal throttling) | Cold-start/recovery busbar ramp rate $\mathrm{d}P/\mathrm{d}t \le 125\,\text{kW/min}$ via Slurm token bucket + OCP ORv3 supercapacitor shelf (`87.1 F`) |
+| Dimension | Workload A: Continual Pre-Training & RLHF/GRPO (`512+ GPUs`) | Workload B: High-Concurrency Online Serving & Agents (`256 GPUs`) | Linked SA Playbooks |
+|---|---|---|---|
+| **Target Models & Precision** | `70B Dense` (`BF16/FP8` compute + `FP32` master weights) & `671B/37B-Active MoE` (`FP8` / `NVFP4`) | `70B Dense` & `671B MoE` (`FP8` / `NVFP4` + tiered KV Cache), `4K–64K` input tokens, `512` output tokens | [Quantization Guide](../components/llm-quantization-selection-faq.en.md) · [MoE Parallelism Guide](../components/moe-parallelism-selection-faq.en.md) |
+| **Throughput & Latency SLOs** | Effective Cluster Goodput **`≥ 90%`**; compute/collective overlap with zero cross-node Tensor Parallelism | Under bursty arrivals ($CV_a^2 = 2.0$): **P95 TTFT `≤ 1.5 s`**, **P99 TPOT `≤ 25 ms/tok`**, SLO compliance **`≥ 95%`** | [Inference Engine Guide](../components/llm-inference-engine-selection-faq.en.md) · [PD Disaggregation Guide](../components/pd-disaggregation-kv-offload-selection-faq.en.md) |
+| **Storage & Fault Recovery RTO** | Multi-TB distributed checkpoint stall **`≤ 3.5 s`**; automated single-node/NIC fault failover **`≤ 90 s`** | Sub-second faulty Prefill/Decode replica eviction; multi-turn Prefix Cache hit ratio **`≥ 75%`** | [Checkpoint Storage Guide](../components/training-checkpoint-architecture-selection-faq.en.md) · [Fault Recovery Guide](../components/gpu-cluster-fault-recovery-selection-faq.en.md) |
+| **Power, Cooling & Queue Headroom** | Rack wall power **`≤ 130 kW`**, secondary coolant inlet `≤ 35°C`, GPU junction **`< 83°C` (0% thermal throttle)** | Cold-start busbar ramp rate **`dP/dt ≤ 125 kW/min`**; online replica queueing utilization capped at **`ρ ≤ 0.65`** | [Cooling & Power Guide](../components/ai-datacenter-cooling-power-selection-faq.en.md) · [Grid Transients & BESS](../components/ai-cluster-grid-power-transients-bess-smoothing-selection-faq.en.md) |
 
 ---
 
-## 2. Three-View End-to-End Architecture Diagrams
+## 2. Three-View End-to-End Reference Architecture Diagrams
 
-### View A: Training & Disaggregated Inference Workload Dataflow
+### View A: Training & Disaggregated Serving Dataflow
 
 ```mermaid
 flowchart LR
-    subgraph TrainPath["Training Dataflow (512-GPU 6D Parallelism + Async DCP Checkpoint)"]
-        DS["Parallel FS / 3FS USRBIO<br/>Training Stream"] -->|"GDS / Pinned Stage Buffer"| FSDP["TP=8 (NVLink/GIN) x PP=4 x FSDP2=16<br/>Forward/Backward + MegaMoE/MegaMHC"]
-        FSDP -->|"PyTorch DCP StateDictStager<br/>WeakIdKeyDictionary Pinned Pool (~0.048 s)"| Pinned["Host Pinned Shared Memory<br/>_ReplicationStager Partner (rank+W/2)%W"]
-        Pinned -->|"Async Background Writer"| Lustre["NVMe Tier + Lustre / 3FS<br/>Atomic Commit"]
+    subgraph TrainPath["Training Dataflow (512-GPU TP×PP×FSDP2/EP + Two-Phase Async Checkpoint)"]
+        DS["Parallel File System (3FS / Lustre / WEKA)<br/>+ Object Store Tiering"] -->|"GPUDirect Storage (GDS)<br/>Zero-Copy Prefetch"| TrainPool["Intra-Node NVLink TP=8 × Inter-Node FSDP2 / PP / DeepEP<br/>Compute–Collective Overlap"]
+        TrainPool -->|"Phase 1: D2H Copy to Pinned Host DRAM<br/>GPU Stall ~2.0–3.1 s"| Pinned["Pinned Host Shared-Memory Pool<br/>Cross-Rack Partner Replication"]
+        Pinned -->|"Phase 2: Async Multi-Thread Flush"| NVMeFS["Local NVMe Tier + Parallel FS<br/>Atomic Rename Commit"]
     end
 
-    subgraph InferPath["Online Inference Dataflow (P/D Disaggregation + Sparse MLA / HiSparse)"]
-        Client["API Gateway / Bursty Arrivals<br/>Q=24 req/s, CV_a^2=2.0"] -->|"Dynamo KV-Aware Router"| Prefill["Prefill Pool (Compute-Bound)<br/>TP=4, Chunked Prefill + GDN Checkpoints"]
-        Prefill -->|"Mooncake CX8 Data Direct RDMA (92 GB/s)<br/>BatchRdmaDeviceCache (99.976% hit)"| Decode["Decode Pool (HBM-BW-Bound)<br/>FlashMLA Sparse (352B NVFP4 / 528B MXFP8) + HiSparse Hot Cache"]
-        Client -.->|"Ultra-Low-Latency Subflow"| Innovator["SRAM + HBM Cascade<br/>SRAM 8B Draft (8K window) + GPU 70B Verifier"]
+    subgraph InferPath["Online Inference Dataflow (Dynamo / Mooncake PD Disaggregation + Tiered KV)"]
+        Client["Enterprise AI Gateway (Auth / Quota / Guardrails)<br/>Bursty Arrivals CV_a² = 2.0"] -->|"Prefix-Aware Global Router<br/>Safe Queue Target ρ ≤ 0.65"| Prefill["Prefill Pool (Compute-Bound)<br/>Chunked Prefill · High-Throughput Ingestion"]
+        Prefill -->|"100G–400G RDMA Zero-Copy Transfer<br/>Mooncake / NIXL KV Connector"| Decode["Decode Pool (HBM-BW-Bound)<br/>FP8/NVFP4 + Continuous Batching + MTP/EAGLE-3"]
+        Prefill <-->|"64K Multi-Turn Session Reuse"| KVPool["Tiered KV Cache Pool<br/>Pinned Host DRAM / RDMA Pool / NVMe GDS"]
     end
 ```
 
-### View B: Rail-Optimized Multi-Rail Topology & 126.4 kW Liquid-Cooled Rack Domain
+### View B: 8-Rail Network Fabric & 126 kW Liquid-Cooled Rack Power Domain
 
 ```mermaid
 flowchart TB
-    subgraph Spine["Rail-Optimized Spine Layer (8 Independent Rail Planes + SHARP / UEC Packet Trimming)"]
-        S0["Rail-0 Spine Switches"]
-        S7["Rail-7 Spine Switches"]
+    subgraph Spine["Rail-Optimized Spine Tier (8 Independent Rail Planes · IB SHARP / RoCEv2 DLB+ECN)"]
+        S0["Rail-0 Spine Plane"]
+        S7["Rail-7 Spine Plane"]
     end
 
-    subgraph Pod["SuPod / Rack Group (126.4 kW Wall Power, CDU 133.3 LPM @ dT=12C)"]
-        subgraph Rack1["Liquid-Cooled Rack Domain #1 (MNNVL Clique / 8x Rail ToR)"]
-            ToR0["Rail-0 Leaf/ToR (PFC/DCQCN or UEC Trimming)"]
-            ToR7["Rail-7 Leaf/ToR (PFC/DCQCN or UEC Trimming)"]
-            Node1["Compute Tray Group<br/>NVLink / NVSwitch Intra-Rack Domain (IMEX UP)<br/>PCI-Root Paired ConnectX-8 Data Direct NICs"]
-            CDU1["Rack Manifold + CDU Heat Exchanger<br/>88% Liquid Capture (111.2 kW) / 12% Air (15.2 kW)"]
+    subgraph Pod["High-Density Rack Pod (126.4 kW Wall Power per Rack · CDU 133.3 LPM @ ΔT=12°C)"]
+        subgraph Rack1["Cold-Plate Liquid-Cooled Rack Domain #1 (Intra-Node/Rack NVLink + 8× 400G Rail ToR)"]
+            ToR0["Rail-0 Leaf/ToR (PFC Watchdog + ECN/DCQCN)"]
+            ToR7["Rail-7 Leaf/ToR (PFC Watchdog + ECN/DCQCN)"]
+            Node1["8-GPU Compute Nodes / Supernode Trays<br/>NVLink / NVSwitch High-BW Domain (TP/EP)<br/>8× 400G NDR/RoCE NICs Mapped 1:1 to Rails 0..7"]
+            CDU1["Rack Manifold + Coolant Distribution Unit (CDU)<br/>88% Liquid Heat Capture (111.2 kW) · 12% Rear-Door Air (15.2 kW)"]
         end
     end
 
     S0 --- ToR0
     S7 --- ToR7
-    ToR0 ---|"NIC-0 (pci0009:00)"| Node1
-    ToR7 ---|"NIC-7 (pci000c:00)"| Node1
-    CDU1 -.->|"T_in=32C, T_out=44C, T_j=77.6C"| Node1
+    ToR0 ---|"NIC-0 (PCIe Root Aligned)"| Node1
+    ToR7 ---|"NIC-7 (PCIe Root Aligned)"| Node1
+    CDU1 -.->|"Inlet 32°C / Outlet 44°C · GPU T_j = 77.6°C (<83°C)"| Node1
+```
+
+### View C: Fault Detection, Warm-Spare Swap & Tidal Recovery State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> BurnInGate: Day-0 Pairwise RDMA/NVLink Burn-In + HPL/GEMM Thermal Soak
+    BurnInGate --> HealthyRunning: Kueue TAS / Slurm Topology-Aware Gang Scheduling
+
+    HealthyRunning --> TransientMitigation: Transient Self-Healing Warning\\n1. RoCEv2 ECN Marking / Correctable ECC\\n2. Minor Coolant Temp Drift (T_j < 80°C)
+    TransientMitigation --> HealthyRunning: Hardware Retry / CDU Flow Compensation
+
+    HealthyRunning --> FaultIsolation: Hard Fault or Grey Failure (Straggler / SDC)\\n1. DCGM Xid 79/94/95 or Uncorrectable HBM Row-Remap Failure\\n2. NVSwitch / RDMA Link Down or Dual-End Straggler Detection
+    FaultIsolation --> CordonAndSwap: 1. Auto-Cordon Faulty Node or Supernode Clique\\n2. Token-Bucket Ramp (≤125 kW/min) Swaps in Warm-Spare Node\\n3. Serving Re-Routes Sub-Second; Training Resumes from Pinned/NVMe Checkpoint (<90s)
+    CordonAndSwap --> HealthyRunning: Communicator Rebuilt & Steady-State Restored
 ```
 
 ---
 
-## 3. Verified Full-Stack Quantitative Ledger (`own-offline`)
+## 3. Subsystem Trade-Offs & Verified Quantitative Sizing Matrix
 
-| Subsystem | Baseline / Naive Configuration | Optimized Architecture Contract | Verified Gain (`experiments/*/results.json`) |
-|---|---|---|---|
-| **6D Training & FSDP2 / HFSDP** | Naive `FSDP=64` (`49.00 GiB`, `166.96 ms/step`); 120B OOM (`244.20 GiB`) | `TP=8 + SP + FSDP2` (`35.44 GiB`, `55.97 ms`); Megatron-FSDP `HFSDP` (`51.01 GiB`) | **`2.98x`** faster 70B step; **`4.79x`** lower 120B state memory |
-| **NCCL Collectives (`SHARP`, `UB`, `GIN`)** | Ring AllReduce; SM-heavy NCCL (`+47.18%` GEMM slowdown); 3-kernel `RS+RMSNorm+AG` (`234.57 us`) | `NVLS + SHARP` (`27.91x`); `ncclCommWindowRegister` + `P2P_CUMEM` (`0` SMs); 1-kernel `RMSNormGIN` (`110.92 us`) | **`2.11x`** faster fused norm+collective; **`0.0%`** GEMM tail inflation |
-| **SM100 MoE & Attention Kernels** | Unfused 6-kernel `mHC` (`184.79 us`, `984.38 MiB`); BF16 MLA KV (`1,152 B/tok`) | DeepGEMM `MegaMoE` (`24/8` store blocks) + `MegaMHC` (`96.44 us`, `-40.09%` HBM); `nvfp4_ds_mla` (`352 B/tok`) + `HiSparse`; FlashInfer Frost DS4.1 mixed `MXFP8/FP4` (`528B/288B`) + `tl.div_rn` | **`1.92x`** `MegaMHC` speedup; **`3.273x`** KV compression + **`12.8x`** HBM offload; **`3.0476x`** active KV BW reduction |
-| **FlexShard & GB200 HybridEP** | Naive 6-rank `Shard(0)` on Kimi `wkv_a` (`4` broken matrices); FP32 NS (`8.757 ms`); `cf=1.0` EP buffer (`16,132.5 MiB`) | `BlockShard(0, (512, 64))` (`16` intact matrices); BF16 4-bucket DistMuon (`5.103 ms`); non-blocking `HybridEP` `cf=0.25` (`4,033.1 MiB`) | **`1.716x`** DistMuon speedup; **`-75.0%`** EP buffer memory with `0` drops |
-| **Disaggregated KV & Role Switch** | Round-robin NIC selection (`4.074 ms` for `64 MiB`); `42.0 s` PD cold restart; `65 B` JSON consensus | Mooncake CX8 `Data Direct` (`0.779 ms`); SGLang zero-realloc `handle_pd_role_switch` (`180 ms`); `18 B` MsgPack + incremental tail offload (`38` tokens) | **`5.23x`** faster 64 MiB KV transfer; **`233.33x`** faster PD role switch; **`-72.31%`** ZMQ payload |
-| **Fault Tolerance & Checkpointing** | Uncached DCP `pin_memory` (`3.993 s` stall); blind 16K-GPU hang timeout (`940.0 s`) | Cached `StateDictStager` (`0.048 s`, `83.2x`); `FlightRecorder` + `NCCL RAS` (`389–584 ms` root-cause) | **`99.993%`** checkpoint goodput; **`46.11x`** faster hang recovery |
+| Subsystem | Common Anti-Pattern (Naive Baseline) | Recommended SA Target Architecture | Quantitative Gain & Decision Boundary | Reproducible Model & Playbook |
+|---|---|---|---|---|
+| **1. Scale-Out Fabric** | Static 5-tuple ECMP Ethernet on low-entropy RDMA elephant flows (hash polarization + PFC storms) | **InfiniBand NDR/XDR (SHARP + AR)** for `≥1K-GPU` synchronous pre-training; **AI Ethernet RoCEv2 (Rail-Optimized + ECN/DCQCN + DLB/Packet Spraying)** for `≤512-GPU` post-training & PD serving | Lifts multi-node collective effective bandwidth efficiency from `<55%` to **`85%–92%+`** with zero PFC deadlock | [`experiments/rocev2_load_balancing_selection/`](../../experiments/rocev2_load_balancing_selection/) · [IB vs RoCE Guide](../components/ib-vs-ethernet-roce-selection-faq.en.md) |
+| **2. Parallelism & Precision** | Stretching `TP>8` across Ethernet/IB nodes or running unsharded `BF16` on 671B MoE | **Intra-node `TP=8 + SP` (pinned to NVLink) × Inter-node `FSDP2 / DualPipe PP`**; **`FP8/NVFP4 + Attention DP + Expert EP + DeepEP + EPLB`** for 671B MoE | `70B` per-GPU peak memory capped at **`35.4 GiB`** (**`2.98×`** faster step); `671B MoE FP8+EP` boosts SLA goodput **`2.65×`** (`-62%` TCO) | [`experiments/capacity_roofline/`](../../experiments/capacity_roofline/README.md) · [`experiments/moe_quantization_parallelism_selection/`](../../experiments/moe_quantization_parallelism_selection/README.md) |
+| **3. Online Serving & PD Disaggregation** | Co-located serving pushed to `ρ > 0.85` utilization under bursty long-prompt arrivals | **SGLang / vLLM + Dynamo/Mooncake PD Disaggregation** on `≥16 GPUs` with `100G–400G RDMA` + global prefix-aware routing (`ρ ≤ 0.65`) | Cuts Decode `P99 TPOT` **`3.76×`** and saves **`26.5%–34.2%`** SLA GPU cost under bursty traffic; 75% prefix cache hit cuts TTFT **`3.45×`** | [`experiments/llm_inference_engine_pd_selection/`](../../experiments/llm_inference_engine_pd_selection/) · [PD Selection Cards](../reports/enterprise-pd-disaggregation-vs-colocated-inference-architecture-selection-cards.html) |
+| **4. Checkpointing & Tiered KV Storage** | Synchronous blocking remote checkpoint writes; full Prefill recomputation after KV eviction | **Two-Phase Async Checkpointing** (`D2H` to pinned Host DRAM first + async NVMe/3FS/Lustre flush); **Pinned DRAM / RDMA+GDS Tiered KV Offload** | Shrinks `9 TB` checkpoint stall from `225 s` to **`3.125 s` (`72×` faster, `99.83%` goodput)**; speeds up `64K` multi-turn resume TTFT **`15×`** | [`experiments/ai_storage_checkpoint_kv_offload/`](../../experiments/ai_storage_checkpoint_kv_offload/README.md) · [Storage & KV Guide](../components/kv-cache-tiered-offload-selection-faq.en.md) |
+| **5. Orchestration & Tidal Sharing** | Topology-blind K8s scheduling scattering pods across switches and deadlocking partial allocations | **Kubernetes `Kueue TAS` + `DRA` gang scheduling** (or bare-metal Slurm) with daytime high-priority serving + nighttime preemptible SFT/RL backfill | Eliminates gang-allocation deadlocks, preserves Rail/NVLink locality, and raises 24-hour fleet utilization to **`75%–85%+`** | [`experiments/ai_cluster_slurm_k8s_kueue_dra_scheduling_selection/`](../../experiments/ai_cluster_slurm_k8s_kueue_dra_scheduling_selection/) · [K8s vs Slurm Guide](../components/ai-cluster-slurm-vs-kubernetes-kueue-dra-gang-scheduling-selection-faq.en.md) |
+| **6. Liquid Cooling & Power Ramp Control** | Forcing air cooling above `50 kW/rack` or waking 64+ nodes simultaneously after maintenance | **Cold-Plate Direct Liquid Cooling (DLC, 85%–90% liquid capture) above `45 kW/rack`** + scheduler token-bucket wake-up rate limiting + BESS smoothing | Holds `126.4 kW` rack GPU junction at **`77.6°C`** (0% thermal throttle) and bounds cold-start ramp to **`≤122.4 kW/min`** | [`experiments/ai_datacenter_cooling_power_selection/`](../../experiments/ai_datacenter_cooling_power_selection/) · [Cooling & Power Cards](../reports/ai-datacenter-cooling-power-selection-cards.html) |
+
+---
+
+## 4. Three High-Impact Solution Architect Anti-Patterns
+
+1. **Anti-Pattern 1: Sizing Inference Fleets from `Mean QPS × Peak TFLOPS` Alone**
+   - **Why It Fails**: Real enterprise Agent and RAG arrivals are bursty ($CV_a^2 \ge 2.0$). Pushing online replica utilization from `60%` to `92%` explodes queueing wait times past `4,000 ms`, collapsing P95 TTFT compliance below `10%`. **SA Rule**: Cap interactive serving utilization at `ρ ≤ 0.65` and monetize spare nighttime/trough cycles with preemptible batch/SFT workloads.
+2. **Anti-Pattern 2: Confusing Total MoE Parameters with Active Parameters per Token**
+   - **Why It Fails**: A `671B` sparse MoE activates only `~37B` parameters per token, yet **all `671B` expert weights must reside in HBM**. Sizing memory from `37B` causes immediate OOM, whereas computing MFU from `671B` inflates reported utilization by **18×** while masking `EP All-to-All` network bottlenecks.
+3. **Anti-Pattern 3: Treating Rack-Scale NVLink Supernodes Like Standalone 8-GPU Servers**
+   - **Why It Fails**: In `GB200 NVL72` or `128-card supernode` racks, trays share a unified Scale-Up switch domain and liquid-cooling manifold. Model the **entire supernode clique and CDU loop** as a first-class failure and scheduling domain, gated by [Day-0 pairwise burn-in acceptance](../components/ai-cluster-burn-in-acceptance-dcgm-nccl-validation-selection-faq.en.md).
+
+---
+
+## 5. Pre-Production Solution Architect Go-Live Checklist
+
+- [ ] **Day-0 Hardware & Fabric Burn-In**: Pass per-GPU HPL/GEMM thermal soak, intra-node NVLink P2P matrix tests, and inter-node pairwise same-rail RDMA bandwidth/BER checks with `NCCL_CROSS_NIC=0` and hardware PFC watchdog enabled.
+- [ ] **Distributed Training & Checkpoint Gate**: Confirm `TP` stays strictly inside NVLink domains, two-phase async checkpoint GPU stalls remain `< 3.5 s`, and simulated worker failure recovers automatically within `≤ 90 s`.
+- [ ] **Online Serving SLA & TCO Gate**: Benchmark P95 TTFT and P99 TPOT under realistic skewed prompt distributions; compare co-located Chunked Prefill vs. PD Disaggregation on `$/1M SLA-compliant tokens` and verify `≥ 70%` Prefix Cache hit rate.
+- [ ] **Liquid Cooling, Power & FinOps Telemetry**: Stream `DCGM + OpenTelemetry` GPU SM activity, Xid/row-remap health events, CDU inlet/outlet temperatures, and tenant-attributed `$/1M tokens` into unified FinOps dashboards.

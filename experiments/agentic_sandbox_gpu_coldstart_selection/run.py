@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 14: Agentic Code Sandbox & Serverless GPU Cold-Start Architecture Selection.
+"""Deterministic evaluator for Agentic Code Sandbox & Serverless GPU Cold-Start Architecture Selection.
 
 Compares 4 sandbox & serverless GPU runtime architectures for Coding Agent tool execution
 and bursty Serverless GPU model inference (16 GB container image + 14 GB FP16/FP8 weights,
@@ -223,7 +223,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 14 agentic sandbox & serverless GPU cold-start model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide agentic sandbox & serverless GPU cold-start model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

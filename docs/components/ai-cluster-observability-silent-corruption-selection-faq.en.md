@@ -1,6 +1,6 @@
 # Large-Scale AI Cluster Observability, Straggler & Silent Data Corruption (SDC) Triage Selection FAQ (`Basic Prometheus Polling` vs. `DCGM + XID Auto-Cordon` vs. `FlightRecorder + NCCL RAS` vs. `Online Tensor Checksum + Golden-Step SDC Guard`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./ai-cluster-observability-silent-corruption-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/ai-cluster-observability-silent-corruption-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#observability-sdc-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./ai-cluster-observability-silent-corruption-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/ai-cluster-observability-silent-corruption-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#observability-sdc-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When operating `1,024 ~ 10,000+` GPUs for synchronous foundation model training, the most expensive enemies are not loud node crashes, but two silent killers: **(1) Grey Stragglers & Sympathetic NCCL Timeouts: if 1 GPU out of 2,048 stalls or slows down by 20% due to optical FEC retries or PCIe lane degradation, the other 2,047 healthy GPUs wait at the `All-Reduce` barrier for 30 minutes and crash simultaneously with the exact same `Watchdog caught collective operation timeout`—forcing engineers to spend `145 minutes` running manual binary-search (`bisect`) node tests; and (2) Silent Data Corruption (`SDC`): a cosmic-ray or voltage-droop bit flip inside an un-ECC'd Tensor Core ALU silently corrupts a gradient without raising any hardware `XID`, poisoning all 2,048 GPUs during `All-Reduce` and destroying 24 hours (`$100,000+`) of training progress!** Grounded in `experiments/ai_cluster_observability_sdc_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact boundaries across **Basic Polling, DCGM + XID Auto-Cordon, PyTorch FlightRecorder + NCCL RAS, and Online Tensor Checksum + Deterministic Golden-Step SDC Verification**.
 
@@ -142,7 +142,7 @@ Because a single straggler or hang stalls **all $N$ GPUs** in a synchronous job,
 # Verify results.json matches the deterministic observability & SDC model 100%
 python experiments/ai_cluster_observability_sdc_selection/run.py --check
 
-# Run Round 21 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_ai_cluster_observability_sdc_selection.py
 ```
 

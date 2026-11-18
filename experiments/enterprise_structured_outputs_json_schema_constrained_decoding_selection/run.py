@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Structured Outputs, JSON Schema Constrained Decoding & API Contracts (Round 387)
+    # Analytical model for Enterprise Structured Outputs, JSON Schema Constrained Decoding & API Contracts 
     # Workload: 20,000,000 structured microservice & ERP API extraction/decision calls per month (128K vocab LLM).
     monthly_calls = 20_000_000
 

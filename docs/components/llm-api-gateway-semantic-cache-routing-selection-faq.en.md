@@ -1,6 +1,6 @@
 # Enterprise LLM API Gateway, Semantic Cache & Cascade Routing Selection FAQ (`Round-Robin Proxy` vs. `TPM Rate-Limit + Exact Cache` vs. `KV-Prefix Affinity + Semantic Cache` vs. `Difficulty Cascade Router + SLO Breaker`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./llm-api-gateway-semantic-cache-routing-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/llm-api-gateway-semantic-cache-routing-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#llm-gateway-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./llm-api-gateway-semantic-cache-routing-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/llm-api-gateway-semantic-cache-routing-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#llm-gateway-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When an enterprise deploys a unified **LLM API Gateway** handling `10,000,000` requests/month across multiple inference replicas, reusing a legacy microservice **stateless Round-Robin reverse proxy (Nginx / Envoy)** triggers three costly failures: **(1) Destroying GPU KV Prefix Cache Locality: across 8 replicas, stateless round-robin sprays consecutive turns of the same conversation across different servers, collapsing GPU RadixCache/APC hit rates from `65.0%` down to `8.1%`; (2) Request-Count Rate Limiting Blindness: counting a 64K-token RAG prompt and a 20-token chat message as "1 request each" causes severe head-of-line blocking (`1,420 ms` P99 TTFT); and (3) Frontier Model Overkill: sending 55% routine extraction/classification tasks to a 671B frontier model burns `$142,000/month`**. Grounded in `experiments/llm_api_gateway_routing_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact boundaries across four enterprise AI gateway tiers.
 
@@ -145,7 +145,7 @@ As an inference cluster scales from 2 to 32 replicas, stateless round-robin dest
 # Verify results.json matches the deterministic LLM gateway & cascade routing model 100%
 python experiments/llm_api_gateway_routing_selection/run.py --check
 
-# Run Round 25 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_llm_api_gateway_routing_selection.py
 ```
 

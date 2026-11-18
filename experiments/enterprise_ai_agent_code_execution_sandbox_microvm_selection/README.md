@@ -1,4 +1,4 @@
-# Enterprise AI Agent Code Execution Sandbox (Docker vs. gVisor vs. Snapshot MicroVM) Evaluator (Round 395)
+# Enterprise AI Agent Code Execution Sandbox (Docker vs. gVisor vs. Snapshot MicroVM) Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise sandboxing architectures for executing `3,000,000` untrusted LLM-generated Python/Bash scripts per month:
 

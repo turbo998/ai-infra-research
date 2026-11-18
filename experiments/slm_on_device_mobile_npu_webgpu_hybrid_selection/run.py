@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Small Language Model (SLM 1B-8B) On-Device Mobile NPU, WebGPU & Cloud-Edge Hybrid Routing Selection (Round 63).
+"""Deterministic evaluator for Small Language Model (SLM 1B-8B) On-Device Mobile NPU, WebGPU & Cloud-Edge Hybrid Routing Selection .
 
 Models median Time-To-First-Token (TTFT ms), sustained Decode speed after 5-minute thermal soak (tok/s),
 device active power draw (Watts), complex + routine blended task accuracy (%),

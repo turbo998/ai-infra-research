@@ -1,4 +1,4 @@
-# Enterprise Kubernetes GPU Sharing (Full GPU vs. Time-Slicing vs. MIG vs. MIG+MPS) Evaluator (Round 389)
+# Enterprise Kubernetes GPU Sharing (Full GPU vs. Time-Slicing vs. MIG vs. MIG+MPS) Evaluator 
 
 Deterministic analytical evaluator comparing four Kubernetes GPU sharing architectures for packing `28` auxiliary AI microservices (`Embeddings, Rerankers, Guardrails, ASR, OCR, 1B-7B SLMs`) onto `80GB` H100/A100 nodes:
 

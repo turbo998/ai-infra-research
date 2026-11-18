@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 17: Enterprise AI GPU Cluster Scheduler & Topology Orchestration Selection.
+"""Deterministic evaluator for Enterprise AI GPU Cluster Scheduler & Topology Orchestration Selection.
 
 Compares 4 cluster scheduling & topology orchestration architectures across a 512-GPU H100 cluster
 (64 nodes x 8 GPUs across 8 Leaf-Switch Racks, $2.50/GPU-hr = $934,400/mo total cluster lease)
@@ -163,7 +163,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 17 GPU cluster scheduler & topology orchestration model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide GPU cluster scheduler & topology orchestration model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

@@ -1,6 +1,6 @@
 # AI Cluster L3 Routing Control Plane, BGP Unnumbered & RoCEv2 Multi-Rail Underlay Selection (`ai_cluster_bgp_evpn_rocev2_rail_underlay_selection`)
 
-Deterministic Python 3.12 analytical evaluator for **Round 174**: comparing `Legacy L2 VLAN / MLAG + 180s BGP Hold-Timer` (Tier 1), `Manual /31 IPv4 eBGP Clos + Equal ECMP` (Tier 2), `RFC 5549 BGP Unnumbered + Rail-Independent ASN + 300ms BFD` (Tier 3), and `BGP Unnumbered + Hardware 15ms BFD + BGP Link-Bandwidth WCMP + EVPN VRF` (Tier 4).
+Deterministic Python 3.12 analytical evaluator for **SA Guide**: comparing `Legacy L2 VLAN / MLAG + 180s BGP Hold-Timer` (Tier 1), `Manual /31 IPv4 eBGP Clos + Equal ECMP` (Tier 2), `RFC 5549 BGP Unnumbered + Rail-Independent ASN + 300ms BFD` (Tier 3), and `BGP Unnumbered + Hardware 15ms BFD + BGP Link-Bandwidth WCMP + EVPN VRF` (Tier 4).
 
 ## Reproduction
 

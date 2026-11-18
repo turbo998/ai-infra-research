@@ -1,4 +1,4 @@
-"""Unit tests for Round 47 Test-Time Compute Scaling & Long-CoT PRM Routing Selection Evaluator."""
+"""Unit tests for Test-Time Compute Scaling & Long-CoT PRM Routing Selection Evaluator."""
 
 from __future__ import annotations
 

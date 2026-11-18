@@ -1,4 +1,4 @@
-"""Unit tests for Round 61 Enterprise Codebase Indexing, Tree-sitter AST Graph & SWE-Agent Selection Evaluator."""
+"""Unit tests for Enterprise Codebase Indexing, Tree-sitter AST Graph & SWE-Agent Selection Evaluator."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 22: Enterprise Agent Structured Output & Constrained Decoding Selection.
+"""Deterministic evaluator for Enterprise Agent Structured Output & Constrained Decoding Selection.
 
 Compares 4 structured output & grammar-constrained decoding architectures for an enterprise Agent
 platform running 70B FP8 models (vocabulary size V = 128,256 tokens, baseline unconstrained decode
@@ -163,7 +163,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 22 structured output & constrained decoding model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide structured output & constrained decoding model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

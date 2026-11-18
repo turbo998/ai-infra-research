@@ -1,6 +1,6 @@
 # Large-Scale Distributed Training Parallelism & Memory Optimization Selection FAQ (`DDP / ZeRO-1` vs. `Full ZeRO-3 / FSDP` vs. `Hybrid FSDP (HFSDP)` vs. `Megatron 3D (TP + DualPipe PP + DP) + Selective Activation Offload`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./distributed-training-memory-parallelism-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/distributed-training-memory-parallelism-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#training-parallelism-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./distributed-training-memory-parallelism-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/distributed-training-memory-parallelism-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#training-parallelism-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When scaling 70B–120B+ LLM training or fine-tuning across 64 to 1,024 H100/H200/B200 GPUs, engineering teams routinely hit two devastating traps: **(1) running standard `DDP / ZeRO-1`, which immediately triggers `CUDA OOM` on 80GB GPUs due to the `16×Ψ` mixed-precision state rule (`244.20 GB/GPU` unsharded peak for a 120B model); and (2) blindly turning on global 256-GPU `Full ZeRO-3 / FSDP`, which cuts peak HBM to `46.80 GB` but forces every forward and backward layer to execute a 32-node `All-Gather / Reduce-Scatter` over 400G RoCEv2—stalling GPUs for 44.2% of every step and collapsing MFU to `36.4%`**. Grounded in `experiments/distributed_training_parallelism_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact decision boundaries across **DDP/ZeRO-1, Full ZeRO-3/FSDP, Hybrid FSDP (HFSDP), and Megatron-Core 3D Parallelism (`TP + DualPipe PP + DP`) + Selective Activation Offload**.
 
@@ -155,7 +155,7 @@ As the training cluster scales from 32 GPUs (4 nodes) to 1,024 GPUs (128 nodes),
 # Verify results.json matches the deterministic distributed training parallelism model 100%
 python experiments/distributed_training_parallelism_selection/run.py --check
 
-# Run Round 16 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_distributed_training_parallelism_selection.py
 ```
 

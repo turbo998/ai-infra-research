@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Multi-Region High Availability (HA/DR) & Cross-Cloud LLM Traffic Routing Selection (Round 372).
+"""Deterministic evaluator for Enterprise Multi-Region High Availability (HA/DR) & Cross-Cloud LLM Traffic Routing Selection .
 
 Models annualized effective availability (%), regional outage Recovery Time Objective (RTO in ms),
 brownout P99 TTFT latency (ms), idle standby capacity waste (%), and monthly total TCO (USD)

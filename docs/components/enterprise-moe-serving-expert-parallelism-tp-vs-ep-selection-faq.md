@@ -72,7 +72,7 @@
 ```mermaid
 flowchart TD
     A[企业计划部署 DeepSeek-V3/R1 671B 或 Qwen3-235B MoE 大模型] --> B{企业采购预算与集群并发吞吐规模？}
-    B -->|中小并发 (< 30 RPS) 或初期 PoC<br/>不想自建百卡机房| C[优先使用云厂商全托管 MaaS API<br/>或混合 PTU + PAYGO 溢出架构<br/>详见 Round 361]
+    B -->|中小并发 (< 30 RPS) 或初期 PoC<br/>不想自建百卡机房| C[优先使用云厂商全托管 MaaS API<br/>或混合 PTU + PAYGO 溢出架构<br/>]
     B -->|中高并发私有化自托管 (1~3 台服务器规模)| D{是否能直接采购 8x H200 (141GB) 或 B200 机型？}
     D -->|能采购 8x H200 (单机 1,128GB 显存)| E[🟦 Tier 2: 单机 8x H200 机内 NVLink (TP=8 / EP=8)<br/>单机完整装下 671B-FP8 + 457GB KV Cache<br/>零跨机网络依赖 · 开箱即获 4,850 tok/s/机 ✅]
     D -->|只能使用 80GB H100 / H800 跨多机部署<br/>或建设 >= 32 卡超大规模高吞吐算力中心| F[🟩 Tier 4: DP-Attention + 宽专家并行 (EP=16/32) + DeepEP 双批重叠 + EPLB<br/>消灭跨机 TP 碎矩阵 · 动态复制热点专家消除慢卡<br/>单卡吞吐 738 tok/s (提4.99x) · 成本省 60.4% 🏆]
@@ -178,5 +178,5 @@ sequenceDiagram
 - [ ] **4. 生产环境强制开启 `EPLB`（动态冗余热点专家负载均衡）**：针对企业垂直业务流量偏斜，自动在每张卡预留冗余槽位复制高频激活的“热门专家”，消除 `All-to-All` 木桶慢卡效应。
 - [ ] **5. 启用双微批通信-计算重叠（`Two-Batch Overlap / DeepEP`）**：将跨节点 RDMA `Dispatch/Combine` 通信耗时隐藏在另一微批的 Attention 与共享专家计算背后。
 - [ ] **6. MoE 路由门控网络（Router Gate）与归一化层必须保持 `BF16 / FP32` 高精度**：即使 256 个专家权重使用 `FP8` 量化，负责给 Token 分配专家的路由器绝不能低比特量化（防止选错专家！）。
-- [ ] **7. 结合 Round 385 规范开启 DeepSeek 原生 `MTP`（Multi-Token Prediction）投机解码**：将 MoE 模型的单请求流式生成速度再提升 `1.8x~2.4x`。
+- [ ] **7. 开启 DeepSeek 原生 `MTP`（Multi-Token Prediction）投机解码**：将 MoE 模型的单请求流式生成速度再提升 `1.8x~2.4x`。
 - [ ] **8. 跨机 EP 集群的网络交换机必须开启 RoCEv2 PFC/ECN 无损流控或使用 InfiniBand**：防止高频并发 `All-to-All` 流量引发交换机微突发丢包重传（Incast Congestion）。

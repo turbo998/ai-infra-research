@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Discrete Diffusion LLM (Mercury / LLaDA / Block Diffusion BD3-LM) Parallel Token Generation vs Autoregressive Selection (Round 67).
+"""Deterministic evaluator for Discrete Diffusion LLM (Mercury / LLaDA / Block Diffusion BD3-LM) Parallel Token Generation vs Autoregressive Selection .
 
 Models single-stream generation throughput (tokens/sec on 1xH100 for 8B-class model generating
 512 tokens with a 4,096-token prompt), HBM weight reads per 512 generated tokens,

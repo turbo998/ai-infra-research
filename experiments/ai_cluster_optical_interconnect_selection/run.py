@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic Round 12 evaluator: AI Cluster Optical & Copper Interconnect Selection.
+"""Deterministic SA Guide evaluator: AI Cluster Optical & Copper Interconnect Selection.
 
 Compares 4 interconnect architectures across a 2,048-GPU 800G Rail-Optimized 2-Tier Leaf-Spine cluster
 (4,096 bidirectional 800G links = 8,192 transceiver/cable endpoints; 3-year = 26,280-hour horizon):
@@ -283,7 +283,7 @@ def compute_model() -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run or check Round 12 optical interconnect model.")
+    parser = argparse.ArgumentParser(description="Run or check SA Guide optical interconnect model.")
     parser.add_argument("--check", action="store_true", help="Verify results.json matches deterministic model.")
     args = parser.parse_args()
 
@@ -296,7 +296,7 @@ def main() -> int:
         if existing != computed:
             print("ERROR: results.json drifted from deterministic compute_model().", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 12 optical interconnect model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide optical interconnect model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(computed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

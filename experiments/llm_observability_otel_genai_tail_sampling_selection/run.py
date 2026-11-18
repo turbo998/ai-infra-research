@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise LLM Observability, OpenTelemetry GenAI Semantic Conventions & Tail-Based Drift Sampling (Round 71).
+"""Deterministic evaluator for Enterprise LLM Observability, OpenTelemetry GenAI Semantic Conventions & Tail-Based Drift Sampling .
 
 Models silent hallucination / regression capture recall (%), inline user-facing latency overhead (ms),
 fraction of production requests evaluated by LLM-Judge (%), monthly storage + judge compute bill (USD/mo for 50M requests),

@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Embedding & Reranker Two-Stage Retrieval Pipeline Selection (Round 400)
+    # Analytical model for Enterprise Embedding & Reranker Two-Stage Retrieval Pipeline Selection 
     # Workload: 500 RPS peak retrieval across 50M enterprise chunks (30,000,000 queries/month).
 
     # Tier 1: Single-Stage 3072-Dim Commercial Embedding API Only (No Reranker)

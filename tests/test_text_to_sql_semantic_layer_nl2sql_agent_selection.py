@@ -1,4 +1,4 @@
-"""Unit tests for Round 64 Enterprise Text-to-SQL (NL2SQL), LSH Value Linking & Governed Semantic Layer Selection Evaluator."""
+"""Unit tests for Enterprise Text-to-SQL (NL2SQL), LSH Value Linking & Governed Semantic Layer Selection Evaluator."""
 
 from __future__ import annotations
 

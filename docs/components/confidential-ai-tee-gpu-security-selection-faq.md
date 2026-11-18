@@ -1,6 +1,6 @@
 # 金融政企机密计算与隐私合规大模型推理架构选型指南（`标准明文 GPU 容器` vs. `应用层 PII 脱敏网关` vs. `单卡 H100/H200 CC-On 硬件 TEE` vs. `多卡 PPCIE + Blackwell NVLink 硬件加密集群`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./confidential-ai-tee-gpu-security-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/confidential-ai-tee-gpu-security-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#confidential-tee-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./confidential-ai-tee-gpu-security-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/confidential-ai-tee-gpu-security-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#confidential-tee-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当银行、医疗、律所与主权云客户将核心业务接入大模型时，最大的合规拦路虎是**“运行态数据与专有模型权重裸奔（Data-in-Use Exposure）”**——哪怕网络开了 TLS、磁盘开了加密，云厂商宿主机管理员（Root / Hypervisor）依然可以直接从内存和 GPU 显存中 Dump 出客户的并购合同、病历源码以及企业斥资百万训练的微调权重。与此同时，架构师往往存在两大认知误区：**① 迷信在前面加一层“正则/NER 脱敏网关”，结果不仅漏掉 18.5% 的准标识符，还把上下文改得面目全非导致推理准确率暴跌 `6.4%`；② 听说开启 GPU 硬件机密计算（`CC-On`）会让 PCIe 带宽掉 75%，就不敢在生产大模型上开启**。本文基于 `experiments/confidential_ai_tee_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），从第一性原理揭示：**为什么 70B 大模型开启单卡硬件 TEE 仅损失 `4.8%` 性能，以及为什么 405B 多卡 `TP=8` 必须升级 `PPCIE / Blackwell 内联 NVLink 加密` 以避开 `+280.4%` 的软件弹跳缓冲区悬崖**。
 
@@ -159,7 +159,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性机密计算 TEE 模型 100% 一致
 python experiments/confidential_ai_tee_selection/run.py --check
 
-# 运行 Round 19 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_confidential_ai_tee_selection.py
 ```
 

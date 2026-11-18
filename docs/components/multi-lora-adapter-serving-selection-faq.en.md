@@ -1,6 +1,6 @@
 # Hundred-to-Thousand Adapter Multi-LoRA High-Density Serving Selection FAQ (`Dedicated Replicas` vs. `Serial Hot-Swapping` vs. `vLLM Paged LoRA BGMV` vs. `S-LoRA Unified Paged Pool + Heterogeneous MBGMM`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./multi-lora-adapter-serving-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/multi-lora-adapter-serving-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#multi-lora-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./multi-lora-adapter-serving-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/multi-lora-adapter-serving-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#multi-lora-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When an enterprise or SaaS platform fine-tunes **`128` vertical LoRA adapters (`320 MB` each)** on a shared **`70B FP8` base model (`70.0 GB`)** for different business units or customers, the most expensive anti-pattern is **calling `merge_and_unload()` to merge each 320MB adapter into a separate 70GB checkpoint deployed on 128 dedicated GPUs—burning `$233,600/month` at just `6.8%` average GPU utilization!** Conversely, swapping adapters serially on a single instance destroys Continuous Batching and spikes P99 TTFT to `1,840 ms`. Grounded in `experiments/multi_lora_serving_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact boundaries across **Dedicated Merged Replicas, Serial Hot-Swapping, vLLM Punica BGMV, and S-LoRA Unified Paged Pools + Heterogeneous MBGMM Kernels**.
 
@@ -148,7 +148,7 @@ As the number of simultaneously active LoRA adapters scales from 8 to 512, P99 T
 # Verify results.json matches the deterministic Multi-LoRA serving model 100%
 python experiments/multi_lora_serving_selection/run.py --check
 
-# Run Round 23 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_multi_lora_serving_selection.py
 ```
 

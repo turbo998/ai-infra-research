@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Multi-LoRA Serving & 120-Tenant Adapter Architecture Selection (Round 393)
+    # Analytical model for Enterprise Multi-LoRA Serving & 120-Tenant Adapter Architecture Selection 
     # Workload: 120 customized fine-tuned tenant models (LoRA rank r=16, ~160 MB each on top of a shared base LLM),
     # 250 RPS aggregate cluster traffic across 120 enterprise tenants.
     custom_tenant_models = 120

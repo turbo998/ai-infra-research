@@ -1,6 +1,6 @@
 # 万卡 AI 集群可观测性、慢节点（Straggler）与静默数据损坏（SDC）排障架构选型指南（`基础 Prometheus 轮询` vs. `DCGM + XID 自动隔离` vs. `FlightRecorder + NCCL RAS 亚秒级定位` vs. `在线张量指纹 + Golden-Step SDC 校验`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./ai-cluster-observability-silent-corruption-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/ai-cluster-observability-silent-corruption-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#observability-sdc-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./ai-cluster-observability-silent-corruption-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/ai-cluster-observability-silent-corruption-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#observability-sdc-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业在 `1,024 ~ 10,000+` 张 GPU 上开展大规模训练时，最让基础设施团队崩溃的不是显卡直接掉线（掉线很容易发现），而是两大“隐形杀手”：**① 灰色慢节点与 NCCL 假死（Grey Failure / Straggler）：2,048 张卡里只要有 1 张卡因为光模块误码重传或散热降频慢了 20%，或者卡死在某次 `All-Reduce` 上，其余 2,047 张正常卡就会陪它干等 30 分钟然后同时抛出完全一模一样的 `NCCL Watchdog Timeout`——运维根本分不清谁是“零号病人（Patient Zero）”，被迫花 `145 分钟` 做二分法重启排查；② 静默数据损坏（Silent Data Corruption, `SDC`）：GPU Tensor Core 运算单元（ALU）内部发生高能粒子或电压跌落引起的单比特翻转，硬件既不报 `ECC` 错误也不报 `XID`，但算出的毒梯度一旦通过 `All-Reduce` 混入全局权重，几小时后 `Loss` 突然爆炸，直接报废整整一天（价值 `$100,000+`）的训练进度！** 本文基于 `experiments/ai_cluster_observability_sdc_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解从 **基础轮询、DCGM+XID、PyTorch FlightRecorder + NCCL RAS** 到 **在线张量指纹 + Golden-Step 确定性 SDC 拦截** 的四档架构选型边界。
 
@@ -156,7 +156,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性可观测性/SDC 模型 100% 一致
 python experiments/ai_cluster_observability_sdc_selection/run.py --check
 
-# 运行 Round 21 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_ai_cluster_observability_sdc_selection.py
 ```
 

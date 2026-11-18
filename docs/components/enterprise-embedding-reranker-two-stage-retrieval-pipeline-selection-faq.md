@@ -134,7 +134,7 @@ sequenceDiagram
 
 ### 5.1 基准算例假设（500 RPS 峰值 · 月均 3,000 万次企业检索请求）
 - **为什么 Tier 4 仅用 `$2,900/月`（比 7B/9B 重型方案 `$34,500/月` 省下 `91.6%`）就能拿到全场最高的 `92.4%` NDCG@10？**
-  1. **告别重排算力黑洞**：9B Reranker 重排 100 个块（Tier 2）单次算力相当于让 9B 模型读一篇 50,000 字长文！改用 `568M` 模型 + `TensorRT FP8` + `Top-30` 窗口 + `40% 早停`，单次平均算力骤降 **`50 倍`**，仅需 2 个 MIG 切片（详见 Round 389）即可扛住全公司 500 RPS 流量！
+  1. **告别重排算力黑洞**：9B Reranker 重排 100 个块（Tier 2）单次算力相当于让 9B 模型读一篇 50,000 字长文！改用 `568M` 模型 + `TensorRT FP8` + `Top-30` 窗口 + `40% 早停`，单次平均算力骤降 **`50 倍`**，仅需 2 个 MIG 切片即可扛住全公司 500 RPS 流量！
 
 ```chart
 {
@@ -177,4 +177,4 @@ sequenceDiagram
 - [ ] **5. 实现“粗排分数裕度早停（Margin Early-Exit）”**：当粗排第 1 名与第 2 名得分差距超过标定阈值（如 $\Delta \ge 0.18$）时，直接跳过 Reranker 返回结果。
 - [ ] **6. 使用 `TensorRT / ONNX Runtime` 将 Cross-Encoder 重排器编译为 `FP8 / INT8` 引擎并开启动态 Batching**：将 30 个候选切片打包为 1 个 Batch 一次前向跑完（耗时 `< 15 ms`）。
 - [ ] **7. 强制设置重排器输出“相关性绝对分数截断阈值（Relevance Cutoff `>= 0.35`）”**：宁可只给大模型传 2 个真正相关的切片，也绝不把 3 个低分无关切片塞进去凑满 Top-5！
-- [ ] **8. 结合 Round 389 规范，将同节点的 `0.6B Embedding` 与 `0.5B Reranker` 混部在同一个 `NVIDIA MIG` 切片的 `Triton / CUDA MPS` 域内**：零跨机网络传输、单切片即可跑满 500 RPS。
+- [ ] **8. 将同节点的 `0.6B Embedding` 与 `0.5B Reranker` 混部在同一个 `NVIDIA MIG` 切片的 `Triton / CUDA MPS` 域内**：零跨机网络传输、单切片即可跑满 500 RPS。

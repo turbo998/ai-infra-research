@@ -1,7 +1,7 @@
 # 大模型 Prefill-Decode (PD) 分离与 KV Cache 卸载选型 FAQ 指南：单实例混部 vs. NVIDIA Dynamo + Mooncake
 
 > 🌐 **Language / 语言**: **中文 (Chinese)** | **[English (`pd-disaggregation-kv-offload-selection-faq.en.md`)](pd-disaggregation-kv-offload-selection-faq.en.md)**
-> 🧭 **姊妹专题 (Companion FAQ)**: [大模型推理引擎选型 FAQ (`vLLM` vs `SGLang` vs `TensorRT-LLM`)](llm-inference-engine-selection-faq.md) · [综合合订版 (`llm-inference-engine-pd-disaggregation-selection-faq.md`)](llm-inference-engine-pd-disaggregation-selection-faq.md)
+> 🧭 **姊妹专题 (Companion FAQ)**: [大模型推理引擎选型 FAQ (`vLLM` vs `SGLang` vs `TensorRT-LLM`)](llm-inference-engine-selection-faq.md)](llm-inference-engine-pd-disaggregation-selection-faq.md)
 > 📊 **数据溯源与复现边界 (Provenance)**: 文中定量结果来自本仓库确定性 Roofline 与排队论仿真器 [`experiments/llm_inference_engine_pd_selection/run.py`](../../experiments/llm_inference_engine_pd_selection/run.py)（分类：`synthetic` 理论/系统算例 + `anonymized_reported` H200 SXM FP8 与 400G RoCEv2 公开参数；`independently_reproduced=false`；未启动付费云上 8×H200 物理实机集群，物理集群实测状态：`not_measured`）。其中 `1.024 GB (8.192 Gb)` KV Cache 在 `400G RoCEv2` 实效带宽 `44.91 GB/s (359.30 Gbps)` 下跨节点零拷贝传输耗时严格为 **`22.8 ms`**。
 
 ---

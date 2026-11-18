@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Heterogeneous GPU Cluster (NVIDIA H100/B200 + AMD MI300X/MI325X) Compiler Stack & Cross-Architecture PD Disaggregation Selection (Round 49).
+"""Deterministic evaluator for Heterogeneous GPU Cluster (NVIDIA H100/B200 + AMD MI300X/MI325X) Compiler Stack & Cross-Architecture PD Disaggregation Selection .
 
 Models the effective memory bandwidth utilization (%), single-node 70B FP8 serving throughput (tokens/s),
 P99 Time-Per-Output-Token (TPOT ms), maximum concurrent 32K-context sessions per 8-GPU node,

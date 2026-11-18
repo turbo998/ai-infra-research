@@ -1,4 +1,4 @@
-# Enterprise Colocated vs. Prefill-Decode (PD) Disaggregated Inference Evaluator (Round 383)
+# Enterprise Colocated vs. Prefill-Decode (PD) Disaggregated Inference Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise LLM serving architectures for an 8K-input / 512-output 70B RAG workload under strict dual SLA (`P95 TTFT <= 800 ms` AND `P99 TPOT <= 35 ms`):
 

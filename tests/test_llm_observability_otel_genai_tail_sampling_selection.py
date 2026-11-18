@@ -1,4 +1,4 @@
-"""Unit tests for Round 71 Enterprise LLM Observability, OTel GenAI & Tail-Based Drift Sampling Evaluator."""
+"""Unit tests for Enterprise LLM Observability, OTel GenAI & Tail-Based Drift Sampling Evaluator."""
 
 from __future__ import annotations
 

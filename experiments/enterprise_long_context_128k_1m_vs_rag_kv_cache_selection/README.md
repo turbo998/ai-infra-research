@@ -1,4 +1,4 @@
-# Enterprise Long-Context (128K–1M) vs. Hierarchical Full-Section RAG & KV Cache Evaluator (Round 388)
+# Enterprise Long-Context (128K–1M) vs. Hierarchical Full-Section RAG & KV Cache Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise long-document (`150,000 tokens`, 300 pages) architectures at `1,000,000` queries/month:
 

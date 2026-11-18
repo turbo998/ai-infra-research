@@ -1,7 +1,7 @@
 # AI Infrastructure Networking Selection & RoCEv2 Architecture FAQ: InfiniBand (IB) vs. Ethernet
 
 > 🌐 **Language / 语言**: **[中文 (`ib-vs-ethernet-roce-selection-faq.md`)](ib-vs-ethernet-roce-selection-faq.md)** | **English**
-> 🔗 **Related Deep Dives**: [Interconnect & Network Hierarchy](interconnect-network.md) · [RDMA Verbs Lifecycle](rdma-lifecycle.md) · [GPU-Initiated RDMA (`IBGDA` / `GDAKI`)](ibgda-gpu-initiated-rdma.md) · [UEC 1.0 Packet Trimming & Buffering](uec-packet-trimming-switch-buffering.md) · [UEC 1.1 Transport & Congestion Control](uec-transport-congestion.md) · [In-Network SHARP Collectives](in-network-collectives-sharp.md)
+> 🔗 **Related Deep Dives**: [RoCEv2 Load Balancing & Congestion Control](rocev2-load-balancing-congestion-selection-faq.en.md) · [RoCEv2 PFC Storm Defense & AI Ethernet Tuning](ai-cluster-roce-pfc-storm-congestion-control-selection-faq.en.md) · [10k-GPU RDMA Topology Selection (Rail-Optimized vs. Fat-Tree vs. OCS)](ai-cluster-rdma-network-topology-rail-optimized-fat-tree-dragonfly-selection-faq.en.md) · [In-Network Collectives (NVLS & IB SHARP)](ai-cluster-in-network-computing-sharp-collective-selection-faq.en.md) · [MoE DeepEP & IBGDA All-to-All](moe-deepep-ibgda-nvshmem-alltoall-engine-selection-faq.en.md) · [Optical & Copper Interconnect Selection](ai-cluster-optical-interconnect-selection-faq.en.md)
 
 ---
 

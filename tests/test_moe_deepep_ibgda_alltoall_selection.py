@@ -1,4 +1,4 @@
-"""Unit tests for Round 46 MoE DeepEP & GPU-Initiated RDMA (IBGDA) All-to-All Selection Evaluator."""
+"""Unit tests for MoE DeepEP & GPU-Initiated RDMA (IBGDA) All-to-All Selection Evaluator."""
 
 from __future__ import annotations
 

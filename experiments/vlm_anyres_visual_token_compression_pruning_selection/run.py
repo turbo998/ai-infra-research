@@ -1,4 +1,4 @@
-"""Deterministic evaluator for VLM High-Resolution AnyRes, 2x2 Pixel-Shuffle & Text-Guided Visual Token Pruning Selection (Round 69).
+"""Deterministic evaluator for VLM High-Resolution AnyRes, 2x2 Pixel-Shuffle & Text-Guided Visual Token Pruning Selection .
 
 Models visual tokens fed into the LLM per high-res 2560x1440 image, single-image Time-To-First-Token
 (TTFT ms on 72B VLM), fine-grained DocVQA / ChartQA / InfoVQA benchmark accuracy (%),

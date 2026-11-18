@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Cluster Day-0 Burn-In, Acceptance Testing & Straggler Isolation Architecture Selection (Round 51).
+"""Deterministic evaluator for AI Cluster Day-0 Burn-In, Acceptance Testing & Straggler Isolation Architecture Selection .
 
 Models the Infant-Mortality Hardware/Optics Defect Detection Rate (%), Straggler Node Localization Time (minutes),
 Month-1 Unexpected Training Job Crashes, Cluster Effective MFU (%) across 1,024 GPUs,

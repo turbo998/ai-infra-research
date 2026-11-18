@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Codebase Indexing, Tree-sitter AST Graph & SWE-Agent Architecture Selection (Round 61).
+"""Deterministic evaluator for Enterprise Codebase Indexing, Tree-sitter AST Graph & SWE-Agent Architecture Selection .
 
 Models cross-file symbol localization Recall@10 (%), multi-file SWE-Bench Verified issue
 resolution rate (%), average tokens consumed per task, end-to-end resolution latency (s),

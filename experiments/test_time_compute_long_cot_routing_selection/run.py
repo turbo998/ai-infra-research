@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Test-Time Compute Scaling, Long-CoT PRM Tree Search & Difficulty-Aware Routing Selection (Round 47).
+"""Deterministic evaluator for Test-Time Compute Scaling, Long-CoT PRM Tree Search & Difficulty-Aware Routing Selection .
 
 Models the average generated tokens per query, P95 end-to-end reasoning latency (s),
 peak KV Cache VRAM per query (GB), complex reasoning accuracy (AIME/LiveCodeBench/Enterprise Mixed %),

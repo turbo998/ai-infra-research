@@ -1,4 +1,4 @@
-"""Unit tests for Round 171 AI Datacenter GPU Hardware SKU, HBM Memory Wall & 3-Year TCO Selection Evaluator."""
+"""Unit tests for AI Datacenter GPU Hardware SKU, HBM Memory Wall & 3-Year TCO Selection Evaluator."""
 
 from __future__ import annotations
 

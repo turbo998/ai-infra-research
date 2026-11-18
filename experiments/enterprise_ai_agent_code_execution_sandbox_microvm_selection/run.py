@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise AI Agent Code Execution Sandbox (Docker vs. Cold VM vs. gVisor vs. Snapshot MicroVM) (Round 395)
+    # Analytical model for Enterprise AI Agent Code Execution Sandbox (Docker vs. Cold VM vs. gVisor vs. Snapshot MicroVM) 
     # Workload: 3,000,000 untrusted LLM-generated Python/Bash code executions per month (Data Analysis & SWE Agents).
     monthly_executions = 3_000_000
 

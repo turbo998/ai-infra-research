@@ -1,4 +1,4 @@
-"""Unit tests for Round 60 LLM Pipeline Parallelism (1F1B vs Zero-Bubble ZB-V vs DeepSeek DualPipe) Selection Evaluator."""
+"""Unit tests for LLM Pipeline Parallelism (1F1B vs Zero-Bubble ZB-V vs DeepSeek DualPipe) Selection Evaluator."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 # 分布式 Checkpoint 去重、分桶与 GDS/POSIX 恢复算例
 
-本目录提供与 [训练存储、数据加载与分布式 Checkpoint 恢复路径](../../docs/components/storage-checkpoint.md) 配套的**原创标准库 CPU/offline 合成算例**（证据状态：`own-offline`）。
+本目录提供与 [训练存储、数据加载与分布式 Checkpoint 恢复路径](../../docs/components/training-checkpoint-architecture-selection-faq.md) 配套的**原创标准库 CPU/offline 合成算例**（证据状态：`own-offline`）。
 
 ## 1. 验证的源码与规范不变量
 

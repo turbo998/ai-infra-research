@@ -1,6 +1,6 @@
 # 百至千级垂类微调模型（Multi-LoRA）在线高密推理架构选型指南（`独立合并副本` vs. `串行热切换` vs. `vLLM Paged LoRA (BGMV)` vs. `S-LoRA 统一分页显存池 + 异构 MBGMM`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./multi-lora-adapter-serving-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/multi-lora-adapter-serving-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#multi-lora-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./multi-lora-adapter-serving-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/multi-lora-adapter-serving-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#multi-lora-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当大型企业或 SaaS 平台为内部 100+ 个业务部门（客服、法务、财务、代码审查、各省分公司）分别基于同一个 `70B` 基座大模型微调出 **`128` 个专属 LoRA 适配器（每个仅 `320 MB`）** 时，最致命的架构反模式是：**在训练结束后执行 `merge_and_unload()` 把每个 320MB 的 LoRA 合并回 70GB 基座权重，保存成 128 份独立的 70GB 模型并分别占用 128 张 GPU 部署——导致月度算力账单飙升至 `$233,600/月`，而长尾部门模型的平均 GPU 利用率只有可怜的 `6.8%`！** 反过来，如果为了省卡在单实例上按请求串行热加载切换 LoRA，又会彻底打碎 Continuous Batching 导致排队延迟飙至 `1.84 秒`。本文基于 `experiments/multi_lora_serving_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解从 **独立合并副本、串行热切换、vLLM Punica BGMV** 到 **S-LoRA 统一分页显存池 + 异构秩 MBGMM 融合算子** 的四档架构选型边界。
 
@@ -154,7 +154,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性 Multi-LoRA 模型 100% 一致
 python experiments/multi_lora_serving_selection/run.py --check
 
-# 运行 Round 23 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_multi_lora_serving_selection.py
 ```
 

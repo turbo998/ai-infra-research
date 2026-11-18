@@ -1,6 +1,6 @@
 # 分布式训练 6D 并行与 FSDP2/DeepEP 状态与通信算例
 
-本目录提供与 [分布式训练 6D 并行与 FSDP2/ZeRO 联合状态与通信机制](../../docs/components/training-parallelism.md) 配套的**原创标准库 CPU/offline 合成算例**（证据状态：`own-offline`）。
+本目录提供与 [分布式训练 6D 并行与 FSDP2/ZeRO 联合状态与通信机制](../../docs/components/distributed-training-memory-parallelism-selection-faq.md) 配套的**原创标准库 CPU/offline 合成算例**（证据状态：`own-offline`）。
 
 ## 1. 验证的源码与规范不变量
 

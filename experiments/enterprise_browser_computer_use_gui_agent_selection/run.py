@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Browser-Use / Computer-Use GUI Agent Architecture Selection (Round 391)
+    # Analytical model for Enterprise Browser-Use / Computer-Use GUI Agent Architecture Selection 
     # Workload: 200,000 enterprise web workflows/month (15 steps/workflow across ERP, Expense, Procurement, CRM portals).
     monthly_workflows = 200_000
 

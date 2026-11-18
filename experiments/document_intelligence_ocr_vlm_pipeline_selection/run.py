@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Multimodal Document Intelligence (PDF / Financial Tables / Charts OCR & VLM Parsing) Pipeline Selection (Round 48).
+"""Deterministic evaluator for Enterprise Multimodal Document Intelligence (PDF / Financial Tables / Charts OCR & VLM Parsing) Pipeline Selection .
 
 Models the Table Structure Recognition accuracy (TEDS %), Chart & Equation extraction accuracy (%),
 overall downstream RAG QA accuracy (OmniDocBench %), ingestion throughput (pages/sec/GPU),

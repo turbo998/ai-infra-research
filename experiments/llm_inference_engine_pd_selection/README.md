@@ -1,8 +1,8 @@
 # LLM Inference Engine & PD Disaggregation Selection Sizer (`own-offline`)
 
 Zero-dependency Python 3.12 analytical and systems model supporting:
-- **[中文架构选型 FAQ (`docs/components/llm-inference-engine-pd-disaggregation-selection-faq.md`)](../../docs/components/llm-inference-engine-pd-disaggregation-selection-faq.md)**
-- **[English Architecture Selection FAQ (`docs/components/llm-inference-engine-pd-disaggregation-selection-faq.en.md`)](../../docs/components/llm-inference-engine-pd-disaggregation-selection-faq.en.md)**
+- **[中文架构选型 FAQ (`docs/components/llm-inference-engine-pd-disaggregation-selection-faq.md`)](../../docs/components/llm-inference-engine-selection-faq.md)**
+- **[English Architecture Selection FAQ (`docs/components/llm-inference-engine-pd-disaggregation-selection-faq.en.md`)](../../docs/components/llm-inference-engine-selection-faq.en.md)**
 - **[7-Card 4:5 Benchmark Report (`docs/reports/llm-inference-engine-pd-selection-cards.html`)](../../docs/reports/llm-inference-engine-pd-selection-cards.html)**
 
 ## What This Experiment Verifies

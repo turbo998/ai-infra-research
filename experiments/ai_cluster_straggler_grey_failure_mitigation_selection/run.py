@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Cluster Grey Failure / Runtime Straggler Telemetry, Dynamic Microbatch Rebalancing & Live Swap Selection (Round 62).
+"""Deterministic evaluator for AI Cluster Grey Failure / Runtime Straggler Telemetry, Dynamic Microbatch Rebalancing & Live Swap Selection .
 
 Models straggler root-cause attribution latency (seconds), training downtime/rollback per
 grey-failure event (minutes), effective 10,240-GPU cluster Goodput (%), and weekly/annual

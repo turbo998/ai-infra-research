@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Production RAG Architecture, Pre-Filter ACL & Selective Hybrid GraphRAG Selection (Round 374).
+"""Deterministic evaluator for Enterprise Production RAG Architecture, Pre-Filter ACL & Selective Hybrid GraphRAG Selection .
 
 Models blended answer accuracy (%), ACL permission starvation/empty-recall rate (%),
 P99 retrieval + rerank latency (ms), document update freshness lag, and monthly total RAG TCO (USD)

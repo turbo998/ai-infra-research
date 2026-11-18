@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Round 187: AI Container Image Distribution (Nydus / Dragonfly P2P) & SquashFS Python Import Storm Evaluator."""
+"""AI Container Image Distribution (Nydus / Dragonfly P2P) & SquashFS Python Import Storm Evaluator."""
 
 from __future__ import annotations
 

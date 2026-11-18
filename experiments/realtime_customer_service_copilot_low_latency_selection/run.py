@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Real-Time Customer Service & Enterprise Copilot Sub-400ms Low-Latency Architecture Selection (Round 368).
+"""Deterministic evaluator for Real-Time Customer Service & Enterprise Copilot Sub-400ms Low-Latency Architecture Selection .
 
 Models end-to-end P99 Time-to-First-Token (ms), P50 TTFT (ms), P99 Decode TPOT (ms),
 safety guardrail interception rate (%), and cost per 1,000 customer interactions (USD)

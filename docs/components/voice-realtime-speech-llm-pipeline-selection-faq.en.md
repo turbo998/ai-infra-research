@@ -1,6 +1,6 @@
 # Ultra-Low-Latency Real-Time Voice Agent Pipeline Selection FAQ (`Serial HTTP Cascade` vs. `Streaming WebRTC Cascade` vs. `Pure Audio-Token S2S` vs. `Dual-Stream Inner-Monologue Text+Acoustic S2S`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./voice-realtime-speech-llm-pipeline-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/voice-realtime-speech-llm-pipeline-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#voice-pipeline-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./voice-realtime-speech-llm-pipeline-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/voice-realtime-speech-llm-pipeline-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#voice-pipeline-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. Human conversational turn-taking occurs within a **`200 ~ 300 ms`** window. When building real-time enterprise Voice Agents (customer support, automotive assistants, AI tutors), teams routinely fall into three traps: **(1) chaining batch `Whisper ASR -> LLM -> TTS` over HTTP or TCP WebSockets, resulting in an awkward `2,480 ms` P50 (`3,150 ms` P99) silence gap and `3,100 ms` TCP head-of-line blocking under 5% mobile packet loss; (2) adopting pure textless Audio-Token Speech-to-Speech (`Pure Audio S2S`) models, which hit `195 ms` latency but suffer an `-18.5%` reasoning and tool-calling accuracy collapse due to 50x acoustic sequence bloat; and (3) overlooking `Dual-Stream Inner-Monologue Text+Acoustic S2S` architectures (`Kyutai Moshi / GLM-4-Voice / GPT-4o-Audio`) that combine `220 ms` latency with `98.4%` text-grade intelligence!** Grounded in `experiments/realtime_voice_llm_pipeline_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact boundaries across four real-time voice architectures.
 
@@ -149,7 +149,7 @@ As wireless packet loss increases from 0% (lab Wi-Fi) to 5% (moving vehicle / su
 # Verify results.json matches the deterministic real-time voice pipeline model 100%
 python experiments/realtime_voice_llm_pipeline_selection/run.py --check
 
-# Run Round 27 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_realtime_voice_llm_pipeline_selection.py
 ```
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 21: Large-Scale AI Cluster Observability, Straggler & Silent Data Corruption (SDC) Selection.
+"""Deterministic evaluator for Large-Scale AI Cluster Observability, Straggler & Silent Data Corruption (SDC) Selection.
 
 Compares 4 observability, straggler triage, and Silent Data Corruption (SDC) detection architectures
 across a 2,048-GPU H100 training cluster ($2.50/GPU-hr = $5,120/hr = $3,737,600/mo lease):
@@ -165,7 +165,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 21 AI cluster observability & SDC selection model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide AI cluster observability & SDC selection model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

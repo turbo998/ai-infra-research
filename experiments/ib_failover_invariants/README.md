@@ -2,7 +2,7 @@
 
 原创 Python 标准库、CPU/offline 算例；不运行 NCCL、IB HCA、RDMA 交换机或 GPU。
 固定的 `NVIDIA/nccl@3e46c089f4ae4732722a419eb6096aead7e47a30` 源码证据见
-[NCCL IB Port-Failover 与异步恢复不变量正文](../../docs/components/nccl-port-recovery-invariants.md)。
+[NCCL IB Port-Failover 与异步恢复不变量正文](../../docs/components/ib-vs-ethernet-roce-selection-faq.md)。
 
 ## 为什么需要这个算例
 

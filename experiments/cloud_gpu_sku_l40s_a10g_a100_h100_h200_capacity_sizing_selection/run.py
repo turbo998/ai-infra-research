@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Cloud Inference GPU Instance SKU Selection & Concurrency Capacity Sizing: A10G/L4 vs. L40S vs. A100 vs. H100/H200 (Round 364).
+"""Deterministic evaluator for Cloud Inference GPU Instance SKU Selection & Concurrency Capacity Sizing: A10G/L4 vs. L40S vs. A100 vs. H100/H200 .
 
 Models usable KV cache HBM headroom (GB), SLA-compliant max concurrent 8K sessions,
 P99 TTFT (ms), P99 TPOT (ms), throughput per dollar (tok/s/$), and cost per 1M output tokens (USD)

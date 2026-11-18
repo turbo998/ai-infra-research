@@ -1,4 +1,4 @@
-"""Unit tests for Round 172 Enterprise DeepSeek-V3 / R1 (671B Full MoE) Private Deployment Sizing Selection Evaluator."""
+"""Unit tests for Enterprise DeepSeek-V3 / R1 (671B Full MoE) Private Deployment Sizing Selection Evaluator."""
 
 from __future__ import annotations
 

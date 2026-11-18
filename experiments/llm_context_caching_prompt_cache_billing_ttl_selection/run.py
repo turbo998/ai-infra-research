@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise LLM Context Caching, Prompt-Cache Billing Economics & KV TTL Pinning Selection (Round 173).
+"""Deterministic evaluator for Enterprise LLM Context Caching, Prompt-Cache Billing Economics & KV TTL Pinning Selection .
 
 Models effective multi-turn KV prefix cache hit rate (%) across an 8-replica cluster,
 average P50 TTFT (ms) on 20-turn 48K-token Coding Agent / RAG trajectories,

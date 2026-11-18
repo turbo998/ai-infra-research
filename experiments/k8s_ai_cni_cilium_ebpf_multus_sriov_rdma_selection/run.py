@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Round 191: K8s AI Cluster CNI (HostNetwork vs Calico veth vs Multus IPVlan vs Cilium eBPF + SR-IOV RDMA) Evaluator."""
+"""K8s AI Cluster CNI (HostNetwork vs Calico veth vs Multus IPVlan vs Cilium eBPF + SR-IOV RDMA) Evaluator."""
 
 from __future__ import annotations
 

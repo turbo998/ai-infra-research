@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise LLM Customization Path Selection: Prompt+Cache vs. Hybrid RAG vs. LoRA SFT vs. Teacher-to-SLM Distillation (Round 363).
+"""Deterministic evaluator for Enterprise LLM Customization Path Selection: Prompt+Cache vs. Hybrid RAG vs. LoRA SFT vs. Teacher-to-SLM Distillation .
 
 Models domain task accuracy (%), factual hallucination rate (%), knowledge freshness lag,
 P99 end-to-end latency (ms), and monthly total TCO (USD, including inference + indexing/training amortization)

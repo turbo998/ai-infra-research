@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Datacenter GPU Hardware SKU, HBM Memory Wall & 3-Year TCO Selection (Round 171).
+"""Deterministic evaluator for AI Datacenter GPU Hardware SKU, HBM Memory Wall & 3-Year TCO Selection .
 
 Models HBM capacity per 8-GPU node (GB), aggregate memory bandwidth per GPU (TB/s),
 single-node vs multi-node 671B/405B deployment topology requirements, Decode TPOT (ms) at 32K context,

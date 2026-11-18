@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Reasoning Model (DeepSeek-R1 / o3-mini / QwQ) Thinking Budget & Speculative Decoding (Round 385)
+    # Analytical model for Enterprise Reasoning Model (DeepSeek-R1 / o3-mini / QwQ) Thinking Budget & Speculative Decoding 
     # Workload: 10,000,000 enterprise queries/month (70% simple lookup/formatting, 20% moderate analysis, 10% complex math/code/policy reasoning).
     monthly_queries = 10_000_000
 

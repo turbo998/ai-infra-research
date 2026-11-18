@@ -1,6 +1,6 @@
 # 十亿级企业 RAG 向量检索与混合索引硬件架构选型指南（`全内存 FP32 HNSW` vs. `SQ8 / RaBitQ 量化内存索引` vs. `NVMe SSD DiskANN (Vamana)` vs. `GPU cuVS CAGRA 硬件加速索引`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./rag-vector-index-ann-hardware-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/rag-vector-index-ann-hardware-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#rag-vector-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./rag-vector-index-ann-hardware-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/rag-vector-index-ann-hardware-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#rag-vector-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业 RAG 知识库从百万级扩展到 **1 亿～10 亿条（100M ~ 1B）1,536 维向量** 时，直接沿用 POC 阶段的默认 **全内存未压缩 FP32 HNSW 索引** 会撞上一堵令人窒息的“**DRAM 内存成本与 14.5 小时建库墙**”：每 1 亿条向量需消耗 **`890.9 GB` 纯内存**（10 亿条需 **`8.91 TB` DRAM**，仅云端高内存服务器月租就高达 **`$64,800/月`**，甚至比跑大模型的 GPU 还要贵！）。本文基于 `experiments/rag_vector_index_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解 **全内存 FP32 HNSW、SQ8/RaBitQ 内存量化重排、NVMe SSD DiskANN (Vamana 扇区对齐图) 与 GPU cuVS CAGRA 硬件加速图索引** 的四档架构选型边界。
 
@@ -158,7 +158,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性 RAG 向量索引模型 100% 一致
 python experiments/rag_vector_index_selection/run.py --check
 
-# 运行 Round 18 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_rag_vector_index_selection.py
 ```
 

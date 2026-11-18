@@ -1,4 +1,4 @@
-"""Unit tests for Round 49 Heterogeneous GPU (NVIDIA + AMD MI300X) & Triton/AITER Stack Selection Evaluator."""
+"""Unit tests for Heterogeneous GPU (NVIDIA + AMD MI300X) & Triton/AITER Stack Selection Evaluator."""
 
 from __future__ import annotations
 

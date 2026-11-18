@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Cluster-Wide Prefix Cache (RadixAttention vs APC), KV-Aware Routing & SLRU Eviction Selection (Round 66).
+"""Deterministic evaluator for Cluster-Wide Prefix Cache (RadixAttention vs APC), KV-Aware Routing & SLRU Eviction Selection .
 
 Models effective cluster-wide KV cache hit rate (%), P99 Time-To-First-Token (TTFT ms)
 under Zipfian s=1.05 viral prefix bursts, noisy-neighbor batch scan eviction loss (%),

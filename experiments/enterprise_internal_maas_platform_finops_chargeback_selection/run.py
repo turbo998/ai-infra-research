@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Multi-Team Enterprise Internal MaaS Platform & FinOps Chargeback Architecture Selection (Round 365).
+"""Deterministic evaluator for Multi-Team Enterprise Internal MaaS Platform & FinOps Chargeback Architecture Selection .
 
 Models total GPU count required across 16 Business Units (BUs), average 24x7 GPU utilization (%),
 peak burst throttling rate (%), P99 interactive TTFT (ms), FinOps token chargeback accuracy (%),

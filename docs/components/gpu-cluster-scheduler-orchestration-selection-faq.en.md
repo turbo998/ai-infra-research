@@ -1,6 +1,6 @@
 # Enterprise AI GPU Cluster Scheduler & Topology Orchestration Selection FAQ (`Vanilla K8s Default Scheduler` vs. `Standalone Slurm HPC` vs. `K8s + Volcano / Kueue Gang Scheduling` vs. `Kueue TAS Topology-Aware Scheduling + K8s DRA`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./gpu-cluster-scheduler-orchestration-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/gpu-cluster-scheduler-orchestration-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#cluster-scheduler-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./gpu-cluster-scheduler-orchestration-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/gpu-cluster-scheduler-orchestration-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#cluster-scheduler-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When an enterprise deploys a `512 × NVIDIA H100` cluster (`$934,400/month` lease cost), infrastructure leaders inevitably confront two critical questions: **(1) Why does running distributed multi-node training on the default Kubernetes scheduler yield only `48.2%` effective cluster goodput (burning `$484,019/month` in deadlocked and topology-throttled GPUs) even when the dashboard shows `100%` GPU allocation? and (2) Should we build a separate `Slurm` silo for researchers or standardize on `Kubernetes`?** Grounded in `experiments/gpu_cluster_scheduler_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide breaks down **Gang Scheduling, Kueue Topology-Aware Scheduling (`TAS`), and Kubernetes Dynamic Resource Allocation (`DRA`) + `TopologyManager`** across four operational tiers.
 
@@ -154,7 +154,7 @@ As individual distributed training jobs scale from 16 GPUs (2 nodes) to 256 GPUs
 # Verify results.json matches the deterministic cluster scheduler & topology model 100%
 python experiments/gpu_cluster_scheduler_selection/run.py --check
 
-# Run Round 17 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_gpu_cluster_scheduler_selection.py
 ```
 

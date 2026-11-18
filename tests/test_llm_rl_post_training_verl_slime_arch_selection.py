@@ -1,4 +1,4 @@
-"""Unit tests for Round 76 LLM RL Post-Training (verl 3D-HybridEngine vs Slime Async Partial Rollout + TIS) Evaluator."""
+"""Unit tests for LLM RL Post-Training (verl 3D-HybridEngine vs Slime Async Partial Rollout + TIS) Evaluator."""
 
 from __future__ import annotations
 

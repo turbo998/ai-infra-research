@@ -36,9 +36,9 @@
   - **默认的 `shared` 模式 (`Tier 3`)**：哪怕你用 `Multus + IPVlan` 给容器隔出了独立的 IP 网卡 `net1`，但只要把 `/dev/infiniband/uverbs0..7` 挂载进容器，容器依然能看到整台机器上的所有 8 张 RDMA 设备！它依赖 NCCL 自觉按 GID 去挑对应的卡，属于“君子协定式软隔离”。
   - **生产强推的 `exclusive` 模式 (`Tier 4`)**：执行 `rdma system set netns exclusive` 后，当 `sriov-cni` 和 `rdma-cni` 把某张 SR-IOV 虚拟网卡（比如对应 GPU 0 的 `mlx5_8`）移入容器的 Network Namespace 时，**只有这个容器能看到这张 `mlx5_8` RDMA 设备**，宿主机和其他租户容器里完全看不见它，从硅片队列层实现了 100% 物理级隔离！
 
-### Q2：开启了 `SR-IOV` 虚拟网卡（VF）后，还能不能正常跑 `GPUDirect RDMA`（包括 Round 189 讲的 `DMABUF`）？会不会有性能损耗？
+### Q2：开启了 `SR-IOV` 虚拟网卡（VF）后，还能不能正常跑 `GPUDirect RDMA`（包括 `DMABUF`）？会不会有性能损耗？
 - **答案**：**100% 原生支持，且几乎零性能损耗（`48.3 GB/s` vs 物理卡 `48.4 GB/s`）**！
-- ConnectX-6 / ConnectX-7 网卡的每个 `SR-IOV VF` 在 PCIe 总线上都是一个拥有独立 BDF 号和独立硬件收发环（Doorbell / UAR）的真硬件设备。只要按 Round 189 关闭了 PCIe Switch 的 `ACS` 重定向并开启 `iommu=pt`，VF 发起的 DMA 读写同样直接在 PCIe Switch (`PIX`) 内部直通隔壁的 GPU `BAR1` 显存！
+- ConnectX-6 / ConnectX-7 网卡的每个 `SR-IOV VF` 在 PCIe 总线上都是一个拥有独立 BDF 号和独立硬件收发环（Doorbell / UAR）的真硬件设备。只要关闭了 PCIe Switch 的 `ACS` 重定向并开启 `iommu=pt`，VF 发起的 DMA 读写同样直接在 PCIe Switch (`PIX`) 内部直通隔壁的 GPU `BAR1` 显存！
 
 ### Q3：在容器里同时插了 `eth0`（走 Cilium TCP）和 `net1..net4`（走 Multus SR-IOV RoCE），怎么防止 NCCL 走错网卡？
 - **答案**：通过两组标准环境变量精确指路（可由 Webhook 自动注入）：

@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Colocated vs. Prefill-Decode (PD) Disaggregated Inference Selection (Round 383)
+    # Analytical model for Enterprise Colocated vs. Prefill-Decode (PD) Disaggregated Inference Selection 
     # Workload: 70B Enterprise RAG & Agent Service (8,192 input tokens, 512 output tokens),
     # Strict Dual SLA: P95 TTFT <= 800 ms AND P99 TPOT <= 35 ms.
     # Baseline cluster: 16 GPUs.

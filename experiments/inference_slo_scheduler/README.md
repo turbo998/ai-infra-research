@@ -1,6 +1,6 @@
 # vLLM V1 统一 Token-Budget 调度、KV 块预分配与 P/D 分离 SLO 算例
 
-本目录提供与 [Prefill/Decode 分离、Continuous Batching 与 TTFT/TPOT/吞吐权衡](../../docs/components/inference-slo.md) 配套的**原创标准库 CPU/offline 合成算例**（证据状态：`own-offline`）。
+本目录提供与 [Prefill/Decode 分离、Continuous Batching 与 TTFT/TPOT/吞吐权衡](../../docs/components/pd-disaggregation-kv-offload-selection-faq.md) 配套的**原创标准库 CPU/offline 合成算例**（证据状态：`own-offline`）。
 
 ## 1. 验证的源码不变量
 

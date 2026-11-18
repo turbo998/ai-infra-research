@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Multi-Agent Interoperability Protocol (MCP vs. A2A) & Streamable HTTP Gateway Selection (Round 176).
+"""Deterministic evaluator for Enterprise Multi-Agent Interoperability Protocol (MCP vs. A2A) & Streamable HTTP Gateway Selection .
 
 Models main-agent context window token bloat per turn (tokens), multi-domain task completion accuracy (%),
 L7 load-balancer failover / pod scale-down drop rate (%), max concurrent sessions per 4-vCPU gateway pod,

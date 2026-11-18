@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Text-to-SQL, Semantic Layer & BI Data Agent Architecture Selection (Round 378)
+    # Analytical model for Enterprise Text-to-SQL, Semantic Layer & BI Data Agent Architecture Selection 
     # Workload: 300-table enterprise cloud data warehouse (Snowflake / Databricks / Fabric / BigQuery),
     # 500,000 analytical queries/month across finance, retail, and operations.
     monthly_queries = 500_000

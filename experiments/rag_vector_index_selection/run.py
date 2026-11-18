@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 18: Billion-Scale Enterprise RAG Vector Search & Hybrid Indexing Selection.
+"""Deterministic evaluator for Billion-Scale Enterprise RAG Vector Search & Hybrid Indexing Selection.
 
 Compares 4 vector indexing & hardware acceleration architectures per 100M-vector shard (1,536-dim FP32,
 scaling to 1 Billion vectors, target Recall@10 >= 95.0% and P99 Latency <= 15.0 ms):
@@ -185,7 +185,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 18 RAG vector index & hardware selection model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide RAG vector index & hardware selection model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

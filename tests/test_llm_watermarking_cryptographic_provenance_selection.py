@@ -1,4 +1,4 @@
-"""Unit tests for Round 56 LLM Output Watermarking, SynthID & Entropy-Gated Provenance Selection Evaluator."""
+"""Unit tests for LLM Output Watermarking, SynthID & Entropy-Gated Provenance Selection Evaluator."""
 
 from __future__ import annotations
 

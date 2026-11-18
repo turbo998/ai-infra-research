@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Continual Pre-Training (CPT), Domain SFT & Catastrophic Forgetting Prevention Architecture Selection (Round 50).
+"""Deterministic evaluator for Enterprise Continual Pre-Training (CPT), Domain SFT & Catastrophic Forgetting Prevention Architecture Selection .
 
 Models the Domain Knowledge Mastery score (%), General Reasoning Retention score (MMLU-Pro / IFEval %),
 Catastrophic Forgetting drop (pts), total cluster VRAM required for 70B training (GB),

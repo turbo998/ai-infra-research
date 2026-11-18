@@ -1,4 +1,4 @@
-# Enterprise Agentic Memory & Long-Term Personalization Evaluator (Round 394)
+# Enterprise Agentic Memory & Long-Term Personalization Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise cross-session agent memory architectures across `5,000,000` turns/month (`100` historical sessions per user over 6 months):
 

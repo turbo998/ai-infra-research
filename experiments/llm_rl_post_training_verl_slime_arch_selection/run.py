@@ -1,4 +1,4 @@
-"""Deterministic evaluator for LLM RL Post-Training (GRPO / RLVR) Architecture Selection: verl vs. Slime/AReaL (Round 76).
+"""Deterministic evaluator for LLM RL Post-Training (GRPO / RLVR) Architecture Selection: verl vs. Slime/AReaL .
 
 Models long-tail rollout + transition bubble percentage (% of step time GPUs sit idle),
 FSDP/Megatron -> vLLM/SGLang weight resharding latency per step (seconds),

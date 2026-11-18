@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Prompt Caching, Semantic Caching & KV-Aware Gateway Routing Selection (Round 379)
+    # Analytical model for Enterprise Prompt Caching, Semantic Caching & KV-Aware Gateway Routing Selection 
     # Workload: 15,000,000 requests/month across an 8-replica GPU cluster / Cloud API,
     # 16,000-token average prompt context (system prompt + tool schemas + shared docs + multi-turn history).
     monthly_requests = 15_000_000

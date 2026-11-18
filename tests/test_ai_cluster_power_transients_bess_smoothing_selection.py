@@ -1,4 +1,4 @@
-"""Unit tests for Round 57 AI Cluster Synchronous Power Transients (dP/dt) & BESS Smoothing Selection Evaluator."""
+"""Unit tests for AI Cluster Synchronous Power Transients (dP/dt) & BESS Smoothing Selection Evaluator."""
 
 from __future__ import annotations
 

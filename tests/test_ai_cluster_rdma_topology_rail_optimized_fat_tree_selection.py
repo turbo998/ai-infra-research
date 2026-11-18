@@ -1,4 +1,4 @@
-"""Unit tests for Round 75 4,096-GPU AI Cluster RDMA Network Topology (Rail-Optimized + PXN vs Fat-Tree) Evaluator."""
+"""Unit tests for 4,096-GPU AI Cluster RDMA Network Topology (Rail-Optimized + PXN vs Fat-Tree) Evaluator."""
 
 from __future__ import annotations
 

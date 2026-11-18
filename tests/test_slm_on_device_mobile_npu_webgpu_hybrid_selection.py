@@ -1,4 +1,4 @@
-"""Unit tests for Round 63 Small Language Model (SLM) On-Device Mobile NPU, WebGPU & Cloud-Edge Hybrid Selection Evaluator."""
+"""Unit tests for Small Language Model (SLM) On-Device Mobile NPU, WebGPU & Cloud-Edge Hybrid Selection Evaluator."""
 
 from __future__ import annotations
 

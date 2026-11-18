@@ -1,6 +1,6 @@
 # Thousand-GPU Model Weight & Container P2P Distribution Selection FAQ (`Centralized OCI/S3 Pull` vs. `Sharded Registry + CDN` vs. `Dragonfly / Kraken P2P Tree` vs. `RDMA GDS + Mooncake/NCCL Ring Broadcast`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./model-weights-distribution-p2p-registry-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/model-weights-distribution-p2p-registry-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#weight-distribution-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./model-weights-distribution-p2p-registry-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/model-weights-distribution-p2p-registry-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#weight-distribution-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When operating a `512 ~ 2,048` GPU cluster for LLM serving or RLHF post-training, teams roll out updated checkpoints or autoscale nodes a dozen times per day. Using a traditional **centralized OCI Registry (Harbor) or S3 gateway** when `64` nodes (`512` GPUs) simultaneously pull a `140 GB` model + `16 GB` runtime image triggers a **`9,984 GB` (`80 Terabit`) Thundering Herd Stampede**—saturating the `40 Gbps` origin gateway, stalling all 512 GPUs for **`36.3 minutes (2,180 seconds)` per rollout**, and burning **`$279,040/month`** in idle GPU wait time! Grounded in `experiments/model_weight_p2p_distribution_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact architectural boundaries across **Centralized Pull, Multi-Replica CDN, CNCF Dragonfly/Kraken P2P Trees, and GPUDirect Storage (`GDS`) + Mooncake/NCCL 400G RDMA Ring Broadcast**.
 
@@ -143,7 +143,7 @@ As the simultaneous rollout scales from 16 nodes (128 GPUs) to 256 nodes (2,048 
 # Verify results.json matches the deterministic weight P2P/RDMA distribution model 100%
 python experiments/model_weight_p2p_distribution_selection/run.py --check
 
-# Run Round 20 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_model_weight_p2p_distribution_selection.py
 ```
 

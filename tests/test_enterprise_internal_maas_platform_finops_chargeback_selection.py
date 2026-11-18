@@ -1,4 +1,4 @@
-"""Unit tests for Round 365 Multi-Team Enterprise Internal MaaS Platform & FinOps Chargeback Selection Evaluator."""
+"""Unit tests for Multi-Team Enterprise Internal MaaS Platform & FinOps Chargeback Selection Evaluator."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 # Billion-Scale Enterprise RAG Vector Search & Hybrid Indexing Selection FAQ (`In-Memory FP32 HNSW` vs. `SQ8 / RaBitQ Quantized Memory Index` vs. `NVMe SSD DiskANN Vamana` vs. `GPU-Accelerated cuVS CAGRA`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./rag-vector-index-ann-hardware-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/rag-vector-index-ann-hardware-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#rag-vector-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./rag-vector-index-ann-hardware-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/rag-vector-index-ann-hardware-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#rag-vector-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When an enterprise RAG knowledge base scales from a few million chunks to **100 Million–1 Billion (`100M ~ 1B`) `1,536-dim` dense vectors**, keeping the default **uncompressed In-Memory FP32 HNSW index** hits a brutal **DRAM Cost and 14.5-Hour Index Build Wall**: every 100M vectors consume **`890.9 GB` of DRAM** (`8.91 TB` of DRAM for 1 Billion vectors, costing **`$64,800/month`** in high-memory cloud instances alone!). Grounded in `experiments/rag_vector_index_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact architectural boundaries across **In-Memory FP32 HNSW, SQ8/RaBitQ Quantized HNSW with Asymmetric Reranking, NVMe SSD DiskANN (`Vamana`), and GPU-Accelerated NVIDIA `cuVS CAGRA`**.
 
@@ -152,7 +152,7 @@ As an enterprise RAG corpus scales from 10M to 1 Billion (`1,000M`) vectors, mon
 # Verify results.json matches the deterministic RAG vector index selection model 100%
 python experiments/rag_vector_index_selection/run.py --check
 
-# Run Round 18 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_rag_vector_index_selection.py
 ```
 

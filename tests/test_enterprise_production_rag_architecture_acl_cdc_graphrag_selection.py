@@ -1,4 +1,4 @@
-"""Unit tests for Round 374 Enterprise Production RAG Architecture, Pre-Filter ACL & Selective Hybrid GraphRAG Evaluator."""
+"""Unit tests for Enterprise Production RAG Architecture, Pre-Filter ACL & Selective Hybrid GraphRAG Evaluator."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# Enterprise Edge-Cloud Hybrid AI & On-Device NPU SLM Routing Evaluator (Round 399)
+# Enterprise Edge-Cloud Hybrid AI & On-Device NPU SLM Routing Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise Edge-Cloud inference architectures across `50,000` endpoints (`AI PCs, smart vehicles, retail store edge boxes, factory tablets`) and `30,000,000` queries/month:
 

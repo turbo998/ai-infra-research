@@ -1,6 +1,6 @@
 # Confidential AI & Regulated Enterprise GPU TEE Inference Selection FAQ (`Plaintext GPU Container` vs. `PII Redaction Gateway` vs. `Single-GPU H100/H200 CC-On TEE` vs. `Multi-GPU PPCIE + Blackwell NVLink Encrypted Cluster`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./confidential-ai-tee-gpu-security-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/confidential-ai-tee-gpu-security-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#confidential-tee-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./confidential-ai-tee-gpu-security-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/confidential-ai-tee-gpu-security-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#confidential-tee-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When banks, hospitals, law firms, and sovereign agencies deploy LLMs, the primary compliance blocker is **Data-in-Use and Model IP Exposure**: even with TLS in transit and disk encryption at rest, a cloud host administrator (Root / Hypervisor) can dump sensitive prompts and proprietary fine-tuned weights directly from RAM and GPU HBM. Architects commonly fall into two traps: **(1) relying on an application-layer regex/NER PII redaction proxy, which still leaks 18.5% of quasi-identifiers while degrading downstream LLM reasoning accuracy by `-6.4%`; and (2) fearing that GPU Confidential Computing (`CC-On`) will cripple LLM throughput because PCIe bounce-buffer encryption cuts PCIe bandwidth by 77%**. Grounded in `experiments/confidential_ai_tee_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide proves why **70B single-GPU LLM decode incurs only a `4.8%` overhead under `CC-On`**, and why **405B multi-GPU `TP=8` requires `PPCIE` or Blackwell inline NVLink encryption to avoid a `+280.4%` bounce-buffer cliff**.
 
@@ -152,7 +152,7 @@ Why do small I/O-bound models suffer under `CC-On` while large LLMs barely notic
 # Verify results.json matches the deterministic Confidential AI TEE model 100%
 python experiments/confidential_ai_tee_selection/run.py --check
 
-# Run Round 19 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_confidential_ai_tee_selection.py
 ```
 

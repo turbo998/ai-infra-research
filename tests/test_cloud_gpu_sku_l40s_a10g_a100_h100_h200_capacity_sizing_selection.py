@@ -1,4 +1,4 @@
-"""Unit tests for Round 364 Cloud GPU Instance SKU Selection & Concurrency Capacity Sizer Evaluator."""
+"""Unit tests for Cloud GPU Instance SKU Selection & Concurrency Capacity Sizer Evaluator."""
 
 from __future__ import annotations
 

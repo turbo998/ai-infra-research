@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Kubernetes GPU Sharing (Full GPU vs. Time-Slicing vs. MIG vs. MIG+MPS) (Round 389)
+    # Analytical model for Enterprise Kubernetes GPU Sharing (Full GPU vs. Time-Slicing vs. MIG vs. MIG+MPS) 
     # Workload: 28 production AI auxiliary microservices (Embeddings, Rerankers, Guardrails, ASR, OCR, 1B-7B SLMs),
     # each requiring 2 GB - 8 GB VRAM, deployed on 80GB H100/A100 Kubernetes nodes.
     microservice_count = 28

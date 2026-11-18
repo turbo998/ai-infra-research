@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Data Warehouse Text-to-SQL (NL2SQL), LSH Value Linking & Governed Semantic Layer Selection (Round 64).
+"""Deterministic evaluator for Enterprise Data Warehouse Text-to-SQL (NL2SQL), LSH Value Linking & Governed Semantic Layer Selection .
 
 Models Execution Accuracy (EX %) on enterprise multi-table schemas (800 tables, 18,000 columns),
 silent financial KPI definition drift rate (%), average tokens consumed per query,

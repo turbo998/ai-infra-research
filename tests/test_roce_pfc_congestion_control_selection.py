@@ -1,4 +1,4 @@
-"""Unit tests for Round 43 AI Cluster RoCEv2 PFC Storm & Congestion Control Selection Evaluator."""
+"""Unit tests for AI Cluster RoCEv2 PFC Storm & Congestion Control Selection Evaluator."""
 
 from __future__ import annotations
 

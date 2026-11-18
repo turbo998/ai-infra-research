@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Server Out-of-Band Telemetry (BMC / Redfish vs. IPMI), GPU XID Classification & Auto-RMA Remediation Selection (Round 179).
+"""Deterministic evaluator for AI Server Out-of-Band Telemetry (BMC / Redfish vs. IPMI), GPU XID Classification & Auto-RMA Remediation Selection .
 
 Models Mean Time To Recovery (MTTR, minutes) on hardware faults, false-positive node cordon rate (%) on user code bugs (XID 31/43),
 hung-OS (XID 79 / PCIe Bus Lockup) detection latency (seconds), monthly unnecessary vendor RMA dispatches,

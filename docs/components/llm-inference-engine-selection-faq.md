@@ -1,7 +1,7 @@
 # 大模型推理引擎选型 FAQ 指南：vLLM vs. SGLang vs. TensorRT-LLM
 
 > 🌐 **Language / 语言**: **中文 (Chinese)** | **[English (`llm-inference-engine-selection-faq.en.md`)](llm-inference-engine-selection-faq.en.md)**
-> 🧭 **姊妹专题 (Companion FAQ)**: [大模型 Prefill-Decode (PD) 分离与 KV 卸载选型 FAQ](pd-disaggregation-kv-offload-selection-faq.md) · [综合合订版 (`llm-inference-engine-pd-disaggregation-selection-faq.md`)](llm-inference-engine-pd-disaggregation-selection-faq.md)
+> 🧭 **姊妹专题 (Companion FAQ)**: [大模型 Prefill-Decode (PD) 分离与 KV 卸载选型 FAQ](pd-disaggregation-kv-offload-selection-faq.md)](llm-inference-engine-pd-disaggregation-selection-faq.md)
 > 📊 **数据溯源与复现边界 (Provenance)**: 文中定量结果来自本仓库确定性 Roofline 与前缀缓存仿真器 [`experiments/llm_inference_engine_pd_selection/run.py`](../../experiments/llm_inference_engine_pd_selection/run.py)（分类：`synthetic` 理论/系统算例 + `anonymized_reported` 上游公开规格；`independently_reproduced=false`；未启动付费云上 8×H200 实机集群，物理集群实测状态：`not_measured`）。
 
 ---

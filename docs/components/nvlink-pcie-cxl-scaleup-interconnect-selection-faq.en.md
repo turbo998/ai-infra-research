@@ -1,6 +1,6 @@
 # AI Server Intra-Node & Supernode Scale-Up Interconnect Selection FAQ (`PCIe Gen5 Switch Tree` vs. `8-GPU NVSwitch HGX` vs. `Rack-Scale Copper NVL72 MNNVL` vs. `PCIe Gen6 + CXL 3.0 Memory Pooling`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./nvlink-pcie-cxl-scaleup-interconnect-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/nvlink-pcie-cxl-scaleup-interconnect-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#scaleup-interconnect-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./nvlink-pcie-cxl-scaleup-interconnect-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/nvlink-pcie-cxl-scaleup-interconnect-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#scaleup-interconnect-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When procuring GPU compute infrastructure, enterprises routinely fall into three costly architectural traps: **(1) buying 30% cheaper air-cooled `8×PCIe Gen5` servers to run `70B/405B TP=8` real-time inference, only to discover that 61.4% of every token step is stalled on 160 PCIe `All-Reduce` synchronizations; (2) assuming two 8-GPU HGX nodes can be combined into `TP=16 / EP=16` linearly, plunging off the `900 GB/s -> 50 GB/s` 18x inter-node bandwidth cliff; and (3) attempting to replace `NVLink` with `CXL 3.0` for Tensor Parallelism**. Grounded in the sealed deterministic model in `experiments/nvlink_pcie_cxl_scaleup_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact operational boundaries across **PCIe Gen5 Switch Trees, 8-GPU NVSwitch (HGX), 72-GPU Rack-Scale Copper NVL72 (MNNVL), and CXL 3.0 Memory Pooling**.
 
@@ -158,7 +158,7 @@ As the tightly coupled Tensor Parallel (`TP`) or Expert Parallel (`EP`) domain s
 # Verify results.json matches the deterministic Scale-Up interconnect model 100%
 python experiments/nvlink_pcie_cxl_scaleup_selection/run.py --check
 
-# Run Round 15 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_nvlink_pcie_cxl_scaleup_selection.py
 ```
 

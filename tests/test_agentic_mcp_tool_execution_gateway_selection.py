@@ -1,4 +1,4 @@
-"""Unit tests for Round 52 Enterprise Agentic MCP Tool-Use & CodeAct Gateway Selection Evaluator."""
+"""Unit tests for Enterprise Agentic MCP Tool-Use & CodeAct Gateway Selection Evaluator."""
 
 from __future__ import annotations
 

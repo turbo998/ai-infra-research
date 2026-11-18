@@ -1,4 +1,4 @@
-"""Unit tests for Round 179 AI Server Out-of-Band Telemetry (BMC/Redfish), GPU XID Classification & Auto-RMA Evaluator."""
+"""Unit tests for AI Server Out-of-Band Telemetry (BMC/Redfish), GPU XID Classification & Auto-RMA Evaluator."""
 
 from __future__ import annotations
 

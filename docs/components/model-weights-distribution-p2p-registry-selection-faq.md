@@ -1,6 +1,6 @@
 # 千卡集群百 GB 大模型权重与容器镜像极速分发架构选型指南（`中心化 OCI/S3 直拉` vs. `多副本 Registry + CDN` vs. `Dragonfly / Kraken P2P 树` vs. `RDMA GDS + Mooncake/NCCL 环广播`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./model-weights-distribution-p2p-registry-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/model-weights-distribution-p2p-registry-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#weight-distribution-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./model-weights-distribution-p2p-registry-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/model-weights-distribution-p2p-registry-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#weight-distribution-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业规模化运营 `512 ~ 2,048` 张 GPU 的大模型推理或 RLHF 后训练集群时，每天都要执行十几次模型新版本上线、弹性扩容或断点恢复。如果沿用传统微服务时代的 **中心化 Harbor OCI 镜像仓库或 S3 对象存储直拉架构**，`64` 台 8 卡 H100 服务器同时拉取一份 `140 GB` 模型权重 + `16 GB` 容器镜像，瞬间会在源站出口形成 **`9,984 GB`（近 `80 Terabits`）的惊群流量风暴（Thundering Herd Stampede）**——不仅直接把中心存储网关打到 `HTTP 503` 假死，更让 512 张昂贵的 H100 每次上线都要干等 **`36.3 分钟（2,180 秒）`**，每个月光等权重下载就白白烧掉 **`$279,040` 算力费**！本文基于 `experiments/model_weight_p2p_distribution_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解从 **中心直拉、分片 CDN、CNCF Dragonfly/Kraken P2P 分片树** 到 **GPUDirect Storage (`GDS`) + Mooncake/NCCL 400G RDMA 环形广播** 的四档架构选型边界。
 
@@ -150,7 +150,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性权重 P2P/RDMA 分发模型 100% 一致
 python experiments/model_weight_p2p_distribution_selection/run.py --check
 
-# 运行 Round 20 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_model_weight_p2p_distribution_selection.py
 ```
 

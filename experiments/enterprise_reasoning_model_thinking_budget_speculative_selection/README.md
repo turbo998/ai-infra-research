@@ -1,4 +1,4 @@
-# Enterprise Reasoning Model Thinking Budget & Speculative Decoding Evaluator (Round 385)
+# Enterprise Reasoning Model Thinking Budget & Speculative Decoding Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise serving architectures for Reasoning Models (`DeepSeek-R1`, `o3-mini`, `Qwen-QwQ-32B`, `Claude Extended Thinking`) across `10,000,000` queries/month:
 

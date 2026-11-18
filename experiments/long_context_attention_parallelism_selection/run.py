@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic long-context attention & sequence parallelism evaluator (Round 7).
+"""Deterministic long-context attention & sequence parallelism evaluator .
 
 Compares four long-context Prefill & Decode scaling architectures across 32K, 128K, 256K,
 and 1M token context lengths for a 70B-class GQA/MLA model (80 layers, H_q=64, H_kv=8, d=128):

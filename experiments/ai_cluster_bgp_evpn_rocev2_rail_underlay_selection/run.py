@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Cluster L3 Routing Control Plane, BGP Unnumbered & RoCEv2 Multi-Rail Underlay Selection (Round 174).
+"""Deterministic evaluator for AI Cluster L3 Routing Control Plane, BGP Unnumbered & RoCEv2 Multi-Rail Underlay Selection .
 
 Models manual IP subnet configuration lines across a 2,048-GPU (8-Rail) RoCEv2 cluster,
 link-down failover convergence latency (ms), AllReduce effective bus bandwidth retention (%) under a 1-uplink asymmetry fault,

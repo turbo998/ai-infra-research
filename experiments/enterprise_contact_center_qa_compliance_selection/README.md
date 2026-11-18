@@ -1,4 +1,4 @@
-# Enterprise Multimodal Contact Center QA & 100% Call Compliance Audit Architecture Evaluator (Round 401)
+# Enterprise Multimodal Contact Center QA & 100% Call Compliance Audit Architecture Evaluator 
 
 Deterministic evaluator comparing four contact center quality assurance (`QA`) and regulatory compliance audit architectures across 1,000,000 monthly calls (5,000,000 audio minutes/month):
 - **Tier 1**: Legacy `2%` Manual QA Sampling + Basic Keyword Spotting (`14.2%` violation recall, `72.0%` speaker attribution, `72.0 h` turnaround, `$42,000/mo`)

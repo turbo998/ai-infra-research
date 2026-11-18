@@ -1,7 +1,7 @@
 # AI Infra 网络架构选型与 RoCEv2 核心原理 FAQ：InfiniBand (IB) vs. Ethernet
 
 > 🌐 **Language / 语言**: **中文 (Chinese)** | **[English (`ib-vs-ethernet-roce-selection-faq.en.md`)](ib-vs-ethernet-roce-selection-faq.en.md)**
-> 🔗 **关联专题 (Related Deep Dives)**: [互连与网络分层](interconnect-network.md) · [RDMA Verbs 生命周期](rdma-lifecycle.md) · [GPU 直发 RDMA (`IBGDA` / `GDAKI`)](ibgda-gpu-initiated-rdma.md) · [UEC 1.0 数据包裁剪与缓冲](uec-packet-trimming-switch-buffering.md) · [UEC 1.1 传输与拥塞控制](uec-transport-congestion.md) · [SHARP 网内集合通信](in-network-collectives-sharp.md)
+> 🔗 **关联专题 (Related Deep Dives)**: [RoCEv2 负载均衡与拥塞控制](rocev2-load-balancing-congestion-selection-faq.md) · [RoCEv2 PFC 风暴防御与 AI 以太网调优](ai-cluster-roce-pfc-storm-congestion-control-selection-faq.md) · [万卡 RDMA 拓扑选型 (Rail-Optimized vs Fat-Tree vs OCS)](ai-cluster-rdma-network-topology-rail-optimized-fat-tree-dragonfly-selection-faq.md) · [SHARP 网内集合通信与 NVLS](ai-cluster-in-network-computing-sharp-collective-selection-faq.md) · [MoE DeepEP 与 IBGDA 跨机通信](moe-deepep-ibgda-nvshmem-alltoall-engine-selection-faq.md) · [光互连与铜缆选型 (DAC/AOC/LPO/CPO)](ai-cluster-optical-interconnect-selection-faq.md)
 
 ---
 

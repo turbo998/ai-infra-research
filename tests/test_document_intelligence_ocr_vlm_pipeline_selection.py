@@ -1,4 +1,4 @@
-"""Unit tests for Round 48 Document Intelligence & Multimodal PDF OCR/VLM Pipeline Selection Evaluator."""
+"""Unit tests for Document Intelligence & Multimodal PDF OCR/VLM Pipeline Selection Evaluator."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 # 政企私有化单机/工作站与边缘大模型推理硬件选型指南（`4×RTX 4090/5090 拼装机` vs. `统一内存 Mac Studio / DGX Spark` vs. `双卡 RTX PRO 6000 Blackwell (192GB)` vs. `2×H200 NVL 企业服务器`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./edge-on-prem-workstation-llm-deployment-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/edge-on-prem-workstation-llm-deployment-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#onprem-workstation-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./edge-on-prem-workstation-llm-deployment-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/edge-on-prem-workstation-llm-deployment-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#onprem-workstation-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当医院科室、制造工厂、律所分支机构或涉密研发部门需要在本地物理隔离环境（Air-Gapped On-Premises）用 **1 台机器** 私有化部署 `70B ~ 671B` 大模型服务内部 `1 ~ 50` 名员工时，硬件选型往往陷入三大误区：**① 图便宜买 4 张消费级 `RTX 4090 (24GB×4)` 塞进机架服务器，结果发现消费级驱动屏蔽了 PCIe `BAR1 P2P` 直通，且总显存仅 96GB（装完 70GB 权重只剩 26GB 跑 KV Cache），加上轴流风扇热回流与 12VHPWR 接口过热，年故障率高达 `14.5%`；② 看到 `Mac Studio M3/M4 Ultra (192GB~512GB)` 或 `DGX Spark (128GB)` 能装下超大模型，就买来给整个部门 20 个人并发用，结果因为统一内存算力弱，16K 长文档 RAG 的首字延迟（TTFT）高达 `4.85 秒`；③ 不知道新一代单卡 `96 GB ECC` 的 `NVIDIA RTX PRO 6000 Blackwell` 只需 2 张卡（192GB）就能在标准工作站里完爆 4 张 4090！** 本文基于 `experiments/onprem_edge_workstation_llm_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解四档私有化单机硬件的选型边界。
 
@@ -149,7 +149,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性私有化硬件选型模型 100% 一致
 python experiments/onprem_edge_workstation_llm_selection/run.py --check
 
-# 运行 Round 26 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_onprem_edge_workstation_llm_selection.py
 ```
 

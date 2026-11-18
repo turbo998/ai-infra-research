@@ -1,4 +1,4 @@
-"""Unit tests for Round 73 Billion-Scale Vector Database (HNSW vs IVF-PQ vs DiskANN vs GPU CAGRA + RaBitQ) Evaluator."""
+"""Unit tests for Billion-Scale Vector Database (HNSW vs IVF-PQ vs DiskANN vs GPU CAGRA + RaBitQ) Evaluator."""
 
 from __future__ import annotations
 

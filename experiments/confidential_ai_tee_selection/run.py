@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 19: Confidential AI & Regulated Enterprise GPU TEE Inference Selection.
+"""Deterministic evaluator for Confidential AI & Regulated Enterprise GPU TEE Inference Selection.
 
 Compares 4 security & confidential computing architectures for regulated enterprise LLM serving
 (70B single-GPU H200/B200 and 405B 8-GPU TP=8 under GDPR/HIPAA/Financial compliance):
@@ -133,7 +133,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 19 Confidential AI & GPU TEE selection model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide Confidential AI & GPU TEE selection model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

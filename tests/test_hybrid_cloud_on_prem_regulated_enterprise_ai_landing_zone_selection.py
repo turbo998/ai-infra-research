@@ -1,4 +1,4 @@
-"""Unit tests for Round 366 Hybrid Cloud & On-Premises Regulated Enterprise AI Landing Zone Selection Evaluator."""
+"""Unit tests for Hybrid Cloud & On-Premises Regulated Enterprise AI Landing Zone Selection Evaluator."""
 
 from __future__ import annotations
 

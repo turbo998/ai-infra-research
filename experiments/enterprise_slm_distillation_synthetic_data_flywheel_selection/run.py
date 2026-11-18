@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise SLM Knowledge Distillation & Synthetic Data Flywheel Selection (Round 392)
+    # Analytical model for Enterprise SLM Knowledge Distillation & Synthetic Data Flywheel Selection 
     # Workload: Distilling a 70B/671B Teacher (Baseline Score: 86.0, Monthly 100% Teacher Serving Cost: $50,000)
     # into a specialized 8B Student SLM serving 15,000,000 requests/month.
     teacher_baseline_score = 86.0

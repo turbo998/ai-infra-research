@@ -1,4 +1,4 @@
-"""Unit tests for Round 377 Enterprise AI Safety Guardrails, Prompt Shield & Streaming Groundedness Evaluator."""
+"""Unit tests for Enterprise AI Safety Guardrails, Prompt Shield & Streaming Groundedness Evaluator."""
 
 from __future__ import annotations
 

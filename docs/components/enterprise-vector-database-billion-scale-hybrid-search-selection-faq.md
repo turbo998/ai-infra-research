@@ -65,7 +65,7 @@
 * **真相剖析（元数据爆炸 vs. Partition-Key + 鲸鱼租户分层晋升）**：
   - 在 Milvus / Qdrant / Elasticsearch 中，每一个物理 Collection / Index 都包含独立的 WAL 日志流、Segment 文件句柄、后台合并线程（Compaction）和监控指标。当集群里存在 `5,000` 个物理 Collection 时，光空转的元数据内存和后台刷盘就会把协调节点（Coordinator）彻底压垮！
   - **企业级多租户黄金设计（Tiered Multi-Tenancy）**：
-    1. **99% 的普通中小租户（`< 50 万`条向量/租户）**：全部装进同一个共享物理 Collection，并将 `tenant_id` 设为 **`partition_key`（配合 `isolation = true` 分组子索引）**。查询时网关强制从 JWT 注入 `tenant_id` 过滤，底层直接定位到该租户专属的微型虚拟分片，既 100% 杜绝了前文 Round 374 提到的“小租户召回饥饿”，又只维护 1 套物理表元数据！
+    1. **99% 的普通中小租户（`< 50 万`条向量/租户）**：全部装进同一个共享物理 Collection，并将 `tenant_id` 设为 **`partition_key`（配合 `isolation = true` 分组子索引）**。查询时网关强制从 JWT 注入 `tenant_id` 过滤，底层直接定位到该租户专属的微型虚拟分片，既 100% 杜绝了前文提到的“小租户召回饥饿”，又只维护 1 套物理表元数据！
     2. **Top 1% 的“巨无霸鲸鱼租户（Whale Tenants，`> 500 万`条向量或购买了物理独享 SLA）”**：控制面自动触发后台异步迁移，将其无缝晋升（Promote）至独立的物理 Collection / Dedicated Node Group，防止大租户批量建索引影响其他租户的 P99 延迟。
 
 ---

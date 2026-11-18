@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 23: Hundred-to-Thousand Adapter Multi-LoRA High-Density Serving Selection.
+"""Deterministic evaluator for Hundred-to-Thousand Adapter Multi-LoRA High-Density Serving Selection.
 
 Compares 4 Multi-LoRA serving architectures for an enterprise platform hosting 128 vertical fine-tuned
 LoRA adapters (320 MB/adapter = 40.96 GB total adapters) on a 70B FP8 base model ($2.50/GPU-hr,
@@ -173,7 +173,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 23 Multi-LoRA serving model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide Multi-LoRA serving model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

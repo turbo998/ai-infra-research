@@ -1,4 +1,4 @@
-"""Unit tests for Round 183 AI Cloud-Native Object Storage High-Throughput Streaming Evaluator."""
+"""Unit tests for AI Cloud-Native Object Storage High-Throughput Streaming Evaluator."""
 
 from __future__ import annotations
 

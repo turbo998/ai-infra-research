@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 13: Multimodal VLM & Long-Video Inference Serving Architecture Selection.
+"""Deterministic evaluator for Multimodal VLM & Long-Video Inference Serving Architecture Selection.
 
 Compares 4 architectural tiers on a 16-GPU NVIDIA H100 80GB SXM cluster ($40.00/hr total
 at $2.50/GPU-hr) serving a 72B VLM (ViT-4B Vision Encoder + 70B LLM Backbone) under a
@@ -216,7 +216,7 @@ def build_model_results() -> Dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run or verify Round 13 multimodal VLM serving selection model.")
+    parser = argparse.ArgumentParser(description="Run or verify SA Guide multimodal VLM serving selection model.")
     parser.add_argument("--check", action="store_true", help="Verify results.json matches deterministic model output.")
     args = parser.parse_args()
 
@@ -240,7 +240,7 @@ def main() -> int:
         assert t3["avg_ttft_ms"] == 680.0 and t3["cluster_throughput_req_per_s"] == 11.4
         assert t4["avg_ttft_ms"] == 245.0 and t4["cluster_throughput_req_per_s"] == 24.6
         assert t4["kv_cache_per_request_gb"] == 1.47 and t4["cost_per_1k_requests_usd"] == 0.45
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 13 multimodal VLM serving model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide multimodal VLM serving model.")
         return 0
 
     RESULTS_PATH.write_text(rendered, encoding="utf-8")

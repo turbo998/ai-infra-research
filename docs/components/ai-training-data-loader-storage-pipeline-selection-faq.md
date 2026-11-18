@@ -1,6 +1,6 @@
 # PB 级多模态预训练数据加载与流式预处理架构选型指南（`POSIX 小文件直读` vs. `WebDataset Tar 顺序分片` vs. `MosaicML MDS / LitData 确定性流` vs. `NVIDIA DALI GPU 硬件解码 + GDS`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./ai-training-data-loader-storage-pipeline-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/ai-training-data-loader-storage-pipeline-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#dataloader-pipeline-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./ai-training-data-loader-storage-pipeline-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/ai-training-data-loader-storage-pipeline-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#dataloader-pipeline-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业在 `256 × NVIDIA H100` 集群（月租 `$467,200/月`）上训练多模态大模型（VLM）或视频生成模型（DiT）时，最隐蔽的算力黑洞不在模型算子，而在 **`DataLoader` 数据饥饿（Data Starvation）**：**① 如果直接把 5 亿张独立的 `.jpg` 和 `.json` 零散小文件放在共享 NFS / Lustre / 对象存储 FUSE 上读取，每秒 37 万次 `open/stat/close` 会瞬间打崩存储元数据服务器（MDS），导致 256 张 H100 有 `64.5%` 的时间停下来干等 `next(dataloader)`，每月白白烧掉 `$301,344`；② 即使打包成 `WebDataset (.tar)` 解决了磁盘 IOPS，宿主机 128 核 CPU 也会被高分辨率图像/视频软解码 100% 占满；③ 当训练在第 42,000 步因故重启时，传统流式迭代器无法直接跳转到第 42,000 步，必须空跑 `68 分钟` 重新遍历跳过前序样本！** 本文基于 `experiments/ai_training_dataloader_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解四档预训练数据流水线的底层机制与选型边界。
 
@@ -162,7 +162,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性数据加载流水线模型 100% 一致
 python experiments/ai_training_dataloader_selection/run.py --check
 
-# 运行 Round 24 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_ai_training_dataloader_selection.py
 ```
 

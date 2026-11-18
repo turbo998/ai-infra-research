@@ -1,6 +1,6 @@
 # 超低延迟实时语音大模型（Voice Agent）端到端推理架构选型指南（`HTTP 串行级联` vs. `WebRTC 流式分块级联` vs. `纯音频 Token S2S` vs. `双轨内心独白 Text+Acoustic S2S`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./voice-realtime-speech-llm-pipeline-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/voice-realtime-speech-llm-pipeline-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#voice-pipeline-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./voice-realtime-speech-llm-pipeline-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/voice-realtime-speech-llm-pipeline-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#voice-pipeline-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。人类自然对话的轮次切换间隙（Turn-Taking Gap）通常只有 **`200 ~ 300 毫秒`**。当企业构建实时语音智能体（AI 客服外呼、车载语音助手、口语外教、心理陪伴）时，最常踩中的三大架构深坑是：**① 直接用传统 HTTP/WebSocket 把 `Whisper ASR -> LLM -> TTS` 串行拼起来，结果用户说完话要等 `2.48 秒（P99 3.15 秒）` 才有声音返回，且在移动 4G/5G 弱网 `3%` 丢包下因 TCP 队头阻塞直接卡死；② 盲目追捧“纯音频 Token 端到端语音大模型（Pure Audio S2S）”，结果虽然延迟降到了 `195 ms`，但因为没有内部文本锚点，模型的逻辑推理与 JSON 工具调用准确率暴跌 `-18.5%`（变成“声音好听但说话没脑子”）；③ 不懂得用 `双轨内心独白架构（Inner-Monologue Dual-Stream，如 Kyutai Moshi / GLM-4-Voice / GPT-4o-Audio）` 同时兼得 `220 ms` 超低延迟与 `98.4%` 文本级高智商**！本文基于 `experiments/realtime_voice_llm_pipeline_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解四档实时语音架构的物理边界。
 
@@ -155,7 +155,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性实时语音流水线模型 100% 一致
 python experiments/realtime_voice_llm_pipeline_selection/run.py --check
 
-# 运行 Round 27 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_realtime_voice_llm_pipeline_selection.py
 ```
 
@@ -166,5 +166,5 @@ python -m unittest tests/test_realtime_voice_llm_pipeline_selection.py
 1. - [ ] **客户端至边缘网关强制采用 `UDP WebRTC`（严禁裸用 `TCP WebSocket` 传音频帧）**：开启 Opus 编码器的带内前向纠错（`In-Band FEC`）与丢包隐藏（`PLC`），在边缘 SFU 节点就近终结媒体流。
 2. - [ ] **用“语义终点检测（Semantic Turn Detection）”替代固定 `700ms` 静音计时器**：结合声学韵律（语调是否下沉收尾）与轻量级文本语义完整性判断，在用户话音刚落 `100~140 ms` 内立即触发生成，而在用户思考停顿（`"呃……我想想"`）时耐心等待不抢话。
 3. - [ ] **流式级联（Tier 2）开启“首句短词组投机合成（Clause-Level Speculative TTS）”**：对 LLM 输出的前 4～8 个 Token 一旦遇到逗号、语气词或完整短语立即切块送入流式 TTS，将首帧发声延迟压进 `500 ms` 以内。
-4. - [ ] **端到端语音大模型强制选用“双轨 Text+Acoustic 内心独白架构（Tier 4）”**：确保每个时间步先产出同步文本 Token，既用来挂载 `XGrammar` 结构化工具调用（Round 22），又将实时文本流存入合规审计数据库。
+4. - [ ] **端到端语音大模型强制选用“双轨 Text+Acoustic 内心独白架构（Tier 4）”**：确保每个时间步先产出同步文本 Token，既用来挂载 `XGrammar` 结构化工具调用，又将实时文本流存入合规审计数据库。
 5. - [ ] **边缘网关内置硬件回声消除（`AEC`）与 `<= 50 ms` 本地静音打断（Barge-In Flush）**：一旦 VAD 检测到用户真声打断（排除背景电视噪音），边缘网关必须在 `50 ms` 内直接清空下行音频缓冲区，无需等待云端大模型响应。

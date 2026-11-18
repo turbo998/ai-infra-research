@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Cluster Model Weight Loading, Nydus/SOCI Lazy OCI Streaming & RDMA P2P Broadcast (Round 72).
+"""Deterministic evaluator for Cluster Model Weight Loading, Nydus/SOCI Lazy OCI Streaming & RDMA P2P Broadcast .
 
 Models 64-node (512-GPU) cluster-wide cold-start / rollout time (seconds) for a 671B FP8 MoE model (685 GB weights + 22 GB runtime image),
 total object-storage / NAS read traffic across the 64-node rollout (TB), per-GPU weight ingestion bandwidth (GB/s),

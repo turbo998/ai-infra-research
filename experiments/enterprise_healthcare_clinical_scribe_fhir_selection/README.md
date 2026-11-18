@@ -1,4 +1,4 @@
-# Enterprise Healthcare Clinical Documentation (Ambient AI Scribe), FHIR EHR & ICD-10 Coding Evaluator (Round 406)
+# Enterprise Healthcare Clinical Documentation (Ambient AI Scribe), FHIR EHR & ICD-10 Coding Evaluator 
 
 Deterministic evaluator comparing four healthcare ambient clinical scribe and automated medical coding (`HL7 FHIR R4 / ICD-10-CM / CPT`) architectures across 500,000 monthly patient consultations (7,500,000 audio minutes/month):
 - **Tier 1**: Generic Cloud ASR + Unconstrained Free-Text SOAP Note Prompt (`84.5%` medication/negation accuracy, `61.2%` ICD-10 coding pass rate, `6.8 min` physician review, `$62,000/mo`)

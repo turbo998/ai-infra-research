@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Vector Database & Billion-Scale Hybrid Search Selection (Round 382)
+    # Analytical model for Enterprise Vector Database & Billion-Scale Hybrid Search Selection 
     # Workload: 100,000,000 vectors (1536-dim), 5,000 enterprise tenants, 300 QPS peak hybrid search (Vector + BM25).
     total_vectors = 100_000_000
     vector_dim = 1_536

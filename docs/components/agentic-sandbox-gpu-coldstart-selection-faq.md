@@ -1,6 +1,6 @@
 # AI Agent 代码沙箱与 Serverless GPU 极速冷启动架构选型指南（`标准 K8s 容器拉取` vs. `Lazy OCI 按需镜像 + mmap` vs. `Firecracker MicroVM 内存快照` vs. `CRIU + cuda-checkpoint + RDMA 权重流`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./agentic-sandbox-gpu-coldstart-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-08 每日进展日报](../daily/2026-11-08.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/agentic-sandbox-gpu-coldstart-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#agentic-sandbox-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./agentic-sandbox-gpu-coldstart-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/agentic-sandbox-gpu-coldstart-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#agentic-sandbox-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业大规模部署 **Coding Agent（如 SWE-agent、DeepResearch 代码执行、自动化软件工程测试）** 或 **突发型 Serverless GPU 推理（多长尾 LoRA / 垂直专家模型按需唤醒）** 时，传统 Kubernetes 容器架构会撞上一道致命的“**25 秒冷启动与 58% 闲置常驻税之墙**”：拉取解压 16 GB 容器镜像耗时 `14.2 s`、初始化 Python/CUDA 运行时耗时 `4.8 s`、从磁盘加载 14 GB 模型权重耗时 `6.5 s`，中位冷启动高达 **`25,500 ms`（P99 达 `34,800 ms`）**。为了掩盖 25.5 秒延迟，平台被迫维持 **58% 的常驻空闲热池（Idle Warm Pool）**，导致真实 GPU 利用率跌至 **`31.0%`**。本文基于 `experiments/agentic_sandbox_gpu_coldstart_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解从 **Lazy OCI 懒加载（`SOCI / eStargz`）**、**Firecracker MicroVM 内存快照 + `UFFD` 缺页恢复** 到 **CRIU + NVIDIA `cuda-checkpoint` 显存上下文直通恢复 + RDMA 权重流** 的四档架构选型边界。
 
@@ -153,7 +153,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性冷启动/TCO 模型 100% 一致
 python experiments/agentic_sandbox_gpu_coldstart_selection/run.py --check
 
-# 运行 Round 14 单元测试套件
+# 运行本专题单元测试
 python -m unittest tests/test_agentic_sandbox_gpu_coldstart_selection.py
 ```
 

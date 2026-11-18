@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 26: Enterprise On-Premises Single-Node, Workstation & Edge LLM Hardware Selection.
+"""Deterministic evaluator for Enterprise On-Premises Single-Node, Workstation & Edge LLM Hardware Selection.
 
 Compares 4 on-premises / edge / workstation hardware architectures for local air-gapped deployment
 of 70B FP8 (70 GB) and 235B/671B MoE models serving 1 to 50 concurrent internal users (16K RAG context):
@@ -127,7 +127,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 26 on-prem workstation & edge LLM hardware model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide on-prem workstation & edge LLM hardware model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic RLHF / GRPO post-training rollout, weight-resharding, and straggler-bubble evaluator for Round 11:
-RLHF / GRPO Post-Training Rollout & Weight-Sync Architecture Selection
+"""Deterministic RLHF / GRPO post-training rollout, weight-resharding, and straggler-bubble evaluator for RLHF / GRPO Post-Training Rollout & Weight-Sync Architecture Selection
 (Naive FSDP Rollout vs. Statically Disaggregated Actor/Rollout Pools vs. HybridEngine Co-Located 3D Weight Resharding vs. Asynchronous Partial-Rollout Streaming).
 
 Provenance Note:
@@ -196,7 +195,7 @@ def compute_results() -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run or check Round 11 RLHF/GRPO post-training evaluator.")
+    parser = argparse.ArgumentParser(description="Run or check SA Guide RLHF/GRPO post-training evaluator.")
     parser.add_argument("--check", action="store_true", help="Verify results.json matches deterministic model.")
     args = parser.parse_args()
 

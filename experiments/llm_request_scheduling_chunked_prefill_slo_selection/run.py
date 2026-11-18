@@ -1,4 +1,4 @@
-"""Deterministic evaluator for LLM Request Scheduling, Stall-Free Chunked Prefill & Preemption Architecture Selection (Round 54).
+"""Deterministic evaluator for LLM Request Scheduling, Stall-Free Chunked Prefill & Preemption Architecture Selection .
 
 Models the P99 Time-Per-Output-Token (TPOT ms, measuring mid-generation stutter),
 P99 Time-To-First-Token (TTFT ms), Preemption / Recomputation Wasted FLOPs (%),

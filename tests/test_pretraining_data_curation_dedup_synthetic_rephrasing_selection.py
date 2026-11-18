@@ -1,4 +1,4 @@
-"""Unit tests for Round 58 Trillion-Token Pretraining Data Curation, Deduplication & Synthetic Rephrasing Selection Evaluator."""
+"""Unit tests for Trillion-Token Pretraining Data Curation, Deduplication & Synthetic Rephrasing Selection Evaluator."""
 
 from __future__ import annotations
 

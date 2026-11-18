@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 20: Thousand-GPU Model Weight & Container P2P Distribution Selection.
+"""Deterministic evaluator for Thousand-GPU Model Weight & Container P2P Distribution Selection.
 
 Compares 4 model weight & container image distribution architectures across a 64-node / 512-GPU H100
 cluster ($2.50/GPU-hr = $1,280/hr) simultaneously pulling a 140 GB model checkpoint + 16 GB image
@@ -156,7 +156,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 20 model weight P2P distribution model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide model weight P2P distribution model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

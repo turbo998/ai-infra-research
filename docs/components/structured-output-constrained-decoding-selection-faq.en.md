@@ -1,6 +1,6 @@
 # Enterprise Agent Structured Output & Constrained Decoding Selection FAQ (`Prompt Retry` vs. `Naive Per-Token Vocab Scan` vs. `Outlines Precompiled FSM` vs. `XGrammar Async Overlap + Jump-Forward Skipping`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./structured-output-constrained-decoding-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/structured-output-constrained-decoding-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#constrained-decoding-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./structured-output-constrained-decoding-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/structured-output-constrained-decoding-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#constrained-decoding-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. Enterprise agentic workflows (Function Calling, Text-to-SQL, structured data extraction) require 100% adherence to a `JSON Schema` or `Context-Free Grammar (CFG)`. Architects routinely face three questions: **(1) Why does relying on System Prompt instructions + client-side `JSON.parse` retries fail on 15.5% of complex nested schemas and waste `+38%` extra tokens? (2) Why did early guided-decoding implementations tank GPU utilization and inflate per-token latency from `9.5 ms` to `28.0 ms`? and (3) How does `XGrammar + SGLang Jump-Forward Decoding` achieve `100.0%` schema validity while running `1.56x` faster (`6.10 ms` vs. `9.50 ms`) than unconstrained decoding?** Grounded in `experiments/structured_output_constrained_decoding_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact boundaries across four structured decoding tiers.
 
@@ -149,7 +149,7 @@ As continuous batching scales from 1 to 128 concurrent structured-output request
 # Verify results.json matches the deterministic structured decoding model 100%
 python experiments/structured_output_constrained_decoding_selection/run.py --check
 
-# Run Round 22 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_structured_output_constrained_decoding_selection.py
 ```
 

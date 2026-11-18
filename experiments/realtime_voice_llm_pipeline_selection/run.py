@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 27: Ultra-Low-Latency Real-Time Voice Agent Pipeline Selection.
+"""Deterministic evaluator for Ultra-Low-Latency Real-Time Voice Agent Pipeline Selection.
 
 Compares 4 real-time conversational Voice Agent architectures (target Voice-to-Voice P99 <= 350 ms,
 barge-in interruption <= 80 ms, and >= 98% tool-calling / reasoning accuracy):
@@ -136,7 +136,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 27 real-time voice LLM pipeline model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide real-time voice LLM pipeline model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

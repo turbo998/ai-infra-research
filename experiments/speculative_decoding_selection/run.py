@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic Speculative Decoding architecture selection evaluator (Round 8).
+"""Deterministic Speculative Decoding architecture selection evaluator .
 
 Compares four decoding paradigms on a 70B-class FP8 Target LLM (8x H100/H200 TP=8):
   1. standard_autoregressive_baseline: Standard 1-token/step autoregressive decode (gamma=0)

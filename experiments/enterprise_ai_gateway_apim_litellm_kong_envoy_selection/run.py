@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise AI Gateway Selection & Unified Control Plane Architecture (Round 362).
+"""Deterministic evaluator for Enterprise AI Gateway Selection & Unified Control Plane Architecture .
 
 Models P99 gateway proxy overhead (ms), HTTP 429/503 failover recovery time (ms),
 effective service availability (%), noisy-neighbor quota starvation rate (%),

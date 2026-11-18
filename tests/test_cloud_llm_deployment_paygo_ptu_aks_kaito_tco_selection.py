@@ -1,4 +1,4 @@
-"""Unit tests for Round 361 Cloud Managed vs. Self-Hosted LLM Deployment Mode & TCO Selection Evaluator."""
+"""Unit tests for Cloud Managed vs. Self-Hosted LLM Deployment Mode & TCO Selection Evaluator."""
 
 from __future__ import annotations
 

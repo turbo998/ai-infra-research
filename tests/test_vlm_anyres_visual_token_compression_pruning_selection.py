@@ -1,4 +1,4 @@
-"""Unit tests for Round 69 VLM High-Resolution AnyRes & Visual Token Compression Selection Evaluator."""
+"""Unit tests for VLM High-Resolution AnyRes & Visual Token Compression Selection Evaluator."""
 
 from __future__ import annotations
 

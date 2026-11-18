@@ -1,4 +1,4 @@
-"""Deterministic evaluator for AI Cluster Scheduler & Topology-Aware Orchestration Selection: Slurm vs. K8s Kueue TAS + DRA + Sunk (Round 77).
+"""Deterministic evaluator for AI Cluster Scheduler & Topology-Aware Orchestration Selection: Slurm vs. K8s Kueue TAS + DRA + Sunk .
 
 Models gang-scheduling deadlock GPU waste (% of GPU hours lost to partial allocation hangs),
 multi-node training MFU (%), overall 24/7 cluster GPU utilization across mixed training & inference (%),

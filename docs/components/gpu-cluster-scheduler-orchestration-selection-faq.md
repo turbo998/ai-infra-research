@@ -1,6 +1,6 @@
 # 企业级 AI 智算集群调度器与拓扑编排架构选型指南（`原生 K8s Default Scheduler` vs. `独立 Slurm HPC 调度` vs. `K8s + Volcano / Kueue Gang Scheduling` vs. `Kueue TAS 拓扑感知调度 + K8s DRA 动态资源分配`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./gpu-cluster-scheduler-orchestration-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/gpu-cluster-scheduler-orchestration-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#cluster-scheduler-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./gpu-cluster-scheduler-orchestration-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/gpu-cluster-scheduler-orchestration-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#cluster-scheduler-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业花费上千万美元采购 `512 × NVIDIA H100`（月度租金成本高达 `$934,400/月`）建设智算中心时，最常遇到的两大运营噩梦是：**① 为什么直接用企业现有的原生 Kubernetes 调度器跑多机训练，集群明明看起来 `100%` 分配满载，真实算力有效产出（Goodput）却只有可怜的 `48.2%`（每月白白蒸发 `$484,019` 算力费）？② 到底该听算法科学家的话搭一套独立的 `Slurm` 集群，还是听云原生团队的话全栈上 `Kubernetes`？** 本文基于 `experiments/gpu_cluster_scheduler_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），从第一性原理拆解 **Gang Scheduling（防死锁整组调度）、Kueue TAS（交换机/机柜宏观拓扑紧致装箱）与 K8s DRA + TopologyManager（节点内 GPU-NIC-CPU 微观 PCIe/NUMA 亲和对齐）** 的四档架构选型边界。
 
@@ -154,7 +154,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性集群调度拓扑模型 100% 一致
 python experiments/gpu_cluster_scheduler_selection/run.py --check
 
-# 运行 Round 17 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_gpu_cluster_scheduler_selection.py
 ```
 

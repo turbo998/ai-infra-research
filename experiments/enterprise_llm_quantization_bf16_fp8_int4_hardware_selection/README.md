@@ -1,4 +1,4 @@
-# Enterprise LLM Quantization (BF16 vs. FP8 W8A8 vs. INT4 AWQ) & Hardware Matching Evaluator (Round 384)
+# Enterprise LLM Quantization (BF16 vs. FP8 W8A8 vs. INT4 AWQ) & Hardware Matching Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise quantization schemes for a 70B LLM (`4,096` input / `512` output tokens, `200 RPS` peak):
 

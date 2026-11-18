@@ -34,7 +34,7 @@ When multinational enterprises operate across **North America (`US-East`), the E
 - **Tier 4 Pre-Compiled Prompt Adapter Profiles**: Microservices call logical task contracts (`task_id="invoice_tax_audit_v3"`, `variables={...}`) rather than raw prompt strings. The gateway stores pre-compiled, golden-dataset-verified prompt templates for each target model (`Profile_GPT4o`, `Profile_Claude`, `Profile_Qwen72B`) and automatically swaps both the endpoint and the prompt profile during failover (`97.6%` consistency).
 
 ### Q2: How do we prevent "Vector Database Lock-In" across clouds and sovereign regions?
-- **Never use a proprietary, non-exportable cloud Embedding API for enterprise RAG**. Standardize 100% of vector indexing on open-weights embedding models (`BGE-M3` or `Qwen3-Embedding-0.6B`, see Round 400) so identical embeddings can be generated across AWS, Azure, Alibaba Cloud, or on-prem sovereign data centers without re-indexing 100M documents.
+- **Never use a proprietary, non-exportable cloud Embedding API for enterprise RAG**. Standardize 100% of vector indexing on open-weights embedding models (`BGE-M3` or `Qwen3-Embedding-0.6B`) so identical embeddings can be generated across AWS, Azure, Alibaba Cloud, or on-prem sovereign data centers without re-indexing 100M documents.
 
 ---
 

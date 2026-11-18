@@ -1,4 +1,4 @@
-"""Unit tests for Round 363 Enterprise LLM Customization Path Selection Evaluator."""
+"""Unit tests for Enterprise LLM Customization Path Selection Evaluator."""
 
 from __future__ import annotations
 

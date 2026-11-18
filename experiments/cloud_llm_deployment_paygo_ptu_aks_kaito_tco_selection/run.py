@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Cloud Managed vs. Self-Hosted LLM Deployment Mode & TCO Breakeven Selection (Round 361).
+"""Deterministic evaluator for Enterprise Cloud Managed vs. Self-Hosted LLM Deployment Mode & TCO Breakeven Selection .
 
 Models monthly TCO (USD), blended cost per 1M tokens (USD), P99 TTFT (ms), P99 TPOT (ms),
 HTTP 429 rate-limit throttling percentage, and capacity utilization (%) across four enterprise deployment modes:

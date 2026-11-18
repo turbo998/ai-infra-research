@@ -1,4 +1,4 @@
-"""Unit tests for Round 180 Distributed Multimodal Data Processing & Ray Data Heterogeneous CPU-GPU Streaming Evaluator."""
+"""Unit tests for Distributed Multimodal Data Processing & Ray Data Heterogeneous CPU-GPU Streaming Evaluator."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Unit tests for Round 50 Continual Pre-Training (CPT) & Catastrophic Forgetting Prevention Selection Evaluator."""
+"""Unit tests for Continual Pre-Training (CPT) & Catastrophic Forgetting Prevention Selection Evaluator."""
 
 from __future__ import annotations
 

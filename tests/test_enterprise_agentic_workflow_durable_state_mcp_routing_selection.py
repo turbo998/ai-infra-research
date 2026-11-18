@@ -1,4 +1,4 @@
-"""Unit tests for Round 371 Enterprise Multi-Agent Production Serving, MCP Tool Gateway & Planner-Executor Routing Evaluator."""
+"""Unit tests for Enterprise Multi-Agent Production Serving, MCP Tool Gateway & Planner-Executor Routing Evaluator."""
 
 from __future__ import annotations
 

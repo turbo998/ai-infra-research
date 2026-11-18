@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Billion-Scale Vector Database & Hybrid Indexing Architecture Selection (Round 73).
+"""Deterministic evaluator for Billion-Scale Vector Database & Hybrid Indexing Architecture Selection .
 
 Models cluster DRAM requirement (GB for 1 Billion 1024-dim vectors), Recall@10 accuracy (%),
 P95 query latency (ms), peak cluster QPS, 1B-vector index build time (hours), and monthly cloud bill (USD/mo)

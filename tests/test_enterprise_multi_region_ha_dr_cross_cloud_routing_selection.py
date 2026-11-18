@@ -1,4 +1,4 @@
-"""Unit tests for Round 372 Enterprise Multi-Region High Availability (HA/DR) & Cross-Cloud LLM Routing Evaluator."""
+"""Unit tests for Enterprise Multi-Region High Availability (HA/DR) & Cross-Cloud LLM Routing Evaluator."""
 
 from __future__ import annotations
 

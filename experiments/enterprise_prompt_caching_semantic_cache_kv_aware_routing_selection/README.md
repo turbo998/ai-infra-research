@@ -1,4 +1,4 @@
-# Enterprise Prompt Caching, Semantic Caching & KV-Aware Gateway Routing Evaluator (Round 379)
+# Enterprise Prompt Caching, Semantic Caching & KV-Aware Gateway Routing Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise caching and gateway routing architectures across an 8-replica cluster (`15,000,000` requests/month, `16,000` avg prompt tokens):
 

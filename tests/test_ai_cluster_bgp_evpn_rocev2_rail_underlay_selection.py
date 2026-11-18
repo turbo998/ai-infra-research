@@ -1,4 +1,4 @@
-"""Unit tests for Round 174 AI Cluster L3 Routing Control Plane, BGP Unnumbered & RoCEv2 Multi-Rail Underlay Evaluator."""
+"""Unit tests for AI Cluster L3 Routing Control Plane, BGP Unnumbered & RoCEv2 Multi-Rail Underlay Evaluator."""
 
 from __future__ import annotations
 

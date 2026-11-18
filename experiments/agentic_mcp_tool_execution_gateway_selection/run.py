@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise AI Agent MCP Tool-Use, Deferred Discovery & Programmatic Tool Calling (CodeAct) Gateway Selection (Round 52).
+"""Deterministic evaluator for Enterprise AI Agent MCP Tool-Use, Deferred Discovery & Programmatic Tool Calling (CodeAct) Gateway Selection .
 
 Models the total LLM tokens consumed per 12-tool workflow, end-to-end task completion latency (s),
 LLM inference roundtrips per task, tool-selection & workflow success rate (%),

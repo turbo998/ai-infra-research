@@ -1,6 +1,6 @@
 # 百亿至万亿参数大模型分布式训练并行与显存优化架构选型指南（`DDP / ZeRO-1` vs. `全量 ZeRO-3 / FSDP` vs. `混合分片 HFSDP` vs. `Megatron 3D (TP + DualPipe PP + DP) + 选择性激活卸载`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./distributed-training-memory-parallelism-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/distributed-training-memory-parallelism-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#training-parallelism-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./distributed-training-memory-parallelism-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/distributed-training-memory-parallelism-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#training-parallelism-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业使用 64 至 1,024 张 H100/H200/B200 GPU 训练或微调 70B～120B+ 大模型时，研发团队最常踩中的两个深坑是：**① 直接套用单机时代的 `DDP / ZeRO-1`，结果因为 `16×Ψ` 混合精度显存定律（120B 模型未切分时单卡峰值需 `244.20 GB`）瞬间触发 `CUDA OOM`；② 为了解决 OOM 一键开启跨全集群 256 卡的 `Full ZeRO-3 / FSDP`，结果显存虽然降到了 `46.80 GB`，但每一层前向和反向都被迫在跨机 400G RoCE 网络上执行全局 `All-Gather / Reduce-Scatter`，导致 44.2% 的时间卡死在网卡上，集群有效算力利用率（MFU）暴跌至 `36.4%`**。本文基于 `experiments/distributed_training_parallelism_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解从 **DDP/ZeRO-1、全量 ZeRO-3/FSDP、混合分片 HFSDP** 到 **Megatron-Core 3D 并行（`TP + DualPipe PP + DP`）+ 选择性激活重算卸载** 的四档架构选型边界。
 
@@ -156,7 +156,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性分布式训练并行模型 100% 一致
 python experiments/distributed_training_parallelism_selection/run.py --check
 
-# 运行 Round 16 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_distributed_training_parallelism_selection.py
 ```
 

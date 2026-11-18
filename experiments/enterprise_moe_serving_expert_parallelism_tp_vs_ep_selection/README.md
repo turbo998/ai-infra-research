@@ -1,4 +1,4 @@
-# Enterprise 671B/235B MoE Serving & Expert Parallelism (TP vs. EP + EPLB) Evaluator (Round 396)
+# Enterprise 671B/235B MoE Serving & Expert Parallelism (TP vs. EP + EPLB) Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise deployment and parallelism architectures for serving a `671B-FP8` Mixture-of-Experts (`37B` active/token, `256` routed experts) model at a `15,000 tok/s` cluster target:
 

@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise DeepSeek-V3 / R1 (671B Full MoE) Private Deployment Sizing & TCO Selection (Round 172).
+"""Deterministic evaluator for Enterprise DeepSeek-V3 / R1 (671B Full MoE) Private Deployment Sizing & TCO Selection .
 
 Models hardware CapEx / monthly OpEx, concurrent user capacity (at TPOT <= 20ms & TTFT <= 1.5s),
 P99 TTFT (ms) at 16K prompt length, P99 Decode TPOT (ms), cluster total throughput (tok/s),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 16: Large-Scale Distributed Training Parallelism & Memory Optimization Selection.
+"""Deterministic evaluator for Large-Scale Distributed Training Parallelism & Memory Optimization Selection.
 
 Compares 4 distributed training parallelism & memory architectures on a 256-GPU H100 80GB cluster
 (32 nodes x 8 GPUs, 900 GB/s intra-node NVLink-4, 400 Gbps RoCEv2, $2.50/GPU-hr = $640/hr)
@@ -184,7 +184,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 16 distributed training parallelism model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide distributed training parallelism model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

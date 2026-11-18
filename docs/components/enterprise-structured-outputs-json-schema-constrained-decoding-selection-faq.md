@@ -84,7 +84,7 @@
 ```mermaid
 flowchart TD
     A[企业服务需要大模型返回严格结构化 JSON 数据] --> B{底层使用的是推理模型 R1/QwQ 还是标准指令模型？}
-    B -->|使用推理模型 DeepSeek-R1 / QwQ| C[在 &lt;/think&gt; 闭合标签之后<br/>才激活 XGrammar JSON 状态机<br/>详见 Round 385 铁律 7]
+    B -->|使用推理模型 DeepSeek-R1 / QwQ| C[在 &lt;/think&gt; 闭合标签之后<br/>才激活 XGrammar JSON 状态机<br/>]
     B -->|使用标准指令模型 V3 / 70B / 8B / GPT-4o| D[启用引擎级预编译约束解码<br/>XGrammar / llguidance / Cloud Strict JSON Schema]
     D --> E{Schema 中是否包含分类/审批/风控等判断字段？}
     E -->|是| F[🟩 Tier 4: 强制将 step_by_step_reasoning 字段排在<br/>decision_enum 字段之前 + 后置 Pydantic 跨字段校验<br/>100% 语法合法 + 97.8% 业务准确率 🏆]

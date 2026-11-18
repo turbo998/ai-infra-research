@@ -1,4 +1,4 @@
-"""Unit tests for Round 74 Multi-Tenant LLM Fair Queuing (VTC Virtual Token Counter) & Work-Conserving Rate Limiting Evaluator."""
+"""Unit tests for Multi-Tenant LLM Fair Queuing (VTC Virtual Token Counter) & Work-Conserving Rate Limiting Evaluator."""
 
 from __future__ import annotations
 

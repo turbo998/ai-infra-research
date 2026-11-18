@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise Edge-Cloud Hybrid AI (On-Device NPU SLM + Cloud LLM Cascade) (Round 399)
+    # Analytical model for Enterprise Edge-Cloud Hybrid AI (On-Device NPU SLM + Cloud LLM Cascade) 
     # Workload: 50,000 enterprise edge endpoints (AI PCs, smart vehicles, retail store edge boxes, factory tablets),
     # 30,000,000 queries/month across device control, local document summary, and complex cloud knowledge reasoning.
     edge_endpoints = 50_000

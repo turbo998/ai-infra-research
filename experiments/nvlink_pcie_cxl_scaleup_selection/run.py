@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 15: AI Server Intra-Node & Supernode Scale-Up Interconnect Architecture Selection.
+"""Deterministic evaluator for AI Server Intra-Node & Supernode Scale-Up Interconnect Architecture Selection.
 
 Compares 4 Scale-Up interconnect architectures across a 72-GPU pod running 405B Dense / 671B MoE
 decode and 128K-context KV / embedding memory expansion:
@@ -211,7 +211,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 15 NVLink vs PCIe vs CXL scale-up interconnect model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide NVLink vs PCIe vs CXL scale-up interconnect model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

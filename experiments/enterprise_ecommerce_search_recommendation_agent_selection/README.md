@@ -1,4 +1,4 @@
-# Enterprise E-Commerce Search, Personalized Recommendation & Shopping Agent Architecture Evaluator (Round 402)
+# Enterprise E-Commerce Search, Personalized Recommendation & Shopping Agent Architecture Evaluator 
 
 Deterministic evaluator comparing four retail & e-commerce search/recommendation architectures across 5,000,000 SKUs and 60,000,000 monthly queries (1,000 RPS peak):
 - **Tier 1**: Legacy BM25 Keyword Search + Static Rule Boost (`2.15%` long-tail CVR, `0.0%` price/stock hallucination, `35.0 ms` P95 latency, `$8,400/mo`)

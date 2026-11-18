@@ -1,4 +1,4 @@
-"""Deterministic evaluator for LLM Weight Serialization Format (PyTorch Pickle vs. Safetensors vs. GGUF vs. Run:ai/Tensorizer GDS) Selection (Round 175).
+"""Deterministic evaluator for LLM Weight Serialization Format (PyTorch Pickle vs. Safetensors vs. GGUF vs. Run:ai/Tensorizer GDS) Selection .
 
 Models 140 GB (70B BF16) model cold-load latency (seconds), peak host CPU RAM footprint (GB),
 effective storage-to-GPU ingest throughput (GB/s), arbitrary code execution (RCE) security risk,

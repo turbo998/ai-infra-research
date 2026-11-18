@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Trillion-Token Pretraining Data Curation, Deduplication & Synthetic Rephrasing Pipeline Selection (Round 58).
+"""Deterministic evaluator for Trillion-Token Pretraining Data Curation, Deduplication & Synthetic Rephrasing Pipeline Selection .
 
 Models data curation wall-clock time (hours for 50T raw tokens -> 5T curated tokens),
 residual near-duplicate token ratio (%), downstream 8B model average benchmark accuracy

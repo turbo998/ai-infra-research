@@ -1,4 +1,4 @@
-"""Unit tests for Round 176 Enterprise Multi-Agent Interoperability Protocol (MCP vs. A2A) & Streamable HTTP Selection Evaluator."""
+"""Unit tests for Enterprise Multi-Agent Interoperability Protocol (MCP vs. A2A) & Streamable HTTP Selection Evaluator."""
 
 from __future__ import annotations
 

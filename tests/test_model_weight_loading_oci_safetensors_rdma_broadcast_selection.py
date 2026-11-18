@@ -1,4 +1,4 @@
-"""Unit tests for Round 72 Cluster Model Weight Loading, Nydus/SOCI Lazy OCI & RDMA P2P Broadcast Evaluator."""
+"""Unit tests for Cluster Model Weight Loading, Nydus/SOCI Lazy OCI & RDMA P2P Broadcast Evaluator."""
 
 from __future__ import annotations
 

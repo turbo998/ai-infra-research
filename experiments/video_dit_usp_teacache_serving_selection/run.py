@@ -1,4 +1,4 @@
-"""Deterministic evaluator for DiT Video Generation & World Model Multi-GPU Serving Architecture Selection (Round 44).
+"""Deterministic evaluator for DiT Video Generation & World Model Multi-GPU Serving Architecture Selection .
 
 Models the end-to-end 720p 5-second (121 frames, 75,600 3D spatiotemporal tokens, 50 denoising steps, CFG=2)
 video generation latency, collective communication overhead, peak VRAM per GPU, throughput (videos/hour),

@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Multi-Agent Production Serving, MCP Tool Gateway & Planner-Executor Routing Selection (Round 371).
+"""Deterministic evaluator for Enterprise Multi-Agent Production Serving, MCP Tool Gateway & Planner-Executor Routing Selection .
 
 Models total input tokens per 8-step workflow, task completion success rate (%),
 P99 end-to-end workflow latency (seconds), cost per workflow execution (USD),

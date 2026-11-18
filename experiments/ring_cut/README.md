@@ -1,7 +1,7 @@
 # Ring cut：rank 顺序怎样改变共享 NIC 的 payload 下界
 
 原创 Python 标准库、CPU/offline 算例；不运行 NCCL、GPU、RDMA 或模型。
-固定的 NCCL Ring 静态证据见 [组件正文](../../docs/components/nccl-topology-transport.md)；
+固定的 NCCL Ring 静态证据见 [组件正文](../../docs/components/ib-vs-ethernet-roce-selection-faq.md)；
 **本程序不模拟 NCCL graph search、algorithm selection 或实际 channel 布局。**
 
 ## 输入、公式与方向

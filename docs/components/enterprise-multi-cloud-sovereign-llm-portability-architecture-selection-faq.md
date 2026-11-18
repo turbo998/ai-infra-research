@@ -43,7 +43,7 @@
 ### Q3：如果做 RAG 知识库，主云用的是某闭源厂商私有的 Embedding API（如 `text-embedding-3-large`），将来想换云厂商时会发生什么？
 - **这是最隐蔽的“向量数据库级别厂商死锁（Vector Lock-In）”**！
 - 一旦你用闭源私有 Embedding API 把 1 亿条企业文档编码进了向量库，如果该云厂商断供或你在另一个国家无法调用该 API，你连一次查询向量（Query Embedding）都生成不出来，1 亿条向量索引瞬间变成废铁！
-- **架构师防锁定铁律**：**企业级 RAG 的 Embedding 与 Reranker 模型必须 100% 选用可私有化部署的开源权重模型（如 `BGE-M3`、`Qwen3-Embedding-0.6B`，见 Round 400）**！无论你在阿里云、AWS、Azure 还是本地机房，都能随时拉起完全相同的 Embedding 容器，彻底消除数据底座的重构风险！
+- **架构师防锁定铁律**：**企业级 RAG 的 Embedding 与 Reranker 模型必须 100% 选用可私有化部署的开源权重模型（如 `BGE-M3`、`Qwen3-Embedding-0.6B`）**！无论你在阿里云、AWS、Azure 还是本地机房，都能随时拉起完全相同的 Embedding 容器，彻底消除数据底座的重构风险！
 
 ---
 

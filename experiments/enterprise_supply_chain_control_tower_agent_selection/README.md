@@ -1,4 +1,4 @@
-# Enterprise Supply Chain Control Tower, Demand Forecasting & Disruption Mitigation Agent Evaluator (Round 407)
+# Enterprise Supply Chain Control Tower, Demand Forecasting & Disruption Mitigation Agent Evaluator 
 
 Deterministic evaluator comparing four supply chain demand forecasting and inventory replenishment architectures across 250,000 SKUs, 40 warehouses, and 15,000 monthly purchase orders:
 - **Tier 1**: Legacy ERP Static Moving-Average + Manual Excel Expediting (`68.5%` forecast accuracy `1-WAPE`, `4.2%` MOQ violation rate, `72.0 h` disruption recovery, `$145,000/mo`)

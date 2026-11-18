@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Browser & GUI Computer-Use Agent (DOM vs Pure Vision vs AXTree+SoM vs Hybrid API Bypass) Selection (Round 68).
+"""Deterministic evaluator for Enterprise Browser & GUI Computer-Use Agent (DOM vs Pure Vision vs AXTree+SoM vs Hybrid API Bypass) Selection .
 
 Models end-to-end 10-step web/GUI task completion success rate (% on WebArena / OSWorld enterprise profile),
 UI element click grounding error rate (%), total tokens consumed per 10-step workflow,

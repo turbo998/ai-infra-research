@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Voice AI Agent & Multimodal Real-Time Architecture Selection: Cascaded vs. Native Omni vs. Hybrid Duplex (Round 376).
+"""Deterministic evaluator for Enterprise Voice AI Agent & Multimodal Real-Time Architecture Selection: Cascaded vs. Native Omni vs. Hybrid Duplex .
 
 Models end-to-end P99 Time-to-First-Audio (TTFA in ms), compliance script & PII gate controllability (%),
 barge-in interruption accuracy (%), cost per call-minute (USD), and monthly TCO for 2,500,000 call-minutes (USD)

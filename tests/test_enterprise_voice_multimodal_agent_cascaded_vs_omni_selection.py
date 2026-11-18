@@ -1,4 +1,4 @@
-"""Unit tests for Round 376 Enterprise Voice AI Agent & Multimodal Real-Time Architecture Evaluator."""
+"""Unit tests for Enterprise Voice AI Agent & Multimodal Real-Time Architecture Evaluator."""
 
 from __future__ import annotations
 

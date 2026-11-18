@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Coding Copilot, FIM Dual-Track Serving, AST Repo-Map & Sandboxed SWE-Agent Architecture Selection (Round 375).
+"""Deterministic evaluator for Enterprise Coding Copilot, FIM Dual-Track Serving, AST Repo-Map & Sandboxed SWE-Agent Architecture Selection .
 
 Models inline Fill-in-the-Middle (FIM) P99 latency (ms), developer Tab acceptance rate (%),
 multi-file code compilation & unit-test pass rate (%), and monthly platform TCO for 2,000 developers (USD)

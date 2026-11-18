@@ -1,4 +1,4 @@
-"""Unit tests for Round 367 Enterprise LLM Inference Engine Architect Selection Evaluator."""
+"""Unit tests for Enterprise LLM Inference Engine Architect Selection Evaluator."""
 
 from __future__ import annotations
 

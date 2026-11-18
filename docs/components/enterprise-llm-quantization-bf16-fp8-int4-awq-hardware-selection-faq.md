@@ -97,7 +97,7 @@ sequenceDiagram
     autonumber
     participant Gold as 企业黄金业务语料库 (512条真实Prompt)
     participant Comp as LLM-Compressor 量化引擎
-    participant Eval as CI 二值量表评测门禁 (Round 380)
+    participant Eval as CI 二值量表评测门禁 
     participant Prod as vLLM / TensorRT-LLM 生产集群
 
     Gold->>Comp: 1. 注入 512 条脱敏企业真实 Prompt (含行业术语/SQL/工具调用)
@@ -170,4 +170,4 @@ sequenceDiagram
 - [ ] **5. 严禁把注意力机制之路由网关层（MoE Router Gate）与首尾 Embedding/LM-Head 层强行量化为 4-bit**：MoE 模型的路由门控层（Router）与 LayerNorm 必须始终保持 `BF16 / FP32` 高精度。
 - [ ] **6. 开启权重量化的同时，必须配套开启 `FP8 KV Cache`（`--kv-cache-dtype fp8`）**：将长上下文会话的显存容量上限扩大 2 倍。
 - [ ] **7. 利用量化缩减显存后，优先减小张量并行跨卡度（如从 `TP=4` 缩减至 `TP=2` 或 `TP=1`）**：减少跨卡 AllReduce 通信次数带来的延迟红利远超单纯省显存。
-- [ ] **8. 任何量化模型上线前必须通过 Round 380 定义的“500 条企业黄金集二值量表回归门禁”**：要求核心业务指标与原版 BF16 的分差 `< 1.0%` 方可放行。
+- [ ] **8. 任何量化模型上线前必须通过“500 条企业黄金集二值量表回归门禁”**：要求核心业务指标与原版 BF16 的分差 `< 1.0%` 方可放行。

@@ -1,4 +1,4 @@
-# Enterprise Confidential AI (CPU+GPU TEE, Remote Attestation & HSM Key Release) Evaluator (Round 386)
+# Enterprise Confidential AI (CPU+GPU TEE, Remote Attestation & HSM Key Release) Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise deployment architectures for high-security 70B LLM workloads (`100 RPS` peak):
 

@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise Distributed Inference Orchestration & Serving Framework (Classic Triton vs. KServe vs. Ray Serve LLM vs. NVIDIA Dynamo + NIXL) Selection (Round 181).
+"""Deterministic evaluator for Enterprise Distributed Inference Orchestration & Serving Framework (Classic Triton vs. KServe vs. Ray Serve LLM vs. NVIDIA Dynamo + NIXL) Selection .
 
 Models cross-node KV handoff latency (ms), SLA-compliant Goodput per GPU (tokens/s/GPU at TTFT <= 1s & TPOT <= 18ms),
 cluster KV cache hit rate (%), dynamic Prefill-Decode ratio autoscaling responsiveness (seconds),

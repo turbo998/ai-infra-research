@@ -1,151 +1,112 @@
-# 端到端 AI Infra 综合架构案例：1024-GPU 训练与分离式推理（P/D Disaggregation）混合集群全栈设计
+# 端到端 AI Infra 综合参考架构：1024-GPU 训练与分离式推理（PD Disaggregation）混合集群全栈设计
 
-> **Language / 语言**: **中文 (Chinese)** | [English (英文版)](end-to-end-ai-infra-case.en.md)
+> **Language / 语言**: **简体中文** | [English](./end-to-end-ai-infra-case.en.md) · [返回总目录](../full-catalog-zh.md) · [交互式架构工作台](../reports/ai-infra-architect-workbench.html)
 
-- **状态**：已建立覆盖 GPU/HBM、Scale-Up/Scale-Out 互连、并行训练、在线推理 SLO、异步 Checkpoint 存储、拓扑感知编排、容量/Token 经济学与机架液冷/功耗控制的端到端综合架构设计（`specification` / `implementation` / `own-offline`）；所有定量预算均由本仓库 11 套可复核标准库实验验证，未在真实 1024-GPU 液冷生产集群上执行实机压测（`own-hardware` 未生成）。
-- **覆盖组件与先修链**：
-  - 硬件与互连基座：[GPU 架构与 HBM](../components/gpu-hbm.md) → [互连与网络总览](../components/interconnect-network.md) → [RDMA Verbs 生命周期](../components/rdma-lifecycle.md) → [NCCL 拓扑与传输](../components/nccl-topology-transport.md) → [NCCL 图搜索与多轨 Channel 映射](../components/nccl-graph-channel-mapping.md) → [NCCL IB Port-Failover 与恢复不变量](../components/nccl-port-recovery-invariants.md) → [张量 Layout/Dtype 到 SM100 Kernel 分派](../components/kernel-dispatch-layout.md) → [NCCL Device API (`ncclGin`) 与对称集合通信](../components/nccl-device-gin-symmetric-collectives.md) → [DeepGEMM SM100 `MegaMoE` 与 `MegaMHC`](../components/deepgemm-sm100-mega-moe-mhc-hyperconnection.md) → [FlashInfer Frost DS4.1 混合 `MXFP8/FP4` 解码与 `Green Context`](../components/flashinfer-frost-ds41-mixed-mxfp8-fp4-decode.md) → [FlashInfer Cake SM100/SM103 融合 GEMM + Lamport All-Reduce 与 `tcgen05` 同步契约](../components/flashinfer-cake-sm100-gemm-lamport-allreduce-tmem-drain.md) → [TE Blackwell FP8 分块缩放至 MXFP8 分组 GEMM Swizzle](../components/te-blackwell-fp8bs-grouped-gemm-mxfp8-swizzle.md) → [FA4 SM100 `hdim=256` 反向 `M=64` TMEM 布局与 `AccumTileOrder`](../components/fa4-sm100-hd256-bwd-m64-tmem-accum-layout.md) → [FlashMLA SM100 V4.1 融合 `Norm+RoPE+Attn` 与零冲突 `KVBlockDequantizer`](../components/flashmla-sm100-v41-fused-norm-rope-attn-dequant-kv.md) → [Mooncake 7 级 Auto-GID 重探测与有界 Scatter 重分片](../components/mooncake-rdma-auto-gid-reprobe-bounded-reshard.md) → [NIXL UCX VRAM `mem_type` 提示与 `cuMemCreate` Libfabric 上下文回退](../components/nixl-ucx-vram-memtype-hint-libfabric-ctx-fallback.md)。
-  - 工作负载与系统工程：[分布式训练并行策略](../components/training-parallelism.md) → [TorchTitan `FlexShard` (`BlockShard`/`Owned`) 与 GB200 `HybridEP`](../components/torchtitan-flexshard-distmuon-hybridep.md) → [TorchTitan Kimi K3 MXFP4 适配器、DeepSeek-V3 索引过滤与 `SimpleFSDP` `meta` 检查保护](../components/torchtitan-kimi-k3-mxfp4-adapter-graph-fsdp-meta-inspect.md) → [veRL 低精度 QAT 零拷贝 FP4 Refit 与 `forward_kl_topk_tail` 尾桶蒸馏](../components/verl-qat-nvfp4-mxfp8-rollout-tail-kl-distillation.md) → [Megatron `CheckpointWithoutOutput` 与 `Megatron-FSDP` 冻结梯度延迟释放](../components/megatron-checkpoint-without-output-mfsdp-frozen-grad.md) → [在线推理服务与 P/D 分离](../components/inference-slo.md) → [vLLM V1 稀疏 MLA、`HiSparse` 与 `GDN`](../components/vllm-v1-sparse-mla-hisparse-gdn-hybrid.md) → [vLLM V1 UMBP 共享 KV 连接器与 THUDM/slime Straw 原地检查点回滚](../components/vllm-v1-umbp-kv-connector-slime-straw-rewind.md) → [SGLang 零 KV 重分配 PD 角色热切换与 `PPConsensusStore`](../components/sglang-pd-role-switch-pp-consensus-offload.md) → [SGLang `KVShard` 页交错 PD 传输与未缓存 Token 分桶路由](../components/sglang-kvshard-pd-transfer-uncached-bucket-routing.md) → [LMCache Device-DAX 偏移分区、APC 命中归因与 Dynamo Cuckoo/迁移计费](../components/lmcache-devdax-offset-apc-attribution-dynamo-relay.md) → [训练存储与异步 Checkpoint](../components/storage-checkpoint.md) → [集群编排与故障自愈](../components/cluster-orchestration.md) → [容量、Token 经济学与功耗预算](../components/capacity-economics.md) → [机架功率、液冷与机柜级故障域](../components/rack-power-cooling.md) → [AI Infra 创新架构对比](../components/ai-infra-innovators.md)。
-- **关联 queue ID**：`architecture-case`（priority 10）；先修 `cluster-orchestration`、`capacity-economics`、`rack-power-cooling` 均已 `done`。
-- **掌握度**：`not-assessed`（见 [能力矩阵](../learning/competency-matrix.md)）。
-
-## 1. 业务目标、工作负载契约与 SLO 边界
-
-本综合案例面向一位负责交付 **512-GPU 预训练/后训练集群 + 256-GPU 低延迟在线推理集群（总计 768 张主力 GPU，分属 12 个液冷/风冷混合机柜域，并预留创新推理加速层接口）** 的云与 AI 基础设施解决方案架构师。系统必须同时满足以下两类严苛契约：
-
-| 维度 | 负载 A：MoE / Dense 大模型持续预训练与长上下文微调 | 负载 B：高并发在线推理服务（Prefill / Decode 分离 + 投机解码） |
-|---|---|---|
-| **代表模型与精度** | 70B Dense (`BF16` 训练 / `FP32` Master Weights) & 671B/37B-Active MoE | 70B Dense (`FP8` / `BF16` KV Cache)，输入 $I=4096$ tokens，输出 $O=512$ tokens |
-| **吞吐与延迟 SLO** | 512-GPU 集群有效训练步时间 $\le 4.8\,\text{s}$，训练有效好吞吐（Cluster Goodput）$\ge 90\%$，完成 $1\,\text{T}$ tokens 总墙钟时间 $\le 14.5$ 天 | 在线流量均值 $Q=24\,\text{req/s}$（Gamma 突发系数 $\text{burstiness}=0.5, CV_a^2=2.0$），满足 **TTFT $P_{95} \le 1.5\,\text{s}$** 且 **TPOT $\le 25\,\text{ms/token}$**，SLO Goodput $\ge 95\%$ |
-| **恢复与容错 RTO** | 单次约 $1\,\text{TiB}$ 分布式 Checkpoint 阻塞训练时间 $T_{\text{stall}} \le 2.5\,\text{s}$；单节点/单 NIC 故障恢复时间 $\le 90\,\text{s}$ | 单 Prefill/Decode 实例故障通过 NIXL/RDMA KV 路由秒级摘除，长尾重算率 $< 1\%$；对于 `batch=1` 极低延迟（TPOT $< 5\,\text{ms}$）Agentic 子流量，支持路由至 Groq LPU / Cerebras WSE 或 Fireworks/Sequoia 投机解码层 |
-| **机架与电力红线** | 单高密液冷机柜墙插功率 $P_{\text{wall}} \le 130\,\text{kW}$，二次侧进液温度 $T_{\text{in}} \le 35^\circ\text{C}$，GPU 结温 $T_j < 83^\circ\text{C}$（零热降频） | 集群冷启动/故障批量唤醒时，机房母线功率爬坡率 $\mathrm{d}P/\mathrm{d}t \le 125\,\text{kW/min}$；能耗计量误差 $\le 5\%$ |
+> **Executive Summary / 核心结论**：本参考架构面向负责交付 **千卡级预训练/后训练 + 高并发在线推理混合智算中心** 的云与 AI 基础设施解决方案架构师（SA）。通过将 **8 轨 Rail-Optimized 无损网络**、**两阶段异步 Checkpoint + 并行存储（3FS/Lustre + GDS）**、**Dynamo/Mooncake Prefill-Decode（PD）分离与前缀缓存路由**、**Kueue TAS + DRA 拓扑感知调度** 以及 **>45 kW/柜冷板液冷 + 母线爬坡限流** 组合成闭环方案，可在严守 **TTFT P95 ≤ 1.5 s / TPOT ≤ 25 ms** 与 **训练有效好吞吐（Goodput）≥ 90%** 的同时，将突发流量下的在线推理算力需求削减 **26.5%–34.2%**，并将 9 TB 分布式 Checkpoint 停顿压缩至 **3.1 s 以内**。
 
 ---
 
-## 2. 三视图端到端系统架构图（Dataflow、Topology/Rack Domain、Failure/Recovery State Machine）
+## 1. 业务场景、工作负载契约与架构红线（Workload & SLO Contracts）
 
-### 视图 A：训练与分离式推理端到端数据流图（Workload Dataflow）
+假设企业建设一套 **768–1,024 张旗舰 GPU 规模的企业智算底座**（`512+ GPU` 持续预训练/RLHF 后训练池 + `256 GPU` 低延迟在线推理池 + `暖备与潮汐混部弹性池`），解决方案架构师必须在立项阶段锁定四条硬性 SLA 红线：
+
+| 架构维度 | 负载 A：大模型持续预训练与 RLHF/GRPO 后训练 (`512+ GPUs`) | 负载 B：企业级高并发在线推理与长上下文 Agent (`256 GPUs`) | 关联选型指南 |
+|---|---|---|---|
+| **代表模型与数值精度** | `70B Dense` (`BF16/FP8` 计算 + `FP32` 主权重) 与 `671B/37B-Active MoE` (`FP8` / `NVFP4`) | `70B Dense` 与 `671B MoE` (`FP8` / `NVFP4` + 分层 KV Cache)，输入 `4K–64K` tokens，输出 `512` tokens | [量化选型指南](../components/llm-quantization-selection-faq.md) · [MoE 并行指南](../components/moe-parallelism-selection-faq.md) |
+| **吞吐与延迟 SLO** | 集群有效训练好吞吐（Cluster Goodput）**`≥ 90%`**；单步计算与通信高度重叠，严禁跨机张量并行（TP） | 突发流量（Gamma $CV_a^2 = 2.0$）下 **P95 TTFT `≤ 1.5 s`**、**P99 TPOT `≤ 25 ms/tok`**、SLO 达标率 **`≥ 95%`** | [推理引擎选型](../components/llm-inference-engine-selection-faq.md) · [PD 分离选型](../components/pd-disaggregation-kv-offload-selection-faq.md) |
+| **存储与故障恢复 RTO** | 多 TB 分布式 Checkpoint 阻塞训练时间 **`≤ 3.5 s`**；单节点/单网卡故障自动隔离与热备续训 **`≤ 90 s`** | 单 Prefill/Decode 副本故障秒级摘除；长对话多轮前缀缓存命中率 **`≥ 75%`**（避免重复重算 Prefill） | [Checkpoint 存储架构](../components/training-checkpoint-architecture-selection-faq.md) · [故障自愈指南](../components/gpu-cluster-fault-recovery-selection-faq.md) |
+| **机柜供电、液冷与安全水位** | 单高密液冷机柜墙插功率 **`≤ 130 kW`**，进液温度 `≤ 35°C`，GPU 结温 **`< 83°C`（零热降频）** | 批量唤醒功率爬坡率 **`dP/dt ≤ 125 kW/min`**；在线单副本排队安全利用率控制在 **`ρ ≤ 0.65`** | [智算液冷与供电](../components/ai-datacenter-cooling-power-selection-faq.md) · [电网瞬态与 BESS](../components/ai-cluster-grid-power-transients-bess-smoothing-selection-faq.md) |
+
+---
+
+## 2. 三视图端到端参考架构（Dataflow · Fabric/Cooling Topology · Fault State Machine）
+
+### 视图 A：训练与分离式推理端到端数据流（Workload Dataflow）
 
 ```mermaid
 flowchart LR
-    subgraph TrainPath["训练数据流 (512-GPU 4D Parallelism + Async Checkpoint)"]
-        DS["并行文件系统 / 对象存储<br/>训练样本流"] -->|"GDS / Host Stage Buffer"| FSDP["TP=8 (NVLink) × PP=4 × DP/FSDP=16<br/>前向/反向 + AllGather/ReduceScatter"]
-        FSDP -->|"torch.distributed.checkpoint<br/>Stage 1: D2H Staged Copy (non_blocking)"| Pinned["Host Pinned Memory<br/>CUDA Stream 同步窗口 (~2.0 s)"]
-        Pinned -->|"Stage 2: Async ThreadPool / Walk-The-Dog"| Lustre["NVMe Tier + Lustre / S3<br/>原子 Rename 提交"]
+    subgraph TrainPath["训练数据流 (512-GPU TP×PP×FSDP2/EP + 两阶段异步 Checkpoint)"]
+        DS["并行文件系统 (3FS / Lustre / WEKA)<br/>+ 对象存储热冷分层"] -->|"GPUDirect Storage (GDS)<br/>零拷贝流式预取"| TrainPool["机内 NVLink TP=8 × 跨机 FSDP2 / PP / DeepEP<br/>计算与集合通信流水重叠"]
+        TrainPool -->|"阶段 1: D2H 拷贝至 Host Pinned DRAM<br/>GPU 停顿 ~2.0–3.1 s"| Pinned["Host 锁页共享内存池<br/>跨机架伙伴副本保护"]
+        Pinned -->|"阶段 2: 后台异步多线程刷盘"| NVMeFS["本地 NVMe 缓冲 + 并行文件系统<br/>原子 Rename 提交"]
     end
 
-    subgraph InferPath["在线推理数据流 (P/D Disaggregation + Speculative Decoding)"]
-        Client["API 网关 / 突发请求流<br/>Q=24 req/s, Gamma burstiness=0.5"] -->|"路由与排队控制 (ρ ≤ 0.65)"| Prefill["Prefill 实例池 (Compute-Bound)<br/>TP=4, Prompt I=4096"]
-        Prefill -->|"NIXL / RDMA Write KV Cache<br/>V_KV = 2·L·H_kv·d_h·I·b_kv"| Decode["Decode 实例池 (HBM-BW-Bound)<br/>Continuous Batching + Sequoia Tree Verify"]
-        Client -.->|"超低延迟 batch=1 子流 (TPOT < 5ms)"| Innovator["SRAM 确定性加速池<br/>Groq LPU (900MHz) / Cerebras WSE-3"]
+    subgraph InferPath["在线推理数据流 (Dynamo / Mooncake PD 分离 + 多级 KV 缓存)"]
+        Client["AI Gateway (鉴权 / 配额 / 语义护栏)<br/>突发请求流 CV_a² = 2.0"] -->|"全局前缀感知路由<br/>控制安全排队水位 ρ ≤ 0.65"| Prefill["Prefill 算力池 (Compute-Bound)<br/>Chunked Prefill · 高吞吐预填充"]
+        Prefill -->|"100G–400G RDMA 零拷贝传输<br/>Mooncake / NIXL KV Connector"| Decode["Decode 带宽池 (HBM-BW-Bound)<br/>FP8/NVFP4 + Continuous Batching + MTP/EAGLE-3"]
+        Prefill <-->|"64K 长上下文多轮会话复用"| KVPool["分层 KV 缓存池<br/>Host DRAM / RDMA 内存池 / NVMe GDS"]
     end
 ```
 
-### 视图 B：物理网络、多轨 Rail-Optimized 拓扑与液冷机柜功率域（Physical/Logical Topology & Rack Power Domain）
+### 视图 B：8 轨 Rail-Optimized 网络与 126 kW 冷板液冷机柜域（Network & Rack Power Domain）
 
 ```mermaid
 flowchart TB
-    subgraph Spine["Rail-Optimized Spine 层 (8 个独立 Rail 平面, 无跨平面直连)"]
-        S0["Rail-0 Spine Switches"]
-        S7["Rail-7 Spine Switches"]
+    subgraph Spine["Rail-Optimized 核心交换层 (8 个独立 Rail 平面 · SHARP 网内归约 / RoCEv2 DLB+ECN)"]
+        S0["Rail-0 Spine 交换平面"]
+        S7["Rail-7 Spine 交换平面"]
     end
 
-    subgraph Pod["SuPod / 机柜组 (每机柜 126.4 kW Wall Power, CDU 133.3 LPM @ ΔT=12°C)"]
-        subgraph Rack1["液冷机柜 Domain #1 (MNNVL Clique / 8x Rail ToR)"]
-            ToR0["Rail-0 Leaf/ToR (PFC + ECN/DCQCN)"]
-            ToR7["Rail-7 Leaf/ToR (PFC + ECN/DCQCN)"]
-            Node1["计算节点 / Tray 组<br/>NVLink / NVSwitch 机柜内全互连 (IMEX UP)<br/>8x 400GbE/NDR NIC 分别上联 Rail 0..7"]
-            CDU1["机柜分集水器 + CDU 换热<br/>88% 热量入水 (111.2 kW) / 12% 入风道 (15.2 kW)"]
+    subgraph Pod["高密智算机柜组 (单柜 126.4 kW 墙插功率 · CDU 133.3 LPM @ ΔT=12°C)"]
+        subgraph Rack1["冷板液冷机柜故障域 #1 (机内 NVLink/NVSwitch 全互连 + 8× 400G Rail ToR)"]
+            ToR0["Rail-0 Leaf/ToR (PFC Watchdog + ECN/DCQCN)"]
+            ToR7["Rail-7 Leaf/ToR (PFC Watchdog + ECN/DCQCN)"]
+            Node1["8-GPU 计算节点 / 超节点托盘<br/>机内 NVLink 全互连 (TP/EP 高速域)<br/>8 张 400G NDR/RoCE 网卡一一对应上联 Rail 0..7"]
+            CDU1["机柜分集水器 + 液冷分配单元 (CDU)<br/>88% 热量冷板带走 (111.2 kW) · 12% 风冷后门带走 (15.2 kW)"]
         end
     end
 
     S0 --- ToR0
     S7 --- ToR7
-    ToR0 ---|"NIC-0 (mlx5_0)"| Node1
-    ToR7 ---|"NIC-7 (mlx5_7)"| Node1
-    CDU1 -.->|"T_in=32°C, T_out=44°C, T_j=77.6°C"| Node1
+    ToR0 ---|"NIC-0 (PCIe Root 亲和)"| Node1
+    ToR7 ---|"NIC-7 (PCIe Root 亲和)"| Node1
+    CDU1 -.->|"进液 32°C / 回液 44°C · GPU 结温 77.6°C (<83°C)"| Node1
 ```
 
-### 视图 C：跨层故障检测、隔离、降级与恢复状态机（Failure & Recovery State Machine）
+### 视图 C：集群排障、热备顶替与潮汐降级状态机（Failure & Elastic Recovery State Machine）
 
 ```mermaid
 stateDiagram-v2
-    [*] --> HealthyRunning: 作业通过 Kueue TAS + DraSlice 拓扑分配启动
+    [*] --> BurnInGate: Day-0 两两成对 RDMA/NVLink 压测 + HPL/GEMM 热稳态验收
+    BurnInGate --> HealthyRunning: Kueue TAS / Slurm 拓扑感知整组调度 (Gang Scheduling)
 
-    HealthyRunning --> DegradedOrTransient: 瞬态/可自愈事件\n1. Blackwell NVLink Recovery Successful > 0 (DCGM WARN)\n2. 单次 Thermal/Power Violation > 0 (DCGM WARN)\n3. RoCEv2 ECN 标记触发 DCQCN 降速
-    DegradedOrTransient --> HealthyRunning: 硬件链路层自愈 / CDU 流量补偿恢复
+    HealthyRunning --> TransientMitigation: 瞬态可自愈告警\\n1. RoCEv2 ECN 拥塞标记 / 可纠正 ECC\\n2. 进液温度小幅波动 (T_j < 80°C)
+    TransientMitigation --> HealthyRunning: 硬件链路重试 / CDU 流量自动补偿
 
-    HealthyRunning --> NodeOrCliqueFault: 致命硬件/通信域故障\n1. Xid 79/94/95 或 GPU_RESET / NODE_REBOOT (DCGM FAIL)\n2. MNNVL IMEX DEGRADED/DOWN 或 NVSwitch Link Down (Clique FAIL)\n3. RoCEv2 GID 失效 / Completion Queue CQE Flush Error
-    DegradedOrTransient --> NodeOrCliqueFault: 连续超时或升级为 RECOVERY_FAILED
-
-    NodeOrCliqueFault --> CordonAndDrain: 1. 异步 Checkpoint 保存线程 wait() 优先刷盘或回滚上一完整版本\n2. DCGM/NPD 标记节点或整个 MNNVL Clique Unschedulable\n3. Slurm power_save.c 令牌桶 (ResumeRate=12/min) 从暖备池 (SuspendExcNodes) 唤醒替换节点
-
-    CordonAndDrain --> HealthyRunning: 替换节点就绪 (< 90s) + NCCL 重建 Communicator + 加载最近 Checkpoint 续训
+    HealthyRunning --> FaultIsolation: 致命硬件或灰故障 (Straggler / SDC)\\n1. DCGM Xid 79/94/95 或不可纠正 HBM Row-Remap 失败\\n2. NVSwitch / RDMA 端口断开或双端超时定位慢节点
+    FaultIsolation --> CordonAndSwap: 1. 自动 Cordon 故障节点/机柜 Clique\\n2. 令牌桶限流 (≤125 kW/min) 从暖备池顶替健康节点\\n3. 推理池秒级重路由；训练池从最近内存/NVMe Checkpoint 续训 (<90s)
+    CordonAndSwap --> HealthyRunning: 通信组重建完成，恢复稳态生产
 ```
 
 ---
 
-## 3. 全栈定量容量、网络、存储与电力/液冷预算表（Verified by `own-offline`）
+## 3. 核心子系统架构权衡与定量选型矩阵（Verified Offline Sizing Models）
 
-以下端到端预算中的每一项指标均对应本仓库已提交并通过 `--check` 校验的实验脚本输出：
-
-### 3.1 显存、并行策略与通信重叠预算（对应 [`experiments/capacity_roofline/`](../../experiments/capacity_roofline/README.md) 与 [`experiments/training_parallelism/`](../../experiments/training_parallelism/README.md)）
-
-- **70B Dense 训练显存分解（`TP=8, SP, FSDP=8`，64–1024 张 H100 80GiB）**：
-  - 单卡分片后参数、梯度、`FP32` 优化器状态与激活显存严格控制在 `35.44 GiB`（远低于 `80 GiB` HBM3 红线，单步耗时 `55.97 ms`，见 [`docs/components/training-parallelism.md`](../components/training-parallelism.md)）。
-  - **反例警示**：若采用纯 `FSDP=64` 跨机切分而不开启 `TP=8 + SP` 机内张量/序列并行，单卡未切分激活暴涨至 `28.00 GiB`（总峰值 `49.00 GiB`），且跨节点 AllGather/ReduceScatter 暴露通信高达 `130.91 ms`（单步耗时恶化至 `166.96 ms`）。
-- **NCCL 拓扑与协议选择（对应 [`experiments/rail_channel_cut/`](../../experiments/rail_channel_cut/README.md) 与 [`experiments/ib_failover_invariants/`](../../experiments/ib_failover_invariants/README.md)）**：
-  - 机内 8-GPU NVSwitch 采用 `NVLS` / `Ring` `LL128` 或 `Simple` 协议；跨机 400GbE RoCEv2 / NDR IB 保持 `crossNic = 0` Rail 对齐并启用双端口选择性重传（`IBV_WR_RDMA_READ` 探测 `cmplsRecords` 节省 `75%` 重传流量）。
-
-### 3.2 训练 Token 经济学与能耗积分预算（对应 [`experiments/capacity_economics/`](../../experiments/capacity_economics/README.md)）
-
-| 指标 | 1024x H100 70B Dense 预训练 (`dense_70b_poisson_cached_prefix`) | 2048x H100 671B/37B-Active MoE (`moe_671b_37b_bursty_long_context`) | 公式与代码依据 |
-|---|---|---|---|
-| **有效参与 MatMul 参数量** | `68,950,000,000` (`68.95B`) | `26,950,000,000` (`26.95B`，远小于总参数 `671.10B`) | TorchTitan `get_num_params()` + `get_num_flop_per_token()` |
-| **每 Token 训练 FLOPs** | `4.7812 × 10^11` (`478.12 GFLOP/tok`) | `2.0468 × 10^11` (`204.68 GFLOP/tok`) | $6 N_{\text{matmul}} + 12 L H d_h S$ |
-| **实测/目标 MFU (BF16 989 TFLOPS 分母)** | `44.48%` (`439.87 TFLOPS/GPU`) | `34.77%` (`343.87 TFLOPS/GPU`，受 All-to-All 门控通信制约) | `BaseMetricsProcessor` 稠密峰值分母 |
-| **集群有效 Token 吞吐** | `857,292.8 tok/s` | `3,027,763.2 tok/s` | $\text{TPS}_{\text{GPU}} \times G \times \eta_{\text{goodput}}$ |
-| **每百万训练 Tokens 总成本 (含算力+电费)** | **`$0.9456 / 1M tokens`** (`19,800 J/step/GPU`，总墙钟 `324.02 h`) | **`$0.5355 / 1M tokens`** (`20,475 J/step/GPU`，FP8 下进一步降至 **`$0.3743`**) | Slurm `acct_gather_energy_gpu.c` 梯形积分 + GPU 租用成本 |
-
-### 3.3 在线推理 P/D 分离、突发排队与创新架构加速预算（对应 [`experiments/inference_slo_scheduler/`](../../experiments/inference_slo_scheduler/README.md)、[`experiments/capacity_economics/`](../../experiments/capacity_economics/README.md) 与 [`experiments/innovator_arch_tradeoffs/`](../../experiments/innovator_arch_tradeoffs/README.md)）
-
-1. **共池（Colocated）vs. P/D 分离（Disaggregated）容量对比**：
-   - 在长上下文 Gamma 突发流量（`burstiness = 0.25`，即 $CV_a^2 = 4.0$，方差为泊松流的 4 倍）且未命中缓存 `7,168` tokens（单次 Prefill 耗时 `291.67 ms`、`SLO_TTFT = 600 ms`）下：
-     - **92% 利用率盲目定容反例**：排队等待高达 `4,083.33 ms`（期望 TTFT `4,375.0 ms`），TTFT 达标率（Goodput）暴跌至 **`7.27%`**。
-     - **共池基线 vs. P/D 分离架构（`moe_671b_37b_bursty_long_context`）**：按 Kingman 安全水位（$\rho_{\text{safe}} = 34.58\%$）定容时，共池混部需 **`392` 张 GPU**；改用 **P/D 分离架构（`31` 个 Prefill 实例 + `5` 个 Decode 实例 = `288` 张 GPU）直接节省 `104` 张 GPU（26.5% 算力）**，每百万达标输出 tokens 成本为 **`$12.3698`**；进一步将 Prefix Cache 命中率从 `12.5%` 提升至 `87.5%` 并开启 FP8（`fp8_quantized_moe_high_cache_hit`），总卡数压至 **`40` 张 GPU**，每百万达标输出 tokens 成本降至 **`$1.7180`（下降 86.1%）**。
-2. **创新推理层（Fireworks / Together Sequoia / Groq / Cerebras）补充加速**：
-   - 在 PCIe 双缓冲卸载场景下启用 **Together Sequoia 硬件感知树形投机解码**，在不增加 PCIe 权重传输字节数的前提下将有效卸载吞吐提升 **`5.40x–6.80x`**（从 `0.55–1.01 tok/s` 提至 `2.96–6.29 tok/s`）。
-   - 对延迟极其敏感的 `batch=1` Agentic 代码生成子流，路由至 **Groq LPU 确定性 SRAM 机柜**（`32 kW` 风冷，`14.42 ms` 端到端确定性延迟，`13.33 J/token @ batch=1`）或 **Cerebras CS-3 液冷晶圆单元**（`25 kW` 液冷，东西边缘配置 `2–12` 列 `46 KB/PE` 硬件 FIFO 反压列，`1.74 J/token @ high-batch`）。
-
-### 3.4 异步 Checkpoint 存储与拓扑感知调度预算（对应 [`experiments/checkpoint_recovery/`](../../experiments/checkpoint_recovery/README.md) 与 [`experiments/cluster_orchestration/`](../../experiments/cluster_orchestration/README.md)）
-
-- **两阶段异步 Checkpoint（PyTorch DCP `BlockingAsyncStager` + 去重均衡）**：64 卡训练中跨 Rank 去重将落盘总量从 `5,184 GiB` 压至 `980 GiB`（`5.29x` 缩减），均衡指派（`save_to_lowest_rank = False`）将最慢 Rank 写出从 `45.94 GiB` 压至 `15.31 GiB`；配合 `BlockingAsyncStager` D2H 暂存与后台刷盘，将 256 节点集群在 `4` 热备节点 + `15 min` 检查点间隔下的单配置节点净产出从 `73.47%` 提升至 **`83.28%`（净增 `+9.81 pts`）**。
-- **拓扑感知调度与故障风暴防御**：Kubelet 采用 `--topology-manager-policy=restricted` 拦截跨 Socket GPU/NIC 错位分配并放行整机 8-GPU 作业；Slurm `topology/block` 通过 `_choose_best_bblock` Best-Fit 反碎片分配保护完整空闲基础块。
-
-### 3.5 机架电力、CDU 液冷热力学与 MNNVL 故障域预算（对应 [`experiments/rack_power_cooling/`](../../experiments/rack_power_cooling/README.md)）
-
-| 架构控制项 | 设计设定值 | 定量验证结果 (`own-offline`) | 违反红线的失效后果 |
-|---|---|---|---|
-| **高密液冷机柜功率与 CDU 流量** | 单柜 `118.8 kW` IT 负载，$\eta_{\text{PSU}}=0.94$，纯水 $T_{\text{in}}=32^\circ\text{C}, \Delta T=12^\circ\text{C}, f_{\text{liq}}=88\%$ | 墙插功率 **`126.383 kW`**；液冷带走 **`111.217 kW`**（需 **`133.31 LPM`**），风道带走 **`15.166 kW`**（需 **`1,798.6 CFM`**）；GPU 结温 **`77.6 °C`**（距 `83 °C` 裕度 `+5.4 °C`） | 若切换 PG25 且一次侧水温升至 $45^\circ\text{C}$，结温达 **`88.6 °C`**，触发 `DCGM_CLOCKS_EVENT_REASON_HW_THERMAL` 硬件频率腰斩 |
-| **Slurm 令牌桶唤醒浪涌控制** | `ResumeRate = 12 nodes/min`，`power_save_interval = 15s`，`SuspendExcNodes` 目标 `16` | 唤醒 64 台 `10.2 kW` 节点时，初始突发仅唤醒 **`3` 台（`30.6 kW`）**，随后每 `5000 ms` 唤醒 1 台，爬坡率严格受限于 **`122.4 kW/min`**（总耗时 `305.0 s`） | 若关闭令牌桶限流，64 台节点同时上电产生 **`652.8 kW`** 阶跃浪涌，触发机房 PDU 跳闸或 GPU `HW_POWER_BRAKE` |
-| **DCGM `v4.6.1` MNNVL 机柜级健康状态机** | 监控 `DCGM_FI_IMEX_DOMAIN_STATUS (1502)`、`IMEX_DAEMON_STATUS (1503)` 与 Blackwell `RECOVERY_SUCCESSFUL/FAILED` | Blackwell NVLink 瞬态自愈成功（`RECOVERY_SUCCESSFUL > 0`）仅报 **`WARN`** 不中断训练；唯有 `IMEX = DEGRADED/DOWN` 或 `NVSwitch Link Down` 才置 **`FAIL`** 并隔离整个 MNNVL Clique | 若将 Blackwell 瞬态自愈误判为 `FAIL` 会造成频繁误杀；若忽略 `IMEX = DEGRADED` 只摘除单节点会导致跨节点 NVLink 作业死锁 |
+| 子系统域 | 常见反模式（踩坑基线） | 架构师推荐配置（Target Architecture） | 定量收益与关键边界 | 配套可复核模型与工具 |
+|---|---|---|---|---|
+| **1. Scale-Out 网络选型** | 用传统五元组静态 ECMP 跑多机训练，极易触发哈希极化与 PFC 死锁风暴 | `≥1,000 GPU` 同步预训练优先 **InfiniBand NDR/XDR (SHARP + AR)**；`≤512 GPU` 后训练与 PD 分离推理优先 **AI 以太网 RoCEv2（Rail-Optimized + ECN/DCQCN + DLB/喷洒路由）** | 消除单链路哈希冲突，多机集合通信有效带宽利用率从 `<55%` 提升至 **`85%–92%+`** | [`experiments/rocev2_load_balancing_selection/`](../../experiments/rocev2_load_balancing_selection/) · [IB vs RoCE 指南](../components/ib-vs-ethernet-roce-selection-faq.md) |
+| **2. 并行切分与显存规划** | 跨机盲目拉大 `TP>8` 或纯 `FSDP` 不开激活检查点/序列并行 | **机内 `TP=8 + SP`（锁死在 NVLink 域内）× 跨机 `FSDP2 / DualPipe PP`**；671B MoE 采用 **`Attention DP + Expert EP + DeepEP + EPLB`** | `70B` 训练单卡峰值显存压至 **`35.4 GiB`**（步耗时快 **`2.98×`**）；`671B MoE` 开启 `FP8 + EP` 单卡达标吞吐提升 **`2.65×`**、TCO 降 **`62%`** | [`experiments/capacity_roofline/`](../../experiments/capacity_roofline/README.md) · [`experiments/moe_quantization_parallelism_selection/`](../../experiments/moe_quantization_parallelism_selection/README.md) |
+| **3. 在线推理调度与 PD 分离** | 长输入突发流量下采用共池混部且将单副本利用率推至 `ρ > 0.85` | 在 `≥16 GPU` + `100G–400G RDMA` 条件下采用 **SGLang / vLLM + Dynamo/Mooncake PD 分离**，配合全局前缀缓存路由（控制 `ρ ≤ 0.65`） | Decode `P99 TPOT` 降低 **`3.76×`**（消除 Prefill 抢占毛刺），突发流量下节省 **`26.5%–34.2%`** 达标算力成本；75% 前缀命中下 TTFT 再降 **`3.45×`** | [`experiments/llm_inference_engine_pd_selection/`](../../experiments/llm_inference_engine_pd_selection/) · [PD 分离选型卡片](../reports/enterprise-pd-disaggregation-vs-colocated-inference-architecture-selection-cards.html) |
+| **4. Checkpoint 与分层 KV 存储** | 分布式训练直接同步阻塞写远端共享存储；多轮长对话驱逐 KV 后全量重算 | **两阶段异步 Checkpoint**（先 `D2H` 写入 Host Pinned DRAM，再后台异步刷 NVMe/3FS/Lustre）；长会话启用 **Host DRAM / RDMA+GDS 分层 KV 卸载** | `9 TB` Checkpoint 训练阻塞时间从 `225 s` 压至 **`3.125 s`（快 `72×`，好吞吐 `99.83%`）**；`64K` 多轮恢复 TTFT 加速 **`15×`** | [`experiments/ai_storage_checkpoint_kv_offload/`](../../experiments/ai_storage_checkpoint_kv_offload/README.md) · [存储与 KV 选型指南](../components/kv-cache-tiered-offload-selection-faq.md) |
+| **5. 集群调度与训推潮汐复用** | 默认 K8s 调度器无拓扑感知散落分配 GPU，导致跨机柜通信退化与死锁 | 训练/推理统一启用 **K8s `Kueue TAS`（拓扑感知成组调度）+ `DRA`**（或裸金属 Slurm），白天推理优先、夜间低优抢占回填 SFT/RL 任务 | 消除部分 Pod 抢不到卡的死锁等待，保护同 Rail/NVLink 亲和性，全天集群有效利用率提升至 **`75%–85%+`** | [`experiments/ai_cluster_slurm_k8s_kueue_dra_scheduling_selection/`](../../experiments/ai_cluster_slurm_k8s_kueue_dra_scheduling_selection/) · [K8s vs Slurm 指南](../components/ai-cluster-slurm-vs-kubernetes-kueue-dra-gang-scheduling-selection-faq.md) |
+| **6. 液冷热力学与供电爬坡保护** | 在 `>50 kW/柜` 高密机柜强推纯风冷，或故障恢复时数百节点同时满载上电 | 单柜 **`>45 kW` 切换冷板式液冷（DLC，85%–90% 热量入水）**；集群调度器启用令牌桶唤醒限流 + 储能/超级电容削峰 | `126.4 kW` 机柜下 GPU 结温稳控在 **`77.6°C`**（零热降频），集群冷启动母线爬坡率严格受控在 **`≤122.4 kW/min`** | [`experiments/ai_datacenter_cooling_power_selection/`](../../experiments/ai_datacenter_cooling_power_selection/) · [液冷与供电卡片](../reports/ai-datacenter-cooling-power-selection-cards.html) |
 
 ---
 
-## 4. 关键反例与常见架构误区（Counterexamples）
+## 4. 解决方案架构师三大高频踩坑反例（Critical Anti-Patterns）
 
-1. **误区一：“只按均值 QPS 和峰值 TFLOPS 规划推理与训练集群”**
-   - *反证*：在 Gamma 突发流量（$CV_a^2 = 2.0$）下，若把推理实例利用率跑满到 $\rho = 0.90$，Kingman 排队等待因子 $\frac{\rho}{1-\rho}\cdot\frac{CV_a^2+CV_s^2}{2}$ 会急剧膨胀并击穿 TTFT $P_{95} \le 1.5\,\text{s}$；而在 MoE 训练中，若把 671B 总参数当作每 token 有效激活参数（36.69B），会人为虚报 **18 倍** MFU。
-2. **误区二：“多轨 RoCEv2 网络只要交换机总带宽够，不需要 Rail-Optimized 隔离与端口恢复不变量”**
-   - *反证*：在 [`docs/components/nccl-graph-channel-mapping.md`](../components/nccl-graph-channel-mapping.md) 与 [`docs/components/nccl-port-recovery-invariants.md`](../components/nccl-port-recovery-invariants.md) 已证明，若 `crossNic=1` 偏斜或机内跨 `PATH_PHB` 被多 Channel 叠加，共享链路时间下界会劣化 `4x–6x`；而双端口重传若采用无符号计数则会永久死锁。
-3. **误区三：“把 40kW 风冷机柜的运维策略直接搬到 126kW MNNVL 液冷机柜”**
-   - *反证*：在 126kW MNNVL 机柜中，（a）风冷根本无法提供 `15,000 CFM` 单柜风量；（b）单节点冷板微堵或重启若破坏 `nvidia-imex-ctl` 域状态（`DCGM_FI_IMEX_DOMAIN_STATUS = DEGRADED`），故障域不再是单台 8-GPU 节点，而是整个 72-GPU 机柜 Clique；（c）Slurm RAPL 插件若因系统升级丢失 `/dev/cpu/#/msr` 权限，会调用 `slurm_drain_node()` 将全集群节点瞬间排空。
+1. **反例一：按“平均 QPS × 峰值 TFLOPS”拍脑袋做推理容量规划**
+   - **根因**：真实企业 Agent 与 RAG 流量呈显著突发分布（$CV_a^2 \ge 2.0$）。当在线利用率推高至 `92%` 时，排队等待时间呈非线性爆炸（`>4,000 ms`），`TTFT` 达标率会跌破 `10%`。**架构准则**：在线交互池必须预留排队余量（`ρ ≤ 0.65`），用离线批处理或异步 SFT 任务在低谷期吃满剩余算力。
+2. **反例二：混淆 MoE“总参数量”与“每 Token 激活参数量”**
+   - **根因**：`671B` 稀疏 MoE 每 Token 仅激活约 `37B` 参数，但 **显存驻留必须装下全部 `671B` 专家权重**。若按 `37B` 估算显存会直接 OOM；反之若按 `671B` 计算单 Token 计算量则会虚报 **18 倍** MFU，掩盖跨节点 `EP All-to-All` 的真实网络瓶颈。
+3. **反例三：高密 MNNVL / 超节点机柜沿用传统“单机独立排障”流程**
+   - **根因**：在 `GB200 NVL72` 或 `128 卡超节点` 机柜中，多节点共享同一 Scale-Up 交换域与液冷回路。必须将 **整个超节点 Clique 与 CDU 回路** 建模为一级故障域与拓扑调度域，并提前通过 [Day-0 压测验收](../components/ai-cluster-burn-in-acceptance-dcgm-nccl-validation-selection-faq.md) 拦截边缘光模块与静默数据损坏（SDC）。
 
 ---
 
-## 5. 架构师端到端验收清单（Verification Checklist）
+## 5. 上线前架构师端到端验收清单（Go-Live Acceptance Checklist）
 
-1. **硬件与液冷基线**：确认 CDU 额定流量 $\ge 1.25 \times \dot{V}_{\text{liquid, LPM}}$（留出 PG25 比热容折损与污垢热阻裕度），配置 DCGM Policy 在 $T_j \ge 80^\circ\text{C}$ 时告警、$T_j \ge 85^\circ\text{C}$ 时自动排空节点。
-2. **电力浪涌与能耗采集**：在 `slurm.conf` 中设置 `ResumeRate` 与 `SuspendRate` 使 $R_{\text{resume}} \times P_{\text{node}} \le \text{母线允许爬坡率}$，配置 `SuspendExcNodes` 保留暖备节点池；核查 `/dev/cpu/*/msr` 权限与 Xeon DRAM $0.5^{16}\,\text{J}$ 单位特判。
-3. **网络与通信域**：验证多轨网卡亲和性（`NCCL_CROSS_NIC=0`）、RoCEv2 ECN/PFC 阈值及 MNNVL `nvidia-imex-ctl -N -j` 状态为 `UP`（daemon 状态为 `5 = READY`）。
-4. **训练与推理软件栈**：训练启用 TorchTitan MFU 真实激活参数统计与 PyTorch DCP 两阶段异步 Checkpoint；推理在 `I/O` 悬殊且突发显著时启用 vLLM P/D 分离，并限制单实例目标利用率 $\rho \le 0.65$。
+- [ ] **Day-0 硬件与网络压测**：完成单卡 HPL/GEMM 热稳态压测、机内 NVLink P2P 全矩阵压测与跨机同 Rail 两两成对（Pairwise）RDMA 带宽/误码率验收，确认 `NCCL_CROSS_NIC=0` 与 PFC Watchdog 生效。
+- [ ] **分布式训练与存储门禁**：验证 `TP` 严格限制在机内 NVLink 域内，两阶段异步 Checkpoint 单次保存阻塞 `< 3.5 s`，并在模拟杀死单个 Worker 进程时验证 `≤ 90 s` 自动续训闭环。
+- [ ] **在线推理 SLA 与成本护栏**：使用真实长短混合 Prompt 分布压测 P95 TTFT 与 P99 TPOT；对比共池 Chunked Prefill 与 PD 分离下的 `$/1M SLA 达标 Tokens`，开启 Prefix Cache 命中率监控（目标 `≥ 70%`）。
+- [ ] **液冷、供电与 FinOps 可观测性**：接入 `DCGM + OpenTelemetry` 统一采集 GPU SM 活跃度、Xid/Row-Remap 硬件预警、CDU 进回液温差及按租户/业务线归因的单百万 Token 真实成本。

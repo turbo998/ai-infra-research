@@ -1,4 +1,4 @@
-"""Unit tests for Round 175 LLM Weight Serialization Format & Sub-Second Loading Selection Evaluator."""
+"""Unit tests for LLM Weight Serialization Format & Sub-Second Loading Selection Evaluator."""
 
 from __future__ import annotations
 

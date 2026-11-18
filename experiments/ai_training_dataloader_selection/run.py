@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evaluator for Round 24: Petabyte-Scale Multimodal Pre-Training Data Loader & Streaming Pipeline Selection.
+"""Deterministic evaluator for Petabyte-Scale Multimodal Pre-Training Data Loader & Streaming Pipeline Selection.
 
 Compares 4 data loading, sharding, and preprocessing architectures across a 256-GPU H100 cluster
 (32 nodes x 8 GPUs, 128 CPU cores/node, $640/hr = $467,200/mo lease) training on a 1.2 PB (500M sample)
@@ -164,7 +164,7 @@ def main() -> int:
         if actual != expected:
             print(f"ERROR: {RESULTS_PATH} drifted from deterministic model.", file=sys.stderr)
             return 1
-        print(f"OK: {RESULTS_PATH} matches deterministic Round 24 training dataloader & streaming pipeline model.")
+        print(f"OK: {RESULTS_PATH} matches deterministic SA Guide training dataloader & streaming pipeline model.")
         return 0
 
     RESULTS_PATH.write_text(json.dumps(expected, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

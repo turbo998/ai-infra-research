@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Enterprise LLM Inference Engine Architect Selection: Ollama/llama.cpp vs. TensorRT-LLM vs. vLLM V1 vs. SGLang (Round 367).
+"""Deterministic evaluator for Enterprise LLM Inference Engine Architect Selection: Ollama/llama.cpp vs. TensorRT-LLM vs. vLLM V1 vs. SGLang .
 
 Models effective cluster throughput (tok/s), P99 TTFT (ms), P99 TPOT (ms),
 new-model onboarding engineering effort (days), supported model/hardware ecosystem breadth,

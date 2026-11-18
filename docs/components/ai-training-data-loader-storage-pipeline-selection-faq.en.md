@@ -1,6 +1,6 @@
 # Petabyte-Scale Multimodal Pre-Training Data Loader & Streaming Pipeline Selection FAQ (`Small-File POSIX Read` vs. `WebDataset Tar Shards` vs. `MosaicML MDS / LitData Deterministic Stream` vs. `NVIDIA DALI GPU Decode + GDS`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./ai-training-data-loader-storage-pipeline-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/ai-training-data-loader-storage-pipeline-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#dataloader-pipeline-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./ai-training-data-loader-storage-pipeline-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/ai-training-data-loader-storage-pipeline-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#dataloader-pipeline-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When training a multimodal VLM or video diffusion (DiT) foundation model across `256 × NVIDIA H100` GPUs (`$467,200/month` lease), one of the largest hidden compute drains is **`DataLoader` Starvation**: **(1) reading 500 million individual `.jpg` and `.json` files directly from shared POSIX/NFS/Lustre storage triggers 370,000 `open/stat/close` metadata calls per second—choking the Metadata Server (MDS), leaving GPUs idle for `64.5%` of every step, and burning `$301,344/month`; (2) packing files into `WebDataset (.tar)` shards fixes storage IOPS, but saturates all 128 host CPU cores on software JPEG/H.264 decoding; and (3) crashing at Step 42,000 forces stateless tar iterators to spend `14.5 ~ 68.0 minutes` fast-forwarding through already-seen batches!** Grounded in `experiments/ai_training_dataloader_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact boundaries across four pre-training data pipeline tiers.
 
@@ -152,7 +152,7 @@ As training data shifts from pre-tokenized text to high-resolution images and vi
 # Verify results.json matches the deterministic training dataloader model 100%
 python experiments/ai_training_dataloader_selection/run.py --check
 
-# Run Round 24 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_ai_training_dataloader_selection.py
 ```
 

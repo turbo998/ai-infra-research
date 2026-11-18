@@ -151,5 +151,5 @@ sequenceDiagram
 - [ ] **1. 机内 TP 必开 `NVLS`，跨机 DP 必开 `IB SHARP`（但必须加上通信组大小阈值过滤！）**：在启动脚本中设置 `NCCL_NVLS_ENABLE=1`、`NCCL_IB_SHARP_ENABLE=1` 以及 **`NCCL_SHARP_GROUP_SIZE_THRESH=16`**（或仅对 DP ProcessGroup 传参），严防几十个小通信组耗尽交换机的 64～128 棵硬件 SHARP 树槽位！
 - [ ] **2. 在 InfiniBand 子网管理器（UFM / OpenSM）中启用 `sharp_am` 守护进程与树拓扑感知**：定期执行 `ibdiagnet --sharp` 核验所有 Leaf 与 Spine 交换机的 SHARP 聚合节点状态正常，避免单台交换机 SHARP 固件挂死导致全集群静默退回慢速 Ring。
 - [ ] **3. RoCEv2 以太网集群强制配置 `機内 NVLS + 跨机 Double Binary Tree`**：以太网交换机不支持 IB SHARP，但单机 8 卡内部依然拥有 NVSwitch！务必确认 RoCEv2 集群开启了 `NCCL_NVLS_ENABLE=1` 与 `NCCL_ALGO=NVLS,Tree`，可立刻白捡机内硬件规约与省下 16 个 GPU SM。
-- [ ] **4. 排障需“逐比特确定性复现（0-ULP Bitwise Reproducibility）”时临时关闭动态 SHARP 树**：因为交换机并发包到达顺序微秒级变化可能改变浮点加法结合顺序；在做 SDC 静默错误金标比对（Round 21）时临时固定 `NCCL_ALGO=Ring`，常规大规模训练则全面开启 `NVLS + SHARP`。
+- [ ] **4. 排障需“逐比特确定性复现（0-ULP Bitwise Reproducibility）”时临时关闭动态 SHARP 树**：因为交换机并发包到达顺序微秒级变化可能改变浮点加法结合顺序；在做 SDC 静默错误金标比对时临时固定 `NCCL_ALGO=Ring`，常规大规模训练则全面开启 `NVLS + SHARP`。
 - [ ] **5. 跨园区 / 跨楼宇（RTT > 1ms）拼集群严禁直接拉大 FSDP 同步环**：采用 **Hierarchical DiLoCo / Local-SGD（园区内每步 SHARP 同步 + 园区之间每 $H=30\sim50$ 步同步一次外动量）**，将跨楼宇带宽需求降低 98%。

@@ -1,6 +1,6 @@
 # Enterprise On-Premises Single-Node, Workstation & Edge LLM Hardware Selection FAQ (`Consumer 4×RTX 4090 Rig` vs. `Unified Memory Mac Studio / DGX Spark` vs. `Dual RTX PRO 6000 Blackwell 192GB` vs. `Enterprise 2×H200 NVL`)
 
-> 🌐 **Language**: **[中文 (Chinese)](./edge-on-prem-workstation-llm-deployment-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📊 2026-11-09 Daily Progress Report](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/edge-on-prem-workstation-llm-deployment-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#onprem-workstation-sizer)**
+> 🌐 **Language**: **[中文 (Chinese)](./edge-on-prem-workstation-llm-deployment-selection-faq.md)** | **English Version** · **[📖 Back to Repository README](../../README.en.md)** · **[📚 Full Architecture Catalog](../full-catalog-en.md)** · **[🃏 7-Card 4:5 Visual Benchmark Report](../reports/edge-on-prem-workstation-llm-deployment-selection-cards.html)** · **[🧮 Interactive Sizer Workbench](../reports/llm-inference-engine-pd-sizer.en.html#onprem-workstation-sizer)**
 >
 > **Overview**: A first-principles selection guide for AI Solution Architects. When branch offices, hospitals, factories, law firms, or R&D labs deploy air-gapped on-premises LLMs (`70B ~ 671B`) on a single box for `1 ~ 50` internal users, hardware procurement frequently hits three traps: **(1) building a DIY server with 4 consumer `RTX 4090 (24GB×4 = 96GB)` cards, only to discover that consumer drivers block `PCIe BAR1 P2P` DMA, only `20 GB` remains for KV cache after loading a 70GB model, and axial gaming coolers suffer a `14.5%` annual failure rate in server racks; (2) buying a `Mac Studio M3/M4 Ultra (192GB)` or `DGX Spark (128GB)` for 20 concurrent RAG users, where compute-bound 16K prefill stalls for `4.85 seconds`; and (3) overlooking the `96 GB ECC` `NVIDIA RTX PRO 6000 Blackwell`, where just 2 cards (`192 GB`) outperform 4×4090s by `3.02x` at virtually identical 3-year TCO!** Grounded in `experiments/onprem_edge_workstation_llm_selection/` (`synthetic` + `anonymized_reported`, `independently_reproduced=false`), this guide establishes the exact boundaries across four single-node hardware tiers.
 
@@ -143,7 +143,7 @@ As concurrent users scale from 1 to 32, total system throughput (`tok/s`) behave
 # Verify results.json matches the deterministic on-prem hardware selection model 100%
 python experiments/onprem_edge_workstation_llm_selection/run.py --check
 
-# Run Round 26 unit tests
+# Run unit tests for this guide
 python -m unittest tests/test_onprem_edge_workstation_llm_selection.py
 ```
 

@@ -1,4 +1,4 @@
-# Enterprise Embedding & Reranker Two-Stage Retrieval Pipeline Evaluator (Round 400)
+# Enterprise Embedding & Reranker Two-Stage Retrieval Pipeline Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise Embedding + Reranker retrieval pipelines at `500 RPS` peak (`30,000,000` queries/month):
 

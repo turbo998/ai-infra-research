@@ -1,4 +1,4 @@
-# Enterprise Document Intelligence (IDP), Layout Parsing & VLM Pipeline Evaluator (Round 381)
+# Enterprise Document Intelligence (IDP), Layout Parsing & VLM Pipeline Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise document parsing and table extraction architectures at a scale of `10,000,000` PDF/scanned pages per month:
 

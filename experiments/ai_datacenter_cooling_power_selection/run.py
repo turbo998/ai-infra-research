@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic thermal, PUE, copper-vs-optics BOM, and 3-year TCO evaluator for Round 10:
-AI Datacenter Rack Density, Power Delivery & Cooling Architecture Selection
+"""Deterministic thermal, PUE, copper-vs-optics BOM, and 3-year TCO evaluator for AI Datacenter Rack Density, Power Delivery & Cooling Architecture Selection
 (Forced-Air vs. Rear-Door Heat Exchanger RDHx vs. Single-Phase Direct-to-Chip DLC vs. Two-Phase DLC / Immersion).
 
 Provenance Note:
@@ -230,7 +229,7 @@ def compute_results() -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run or check Round 10 AI datacenter cooling & power evaluator.")
+    parser = argparse.ArgumentParser(description="Run or check SA Guide AI datacenter cooling & power evaluator.")
     parser.add_argument("--check", action="store_true", help="Verify results.json matches deterministic model.")
     args = parser.parse_args()
 

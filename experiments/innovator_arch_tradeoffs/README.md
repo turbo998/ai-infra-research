@@ -2,8 +2,8 @@
 
 原创 Python 标准库、CPU/offline 算例；不运行 GPU、Groq LPU 或 Cerebras WSE 硬件。
 关联组件正文见：
-- [张量 Layout/Dtype 到编译器与 SM100 Kernel 的分派链路](../../docs/components/kernel-dispatch-layout.md)
-- [AI Infra 创新架构深度研究：Fireworks、Together、Groq 与 Cerebras](../../docs/components/ai-infra-innovators.md)
+- [张量 Layout/Dtype 到编译器与 SM100 Kernel 的分派链路](../../docs/components/llm-quantization-selection-faq.md)
+- [AI Infra 创新架构深度研究：Fireworks、Together、Groq 与 Cerebras](../../docs/components/speculative-decoding-selection-faq.md)
 
 ## 三组可重算模型
 

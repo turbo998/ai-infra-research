@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise 671B/235B MoE Serving & Parallelism Selection (TP vs. EP + EPLB) (Round 396)
+    # Analytical model for Enterprise 671B/235B MoE Serving & Parallelism Selection (TP vs. EP + EPLB) 
     # Workload: 671B-FP8 MoE Model (37B active parameters per token, 256 routed experts),
     # Enterprise Target Capacity: 15,000 tok/s SLA-compliant output throughput (P99 TPOT <= 30 ms).
 

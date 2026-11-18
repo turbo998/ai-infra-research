@@ -1,4 +1,4 @@
-"""Deterministic evaluator for Large-Scale MoE Expert Parallelism All-to-All Engine & GPU-Initiated RDMA (DeepEP / IBGDA) Selection (Round 46).
+"""Deterministic evaluator for Large-Scale MoE Expert Parallelism All-to-All Engine & GPU-Initiated RDMA (DeepEP / IBGDA) Selection .
 
 Models the per-layer MoE Dispatch + Combine All-to-All latency (µs), effective RDMA NIC bandwidth utilization (%),
 Decode time per output token (TPOT ms), GPU SM consumption for communication, expert load-imbalance straggler tail penalty (%),

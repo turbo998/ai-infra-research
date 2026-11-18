@@ -1,6 +1,6 @@
 # AI 服务器机内与超节点 Scale-Up 互连架构选型指南（`PCIe Gen5 交换树` vs. `单节点 8 卡 NVSwitch (HGX)` vs. `机柜级铜背板 NVL72 (MNNVL)` vs. `PCIe Gen6 + CXL 3.0 内存池化`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./nvlink-pcie-cxl-scaleup-interconnect-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/nvlink-pcie-cxl-scaleup-interconnect-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#scaleup-interconnect-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./nvlink-pcie-cxl-scaleup-interconnect-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/nvlink-pcie-cxl-scaleup-interconnect-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#scaleup-interconnect-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业在采购 GPU 算力底座时，最常陷入的三大架构误区是：**① 为了节省 30% 硬件采购费，买风冷 `8×PCIe Gen5` 服务器去跑 `70B/405B TP=8` 实时大模型推理，结果发现 61.4% 的 GPU 时间卡死在每 Token 160 次 PCIe `All-Reduce` 同步上；② 以为两台 8 卡 HGX 拼成 `TP=16 / EP=16` 就能线性扩容，结果一脚踩空掉下 `900 GB/s -> 50 GB/s` 的 18 倍跨机带宽悬崖；③ 听信厂商宣传试图用 `CXL 3.0` 替代 `NVLink` 跑张量并行**。本文基于 `experiments/nvlink_pcie_cxl_scaleup_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解 **PCIe Gen5 交换树、8 卡 NVSwitch (HGX)、72 卡机柜铜背板 NVL72 (MNNVL) 与 CXL 3.0 内存池化** 的物理边界与 TCO 拐点。
 
@@ -159,7 +159,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性 Scale-Up 互连模型 100% 一致
 python experiments/nvlink_pcie_cxl_scaleup_selection/run.py --check
 
-# 运行 Round 15 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_nvlink_pcie_cxl_scaleup_selection.py
 ```
 

@@ -1,4 +1,4 @@
-# Enterprise Vector Database & Billion-Scale Hybrid Search Evaluator (Round 382)
+# Enterprise Vector Database & Billion-Scale Hybrid Search Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise vector database and hybrid search architectures at a scale of `100,000,000` vectors (`1536-dim`) across `5,000` tenants (`300 QPS` peak):
 

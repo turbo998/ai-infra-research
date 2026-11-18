@@ -1,7 +1,7 @@
 # 集群调度、拓扑感知与弹性容错离线验证（`cluster_orchestration`）
 
 状态：已验证的 `own-offline` 标准库算例（基于固定版本 Kubernetes `v1.37.1`、Kueue `v0.20.2`、Slurm `slurm-26-05-5-1`、NVIDIA `k8s-device-plugin` `v0.20.1` 与 PyTorch `v2.6.0` `torchelastic` 源码不变量）。
-相关正文：[集群调度、拓扑感知与多租户运维深挖](../../docs/components/cluster-orchestration.md)。
+相关正文：[集群调度、拓扑感知与多租户运维深挖](../../docs/components/gpu-cluster-scheduler-orchestration-selection-faq.md)。
 
 ## 1. 模型覆盖的源码不变量
 

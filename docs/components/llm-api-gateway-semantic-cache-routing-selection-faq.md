@@ -1,6 +1,6 @@
 # 企业级大模型 API 网关、语义缓存与多模型级联路由架构选型指南（`无状态轮询代理` vs. `TPM 限流 + 精确缓存` vs. `KV-Prefix 亲和路由 + 语义缓存` vs. `难度级联路由 + SLO 熔断`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./llm-api-gateway-semantic-cache-routing-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/llm-api-gateway-semantic-cache-routing-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#llm-gateway-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./llm-api-gateway-semantic-cache-routing-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/llm-api-gateway-semantic-cache-routing-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#llm-gateway-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。当企业在内部建设统一的 **AI Gateway（大模型 API 网关）** 承载每月 `1,000 万次` 调用时，直接复用传统微服务时代的 **Nginx / Envoy 无状态轮询（Round-Robin）反向代理** 会引爆三大财务与性能灾难：**① 击穿 GPU 显存前缀缓存：当集群有 8 个推理副本时，无状态轮询把同一个多轮 Agent 会话随机打散到不同节点，导致底层 vLLM/SGLang 的 RadixCache 前缀命中率从 `65.0%` 暴跌 8 倍至 `8.1%`；② 按请求数（RPS）限流失灵：1 个携带 64K Token 的巨型 RAG 请求与 1 个 20 Token 的闲聊请求在 Nginx 眼里都算“1 次请求”，瞬间引发队头阻塞（P99 TTFT 高达 `1,420 ms`）；③ 杀鸡用牛刀：把占总数 55% 的简单意图分类、实体提取全送到最贵的 671B 旗舰模型上，月烧 `$142,000`**。本文基于 `experiments/llm_api_gateway_routing_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解四档企业级大模型网关的架构边界与防踩坑法则。
 
@@ -161,7 +161,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性 AI 网关级联路由模型 100% 一致
 python experiments/llm_api_gateway_routing_selection/run.py --check
 
-# 运行 Round 25 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_llm_api_gateway_routing_selection.py
 ```
 

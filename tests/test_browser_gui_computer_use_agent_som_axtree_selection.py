@@ -1,4 +1,4 @@
-"""Unit tests for Round 68 Enterprise Browser & GUI Computer-Use Agent Selection Evaluator."""
+"""Unit tests for Enterprise Browser & GUI Computer-Use Agent Selection Evaluator."""
 
 from __future__ import annotations
 

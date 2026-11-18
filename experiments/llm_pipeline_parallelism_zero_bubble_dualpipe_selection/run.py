@@ -1,4 +1,4 @@
-"""Deterministic evaluator for LLM Pipeline Parallelism (1F1B vs Zero-Bubble ZB-V vs DeepSeek DualPipe) Selection (Round 60).
+"""Deterministic evaluator for LLM Pipeline Parallelism (1F1B vs Zero-Bubble ZB-V vs DeepSeek DualPipe) Selection .
 
 Models pipeline bubble fraction (%), exposed cross-node communication overhead (% of step time),
 peak activation memory per GPU (GB), end-to-end cluster Model FLOPs Utilization (MFU %),

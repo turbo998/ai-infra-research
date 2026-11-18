@@ -1,4 +1,4 @@
-"""Unit tests for Round 67 Discrete Diffusion LLM (Mercury / LLaDA / Block Diffusion BD3-LM) Selection Evaluator."""
+"""Unit tests for Discrete Diffusion LLM (Mercury / LLaDA / Block Diffusion BD3-LM) Selection Evaluator."""
 
 from __future__ import annotations
 

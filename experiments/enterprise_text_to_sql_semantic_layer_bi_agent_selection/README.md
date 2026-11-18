@@ -1,4 +1,4 @@
-# Enterprise Text-to-SQL, Semantic Layer & BI Data Agent Architecture Evaluator (Round 378)
+# Enterprise Text-to-SQL, Semantic Layer & BI Data Agent Architecture Evaluator 
 
 Deterministic analytical evaluator comparing four enterprise ChatBI / Text-to-SQL architectures on a 300-table cloud data warehouse (`500,000` queries/month):
 

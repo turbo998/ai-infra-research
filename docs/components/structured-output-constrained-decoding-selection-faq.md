@@ -1,6 +1,6 @@
 # 企业级 Agent 结构化输出与语法约束解码架构选型指南（`Prompt 软约束重试` vs. `朴素逐 Token 正则扫描` vs. `Outlines 预编译 FSM` vs. `XGrammar 异步掩码 + Jump-Forward 跳词加速`）
 
-> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./structured-output-constrained-decoding-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📊 2026-11-09 每日进展日报](../daily/2026-11-09.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/structured-output-constrained-decoding-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#constrained-decoding-sizer)**
+> 🌐 **Language**: **中文 (Chinese)** | **[English Version](./structured-output-constrained-decoding-selection-faq.en.md)** · **[📖 返回仓库根目录 README](../../README.md)** · **[📚 全量架构选型目录](../full-catalog-zh.md)** · **[🃏 7-Card 4:5 视觉评测报告](../reports/structured-output-constrained-decoding-selection-cards.html)** · **[🧮 交互式定容工作台](../reports/llm-inference-engine-pd-sizer.html#constrained-decoding-sizer)**
 >
 > **导读**：面向 AI Solution Architect 的第一性原理实战选型指南。在企业级多智能体工作流（Function Calling、Text-to-SQL、数据提取）中，下游微服务要求大模型 100% 输出严格符合 `JSON Schema` 或 `上下文无关文法（CFG）` 的结构化负载。架构师常面临三大困惑：**① 只在 System Prompt 里写“请只输出合法 JSON”为什么在复杂嵌套 Schema 下仍有 `15.5%` 的解析失败率，且报错重试白白多烧掉 `38%` 的算力？② 为什么早期开启 Guided Decoding 后，GPU 利用率暴跌、每 Token 延迟从 `9.5 ms` 恶化到 `28.0 ms`？③ 为什么新一代 `XGrammar + SGLang Jump-Forward` 不仅做到了 `100.0%` 零语法报错，反而比不加任何约束的自由解码还要快 `1.56 倍`（`6.10 ms` vs `9.50 ms`）？** 本文基于 `experiments/structured_output_constrained_decoding_selection/` 封存的确定性模型（`synthetic` + `anonymized_reported`，`independently_reproduced=false`），系统拆解四档结构化解码架构的底层机制与选型边界。
 
@@ -162,7 +162,7 @@ sequenceDiagram
 # 校验封存算例 JSON 与确定性结构化约束解码模型 100% 一致
 python experiments/structured_output_constrained_decoding_selection/run.py --check
 
-# 运行 Round 22 单元测试
+# 运行本专题单元测试
 python -m unittest tests/test_structured_output_constrained_decoding_selection.py
 ```
 

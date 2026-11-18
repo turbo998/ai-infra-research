@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def build_results() -> dict:
-    # Analytical model for Enterprise ITSM (ServiceNow / Jira) & AIOps Incident Triage Agent Selection (Round 397)
+    # Analytical model for Enterprise ITSM (ServiceNow / Jira) & AIOps Incident Triage Agent Selection 
     # Workload: 50,000 IT helpdesk & production alert tickets per month across an enterprise.
     monthly_tickets = 50_000
 

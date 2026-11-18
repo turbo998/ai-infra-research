@@ -1,4 +1,4 @@
-"""Unit tests for Round 181 Enterprise Distributed Inference Orchestration (Triton vs. KServe vs. Ray Serve vs. NVIDIA Dynamo + NIXL) Evaluator."""
+"""Unit tests for Enterprise Distributed Inference Orchestration (Triton vs. KServe vs. Ray Serve vs. NVIDIA Dynamo + NIXL) Evaluator."""
 
 from __future__ import annotations
 
