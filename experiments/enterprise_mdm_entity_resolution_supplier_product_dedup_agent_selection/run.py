@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_payload() -> dict[str, Any]:
+    return {
+        "benchmark_id": "enterprise_mdm_entity_resolution_supplier_product_dedup_agent_selection_v1",
+        "title": "Enterprise Master Data Management (MDM) Entity Resolution, Hybrid Blocking, Spec-Veto Gate & Golden-Record Survivorship Agent Evaluator",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_baseline": {
+            "total_erp_supplier_and_material_records": 2400000,
+            "regional_erp_instances_merged": 14,
+            "monthly_new_onboarding_records": 280000,
+            "sla_target": "Entity resolution F1 >= 96%, false-positive bad-merge rate == 0.0%, pairwise candidate pruning >= 99.9%",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_legacy_edit_distance_rules_and_manual_steward_merge",
+                "name": "Tier 1: Legacy Levenshtein/Regex Rules + Manual Data Steward Review",
+                "entity_resolution_f1_score_pct": 68.5,
+                "false_positive_bad_merge_rate_pct": 1.4,
+                "candidate_pair_reduction_ratio_pct": 95.0,
+                "monthly_steward_and_compute_cost_usd": 245000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier2_dense_vector_threshold_auto_merge_and_naive_llm",
+                "name": "Tier 2: Pure Dense-Vector Cosine (>=0.92) Auto-Merge + Unconstrained LLM Pairwise Prompt",
+                "entity_resolution_f1_score_pct": 73.0,
+                "false_positive_bad_merge_rate_pct": 13.6,
+                "candidate_pair_reduction_ratio_pct": 98.0,
+                "monthly_steward_and_compute_cost_usd": 390000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier3_vector_blocking_plus_holistic_llm_pair_judge",
+                "name": "Tier 3: Vector Top-10 Blocking + Holistic LLM Pairwise Judge",
+                "entity_resolution_f1_score_pct": 84.8,
+                "false_positive_bad_merge_rate_pct": 4.2,
+                "candidate_pair_reduction_ratio_pct": 99.5,
+                "monthly_steward_and_compute_cost_usd": 128000,
+                "action_decision": "Confirm",
+            },
+            {
+                "tier_id": "tier4_hybrid_lsh_vector_blocking_plus_spec_attribute_extractor_plus_tax_duns_hard_gate_agent",
+                "name": "Tier 4: Hybrid LSH+Vector Blocking + LLM Spec-Attribute Extractor + Deterministic Tax-ID/DUNS & Spec-Inequality Veto Gate + Golden-Record Agent",
+                "entity_resolution_f1_score_pct": 97.4,
+                "false_positive_bad_merge_rate_pct": 0.0,
+                "candidate_pair_reduction_ratio_pct": 99.94,
+                "monthly_steward_and_compute_cost_usd": 34000,
+                "action_decision": "Act automatically",
+            },
+        ],
+        "perturbation_check": {
+            "scenario": "Near-Identical Material Specs ('M8x30 304SS Bolt' vs 'M8x30 316L SS Bolt', 0.978 Cosine Sim) + Parent vs Foreign Subsidiary Supplier ('Siemens AG DE' vs 'Siemens Ltd CN')",
+            "tier2_bad_merge_corruption_pct": 28.4,
+            "tier4_spec_and_tax_veto_bad_merge_pct": 0.0,
+            "tier1_f1_pct": 68.5,
+            "tier4_f1_pct": 97.4,
+            "f1_gain_pts": 28.9,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    payload = build_payload()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            return 1
+        return 0 if out_path.read_text(encoding="utf-8") == rendered else 1
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
