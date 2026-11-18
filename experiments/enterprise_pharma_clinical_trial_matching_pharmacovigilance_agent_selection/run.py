@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_payload() -> dict[str, Any]:
+    return {
+        "benchmark_id": "enterprise_pharma_clinical_trial_matching_pharmacovigilance_agent_selection_v1",
+        "title": "Enterprise Biopharma Clinical Trial Eligibility Matching, Pharmacovigilance ICSR MedDRA Coding & FDA 21 CFR Part 11 Agent Evaluator",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_baseline": {
+            "active_phase2_phase3_trials": 85,
+            "monthly_screened_patient_ehr_profiles": 120000,
+            "monthly_adverse_event_icsr_cases": 25000,
+            "sla_target": "Trial eligibility F1 >= 95%, exclusion criteria safety miss rate == 0.0%, MedDRA PT coding accuracy >= 97%, 100% FDA 21 CFR Part 11 audit trail",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_manual_cra_chart_review_and_manual_meddra_coding",
+                "name": "Tier 1: Manual CRA EHR Chart Review + Manual Pharmacovigilance MedDRA / E2B(R3) Coding",
+                "trial_eligibility_f1_accuracy_pct": 88.5,
+                "exclusion_criteria_safety_miss_rate_pct": 3.2,
+                "meddra_pt_coding_accuracy_pct": 91.0,
+                "monthly_clinical_and_pv_ops_cost_usd": 260000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier2_monolithic_prompt_llm_raw_ehr_and_freeform_meddra",
+                "name": "Tier 2: Monolithic Prompt LLM Evaluating 40 Criteria & Free-Form MedDRA Terms",
+                "trial_eligibility_f1_accuracy_pct": 64.2,
+                "exclusion_criteria_safety_miss_rate_pct": 16.8,
+                "meddra_pt_coding_accuracy_pct": 71.5,
+                "monthly_clinical_and_pv_ops_cost_usd": 310000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier3_medical_rag_plus_unconstrained_llm_criteria_check",
+                "name": "Tier 3: Standard Medical Note Vector RAG + Unconstrained LLM Criteria Check",
+                "trial_eligibility_f1_accuracy_pct": 78.4,
+                "exclusion_criteria_safety_miss_rate_pct": 6.4,
+                "meddra_pt_coding_accuracy_pct": 84.8,
+                "monthly_clinical_and_pv_ops_cost_usd": 115000,
+                "action_decision": "Confirm",
+            },
+            {
+                "tier_id": "tier4_atomic_logic_compiler_fhir_labs_plus_meddra_hierarchy_21cfr11_agent",
+                "name": "Tier 4: Atomic Criterion Logic Compiler (FHIR Lab/Date SQL + Clinical NLP) + MedDRA v27 Hierarchy Resolver + 21 CFR Part 11 HITL Agent",
+                "trial_eligibility_f1_accuracy_pct": 96.8,
+                "exclusion_criteria_safety_miss_rate_pct": 0.0,
+                "meddra_pt_coding_accuracy_pct": 98.4,
+                "monthly_clinical_and_pv_ops_cost_usd": 38000,
+                "action_decision": "Act automatically",
+            },
+        ],
+        "perturbation_check": {
+            "scenario": "Double-Negation Oncology Exclusion Criterion (No Grade >=2 Peripheral Neuropathy Unless Resolved >28 Days Prior + Creatinine µmol/L to eGFR Conversion)",
+            "tier2_monolithic_llm_f1_pct": 52.4,
+            "tier4_atomic_compiler_f1_pct": 96.2,
+            "f1_gain_pts": 43.8,
+            "tier2_safety_miss_pct": 16.8,
+            "tier4_safety_miss_pct": 0.0,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    payload = build_payload()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            return 1
+        return 0 if out_path.read_text(encoding="utf-8") == rendered else 1
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
