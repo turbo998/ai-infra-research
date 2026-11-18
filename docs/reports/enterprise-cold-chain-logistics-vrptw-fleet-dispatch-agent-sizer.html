@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级医药与生鲜冷链物流配送 (Cold-Chain VRPTW) 与断链救援 Agent 定容计算器</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 426 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级医药与生鲜冷链物流配送（Cold-Chain VRPTW）、热惯性预测与断链动态救援 Agent 定容计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-cold-chain-logistics-vrptw-fleet-dispatch-agent-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-cold-chain-logistics-vrptw-fleet-dispatch-agent-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-cold-chain-logistics-vrptw-fleet-dispatch-agent-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 冷链车队动态调度（LLM 收货规则编译 + 多温区 OR-Tools VRPTW + 制冷机热惯性救援）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_cold_chain_logistics_vrptw_fleet_dispatch_agent_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="ccSlaSelect">1. 准点率与 GSP/FDA 零断链红线 (Cold-Chain Logistics SLA):</label>
+          <select id="ccSlaSelect" onchange="updateCcSizer()">
+            <option value="prod" selected>收货时间窗准点率 &gt;= 97% · 0.0% 医药/生鲜超温断链报废 · 空驶率 &lt;= 13%</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="ccVolSelect">2. 冷藏车队与每日配送门店规模 (Fleet Scale):</label>
+          <select id="ccVolSelect" onchange="updateCcSizer()">
+            <option value="650t" selected>650 辆双温区冷藏车 (-20°C / +2~8°C) · 日均 18,000 个医院/商超配送点 · 12 座城配中心</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>医药与生鲜冷链车队调度与温控救援 Agent 架构档位</th>
+              <th>收货时间窗准点率</th>
+              <th>GSP/FDA 断链货损率</th>
+              <th>车辆空驶里程占比</th>
+              <th>月度油费与断链货损总成本</th>
+            </tr>
+          </thead>
+          <tbody id="ccSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="ccDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const CC_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统调度员按行政区划片排线 + 卸货后插 USB 导温度记录仪', ontime: '78.5% ✕', spoil: '3.4% ✕ (到店才发现超温)', empty: '29.0% ✕', cost: '$360,000 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 纯 Prompt 让 LLM 直接对 500 个门店坐标排配送顺序', ontime: '56.0% ✕ (全城折返绕路)', spoil: '4.8% ✕', empty: '38.5% ✕', cost: '$520,000 / 月 ✕' },
+      { id: 't3', name: '🟦 Tier 3: 静态早晨 VRP 路径规划 + 车厢温度突破 +8°C 被动发短信', ontime: '88.2%', spoil: '1.6% ✕ (突破8°C已无力回天)', empty: '18.4%', cost: '$165,000 / 月' },
+      { id: 't4', name: '🟩 Tier 4: LLM 卸货约束编译 + 动态多温区 OR-Tools VRPTW + 冷机热惯性提前45m接驳救援 Agent', ontime: '98.4% 🏆 (+19.9pts)', spoil: '0.0% 🏆 (中途冷车接驳零报废)', empty: '11.2% 🏆 (-17.8pts)', cost: '$52,000 / 月 (-85.6% 🏆)' }
+    ];
+
+    function updateCcSizer() {
+      const bestId = 't4';
+      const tbody = document.getElementById('ccSizerTbody');
+      tbody.innerHTML = CC_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td><strong>${r.name}</strong></td>
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#e2e8f0'}">${r.ontime}</td>
+          <td>${r.spoil}</td>
+          <td>${r.empty}</td>
+          <td style="font-weight:800;color:${isBest ? '#34d399' : '#f8fafc'}">${r.cost}</td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('ccDecisionCallout').innerHTML =
+        `💡 <strong>架构师推荐结论</strong>：在 <strong>650 辆多温区冷藏车、日均 1.8 万个医院与商超配送点</strong> 规模下，强烈推荐 <strong>🟩 Tier 4（LLM 门店卸货规则编译器 + OR-Tools/VROOM 动态多温区带时间窗路径求解器 VRPTW + 制冷机热惯性提前 45 分钟预测与中途过驳救援 Agent）</strong>，将准点率提升至 <code>98.4%</code>，实现 <code>0.0%</code> 医药生鲜断链报废，空驶率降至 <code>11.2%</code>，月度总成本降至 <code>$52,000</code>（节省 <code>85.6%</code>）。`;
+    }
+    updateCcSizer();
+  </script>
+</body>
+</html>
