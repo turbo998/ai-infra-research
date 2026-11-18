@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_hospitality_hotel_revenue_management_overbooking_housekeeping_agent_selection",
+  "round": 439,
+  "title": "Enterprise Hospitality, Hotel Chain & Theme Park Dynamic Revenue Management (RMS), Overbooking & Housekeeping Crew Dispatch Agent",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "managed_hotel_properties": 120,
+    "total_room_inventory_keys": 36000,
+    "daily_checkins_and_turnovers": 24000,
+    "baseline_average_daily_rate_adr_usd": 210
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Static Seasonal BAR Tiers + Flat 10% Overbooking + FIFO Floor Housekeeping",
+      "architecture": "Fixed Seasonal/Weekend Best Available Rate (BAR) tables + flat 10% overbooking rule of thumb + cleaning rooms top-to-bottom by floor regardless of early arrival queues",
+      "revpar_uplift_vs_baseline_pct": 0.0,
+      "guest_walk_or_empty_spoilage_rate_pct": 8.4,
+      "early_checkin_wait_breach_pct": 29.5,
+      "group_block_wash_forecast_error_pct": 22.0,
+      "monthly_spoilage_walk_and_overtime_cost_usd": 540000
+    },
+    {
+      "tier": "Tier 2: Prompt-Only General LLM Competitor Rate Matcher",
+      "architecture": "Scraping OTA competitor rates and asking an LLM to undercut by $5 without unconstrained demand detruncation, length-of-stay (LOS) bid prices, or cancellation hazards",
+      "revpar_uplift_vs_baseline_pct": -3.2,
+      "guest_walk_or_empty_spoilage_rate_pct": 11.2,
+      "early_checkin_wait_breach_pct": 27.0,
+      "group_block_wash_forecast_error_pct": 25.5,
+      "monthly_spoilage_walk_and_overtime_cost_usd": 635000
+    },
+    {
+      "tier": "Tier 3: Standard Historical Occupancy Regression (No Detruncation or Walk Asymmetric Loss)",
+      "architecture": "Time-series regression on censored historical occupancy (confusing sold-out 100% cap with true demand) + symmetric MSE overbooking without LOS displacement bid prices",
+      "revpar_uplift_vs_baseline_pct": 4.8,
+      "guest_walk_or_empty_spoilage_rate_pct": 4.1,
+      "early_checkin_wait_breach_pct": 16.5,
+      "group_block_wash_forecast_error_pct": 11.8,
+      "monthly_spoilage_walk_and_overtime_cost_usd": 265000
+    },
+    {
+      "tier": "Tier 4: EM-Detruncated LOS Bid-Price DP + Binomial Walk-Cost Solver + Arrival-Synced Housekeeping MILP Agent",
+      "architecture": "Expectation-Maximization (EM) Demand Detruncation + Network Length-of-Stay (LOS) Bid-Price DP + Asymmetric Newsvendor Overbooking + Mobile-ETA Housekeeping MILP",
+      "revpar_uplift_vs_baseline_pct": 14.6,
+      "guest_walk_or_empty_spoilage_rate_pct": 0.3,
+      "early_checkin_wait_breach_pct": 0.8,
+      "group_block_wash_forecast_error_pct": 2.1,
+      "monthly_spoilage_walk_and_overtime_cost_usd": 48000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "H1",
+      "scenario": "Multi-Night Length-of-Stay (LOS) Displacement Protection During Tuesday Sold-Out Citywide Convention",
+      "question": "Hotel has 40 rooms left for Tuesday (Tech Expo peak); should it accept a $260 1-night Tuesday OTA booking or hold for a $230/night 4-night Mon–Thu corporate guest?",
+      "model_answer": "Compute network shadow bid prices (pi_Mon=$110, pi_Tue=$285, pi_Wed=$195, pi_Thu=$140); close 1-night Tuesday BAR (<$285 hurdle) while accepting 4-night stay ($920 > $730 sum of hurdles)",
+      "tier1_3_failure": "Tier 1/2 accepts $260 1-night Tuesday guests until Tuesday sells out, leaving Monday/Wednesday/Thursday rooms empty and losing $660 per displaced multi-night stay.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "H2",
+      "scenario": "Asymmetric Overbooking Walk-Risk vs. Last-Minute OTA Free-Cancellation Surge",
+      "question": "Set optimal overbooking pad for 500-key property when 180 bookings are refundable OTA rates (32% cancellation hazard) and walking a Diamond VIP costs $650 + loyalty churn",
+      "model_answer": "Solve non-homogeneous binomial survival distribution over booking lead-time x channel x rate-code; set critical fractile F(Q*) = C_spoilage / (C_spoilage + C_walk) = 210 / (210 + 650) = 0.244 -> +19 rooms pad (0 VIP walks)",
+      "tier1_3_failure": "Tier 1 flat 10% (+50 rooms) overbooks into a rainstorm when cancellations drop to 8%, forcing 14 costly guest walks ($9,100 penalty + 1-star reviews).",
+      "action": "Confirm",
+      "confidence": 0.98
+    },
+    {
+      "id": "H3",
+      "scenario": "Group Block 'Wash' Forecasting (Conference Organizer Reserves 200 Rooms, Only 142 Pickup)",
+      "question": "A medical association blocks 200 rooms 6 months out; predict net pickup ('wash' = 29%) 21 days before arrival to release 58 rooms to high-yield transient demand",
+      "model_answer": "Track pacing curve of individual rooming-list pick-up vs. historical association cohort survival curve; release 54 wash rooms at T-21 days (+14.6% RevPAR lift)",
+      "tier1_3_failure": "Tier 1 holds all 200 rooms until the T-7 cutoff date, dumping 58 unsold rooms at fire-sale discounts 6 days before arrival.",
+      "action": "Confirm",
+      "confidence": 0.98
+    },
+    {
+      "id": "H4",
+      "scenario": "Arrival-Synchronized Housekeeping Crew Routing (14:00 Early Check-In Rush vs. Late Checkout VIPs)",
+      "question": "Assign 38 room attendants across 340 dirty rooms when 85 mobile-checked-in guests arrive at 13:30 desiring quiet high-floor king rooms",
+      "model_answer": "Solve multi-shift MILP matching live mobile-app airport ETA, room-attribute (High-Floor/Quiet/King) queues, and floor-elevator travel penalties",
+      "tier1_3_failure": "Tier 1 cleans rooms sequentially by room number (201, 202, 203...), leaving 29.5% of arriving guests waiting in the lobby for 90+ minutes.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Sudden Concert / Stadium Event Announcement (300% Inbound Search Velocity Spike in 15 Minutes)",
+      "original": "+14.6% RevPAR Uplift | 0.3% Walk/Spoilage Rate",
+      "perturbed": "+15.2% RevPAR Uplift | 0.3% Walk/Spoilage Rate (Real-Time Shopping-to-Booking Velocity Trigger)",
+      "change_pts": "+0.6 pts RevPAR"
+    },
+    {
+      "check": "Severe Airport Flight Cancellations at 17:00 (Simultaneous Late No-Shows + Stranded Distressed Passengers)",
+      "original": "0.3% Guest Walk / Spoilage Rate",
+      "perturbed": "0.4% Guest Walk / Spoilage Rate (Flight-Number Linked Survival Update)",
+      "change_pts": "+0.1 pts Walk/Spoilage"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (EM-Detruncated Network LOS Bid-Price DP + Binomial Asymmetric Overbooking + Arrival-Synced Housekeeping MILP) delivers +14.6% RevPAR uplift while cutting guest walk and empty-room spoilage to 0.3%.",
+    "Replacing naive competitor price-undercutting with Network Length-of-Stay (LOS) shadow bid prices prevents 1-night peak bookings from displacing high-value 4-night stays.",
+    "Synchronizing housekeeping room-attendant MILP routing with live mobile check-in ETAs and attribute preferences (Attribute-Based Selling) slashes lobby wait-time breaches from 29.5% to 0.8%, reducing monthly spoilage, walk compensation, and housekeeping overtime cost from $540K to $48K (-91.1%)."
+  ]
+}
