@@ -1,8 +1,8 @@
 # Cloud & AI Infrastructure Solution Architect Playbook & Sizing Hub (`ai-infra-research`)
 
-> **Language / 语言**: [简体中文](./README.md) | **English** · [Complete 150-Playbook Catalog](./docs/full-catalog-en.md) · [L0–L9 Stack Map](./docs/stack-map.en.md) · [SA Competency Roadmap](./docs/learning/roadmap.en.md) · [Interactive Sizing Workbench](./docs/reports/ai-infra-architect-workbench.html)
+> **Language / 语言**: [简体中文](./README.md) | **English** · [Complete 194-Playbook Catalog](./docs/full-catalog-en.md) · [L0–L9 Stack Map](./docs/stack-map.en.md) · [SA Competency Roadmap](./docs/learning/roadmap.en.md) · [Interactive Sizing Workbench](./docs/reports/ai-infra-architect-workbench.html)
 
-A bilingual (`zh-CN` & `en`), quantitative architecture decision hub purpose-built for **Cloud & AI Infrastructure Solution Architects**. Stripped of obscure non-SA scientific simulations and low-level commit noise, this repository focuses squarely on the **8 high-stakes infrastructure domains** architects face when designing GPU clusters, evaluating cloud vs. self-hosted platforms, and scaling production LLM/Agent systems — backed by **150 bilingual architecture guides, 289 self-contained interactive HTML sizers & 7-card visual benchmark decks, and 164 reproducible Python 3.12 analytical models**.
+A bilingual (`zh-CN` & `en`), quantitative architecture decision hub purpose-built for **Cloud & AI Infrastructure Solution Architects**. Stripped of obscure non-SA scientific simulations and low-level commit noise, this repository focuses squarely on the **8 high-stakes infrastructure domains** architects face when designing GPU clusters, evaluating cloud vs. self-hosted platforms, and scaling production LLM/Agent systems — backed by **194 bilingual architecture guides, 377 self-contained interactive HTML sizers & 7-card visual benchmark decks, and 208 reproducible Python 3.12 analytical models**.
 
 ---
 
@@ -44,7 +44,7 @@ flowchart TB
 
 ## 3. Curated Solution Architect Playbooks Across 8 Core Domains
 
-Every component guide follows the absorbable decision-guide standard modeled on [`ib-vs-ethernet-roce-selection-faq.en.md`](./docs/components/ib-vs-ethernet-roce-selection-faq.en.md): **Executive Summary → Scenario Q&A → Architecture Trade-offs → Quantitative Decision Matrix → Pre-Production Checklist**. Browse all **150** deliverables in the **[Complete Bilingual Catalog](./docs/full-catalog-en.md)**.
+Every component guide follows the absorbable decision-guide standard modeled on [`ib-vs-ethernet-roce-selection-faq.en.md`](./docs/components/ib-vs-ethernet-roce-selection-faq.en.md): **Executive Summary → Scenario Q&A → Architecture Trade-offs → Quantitative Decision Matrix → Pre-Production Checklist**. Browse all **194** deliverables in the **[Complete Bilingual Catalog](./docs/full-catalog-en.md)**.
 
 ### 3.1 AI Networking & High-Speed Interconnects
 
@@ -103,7 +103,7 @@ Every component guide follows the absorbable decision-guide standard modeled on 
 | Decision Scenario | Core Architecture Trade-offs | Recommended SA Pattern & Guardrails | Bilingual Guide & Tools |
 |---|---|---|---|
 | Governing enterprise LLM traffic, MCP/A2A multi-agent workflows, & safety guardrails | Direct app-to-provider calls scatter API keys, trip 429 rate limits, and expose PII; stateful multi-agent loops require durable checkpointing and bounded tool scopes | Centralize traffic through an **Enterprise AI Gateway (token quotas, semantic caching, multi-region/provider failover)**; pair **MCP + durable state orchestration (`LangGraph/Temporal`)** with dual-layer guardrails | [Enterprise AI Gateway](./docs/components/enterprise-ai-gateway-apim-litellm-kong-envoy-higress-selection-faq.en.md) · [Multi-Agent MCP/A2A](./docs/components/multi-agent-orchestration-dag-handoff-state-machine-selection-faq.en.md) · [Safety Guardrails](./docs/components/enterprise-ai-safety-guardrails-prompt-shield-groundedness-architecture-selection-faq.en.md) |
-| Delivering regulated vertical AI platforms (Finance, Manufacturing, Healthcare, Telco, Retail, Energy) | Industry deployments face strict sovereign residency, edge latency, multimodal document/DICOM pipelines, and legacy ERP/MES integration gates | Apply **20+ end-to-end industry reference architectures** covering compliance boundaries, cloud-edge sizing, RAG/Agent topology, and TCO payback | Browse [Section 8 of the Complete Bilingual Catalog (32 Platform & Industry Playbooks)](./docs/full-catalog-en.md) |
+| Delivering regulated vertical AI platforms (Finance, Manufacturing, Healthcare, Telco, Retail, Energy) | Industry deployments face strict sovereign residency, edge latency, multimodal document/DICOM pipelines, and legacy ERP/MES integration gates | Apply **60+ end-to-end industry reference architectures** covering compliance boundaries, cloud-edge sizing, RAG/Agent topology, and TCO payback | Browse [Section 8 of the Complete Bilingual Catalog (76 Platform & Industry Playbooks)](./docs/full-catalog-en.md) |
 
 ---
 
@@ -113,15 +113,15 @@ Every component guide follows the absorbable decision-guide standard modeled on 
 ai-infra-research/
 ├── README.md / README.en.md                 # Bilingual Solution Architect hub & decision matrices
 ├── docs/
-│   ├── full-catalog-zh.md / full-catalog-en.md  # Complete categorized index of all 150 SA deliverables
+│   ├── full-catalog-zh.md / full-catalog-en.md  # Complete categorized index of all 194 SA deliverables
 │   ├── stack-map.md / stack-map.en.md           # L0–L9 Cloud & AI Infrastructure Stack Map
 │   ├── learning/roadmap.{md,en.md}              # Cloud Architect → AI Infra SA 6-Stage Roadmap
 │   ├── alibaba-cloud-ai-infra/README.{md,en.md} # Flagship: Alibaba Cloud L0–L3 Full-Stack Review
 │   ├── architectures/end-to-end-ai-infra-case.{md,en.md} # Flagship: 1,024-GPU Training + PD Serving Blueprint
-│   ├── components/*.{md,en.md}                  # 148 bilingual SA selection & architecture FAQs (296 files)
-│   └── reports/*.html                           # 289 self-contained HTML sizers, 7-card decks & workbench
+│   ├── components/*.{md,en.md}                  # 192 bilingual SA selection & architecture FAQs (384 files)
+│   └── reports/*.html                           # 377 self-contained HTML sizers, 7-card decks & workbench
 ├── assets/svg/*.svg                         # High-readability architecture summary SVGs
-├── experiments/*/                           # 164 Python 3.12 stdlib capacity, latency & TCO models
+├── experiments/*/                           # 208 Python 3.12 stdlib capacity, latency & TCO models
 ├── scripts/validate_research.py             # Broken-link, ledger, and sanitization validator
 └── tests/                                   # Automated unit & validation test suite
 ```

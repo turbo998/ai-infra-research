@@ -1,8 +1,8 @@
 # 云与 AI 基础设施解决方案架构师（SA）实战选型知识库 (`ai-infra-research`)
 
-> **Language / 语言**: **简体中文** | [English](./README.en.md) · [全部 150 篇双语总目录](./docs/full-catalog-zh.md) · [L0–L9 全栈分层地图](./docs/stack-map.md) · [SA 能力进阶路线](./docs/learning/roadmap.md) · [交互式容量与 TCO 工作台](./docs/reports/ai-infra-architect-workbench.html)
+> **Language / 语言**: **简体中文** | [English](./README.en.md) · [全部 194 篇双语总目录](./docs/full-catalog-zh.md) · [L0–L9 全栈分层地图](./docs/stack-map.md) · [SA 能力进阶路线](./docs/learning/roadmap.md) · [交互式容量与 TCO 工作台](./docs/reports/ai-infra-architect-workbench.html)
 
-面向 **Cloud & AI Infrastructure Solution Architect（云与 AI 基础设施解决方案架构师）** 的中英双语架构选型、容量规划与 TCO 决策知识库。仓库摒弃脱离业务的晦涩低层源码碎片与跨学科算例，聚焦架构师在企业智算中心建设、公有云/混合云选型与大模型生产落地中最常面对的 **8 大核心架构决策域**，提供 **150 篇双语深度选型指南、289 套自包含交互式容量计算器（Sizer）与 7-Card 4:5 视觉评测报告，以及 164 套可一键复核的 Python 定量模型**。
+面向 **Cloud & AI Infrastructure Solution Architect（云与 AI 基础设施解决方案架构师）** 的中英双语架构选型、容量规划与 TCO 决策知识库。仓库摒弃脱离业务的晦涩低层源码碎片与跨学科算例，聚焦架构师在企业智算中心建设、公有云/混合云选型与大模型生产落地中最常面对的 **8 大核心架构决策域**，提供 **194 篇双语深度选型指南、377 套自包含交互式容量计算器（Sizer）与 7-Card 4:5 视觉评测报告，以及 208 套可一键复核的 Python 定量模型**。
 
 ---
 
@@ -44,7 +44,7 @@ flowchart TB
 
 ## 3. 八大核心架构决策域精选指南（Curated SA Selection Playbooks）
 
-每篇指南均遵循 **一页纸核心结论 → 业务场景与痛点 Q&A → 架构权衡对比（Trade-offs） → 量化选型决策矩阵 → 上线前核对清单（Checklist）** 标准结构（以 [`ib-vs-ethernet-roce-selection-faq.md`](./docs/components/ib-vs-ethernet-roce-selection-faq.md) 为标杆范式）。完整 **150 篇** 列表见 **[双语总目录](./docs/full-catalog-zh.md)**。
+每篇指南均遵循 **一页纸核心结论 → 业务场景与痛点 Q&A → 架构权衡对比（Trade-offs） → 量化选型决策矩阵 → 上线前核对清单（Checklist）** 标准结构（以 [`ib-vs-ethernet-roce-selection-faq.md`](./docs/components/ib-vs-ethernet-roce-selection-faq.md) 为标杆范式）。完整 **194 篇** 列表见 **[双语总目录](./docs/full-catalog-zh.md)**。
 
 ### 3.1 智算网络与高速互连（Networking & Interconnects）
 
@@ -103,7 +103,7 @@ flowchart TB
 | 典型业务场景 (Scenario) | 核心架构权衡 (Architecture Trade-offs) | 推荐选型结论与红线 (SA Recommendation) | 双语指南与交互工具 |
 |---|---|---|---|
 | 建设集团级统一 AI Gateway、MCP/A2A 多智能体底座与安全护栏 | 各业务线直连模型 API 会造成密钥散落、限流踩踏与敏感数据外泄；长链路有状态 Agent 需兼顾检查点持久化与工具权限最小化 | 统一收口至 **企业 AI Gateway（Token 配额、语义缓存、跨区域/多模型自动降级）**；工具集成遵循 **MCP 标准 + 状态持久化编排（LangGraph/Temporal）** + 输入输出双层低延迟护栏 | [企业 AI Gateway](./docs/components/enterprise-ai-gateway-apim-litellm-kong-envoy-higress-selection-faq.md) · [多智能体编排 MCP/A2A](./docs/components/multi-agent-orchestration-dag-handoff-state-machine-selection-faq.md) · [安全护栏架构](./docs/components/enterprise-ai-safety-guardrails-prompt-shield-groundedness-architecture-selection-faq.md) |
-| 金融、制造、医疗、电信、零售、能源等重点行业 AI 架构蓝图 | 不同行业在监管主权隔离、毫秒级边缘时延、多模态文档/影像解析与旧系统集成上约束迥异 | 提供覆盖合规红线、云边协同定容、RAG/Agent 链路与 TCO 回收测算的 **20+ 篇行业端到端参考方案** | 详见 [完整总目录第 8 章（32 篇平台与行业指南）](./docs/full-catalog-zh.md) |
+| 金融、制造、医疗、电信、零售、能源等重点行业 AI 架构蓝图 | 不同行业在监管主权隔离、毫秒级边缘时延、多模态文档/影像解析与旧系统集成上约束迥异 | 提供覆盖合规红线、云边协同定容、RAG/Agent 链路与 TCO 回收测算的 **60+ 篇行业端到端参考方案** | 详见 [完整总目录第 8 章（76 篇平台与行业指南）](./docs/full-catalog-zh.md) |
 
 ---
 
@@ -113,15 +113,15 @@ flowchart TB
 ai-infra-research/
 ├── README.md / README.en.md                 # 中英双语解决方案架构师（SA）导航首页
 ├── docs/
-│   ├── full-catalog-zh.md / full-catalog-en.md  # 全部 150 篇双语 SA 资产分类总目录
+│   ├── full-catalog-zh.md / full-catalog-en.md  # 全部 194 篇双语 SA 资产分类总目录
 │   ├── stack-map.md / stack-map.en.md           # L0–L9 云与 AI 基础设施十层架构地图
 │   ├── learning/roadmap.{md,en.md}              # 云架构师 → AI Infra SA 六阶段能力进阶路线
 │   ├── alibaba-cloud-ai-infra/README.{md,en.md} # 旗舰报告：阿里云 L0–L3 全栈 AI Infra 深度测评
 │   ├── architectures/end-to-end-ai-infra-case.{md,en.md} # 旗舰报告：1024-GPU 训推一体混合集群参考架构
-│   ├── components/*.{md,en.md}                  # 148 篇双语核心组件选型与行业方案 FAQ（共 296 份文档）
-│   └── reports/*.html                           # 289 套自包含交互式容量计算器（Sizer）、7-Card 评测卡与全栈工作台
+│   ├── components/*.{md,en.md}                  # 192 篇双语核心组件选型与行业方案 FAQ（共 384 份文档）
+│   └── reports/*.html                           # 377 套自包含交互式容量计算器（Sizer）、7-Card 评测卡与全栈工作台
 ├── assets/svg/*.svg                         # 双语高可读架构总结图（SVG）
-├── experiments/*/                           # 164 套基于 Python 3.12 标准库的可复核容量/性能/TCO 模型
+├── experiments/*/                           # 208 套基于 Python 3.12 标准库的可复核容量/性能/TCO 模型
 ├── scripts/validate_research.py             # 全仓死链扫描、双语资产对齐与安全合规门禁脚本
 └── tests/                                   # 自动化回归测试套件
 ```
