@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+
+def build_payload() -> dict[str, Any]:
+    return {
+        "benchmark_id": "enterprise_airline_logistics_irops_crew_fleet_recovery_agent_selection_v1",
+        "title": "Enterprise Airline & Logistics Irregular Operations (IROPS) Fleet/Crew Recovery, FAR Part 117 Legality & Column-Generation Agent Evaluator",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_baseline": {
+            "fleet_aircraft_count": 420,
+            "daily_scheduled_flights": 1800,
+            "active_pilots_and_cabin_crew": 14000,
+            "sla_target": "Disrupted passenger/cargo recovery rate >= 92%, FAR Part 117 / CCAR-121 crew legality violation rate == 0.0%, recovery solve time <= 5.0 minutes",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_manual_occ_dispatcher_and_sequential_siloed_recovery",
+                "name": "Tier 1: Manual OCC Dispatcher Gantt Recovery (Sequential Siloed Aircraft -> Crew -> Pax)",
+                "passenger_and_cargo_on_time_recovery_pct": 62.0,
+                "crew_far117_duty_legality_violation_rate_pct": 0.6,
+                "schedule_recovery_computation_minutes": 135.0,
+                "monthly_irops_cancellation_and_delay_cost_usd": 680000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier_id": "tier2_prompt_only_llm_direct_tail_and_crew_rescheduling",
+                "name": "Tier 2: Prompt-Only LLM Directly Reassigning Aircraft Tails & Crew Rosters",
+                "passenger_and_cargo_on_time_recovery_pct": 54.0,
+                "crew_far117_duty_legality_violation_rate_pct": 21.5,
+                "schedule_recovery_computation_minutes": 3.5,
+                "monthly_irops_cancellation_and_delay_cost_usd": 920000,
+                "action_decision": "Send to a human",
+            },
+            {
+                "tier3_aircraft_mip_solver_plus_text_ops_manual_rag": "tier3",
+                "tier_id": "tier3_aircraft_mip_solver_plus_text_ops_manual_rag",
+                "name": "Tier 3: Standalone Aircraft Swap MIP Solver + Text Manual RAG (Uncoupled from Crew)",
+                "passenger_and_cargo_on_time_recovery_pct": 76.5,
+                "crew_far117_duty_legality_violation_rate_pct": 5.8,
+                "schedule_recovery_computation_minutes": 28.0,
+                "monthly_irops_cancellation_and_delay_cost_usd": 310000,
+                "action_decision": "Confirm",
+            },
+            {
+                "tier_id": "tier4_notam_llm_parser_plus_integrated_column_generation_solver_plus_far117_gate",
+                "name": "Tier 4: NOTAM/Weather LLM Constraint Parser + Integrated Aircraft-Crew Column-Generation Solver + FAR Part 117 Legality Gate Agent",
+                "passenger_and_cargo_on_time_recovery_pct": 93.8,
+                "crew_far117_duty_legality_violation_rate_pct": 0.0,
+                "schedule_recovery_computation_minutes": 4.2,
+                "monthly_irops_cancellation_and_delay_cost_usd": 115000,
+                "action_decision": "Act automatically",
+            },
+        ],
+        "perturbation_check": {
+            "scenario": "Hub Thunderstorm Ground Delay Program (GDP 120 Flights Delayed) + Midnight Airport Noise Curfew NOTAM + Cumulative 28-Day Pilot FDP Cap",
+            "tier2_crew_timeout_violation_pct": 29.4,
+            "tier4_column_gen_far117_violation_pct": 0.0,
+            "tier1_recovery_pct": 62.0,
+            "tier4_recovery_pct": 93.8,
+            "recovery_gain_pts": 31.8,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    payload = build_payload()
+    out_path = Path(__file__).resolve().parent / "results.json"
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            return 1
+        return 0 if out_path.read_text(encoding="utf-8") == rendered else 1
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

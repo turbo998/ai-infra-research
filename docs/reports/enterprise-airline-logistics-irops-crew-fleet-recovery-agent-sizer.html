@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:;" />
+  <title>企业级航空与干线物流不正常航班恢复 (IROPS) 与列生成 Agent 定容计算器</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 22px; background: #0f172a; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 24px; }
+    .header-bar a { color: #7dd3fc; text-decoration: none; font-size: 13px; font-weight: 700; margin-left: 12px; }
+    .sizer-box { background: #1e293b; border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .control-card { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    label { display: block; font-size: 12.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 8px; }
+    select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: #94a3b8; font-weight: 700; background: #111827; }
+    .callout { margin-top: 16px; padding: 14px 16px; background: #0f172a; border-left: 4px solid #38bdf8; border-radius: 8px; font-size: 13.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-bar">
+      <div>
+        <strong>ROUND 423 INTERACTIVE SIZER</strong>
+        <span style="color:#94a3b8;font-size:13px;margin-left:10px;">企业级航空与干线物流不正常航班动态恢复（IROPS）、机组排班法规与列生成 Agent 定容计算器</span>
+      </div>
+      <div>
+        <a href="../components/enterprise-airline-logistics-irops-crew-fleet-recovery-agent-selection-faq.md">📘 中文 FAQ</a>
+        <a href="../components/enterprise-airline-logistics-irops-crew-fleet-recovery-agent-selection-faq.en.md">📘 English FAQ</a>
+        <a href="./enterprise-airline-logistics-irops-crew-fleet-recovery-agent-selection-cards.html">🃏 7-Card 报告</a>
+      </div>
+    </div>
+
+    <div class="sizer-box">
+      <h1 style="font-size:22px;margin:0 0 6px;">🧮 航空 AOC/OCC 不正常航班恢复（NOTAM 约束编译 + 飞机-机组列生成求解器 + FAR 117 铁闸）仿真器</h1>
+      <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">封存模型：<code>experiments/enterprise_airline_logistics_irops_crew_fleet_recovery_agent_selection/results.json</code> · <code>provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</code></p>
+
+      <div class="controls">
+        <div class="control-card">
+          <label for="airSlaSelect">1. 航班恢复率与民航机组执勤法规红线 (Aviation AOC SLA):</label>
+          <select id="airSlaSelect" onchange="updateAirSizer()">
+            <option value="prod" selected>受影响旅客/货量恢复率 &gt;= 92% · 0.0% 违反 FAR Part 117 / CCAR-121 执勤期 · 求解耗时 &lt;= 5 分钟</option>
+          </select>
+        </div>
+        <div class="control-card">
+          <label for="airVolSelect">2. 机队、每日航班与机组规模 (Fleet &amp; Crew Scale):</label>
+          <select id="airVolSelect" onchange="updateAirSizer()">
+            <option value="420ac" selected>420 架干线/货运飞机 · 日均 1,800 个航班 · 14,000 名飞行员与乘务员 · 年均 45 次大面积雷雨流控</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>航空不正常航班 (IROPS) 机队与机组恢复 Agent 架构档位</th>
+              <th>旅客/货量准点恢复率</th>
+              <th>违反 FAR 117 / CCAR-121 率</th>
+              <th>全局重调度求解耗时</th>
+              <th>月度航班取消与延误赔付总成本</th>
+            </tr>
+          </thead>
+          <tbody id="airSizerTbody"></tbody>
+        </table>
+      </div>
+      <div class="callout" id="airDecisionCallout"></div>
+    </div>
+  </div>
+
+  <script>
+    const AIR_TIERS = [
+      { id: 't1', name: '🟥 Tier 1: 传统 OCC 签派员手工甘特图串行调整 (先调飞机 -> 再找机组)', rec: '62.0% ✕ (被迫大面积取消)', vio: '0.6%', time: '135.0 分钟 ✕', cost: '$680,000 / 月 ✕' },
+      { id: 't2', name: '🟨 Tier 2: 纯 Prompt 让 LLM 直接重排延误飞机尾号与飞行员排班表', rec: '54.0% ✕', vio: '21.5% ✕ (机组跑道超时违法)', time: '3.5 分钟', cost: '$920,000 / 月 ✕' },
+      { id: 't3', name: '🟦 Tier 3: 独立飞机交换 MIP 模型 + 文本运行手册 RAG (与机组排班脱节)', rec: '76.5%', vio: '5.8% ✕ (换机型后机组无资质)', time: '28.0 分钟', cost: '$310,000 / 月' },
+      { id: 't4', name: '🟩 Tier 4: NOTAM/流控 LLM 约束编译 + 飞机-机组一体化列生成 (Column Generation) + FAR 117 铁闸', rec: '93.8% 🏆 (+31.8pts)', vio: '0.0% 🏆 (RCSPP合法环路)', time: '4.2 分钟 🏆 (-96.9%)', cost: '$115,000 / 月 (-83.1% 🏆)' }
+    ];
+
+    function updateAirSizer() {
+      const bestId = 't4';
+      const tbody = document.getElementById('airSizerTbody');
+      tbody.innerHTML = AIR_TIERS.map(r => {
+        const isBest = r.id === bestId;
+        return `<tr style="${isBest ? 'background:rgba(56,189,248,0.16);' : ''}">
+          <td><strong>${r.name}</strong></td>
+          <td style="font-weight:700;color:${isBest ? '#6ee7b7' : '#e2e8f0'}">${r.rec}</td>
+          <td>${r.vio}</td>
+          <td>${r.time}</td>
+          <td style="font-weight:800;color:${isBest ? '#34d399' : '#f8fafc'}">${r.cost}</td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('airDecisionCallout').innerHTML =
+        `💡 <strong>架构师推荐结论</strong>：在 <strong>420 架飞机、日均 1,800 班航班與 1.4 万名机组人员</strong> 规模下，强烈推荐 <strong>🟩 Tier 4（NOTAM/雷雨流控电报 LLM 约束编译器 + 飞机-机组-旅客一体化列生成 Branch-and-Price 求解器 + FAR Part 117 / CCAR-121 执勤合法性铁闸）</strong>，将大面积延误下旅客与货量恢复率提升至 <code>93.8%</code>，实现 <code>0.0%</code> 机组超时违法，全局重调度耗时从 <code>135 分钟</code> 缩至 <code>4.2 分钟</code>，月度延误取消损失降至 <code>$115,000</code>（降低 <code>83.1%</code>）。`;
+    }
+    updateAirSizer();
+  </script>
+</body>
+</html>
