@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_rag_vector_search_azure_milvus_qdrant_opensearch_pgvector_selection",
+  "round": 468,
+  "title": "Enterprise RAG Vector Database & Hybrid Search Selection: pgvectorscale vs. Azure AI Search / OpenSearch vs. Milvus / Qdrant",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "enterprise_corpus_chunks_millions": 80,
+    "embedding_dimension": 1536,
+    "sustained_hybrid_search_qps": 1200,
+    "active_rbac_security_groups": 4500
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Unindexed / Naive Post-Filtered Vector DB (HNSW Top-K Then RBAC Filter)",
+      "architecture": "Running standard HNSW vector search first (Top-50) and applying enterprise RBAC/tenant security filters in application code afterward",
+      "filtered_rbac_recall_at_10_pct": 38.5,
+      "hybrid_Search_p99_latency_ms": 185.0,
+      "exact_part_number_and_acronym_hit_pct": 44.0,
+      "ram_and_compute_overprovisioning_waste_pct": 54.0,
+      "monthly_search_cluster_and_ops_tco_usd": 68000
+    },
+    {
+      "tier": "Tier 2: Existing Relational DB Vector Extension (`PostgreSQL pgvector / pgvectorscale DiskANN`)",
+      "architecture": "Storing vectors + relational metadata + transactional ACLs in existing PostgreSQL with StreamingDiskANN and BM25 (`pg_search`)",
+      "filtered_rbac_recall_at_10_pct": 91.5,
+      "hybrid_Search_p99_latency_ms": 42.0,
+      "exact_part_number_and_acronym_hit_pct": 88.5,
+      "ram_and_compute_overprovisioning_waste_pct": 12.0,
+      "monthly_search_cluster_and_ops_tco_usd": 14000
+    },
+    {
+      "tier": "Tier 3: Turnkey Cloud Enterprise Search PaaS (`Azure AI Search / AWS OpenSearch Serverless`)",
+      "architecture": "Fully managed cloud hybrid search (BM25 + Vector + RRF + L2 Semantic Ranker) with native Entra ID / IAM document-level security trimming",
+      "filtered_rbac_recall_at_10_pct": 96.8,
+      "hybrid_Search_p99_latency_ms": 28.0,
+      "exact_part_number_and_acronym_hit_pct": 97.4,
+      "ram_and_compute_overprovisioning_waste_pct": 8.0,
+      "monthly_search_cluster_and_ops_tco_usd": 31000
+    },
+    {
+      "tier": "Tier 4: Dedicated Cloud-Native Vector Engine (`Milvus / Zilliz` or `Qdrant` Tiered RAM+NVMe + Pre-Filter Bitmap)",
+      "architecture": "Purpose-built distributed vector engine with Roaring-Bitmap filtered HNSW/DiskANN traversal, sparse-dense hybrid RRF, partition keys, and NVMe/S3 tiering",
+      "filtered_rbac_recall_at_10_pct": 98.4,
+      "hybrid_Search_p99_latency_ms": 16.5,
+      "exact_part_number_and_acronym_hit_pct": 97.8,
+      "ram_and_compute_overprovisioning_waste_pct": 3.5,
+      "monthly_search_cluster_and_ops_tco_usd": 22000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "VDB1",
+      "scenario": "The 'Zero-Result Post-Filtering' Trap Under Selective Enterprise RBAC (`1%` Accessible Documents)",
+      "question": "A user with access to only 1% of a 50M-chunk SharePoint corpus searches for 'Q4 M&A target valuation'",
+      "model_answer": "Execute single-stage pre-filtered graph traversal (Roaring Bitmap ACL bitmask evaluated during HNSW/DiskANN hop expansion or Partition-Key isolation) -> returns 10 valid authorized chunks (98.4% Recall@10)",
+      "tier1_3_failure": "Tier 1 fetches Global Top-50 vectors first and filters by ACL afterward -> all 50 hits belong to unauthorized departments, returning 0 results (38.5% recall)!",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "VDB2",
+      "scenario": "Scale Inflection Point: `<10M` Chunks Departmental App vs. `200M+` Chunks Multi-Tenant Platform",
+      "question": "Architect must select a vector store for (A) a 4M-chunk internal CRM assistant already using PostgreSQL, and (B) a 250M-chunk global multi-tenant knowledge platform",
+      "model_answer": "Choose Tier 2 (`PostgreSQL + pgvectorscale DiskANN`) for Scenario A to avoid standing up a second database ($14K/mo, ACID joins); choose Tier 3 (`Azure AI Search`) or Tier 4 (`Milvus/Qdrant` with NVMe DiskANN tiering) for Scenario B ($22K–$31K/mo)",
+      "tier1_3_failure": "Deploying a 12-node distributed Milvus cluster for a 2M-chunk app wastes $40K/yr in ops; conversely, forcing 250M 1536-d vectors into unsharded Postgres RAM HNSW triggers vacuum stalls.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "VDB3",
+      "scenario": "Exact SKU / Error-Code / Clause Lookup (`ERR-4092-BX` or `ISO-27001 A.8.2`) Where Dense Vectors Fail",
+      "question": "Engineer queries 'Fix for error code ERR-4092-BX on firmware v4.12'",
+      "model_answer": "Run parallel Dense Vector + Sparse BM25/SPLADE retrieval fused via Reciprocal Rank Fusion (RRF, k=60) + Cross-Encoder Semantic Reranker (97.4%–97.8% exact-match hit rate)",
+      "tier1_3_failure": "Dense-only vector search dilutes exact alphanumeric codes into generic 'firmware error' neighbors, missing the exact bulletin (44.0% hit rate).",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "VDB4",
+      "scenario": "Preventing 100% RAM HNSW Explosion on 100M+ Vectors via Binary/Scalar Quantization & NVMe DiskANN",
+      "question": "Host 100M 1536-dimensional float32 vectors without paying $54,000/month for 1.2 TB of pure cloud DRAM",
+      "model_answer": "Enable Scalar Quantization (`SQ8`) / Binary Quantization (`BQ` with 4x oversampling rescore) or NVMe `DiskANN` in Qdrant / Milvus / Azure AI Search -> cuts RAM footprint by 75%–92% while preserving >98% recall",
+      "tier1_3_failure": "Tier 1 stores uncompressed FP32 HNSW graphs entirely in memory, wasting 54.0% of cluster budget on oversized RAM instances.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "High-Cardinality Multi-Tenant Isolation (25,000 Enterprise Customer Tenants in One Index)",
+      "original": "16.5 ms P99 Latency | 98.4% Filtered Recall",
+      "perturbed": "18.0 ms P99 Latency | 98.2% Filtered Recall (Tenant Partition-Key Sub-Indexing Avoids 25,000 Separate Collections)",
+      "change_pts": "+1.5 ms Latency | -0.2 pts Recall"
+    },
+    {
+      "check": "High-Frequency Document Permission Revocation (ACL Group Membership Change)",
+      "original": "0.0% Unauthorized Document Leak",
+      "perturbed": "0.0% Leak (Security-Group OID Filter Evaluated at Query Time Without Re-Embedding Chunks)",
+      "change_pts": "0.0 pts (Invariant)"
+    }
+  ],
+  "key_findings": [
+    "For `<10M` vectors where the enterprise already runs PostgreSQL, Tier 2 (`PostgreSQL + pgvectorscale DiskANN + pg_search BM25`) delivers 91.5% filtered recall at the lowest total TCO ($14K/mo) with zero new infrastructure silos.",
+    "For `10M–100M` enterprise knowledge bases requiring turnkey Microsoft 365 / Entra ID security trimming, hybrid BM25+vector RRF, and L2 semantic reranking with zero K8s ops, Tier 3 (`Azure AI Search / Managed OpenSearch`) achieves 96.8% recall and 97.4% exact-SKU accuracy.",
+    "For `100M–1B+` high-QPS multi-tenant platforms, Tier 4 (`Milvus / Zilliz` or `Qdrant` with Roaring-Bitmap pre-filtered HNSW, partition keys, and NVMe/SQ8 quantization) delivers 98.4% filtered recall at 16.5 ms P99 latency while cutting RAM TCO by 67.6% vs. unquantized clusters."
+  ]
+}
