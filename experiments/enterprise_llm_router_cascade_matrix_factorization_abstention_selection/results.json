@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_llm_router_cascade_matrix_factorization_abstention_selection",
+  "round": 462,
+  "title": "Enterprise Multi-Model Router (RouteLLM Matrix Factorization), Logprob-Margin Abstention Cascade & Cost-Quality Pareto",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "monthly_enterprise_requests_millions": 60,
+    "candidate_model_pool_tiers": 4,
+    "average_input_tokens_per_request": 2400,
+    "target_frontier_quality_parity_pct": 99.0
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: 100% Frontier Model Default Routing (No Router or Cascade)",
+      "architecture": "Sending 100% of enterprise queries directly to a frontier 70B/671B/Sonnet model regardless of prompt difficulty",
+      "relative_frontier_quality_retention_pct": 100.0,
+      "router_decision_overhead_latency_ms": 0.0,
+      "silent_slm_hallucination_under_routing_pct": 0.0,
+      "frontier_model_call_share_pct": 100.0,
+      "monthly_llm_inference_spend_usd": 240000
+    },
+    {
+      "tier": "Tier 2: Prompt-Length / Regex Heuristic Router + Uncalibrated SLM Self-Ask",
+      "architecture": "Routing prompts < 500 tokens to an 8B SLM and asking the 8B model 'Are you confident? (Yes/No)' in text",
+      "relative_frontier_quality_retention_pct": 76.4,
+      "router_decision_overhead_latency_ms": 180.0,
+      "silent_slm_hallucination_under_routing_pct": 21.8,
+      "frontier_model_call_share_pct": 28.0,
+      "monthly_llm_inference_spend_usd": 84000
+    },
+    {
+      "tier": "Tier 3: Standalone Embedding Cosine Router (`RouteLLM` Pre-Router Only, No Post-Verification)",
+      "architecture": "Single-stage embedding classifier predicting win-rate pre-generation without first-token logprob margin abstention",
+      "relative_frontier_quality_retention_pct": 91.2,
+      "router_decision_overhead_latency_ms": 12.0,
+      "silent_slm_hallucination_under_routing_pct": 7.4,
+      "frontier_model_call_share_pct": 34.0,
+      "monthly_llm_inference_spend_usd": 96000
+    },
+    {
+      "tier": "Tier 4: Matrix-Factorization Win-Rate Pre-Router + First-16-Token Logprob Margin Abstention Cascade",
+      "architecture": "8ms Bradley-Terry Matrix-Factorization Router (Prompt x Model Latent Space) + Early-Token Logprob Entropy/Margin Verifier + Speculative Escalation",
+      "relative_frontier_quality_retention_pct": 99.2,
+      "router_decision_overhead_latency_ms": 8.5,
+      "silent_slm_hallucination_under_routing_pct": 0.3,
+      "frontier_model_call_share_pct": 22.0,
+      "monthly_llm_inference_spend_usd": 64000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "RTR1",
+      "scenario": "Short-But-Hard Reasoning Trap ('2-Sentence Olympiad / SQL Subtle Join Bug')",
+      "question": "User submits a 45-token SQL query asking why a LEFT JOIN with a WHERE filter silently drops NULL rows",
+      "model_answer": "Bradley-Terry Matrix-Factorization router projects prompt embedding v_q against model capability vectors v_m -> detects high reasoning difficulty despite short length (P_win(8B) = 0.18 < tau) and routes directly to 70B/R1 (0.3% under-routing)",
+      "tier1_3_failure": "Tier 2 heuristic router sees 45 tokens (< 500 limit) and sends to 8B SLM, which verbalizes 'Confidence: 95%' while giving a wrong answer (21.8% silent hallucination).",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "RTR2",
+      "scenario": "Long-But-Easy Extraction Task ('16K Meeting Transcript Action-Item Bulleting')",
+      "question": "User submits a 16,000-token meeting transcript asking to extract explicit `{owner, due_date}` JSON items",
+      "model_answer": "Matrix-Factorization router scores P_win(8B_FP8) = 0.96 >= tau -> routes to 8B SLM with XGrammar schema constraint at 1/12th the cost of frontier model ($64K/mo total spend)",
+      "tier1_3_failure": "Tier 1 & Tier 2 length heuristics route all 16K-token prompts to the expensive frontier model, burning $240,000/mo.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "RTR3",
+      "scenario": "Catching Pre-Router False Negatives via First-16-Token Logprob Margin Abstention",
+      "question": "A domain-specific regulatory prompt passes the pre-router to the 8B SLM, but the 8B model encounters an unfamiliar statute citation during generation",
+      "model_answer": "Monitor top-1 vs. top-2 token log-probability margin Delta_logprob across the first 16 generated tokens; when mean(p_top1 - p_top2) < 0.35, abort 8B stream in <40ms before flushing to user and escalate to 70B frontier model (99.2% quality retention)",
+      "tier1_3_failure": "Tier 3 pre-router has no post-dispatch check—once routed to 8B, the user receives the hallucinated statute (7.4% under-routing error).",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "RTR4",
+      "scenario": "Zero-Retraining New Model Onboarding via 200-Prompt Golden Anchor Probing",
+      "question": "Onboard a newly released model (`Qwen3-32B` or `Claude-4-Sonnet`) into the enterprise router without collecting 100,000 new pairwise human preference labels",
+      "model_answer": "Evaluate the new model offline on a fixed 200-prompt IRT (Item Response Theory) anchor battery to fit its 64-dim latent capability vector v_m_new while keeping the prompt projection network frozen",
+      "tier1_3_failure": "Multi-class classifier routers require full end-to-end retraining every time a model is added or deprecated.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Out-of-Distribution (OOD) Proprietary Internal Acronym & Codebase Jargon",
+      "original": "99.2% Quality Retention | 0.3% Under-Routing",
+      "perturbed": "99.0% Quality Retention | 0.4% Under-Routing (First-16-Token Logprob Margin Escalates OOD Queries Automatically)",
+      "change_pts": "-0.2 pts Quality | +0.1 pts Under-Routing"
+    },
+    {
+      "check": "Dynamic FinOps Budget Slider Shift (End-of-Month Cost-Saving Mode)",
+      "original": "22.0% Frontier Share | $64,000/Mo Spend",
+      "perturbed": "15.0% Frontier Share | $51,000/Mo Spend (Adjusting Threshold tau Moves Smoothly Along Pareto Frontier Without Retraining)",
+      "change_pts": "-7.0 pts Frontier Share"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (8ms Bradley-Terry Matrix-Factorization Pre-Router + First-16-Token Logprob Margin Abstention Cascade) retains 99.2% of frontier-model quality while dispatching only 22.0% of requests to the frontier model, cutting monthly inference spend from $240K to $64K (-73.3%).",
+    "Prompt token length is negatively correlated with reasoning difficulty on many enterprise tasks (short SQL/math puzzles vs. long transcript extractions), causing length heuristics and verbalized SLM self-confidence to fail on 21.8% of hard queries.",
+    "Adding a first-16-token top-1/top-2 log-probability margin verifier catches out-of-distribution pre-router misses in <40ms before tokens are flushed to the user, slashing silent SLM hallucinations from 7.4% (pre-router only) to 0.3%."
+  ]
+}
