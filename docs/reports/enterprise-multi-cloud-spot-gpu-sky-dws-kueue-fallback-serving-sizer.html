@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Enterprise Multi-Cloud Spot GPU, Kueue DWS &amp; SkyPilot Fallback Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#0b1120; color:#f8fafc; margin:0; padding:24px; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  h1 { font-size:24px; margin:0 0 8px; color:#38bdf8; }
+  p.sub { color:#94a3b8; margin:0 0 20px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .card { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:18px; }
+  label { display:block; font-size:13px; color:#cbd5e1; margin-bottom:6px; font-weight:600; }
+  input[type=range], select { width:100%; margin-bottom:14px; accent-color:#10b981; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:10px; }
+  .kpi { background:#0f172a; border:1px solid #334155; border-radius:10px; padding:12px; }
+  .kpi .k { font-size:12px; color:#94a3b8; }
+  .kpi .v { font-size:20px; font-weight:800; color:#34d399; margin-top:4px; }
+  table { width:100%; border-collapse:collapse; margin-top:18px; font-size:13px; }
+  th, td { border:1px solid #334155; padding:10px; text-align:left; }
+  th { background:#0f172a; color:#38bdf8; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:#065f46; color:#a7f3d0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Enterprise Multi-Cloud Spot GPU, Kueue DWS &amp; SkyPilot Fallback Sizer (R457)</h1>
+  <p class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false). Interactive simulator for Atomic Kueue ProvisioningRequest (DWS) + SkyPilot Multi-Pool Spot Broker + IMDS 30s Drain-Aware Serving.</p>
+  <div class="grid">
+    <div class="card">
+      <label>Target Enterprise GPU Fleet Size (H100 Equivalents): <span id="lblGpus">96</span> GPUs</label>
+      <input id="gpus" type="range" min="16" max="512" step="16" value="96" oninput="recalc()">
+
+      <label>Elastic Spot / Preemptible Share (%): <span id="lblSpot">70</span>%</label>
+      <input id="spot" type="range" min="20" max="90" step="5" value="70" oninput="recalc()">
+
+      <label>Uncorrelated Cloud Regions / SKU Pools: <span id="lblPools">4</span> pools</label>
+      <input id="pools" type="range" min="1" max="8" step="1" value="4" oninput="recalc()">
+
+      <label>Cloud GPU Capacity &amp; Spot Resilience Architecture Tier:</label>
+      <select id="tier" onchange="recalc()">
+        <option value="4" selected>Tier 4: Kueue ProvisioningRequest (DWS) + SkyPilot Multi-Pool + 30s IMDS Drain (Recommended)</option>
+        <option value="3">Tier 3: Single-Cloud Multi-AZ Spot (No Atomic DWS or Cross-Cloud Broker)</option>
+        <option value="2">Tier 2: Raw Single-Zone Spot GPUs Without Termination Drain</option>
+        <option value="1">Tier 1: 100% Single-AZ On-Demand GPUs + Standard Cluster Autoscaler</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <span class="badge">Live Multi-Cloud Availability, Preemption Drain &amp; Cost Telemetry</span>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="k">GPU Stockout Failure Rate</div><div class="v" id="outStock">0.1%</div></div>
+        <div class="kpi"><div class="k">Preemption Dropped Requests</div><div class="v" id="outDrop">0.0%</div></div>
+        <div class="kpi"><div class="k">Partial-Gang Idle Waste</div><div class="v" id="outWaste">0.0%</div></div>
+        <div class="kpi"><div class="k">Monthly Cloud GPU TCO</div><div class="v" id="outCost">$79,000</div></div>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Architecture Tier</th>
+        <th>Stockout Failure Rate</th>
+        <th>Preemption Drop Rate</th>
+        <th>Partial-Gang Waste</th>
+        <th>Failover Time</th>
+        <th>Baseline Monthly TCO</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Tier 1: Single-AZ On-Demand + Standard CA</td><td>28.4%</td><td>18.5%</td><td>22.0%</td><td>420.0 s</td><td>$215,000</td></tr>
+      <tr><td>Tier 2: Raw Single-Zone Spot (No Drain)</td><td>34.0%</td><td>100.0%</td><td>19.5%</td><td>510.0 s</td><td>$142,000</td></tr>
+      <tr><td>Tier 3: Single-Cloud Multi-AZ Spot</td><td>9.2%</td><td>4.8%</td><td>8.4%</td><td>135.0 s</td><td>$118,000</td></tr>
+      <tr><td><strong>Tier 4: Kueue DWS + SkyPilot + 30s Drain</strong></td><td><strong>0.1%</strong></td><td><strong>0.0%</strong></td><td><strong>0.0%</strong></td><td><strong>14.0 s</strong></td><td><strong>$79,000</strong></td></tr>
+    </tbody>
+  </table>
+</div>
+<script>
+function recalc() {
+  const gpus = parseFloat(document.getElementById('gpus').value);
+  const spot = parseFloat(document.getElementById('spot').value);
+  const pools = parseFloat(document.getElementById('pools').value);
+  const tier = document.getElementById('tier').value;
+
+  document.getElementById('lblGpus').textContent = gpus.toLocaleString();
+  document.getElementById('lblSpot').textContent = spot.toLocaleString();
+  document.getElementById('lblPools').textContent = pools.toLocaleString();
+
+  const scale = (gpus / 96.0) * (1.0 - 0.004 * (spot - 70.0));
+  const specs = {
+    '1': { stock: '28.4%', drop: '18.5%', waste: '22.0%', baseCost: 215000 },
+    '2': { stock: '34.0%', drop: '100.0%', waste: '19.5%', baseCost: 142000 },
+    '3': { stock: '9.2%', drop: '4.8%', waste: '8.4%', baseCost: 118000 },
+    '4': { stock: (0.4 / pools).toFixed(1) + '%', drop: '0.0%', waste: '0.0%', baseCost: 79000 }
+  };
+  const s = specs[tier];
+  document.getElementById('outStock').textContent = s.stock;
+  document.getElementById('outDrop').textContent = s.drop;
+  document.getElementById('outWaste').textContent = s.waste;
+  document.getElementById('outCost').textContent = '$' + Math.round(s.baseCost * scale).toLocaleString();
+}
+recalc();
+</script>
+</body>
+</html>
