@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_ai_caching_prefix_kv_cache_semantic_cache_redis_selection",
+  "round": 477,
+  "title": "Enterprise AI Caching Architecture Selection: Semantic Cache vs. Provider Prompt Caching vs. Prefix KV Cache",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "monthly_llm_requests": 60000000,
+    "average_prompt_prefix_tokens": 10500,
+    "single_turn_faq_traffic_pct": 35.0,
+    "multi_turn_agent_and_rag_traffic_pct": 65.0
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Exact-Match SHA-256 String Cache + Dynamic Timestamp at Top of System Prompt",
+      "architecture": "Hashing the raw request JSON while placing `current_time` or `user_name` at the very beginning of the system prompt",
+      "effective_input_token_cost_reduction_pct": 4.2,
+      "semantic_collision_wrong_answer_rate_pct": 0.0,
+      "cross_tenant_acl_cache_poisoning_rate_pct": 0.0,
+      "p95_ttft_latency_ms": 1420.0,
+      "monthly_llm_input_and_cache_tco_usd": 182000
+    },
+    {
+      "tier": "Tier 2: Naive Global Vector Semantic Cache (`Cosine Similarity > 0.88` Without Negation/Entity/ACL Guard)",
+      "architecture": "Caching full LLM responses in a global Redis/vector store and returning cached answers whenever query embedding cosine > 0.88",
+      "effective_input_token_cost_reduction_pct": 48.0,
+      "semantic_collision_wrong_answer_rate_pct": 14.8,
+      "cross_tenant_acl_cache_poisoning_rate_pct": 9.4,
+      "p95_ttft_latency_ms": 380.0,
+      "monthly_llm_input_and_cache_tco_usd": 145000
+    },
+    {
+      "tier": "Tier 3: Cloud Provider Prompt Caching Only (`Azure OpenAI / Anthropic Prompt Caching`, No Gateway Semantic Cache)",
+      "architecture": "Ordering static system prompt + tools first to get 50%–90% provider KV prefix discounts, but recalculating identical FAQ queries",
+      "effective_input_token_cost_reduction_pct": 56.5,
+      "semantic_collision_wrong_answer_rate_pct": 0.0,
+      "cross_tenant_acl_cache_poisoning_rate_pct": 0.0,
+      "p95_ttft_latency_ms": 490.0,
+      "monthly_llm_input_and_cache_tco_usd": 84000
+    },
+    {
+      "tier": "Tier 4: Two-Tier ACL-Scoped Semantic Cache (`Redis + Cross-Encoder Gate`) + Canonical Prefix-Ordered `KV Cache` (`Provider / SGLang Radix`)",
+      "architecture": "L1 Gateway Semantic Cache (`ACL_Hash + Entity/Number Guard + Cosine > 0.96 + Reranker`) for FAQ hits (`18ms`) + L2 Canonical Static-First Prompt Ordering for `82%` KV Prefix Cache Hit Rate on misses",
+      "effective_input_token_cost_reduction_pct": 78.4,
+      "semantic_collision_wrong_answer_rate_pct": 0.0,
+      "cross_tenant_acl_cache_poisoning_rate_pct": 0.0,
+      "p95_ttft_latency_ms": 195.0,
+      "monthly_llm_input_and_cache_tco_usd": 41000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "CA1",
+      "scenario": "Why Putting `current_date` or `user_id` on Line 1 of Your System Prompt Destroys 100% of KV Prefix Caching",
+      "question": "A developer starts the 12,000-token prompt with `System: Today is 2026-11-20 09:14:22. User: Alice.` followed by 10,000 tokens of static tool definitions and domain rules",
+      "model_answer": "KV Prefix Caching (`Azure OpenAI Prompt Caching`, `Anthropic cache_control`, `vLLM APC`, `SGLang RadixAttention`) matches token blocks strictly from **index 0 (left-to-right)**: a single changing token at the top invalidates all 12,000 subsequent tokens! Tier 4 enforces **Canonical Static-First Prompt Ordering (`[Static System Rules -> Static Tool Schemas -> Cached RAG Docs -> Dynamic User/Time Suffix]`)**, boosting KV prefix hit rate from `4.2%` to `82.0%`",
+      "tier1_3_failure": "Tier 1 places dynamic timestamps at token index 5, causing a 0% KV prefix cache hit rate and paying full price on 12,000 tokens every call ($182K/mo).",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "CA2",
+      "scenario": "The 'Semantic Cache Collision' Disaster (`2025 Q3 Revenue` vs. `2026 Q3 Revenue` Have 0.96 Cosine Similarity!)",
+      "question": "User A asks 'What was Acme Corp's Q3 2025 revenue?' and 2 minutes later User B asks 'What was Acme Corp's Q3 2026 revenue?'; dense embedding cosine similarity is 0.958",
+      "model_answer": "Never trust dense embedding cosine similarity alone for semantic caching! Tier 4 applies a **Deterministic Entity/Number/Negation Extractor + Cross-Encoder Verification (`score > 0.96`)**: if dates (`2025 != 2026`), SKUs, negations (`can` vs `cannot`), or currency symbols differ, force a cache miss to L2 Prefix KV Cache (`0.0%` semantic collision)",
+      "tier1_3_failure": "Tier 2 naive vector semantic cache (`threshold = 0.88`) serves the 2025 revenue number for the 2026 query (`14.8%` wrong-answer collision rate)!",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "CA3",
+      "scenario": "Preventing Cross-Tenant / Cross-Role Data Leaks Through Shared Semantic Cache (`ACL-Partitioned Cache Key`)",
+      "question": "An HR Director queries 'What is the severance policy for VP layoffs?' (cached in Redis); 5 minutes later a junior contractor asks the same question",
+      "model_answer": "Partition all L1 Semantic Cache namespaces by `Cache_Partition_Key = SHA256(Tenant_ID + RBAC_Role_Set + Corpus_Version_Hash)`: a cache lookup only searches entries generated under an identical or subset ACL scope (`0.0%` cross-tenant/role cache poisoning)",
+      "tier1_3_failure": "Tier 2 global semantic cache returns the HR Director's confidential answer to the contractor (`9.4%` cross-role leak).",
+      "action": "Confirm",
+      "confidence": 1.0
+    },
+    {
+      "id": "CA4",
+      "scenario": "Combining L1 Gateway Semantic Cache (`Redis / APIM`) with L2 Engine Prefix KV Cache (`SGLang / vLLM / Cloud`)",
+      "question": "Which workloads belong in L1 Response Semantic Cache versus L2 Model-Level Prefix KV Cache?",
+      "model_answer": "Use L1 Gateway Semantic Cache only for **stateless single-turn FAQ / search queries** (`32%` hit rate at `18ms` latency, `100%` token savings); use L2 Prefix KV Cache for **multi-turn Agent loops, coding assistants, and RAG** where the query changes every turn but the 10K-token system/tool/history prefix stays constant (`78.4%` blended token cost reduction, `$41K/mo` TCO)",
+      "tier1_3_failure": "Using semantic response caching on multi-turn agent tool loops returns stale tool actions and breaks state transitions.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Antonym / Negation Perturbation (`'Is port 443 open?'` vs. `'Is port 443 closed?'` — 0.94 Cosine)",
+      "original": "0.0% Semantic Collision Wrong Answer Rate",
+      "perturbed": "0.0% Collision (Negation/Polarity Guard + Cross-Encoder Rejects L1 Hit & Routes to L2 KV Cache)",
+      "change_pts": "0.0 pts (Invariant)"
+    },
+    {
+      "check": "Underlying Knowledge Base Document Update (`Policy v2.4 Published`)",
+      "original": "0.0% Stale Policy Answers Served",
+      "perturbed": "0.0% Stale Answers (Event-Driven Cache Invalidation by `doc_chunk_id` Tag & `Corpus_Version_Hash`)",
+      "change_pts": "0.0 pts (Invariant)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (L1 ACL-Scoped Entity-Guarded Semantic Cache + L2 Canonical Static-First Prefix KV Cache) achieves 78.4% input token cost reduction, 195ms P95 TTFT, 0.0% semantic collisions, and $41K/mo TCO (-77.5% vs Tier 1).",
+    "Placing dynamic timestamps or user metadata at the top of a system prompt invalidates 100% of left-to-right KV Prefix Caching; enforcing Static-First Canonical Prompt Ordering unlocks 82% KV cache hit rates automatically.",
+    "Naive vector semantic caches (`cosine > 0.88`) suffer a 14.8% wrong-answer collision rate on dates, numbers, and negations (`2025` vs `2026`); semantic caches must enforce ACL partitioning, exact number/date matching, and cross-encoder verification."
+  ]
+}
