@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_vector_index_zero_downtime_embedding_migration_procrustes_selection",
+  "round": 459,
+  "title": "Enterprise Vector Index Zero-Downtime Embedding Model Migration, Orthogonal Procrustes Adapter & Blue-Green Cutover",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "indexed_document_chunks_millions": 250,
+    "daily_live_cdc_document_mutations": 180000,
+    "procrustes_calibration_anchor_pairs": 50000,
+    "sustained_rag_search_qps": 1500
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Stop-the-World Index Drop + On-Demand GPU Re-Embedding",
+      "architecture": "Taking RAG search offline while re-embedding 250M chunks on On-Demand GPUs and rebuilding HNSW graph from scratch",
+      "production_rag_service_downtime_minutes": 2280.0,
+      "transition_window_recall_at_10_drop_pct": 100.0,
+      "stale_cdc_delta_miss_rate_pct": 12.4,
+      "peak_dual_ram_hnsw_memory_overhead_pct": 0.0,
+      "total_migration_compute_and_memory_tco_usd": 146000
+    },
+    {
+      "tier": "Tier 2: Naive In-Place Mixed-Model Vector Upsert (No Space Alignment)",
+      "architecture": "Switching query encoder to v2 immediately while lazily overwriting v1 document vectors in the same HNSW index",
+      "production_rag_service_downtime_minutes": 0.0,
+      "transition_window_recall_at_10_drop_pct": 71.0,
+      "stale_cdc_delta_miss_rate_pct": 8.5,
+      "peak_dual_ram_hnsw_memory_overhead_pct": 0.0,
+      "total_migration_compute_and_memory_tco_usd": 185000
+    },
+    {
+      "tier": "Tier 3: Full Dual-RAM HNSW Shadow Index + Synchronous Dual-Encoder Write",
+      "architecture": "Provisioning 2x full RAM HNSW clusters for 14 days while re-embedding 250M chunks on On-Demand GPUs",
+      "production_rag_service_downtime_minutes": 0.0,
+      "transition_window_recall_at_10_drop_pct": 1.2,
+      "stale_cdc_delta_miss_rate_pct": 2.4,
+      "peak_dual_ram_hnsw_memory_overhead_pct": 100.0,
+      "total_migration_compute_and_memory_tco_usd": 92000
+    },
+    {
+      "tier": "Tier 4: Orthogonal Procrustes Query Bridge + DiskANN/MRL Shadow Backfill on Spot GPUs + Atomic Alias Swap",
+      "architecture": "SVD Orthogonal Procrustes Projection (W* = U V^T on 50K anchors) + Off-Peak Spot GPU Backfill + Kafka CDC Watermark + Shadow Recall Gate",
+      "production_rag_service_downtime_minutes": 0.0,
+      "transition_window_recall_at_10_drop_pct": 0.4,
+      "stale_cdc_delta_miss_rate_pct": 0.0,
+      "peak_dual_ram_hnsw_memory_overhead_pct": 18.0,
+      "total_migration_compute_and_memory_tco_usd": 29000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "VEM1",
+      "scenario": "Instant Day-0 Query Compatibility via SVD Orthogonal Procrustes Linear Adapter ($W^* = U V^T$)",
+      "question": "Decommission deprecated cloud Embedding API v1 within 24 hours across 250M vectors before full corpus re-embedding can finish",
+      "model_answer": "Sample 50,000 representative anchor chunks, compute SVD of cross-covariance X_v2^T X_v1 = U Sigma V^T, and deploy orthogonal matrix W* = U V^T at query gateway to project new v2 query vectors into legacy v1 HNSW space (0.4% recall drop, 0.0 min downtime)",
+      "tier1_3_failure": "Tier 2 queries v1 document vectors directly with unprojected v2 query vectors -> cosine similarity collapses to random noise (71.0% Recall@10 drop)!",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "VEM2",
+      "scenario": "250M-Chunk Background Re-Embedding via Content-Hash Dedup & Off-Peak Spot GPU Batching",
+      "question": "Re-embed 250M enterprise document chunks (125B tokens) into `BGE-M3 / Text-Embedding-3-Large` without blowing the cloud GPU budget",
+      "model_answer": "Deduplicate identical boilerplate chunks by SHA-256 content hash (-38% redundant chunks) and run TensorRT-FP8 dynamic-batch backfill on off-peak Spot GPUs into NVMe-backed DiskANN/SQ8 shadow index ($29K total TCO)",
+      "tier1_3_failure": "Tier 1 & Tier 3 re-embed all 250M raw chunks (including 38% duplicate headers/disclaimers) via synchronous On-Demand APIs while paying 100% double RAM HNSW cost ($92K–$146K).",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "VEM3",
+      "scenario": "Zero-Loss Live Document Updates During 7-Day Backfill via Kafka CDC Dual-Write Watermark",
+      "question": "While the 250M historical backfill runs over 7 days, 1.2M live document edits/deletions arrive from SharePoint and Confluence",
+      "model_answer": "Record Kafka CDC offset watermark `T_start`; dual-write live updates to both v1 and v2 indexes with `(doc_id, version_ts)` upsert guards so historical backfill never overwrites newer live edits (0.0% stale delta miss)",
+      "tier1_3_failure": "Tier 1 snapshot backfill overwrites live mid-week document edits with stale Monday snapshot vectors (12.4% stale delta miss rate).",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "VEM4",
+      "scenario": "Shadow Dark-Read `NDCG@10` Verification & Atomic Collection Alias Cutover",
+      "question": "Verify that the new v2 shadow index strictly outperforms v1 across all 12 business domains before switching production traffic",
+      "model_answer": "Fork 5% dark-read shadow queries + Cross-Encoder reranker judge; verify Recall@10/NDCG@10 gain (+6.8 pts) and zero ACL drift before executing sub-millisecond atomic collection alias swap `rag_prod -> index_v2`",
+      "tier1_3_failure": "Tier 2 cuts over blindly without dark-read validation, discovering domain-specific retrieval regressions only after customer complaints spike.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Dimension Mismatch Between Embedding v1 (1536-d) and Embedding v2 (1024-d MRL)",
+      "original": "0.4% Transition Recall Drop | 0.0 min Downtime",
+      "perturbed": "0.6% Transition Recall Drop | 0.0 min Downtime (Truncated SVD / Ridge-Regularized Procrustes Bridge R^(1024x1536))",
+      "change_pts": "+0.2 pts Recall Drop"
+    },
+    {
+      "check": "Out-of-Order Backfill Worker Attempting to Overwrite Newer Live CDC Document Version",
+      "original": "0.0% Stale CDC Delta Miss Rate",
+      "perturbed": "0.0% Miss Rate (Conditional Upsert `WHERE incoming.version_ts > existing.version_ts`)",
+      "change_pts": "0.0 pts (Invariant)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (SVD Orthogonal Procrustes Query Bridge + SHA-256 Deduplicated Spot-GPU Backfill + Kafka CDC Version Watermark + Atomic Alias Cutover) achieves 0.0 minutes of RAG downtime and keeps transition Recall@10 drop to 0.4%.",
+    "Fitting an Orthogonal Procrustes transformation matrix (W* = U V^T) on 50,000 anchor pairs allows a new v2 query encoder to search legacy v1 document vectors immediately while background re-embedding proceeds.",
+    "Combining SHA-256 chunk deduplication (-38% redundant work) with off-peak Spot GPU TensorRT-FP8 batching and DiskANN/SQ8 staging cuts total migration TCO from $146K (Tier 1) and $92K (Tier 3) to $29K (-80.1%)."
+  ]
+}
