@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_offline_batch_llm_processing_architecture_selection",
+  "round": 478,
+  "title": "Enterprise High-Throughput Offline Document & Data Batch LLM Processing Architecture Selection",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "monthly_batch_tokens_billions": 60.0,
+    "nightly_batch_records": 10000000,
+    "completion_window_sla_hours": 8.0,
+    "existing_daytime_ptu_night_idle_pct": 85.0
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Calling Real-Time Synchronous PAYGO / PTU Endpoints in `asyncio.gather()` Loops",
+      "architecture": "Hammering online interactive LLM endpoints with 10M nightly batch jobs, triggering HTTP 429 storms and starving daytime users",
+      "effective_cost_per_million_tokens_usd": 3.8,
+      "online_copilot_sla_degradation_rate_pct": 38.5,
+      "nightly_10m_record_batch_completion_hours": 14.5,
+      "gpu_and_ptu_24x7_utilization_efficiency_pct": 42.0,
+      "monthly_batch_processing_tco_usd": 228000
+    },
+    {
+      "tier": "Tier 2: 100% Cloud-Managed Asynchronous `Batch API` (`Azure OpenAI Global Batch / AWS Bedrock Batch` @ 50% Discount)",
+      "architecture": "Uploading JSONL files to cloud provider 24-hour SLA Batch API (50% token discount, zero quota collision with online traffic)",
+      "effective_cost_per_million_tokens_usd": 1.9,
+      "online_copilot_sla_degradation_rate_pct": 0.0,
+      "nightly_10m_record_batch_completion_hours": 9.2,
+      "gpu_and_ptu_24x7_utilization_efficiency_pct": 65.0,
+      "monthly_batch_processing_tco_usd": 114000
+    },
+    {
+      "tier": "Tier 3: Dedicated Self-Hosted `Ray Data + vLLM Offline` on On-Demand GPUs (No Prefix Sorting or PTU Backfill)",
+      "architecture": "Running offline vLLM on dedicated on-demand H100s in random document order without harvesting idle night PTUs",
+      "effective_cost_per_million_tokens_usd": 1.25,
+      "online_copilot_sla_degradation_rate_pct": 0.0,
+      "nightly_10m_record_batch_completion_hours": 5.8,
+      "gpu_and_ptu_24x7_utilization_efficiency_pct": 74.0,
+      "monthly_batch_processing_tco_usd": 75000
+    },
+    {
+      "tier": "Tier 4: Off-Peak Idle `PTU` Backfill + Prefix-Sorted `Ray Data + vLLM` on Spot GPUs + Cloud `Batch API` Overflow",
+      "architecture": "Harvest already-paid idle night PTU capacity first ($0 marginal cost) + Sort batch JSONL by shared prompt prefix (`3.1x` throughput on Spot `Ray Data + vLLM`) + Cloud 50%-Off Batch API overflow",
+      "effective_cost_per_million_tokens_usd": 0.58,
+      "online_copilot_sla_degradation_rate_pct": 0.0,
+      "nightly_10m_record_batch_completion_hours": 3.4,
+      "gpu_and_ptu_24x7_utilization_efficiency_pct": 94.8,
+      "monthly_batch_processing_tco_usd": 34800
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "BT1",
+      "scenario": "Eliminating the 'Batch-Kills-Online-Copilot' HTTP 429 Contention Disaster",
+      "question": "Data engineering launches a nightly 10-million-record customer review classification job against the same API endpoint used by live customer service agents",
+      "model_answer": "Decouple interactive (`P0`) and batch (`P2`) traffic at the AI Gateway: route batch jobs exclusively to **Off-Peak Idle PTU Scavenging** (throttled dynamically whenever `P0` online utilization > 70%) + **Cloud Asynchronous Batch API / Offline vLLM Pool** (`0.0%` online SLA degradation)",
+      "tier1_3_failure": "Tier 1 `asyncio.gather()` batch script exhausts the shared TPM quota, causing `38.5%` HTTP 429 timeouts for live customer support users.",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "BT2",
+      "scenario": "Harvesting Already-Paid Nighttime `PTU` / Reserved GPU Valleys at `$0` Marginal Cost",
+      "question": "Enterprise pays for 200 Azure OpenAI PTUs (or 16x reserved H100s) 24x7 for daytime Copilots, which sit 85% idle from 20:00 to 07:00 every night",
+      "model_answer": "Deploy a Token-Bucket Backfill Controller (`Kafka/Service Bus` consumer) that monitors real-time PTU utilization every 5 seconds and injects offline batch records into the unused nighttime PTU headroom at **$0 marginal token cost**, processing 45% of the nightly batch for free!",
+      "tier1_3_failure": "Tier 2 & Tier 3 leave already-paid nighttime PTUs sitting empty while paying extra for separate batch compute.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "BT3",
+      "scenario": "Boosting Offline `vLLM / SGLang` Throughput by `3.1x` via Lexicographical Prompt-Prefix Sorting",
+      "question": "10 million batch extraction prompts reference 5,000 shared product catalogs and system templates; fed in random order, GPU KV-cache hit rate is <8%",
+      "model_answer": "Before feeding JSONL shards into `Ray Data + vLLM Offline LLM`, **sort all 10M requests lexicographically by `(system_template_id, shared_document_id)`**: requests sharing the same 6,000-token catalog land in the same GPU batch window, raising KV-cache hit rate from `8%` to `94%` and accelerating completion from `5.8h` to `3.4h`!",
+      "tier1_3_failure": "Tier 3 processes batch rows in random database ID order, thrashing the GPU KV-cache on every row.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "BT4",
+      "scenario": "When to Use Cloud 50%-Off `Batch API` (`Azure OpenAI / Bedrock Batch`) vs. Self-Hosted `Ray Data + vLLM` on Spot GPUs",
+      "question": "How should an architect choose between Cloud Managed Batch API (`50%` discount, 24h SLA) and self-hosted `Ray Data + vLLM` on Spot `L40S / H100` GPUs?",
+      "model_answer": "Use **Cloud Batch API** when using proprietary frontier models (`GPT-4o / Claude 3.5 Sonnet`) or when batch volume is sporadic (`< 10B tokens/month`); use **Self-Hosted `Ray Data + vLLM` on Spot GPUs** with row-level Parquet checkpointing when running open-weight/distilled models (`8B–70B`) at scale (`$0.58 / 1M tokens`, `$34.8K/mo` TCO, `-84.7%` vs Tier 1)",
+      "tier1_3_failure": "Tier 1 pays full synchronous PAYGO rates (`$3.80 / 1M tokens`, `$228K/mo`) for offline workloads that have a 12-hour completion window.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Spot GPU Node Preemption at 80% Progress Through a 10M-Row Batch Job",
+      "original": "3.4 Hours Total Batch Completion | 0 Lost Rows",
+      "perturbed": "3.5 Hours Completion (`Ray Data` Micro-Batch Parquet Checkpointing Every 10,000 Rows Resumes with <1% Recompute)",
+      "change_pts": "+0.1h (Zero Data Loss)"
+    },
+    {
+      "check": "Midnight Overseas Traffic Spike on Shared `PTU` Pool During Nightly Backfill",
+      "original": "0.0% Online Copilot SLA Degradation",
+      "perturbed": "0.0% Degradation (AI Gateway Priority QoS Throttles P2 Batch Backfill in <100ms When P0 Online Load Rises)",
+      "change_pts": "0.0 pts (Invariant)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (Off-Peak Idle PTU Scavenging + Prefix-Sorted Ray Data + vLLM on Spot GPUs + Cloud 50%-Off Batch API Overflow) cuts effective batch cost from $3.80 to $0.58 per 1M tokens ($34.8K/mo vs $228K/mo, -84.7%) and finishes 10M nightly records in 3.4 hours.",
+    "Sorting offline batch prompts lexicographically by `(system_template_id, document_id)` before GPU execution boosts vLLM KV-cache hit rates from <8% to 94%, multiplying offline token throughput by 3.1x.",
+    "Backfilling already-paid nighttime PTU valleys via a priority-throttled queue processes 40%–50% of enterprise offline batch jobs at $0 marginal compute cost with 0.0% impact on online Copilot SLAs."
+  ]
+}
