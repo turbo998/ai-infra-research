@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_saas_ai_tiered_rate_limiting_gcra_token_credit_burst_selection",
+  "round": 456,
+  "title": "Enterprise Multi-Tenant SaaS AI Tiered Rate-Limiting (GCRA), Asymmetric I/O Compute Credits & Work-Conserving Burst-Borrowing",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "active_b2b_saas_tenant_organizations": 5000,
+    "shared_gpu_cluster_h100_count": 64,
+    "api_gateway_replicas": 12,
+    "peak_aggregate_tokens_per_minute": 85000000
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: HTTP Request-Per-Minute (RPM) Fixed-Window Counter",
+      "architecture": "Fixed 60-second HTTP request counters per tenant (treats 100-token chat equal to 64K-prompt + 8K-reasoning loop; suffers :00 boundary stampedes)",
+      "noisy_neighbor_p99_ttft_latency_ms": 4120.0,
+      "false_429_throttle_on_cached_rag_pct": 24.5,
+      "shared_gpu_cluster_utilization_pct": 42.0,
+      "cross_gateway_quota_overrun_leakage_pct": 16.4,
+      "monthly_gpu_cluster_tco_usd": 165000
+    },
+    {
+      "tier": "Tier 2: Flat Unweighted Total-Token-Per-Minute (TPM) Hard Cap",
+      "architecture": "Counting 1 input token == 1 output token == 1 cached token with hard non-borrowing tenant ceilings",
+      "noisy_neighbor_p99_ttft_latency_ms": 2680.0,
+      "false_429_throttle_on_cached_rag_pct": 19.2,
+      "shared_gpu_cluster_utilization_pct": 51.0,
+      "cross_gateway_quota_overrun_leakage_pct": 9.8,
+      "monthly_gpu_cluster_tco_usd": 138000
+    },
+    {
+      "tier": "Tier 3: Local Gateway Token-Bucket Without Pre-Flight Reserve or Cached-Token Discount",
+      "architecture": "Per-gateway in-memory token bucket deducting tokens only post-completion (allows concurrent burst overruns before first stream finishes)",
+      "noisy_neighbor_p99_ttft_latency_ms": 1390.0,
+      "false_429_throttle_on_cached_rag_pct": 8.4,
+      "shared_gpu_cluster_utilization_pct": 63.0,
+      "cross_gateway_quota_overrun_leakage_pct": 6.2,
+      "monthly_gpu_cluster_tco_usd": 104000
+    },
+    {
+      "tier": "Tier 4: Distributed Redis-Cell GCRA + Asymmetric Weighted Compute-Credit (0.15x/1x/4x) + Work-Conserving Burst-Borrowing Queue",
+      "architecture": "Pre-Flight Escrow + Post-Stream Settlement GCRA + Asymmetric Credits (0.15x Cached / 1.0x Uncached In / 4.0x Decode Out) + Idle Cluster Burst-Borrowing",
+      "noisy_neighbor_p99_ttft_latency_ms": 310.0,
+      "false_429_throttle_on_cached_rag_pct": 0.2,
+      "shared_gpu_cluster_utilization_pct": 84.5,
+      "cross_gateway_quota_overrun_leakage_pct": 0.0,
+      "monthly_gpu_cluster_tco_usd": 62000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "RL1",
+      "scenario": "Asymmetric GPU Compute Weighting: 32K Prefix-Cached RAG vs. 8K Long-CoT Decode Loop",
+      "question": "Tenant A sends a 32K RAG query with 30K warm cached prefix tokens + 200 output tokens; Tenant B sends a 1K prompt that generates 8,000 reasoning decode tokens",
+      "model_answer": "Charge asymmetric GPU Compute Credits: C = 0.15 * T_cached + 1.0 * T_uncached_in + 4.0 * T_decode_out -> Tenant A pays 6,500 credits (0.2% false 429), while Tenant B's heavy HBM-bandwidth decode loop pays 33,000 credits",
+      "tier1_3_failure": "Tier 2 flat TPM charges Tenant A 32,200 tokens (falsely throttling cheap cached hits at 19.2%) while under-charging Tenant B's expensive 8K decode loop (9,000 tokens).",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "RL2",
+      "scenario": "Pre-Flight Token Escrow & Post-Stream Actual Settlement (Preventing Concurrent SSE Overruns)",
+      "question": "A Free-tier tenant fires 50 concurrent SSE streaming requests simultaneously across 6 API gateway replicas before any single stream finishes",
+      "model_answer": "Execute atomic Redis-Cell Lua GCRA pre-flight escrow (Prompt_Tokens + P90_Expected_Output_Tokens) at request arrival; refund unused output credits on stream `[DONE]` (0.0% overrun leakage)",
+      "tier1_3_failure": "Tier 3 deducts tokens only when a stream completes—allowing all 50 concurrent requests to bypass the gate and saturate GPU HBM for 45 seconds (6.2%–16.4% quota overrun).",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "RL3",
+      "scenario": "Eliminating :00 Minute-Boundary Stampedes via Continuous GCRA (Theoretical Arrival Time TAT)",
+      "question": "340 enterprise batch scripts retry simultaneously at the top of every minute (:00.000), causing periodic GPU queue spikes",
+      "model_answer": "Enforce Generic Cell Rate Algorithm (GCRA) continuous emission intervals (TAT_new = max(t_now, TAT_prev) + Credit_Cost * Emission_Interval) with sub-second pacing headers",
+      "tier1_3_failure": "Tier 1 fixed-window counter allows a 2x double-quota burst across the :59.9s and :00.1s boundary, spiking P99 TTFT to 4,120 ms.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "RL4",
+      "scenario": "Work-Conserving Opportunistic Burst-Borrowing When Shared GPU Pool Utilization < 75%",
+      "question": "Enterprise Tenant C exceeds its committed 2M credits/min baseline during a product launch while overall GPU cluster utilization is only 58%",
+      "model_answer": "Admit excess requests tagged `qos=Opportunistic_Borrow` into the work-conserving secondary queue as long as cluster KV/compute utilization < 75%; preempt/throttle borrowed traffic instantly if another tenant needs its guaranteed baseline (84.5% cluster utilization)",
+      "tier1_3_failure": "Tier 2 hard TPM cap rejects Tenant C with HTTP 429 while 49% of the expensive H100 cluster sits completely idle.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Redis Cluster Shard Failover / 15ms Network Jitter Across Multi-AZ API Gateways",
+      "original": "0.0% Quota Overrun Leakage | 310.0 ms P99 TTFT",
+      "perturbed": "0.1% Quota Overrun Leakage | 322.0 ms P99 TTFT (Hierarchical Local Lease Batching + Bounded Fallback)",
+      "change_pts": "+0.1 pts Overrun | +12.0 ms TTFT"
+    },
+    {
+      "check": "Client Aborts SSE Stream Mid-Generation After Consuming 4,000 Reasoning Tokens",
+      "original": "0.0% Unbilled Compute Escape",
+      "perturbed": "0.0% Escape (Envoy Stream-Close Hook Settles Exact Generated Tokens Up to Disconnect)",
+      "change_pts": "0.0 pts (Invariant)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (Distributed Redis-Cell GCRA + Asymmetric Weighted Compute-Credit Metering + Pre-Flight Escrow + Work-Conserving Burst-Borrowing) cuts noisy-neighbor P99 TTFT from 4,120 ms to 310 ms (-92.5%) and false HTTP 429 throttling on cached RAG from 24.5% to 0.2%.",
+    "Weighting tokens by true GPU Roofline cost (0.15x cached prefix, 1.0x uncached prefill, 4.0x autoregressive decode) aligns tenant quotas with actual HBM bandwidth and Tensor Core consumption.",
+    "Combining atomic pre-flight token escrow with opportunistic work-conserving burst-borrowing raises shared GPU cluster utilization from 42.0% to 84.5%, cutting monthly GPU TCO from $165K to $62K (-62.4%)."
+  ]
+}
