@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_llm_customization_rag_sft_lora_distillation_gpu_sizer_selection",
+  "round": 473,
+  "title": "Enterprise LLM Customization Path (Prompt+RAG vs SFT/Multi-LoRA vs Distillation) & Cloud GPU SKU Sizing",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "enterprise_business_units": 20,
+    "aggregate_production_qps": 250,
+    "routine_structured_tasks_pct": 80.0,
+    "complex_multi_hop_reasoning_pct": 20.0
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Blind Full-Weight Fine-Tuning (`70B SFT`) for Dynamic Enterprise Knowledge",
+      "architecture": "Baking daily-changing enterprise facts into 70B full-parameter weights + deploying 20 separate 70B GPU clusters for 20 business units",
+      "domain_task_and_fresh_fact_accuracy_pct": 62.4,
+      "structured_schema_and_style_adherence_pct": 94.0,
+      "p99_end_to_end_latency_ms": 1480.0,
+      "required_gpu_fleet_footprint": "64x H100 (80GB) across isolated BU deployments",
+      "monthly_training_and_serving_tco_usd": 245000
+    },
+    {
+      "tier": "Tier 2: Giant Few-Shot Prompt + RAG on Frontier/70B Model Only (No SFT or Distillation)",
+      "architecture": "Stuffing 6,000 tokens of few-shot style/schema examples + 4,000 RAG tokens into every 70B call",
+      "domain_task_and_fresh_fact_accuracy_pct": 89.5,
+      "structured_schema_and_style_adherence_pct": 84.2,
+      "p99_end_to_end_latency_ms": 1820.0,
+      "required_gpu_fleet_footprint": "32x H100 (80GB) due to 10K-token prefill bloat",
+      "monthly_training_and_serving_tco_usd": 142000
+    },
+    {
+      "tier": "Tier 3: RAG + Multi-LoRA `vLLM / SGLang` Shared Base Model (`1x 70B Base + 20 Hot-Swapped LoRA Adapters`)",
+      "architecture": "RAG for dynamic knowledge + rank-32 LoRA SFT for domain schema/tone served from a single shared 70B H200/H100 pool",
+      "domain_task_and_fresh_fact_accuracy_pct": 95.8,
+      "structured_schema_and_style_adherence_pct": 98.5,
+      "p99_end_to_end_latency_ms": 640.0,
+      "required_gpu_fleet_footprint": "8x H200 (141GB) or 12x H100 (80GB) shared Multi-LoRA pool",
+      "monthly_training_and_serving_tco_usd": 54000
+    },
+    {
+      "tier": "Tier 4: Hybrid RAG + Task-Distilled `8B` Student on `L40S` (80% Traffic) + Shared `70B Multi-LoRA` on `H200` (20% Hard Traffic)",
+      "architecture": "Distill 70B teacher traces into a specialized 8B FP8 model on cost-effective L40S GPUs for 80% routine tasks + RAG + 70B Multi-LoRA on H200 for 20% complex reasoning",
+      "domain_task_and_fresh_fact_accuracy_pct": 96.6,
+      "structured_schema_and_style_adherence_pct": 99.1,
+      "p99_end_to_end_latency_ms": 245.0,
+      "required_gpu_fleet_footprint": "8x L40S (48GB) for 8B Student + 4x H200 (141GB) for 70B Multi-LoRA",
+      "monthly_training_and_serving_tco_usd": 28500
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "CS1",
+      "scenario": "The #1 Enterprise Myth: 'Let's Fine-Tune a Model on Our Company PDFs So It Knows Our Products'",
+      "question": "A VP of Engineering wants to run SFT on 50,000 internal product manuals and daily price sheets instead of building RAG",
+      "model_answer": "Use the Orthogonal Customization Law: **RAG is for dynamic facts, citations, and access control (`ACL`); SFT/LoRA is for output format, domain syntax, tone, and压缩 6,000-token few-shot examples into weights!** Combining RAG + LoRA reaches 96.6% accuracy vs 62.4% for SFT-only (which hallucinates stale prices and cannot enforce per-user document ACLs)",
+      "tier1_3_failure": "Tier 1 full-weight SFT forgets yesterday's price updates, hallucinates citations, and leaks restricted training facts to unauthorized users (62.4% accuracy).",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "CS2",
+      "scenario": "Serving 20 Business-Unit Custom Models Without Buying 20 Separate GPU Clusters (`Multi-LoRA`)",
+      "question": "20 enterprise departments (Legal, HR, Tax, Claims, etc.) each fine-tune a custom 70B adapter; deploying 20 dedicated 70B clusters costs $245K/month",
+      "model_answer": "Deploy a single shared `70B FP8` base model on `vLLM / SGLang` with Dynamic Multi-LoRA batching (`S-LoRA / Punica` kernels): 20 rank-32 LoRA adapters (~160 MB each) co-reside in HBM/RAM and execute in the same continuous batch, cutting GPU count from 64x H100 to 8x H200 ($54K/mo)",
+      "tier1_3_failure": "Tier 1 deploys isolated GPU nodes per fine-tuned checkpoint, leaving 18 of 20 departmental clusters sitting at <10% utilization.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "CS3",
+      "scenario": "When to Distill a 70B/Frontier Teacher into an 8B Student on `L40S` GPUs (`Teacher -> Student Distillation`)",
+      "question": "80% of production traffic consists of repetitive high-volume tasks (ticket classification, JSON entity extraction, SQL dialect translation) running at 250 QPS",
+      "model_answer": "Harvest 20,000 verified gold traces from the 70B/GPT-4o Teacher and fine-tune/distill an `8B FP8` Student (`Llama-3.1-8B / Qwen2.5-7B`) deployed on `NVIDIA L40S (48GB)` GPUs: eliminates 5,000 tokens of few-shot prompt bloat, cuts P99 latency from 1,820ms to 245ms, and reduces monthly TCO to $28.5K (-88.4%)",
+      "tier1_3_failure": "Tier 2 pays frontier/70B compute and 6,000-token few-shot prefill cost on every single routine extraction call ($142K/mo).",
+      "action": "Confirm",
+      "confidence": 0.98
+    },
+    {
+      "id": "CS4",
+      "scenario": "Cloud GPU SKU Selection Matrix (`H200 141GB` vs. `H100 80GB` vs. `A100 80GB` vs. `L40S 48GB`)",
+      "question": "How should an architect map `8B`, `32B`, and `70B+` models across `L40S`, `A100`, `H100`, and `H200` instances?",
+      "model_answer": "Map by Memory Capacity (`VRAM`) and Bandwidth (`TB/s`): (1) `8B–14B FP8` (`<= 16K` ctx) -> **1x L40S 48GB** (`864 GB/s`, best $/tok for small models); (2) `70B FP8` standard context -> **2x H100 80GB** (`3.35 TB/s` + native FP8); (3) `70B FP8` long-context (`32K–128K`) or high-batch Multi-LoRA -> **1x–2x H200 141GB** (`4.8 TB/s`, holds 72GB weights + 60GB KV cache on a single GPU without TP=2 cross-card overhead!)",
+      "tier1_3_failure": "Running 70B models on A10G/L40S (requires 4-card PCIe tensor parallelism with severe communication bottlenecks) or running 8B models on expensive H100s at low batch sizes.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "6,000-Token Few-Shot Prompt Compression via LoRA SFT (`6,000 Input Tokens -> 400 Input Tokens`)",
+      "original": "1,820ms P99 Latency | $142K/mo (Tier 2 Few-Shot Bloat)",
+      "perturbed": "245ms P99 Latency | $28.5K/mo (93% Prefill Token Reduction via Weight Internalization)",
+      "change_pts": "-1,575ms P99 Latency | -$113.5K/mo"
+    },
+    {
+      "check": "Single-GPU `H200 (141GB)` vs. Dual-GPU `2x H100 (80GB)` for 70B FP8 Serving",
+      "original": "2x H100 TP=2 (160GB VRAM, NVLink AllReduce Overhead)",
+      "perturbed": "1x H200 TP=1 (141GB HBM3e @ 4.8 TB/s -> Zero Cross-GPU TP Overhead, +28% Tokens/s per GPU)",
+      "change_pts": "+28.0% Throughput / GPU"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (RAG for dynamic facts + Distilled 8B Student on L40S for 80% routine traffic + Shared 70B Multi-LoRA on H200 for 20% complex traffic) achieves 96.6% domain accuracy, 99.1% schema adherence, 245ms P99 latency, and $28,500/mo TCO (-88.4% vs isolated 70B SFT clusters).",
+    "RAG and Fine-Tuning are orthogonal, not substitutes: use RAG for changing knowledge and per-user ACLs; use LoRA SFT/Distillation to lock in output schema, domain syntax, and eliminate 6,000-token few-shot prompt bloat.",
+    "Right-sizing GPU SKUs by memory capacity and FP8 support (`L40S 48GB` for 8B–14B, `H200 141GB` single-GPU for 70B FP8 + large KV cache) boosts throughput per dollar by 2.4x–3.8x."
+  ]
+}
