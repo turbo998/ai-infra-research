@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Enterprise Multi-Tenant Vector DB Isolation &amp; Sharding Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Enterprise Multi-Tenant Vector Database Isolation &amp; Sharding Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare Flat HNSW vs. 5,000 Collections vs. Partition-Key + VIP Shards</div>
+    <div class="grid">
+      <div class="card">
+        <label>Total SaaS / Department Tenants: <strong id="tVal">5,000</strong></label>
+        <input type="range" id="tenants" min="500" max="25000" step="500" value="5000" oninput="recalc()">
+        <label>Total Indexed Vectors (Millions, 1024d): <strong id="vVal">100M</strong></label>
+        <input type="range" id="vecs" min="10" max="500" step="10" value="100" oninput="recalc()">
+        <label>Whale / Regulated VIP Tenants (%): <strong id="wVal">2.0%</strong></label>
+        <input type="range" id="whales" min="1" max="10" step="1" value="2" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t4Rec">98.4%</div><div class="lbl">Small-Tenant Recall@10 (vs 54% Flat HNSW)</div></div>
+          <div class="kpi"><div class="val" id="t4Ram">240 GB</div><div class="lbl">Tier 4 Cluster RAM (vs 2,150 GB in Tier 2)</div></div>
+          <div class="kpi"><div class="val" id="t2Cost">$168,000</div><div class="lbl">Tier 2 Monthly TCO (Collection-per-Tenant)</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$14,500</div><div class="lbl">Tier 4 Monthly TCO (-91.4% Savings)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Multi-Tenant Vector Architecture Tier</th><th>Small-Tenant Recall@10</th><th>Query P99 Latency</th><th>Cluster DRAM Footprint</th><th>Monthly TCO</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Single Monolithic HNSW + `WHERE tenant_id=X`</td><td>54.0% (graph disconnect!)</td><td>640.0 ms</td><td>720 GB</td><td>$115,000 / mo</td></tr>
+          <tr><td>Tier 2: 5,000 Separate Physical Collections / Indexes</td><td>98.5%</td><td>48.0 ms</td><td>2,150 GB (metadata bloat)</td><td>$168,000 / mo</td></tr>
+          <tr><td>Tier 3: Dedicated Micro-Cluster Instance per Tenant</td><td>99.0%</td><td>16.0 ms</td><td>3,400 GB</td><td>$245,000 / mo</td></tr>
+          <tr><td><strong>Tier 4: Partition-Key Sub-Graphs + 100 VIP Shards + Cold NVMe</strong></td><td><strong>98.4%</strong></td><td><strong>18.0 ms</strong></td><td><strong>240 GB</strong></td><td><strong>$14,500 / mo</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const t = parseInt(document.getElementById('tenants').value, 10);
+      const v = parseInt(document.getElementById('vecs').value, 10);
+      const w = parseInt(document.getElementById('whales').value, 10);
+      document.getElementById('tVal').textContent = t.toLocaleString();
+      document.getElementById('vVal').textContent = v + 'M';
+      document.getElementById('wVal').textContent = w + '.0%';
+      const t2Ram = Math.round(650 * (v / 100) + 1500 * (t / 5000));
+      const t4Ram = Math.round(240 * (v / 100) * (0.85 + 0.15 * (w / 2)));
+      const t2Cost = Math.round(168000 * (t2Ram / 2150));
+      const t4Cost = Math.round(14500 * (t4Ram / 240));
+      document.getElementById('t4Ram').textContent = t4Ram.toLocaleString() + ' GB';
+      document.getElementById('t2Cost').textContent = '$' + t2Cost.toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + t4Cost.toLocaleString();
+    }
+  </script>
+</body>
+</html>
