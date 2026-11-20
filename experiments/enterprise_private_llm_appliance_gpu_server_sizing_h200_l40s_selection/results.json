@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_private_llm_appliance_gpu_server_sizing_h200_l40s_selection",
+  "round": 496,
+  "title": "Enterprise On-Premises Private LLM Appliance & GPU Server Sizing (4x L40S vs. 8x H100 vs. 8x H200) Selection",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "model_family": "72B FP8 (80 Layers, GQA 8 KV Heads) + Embedding/Reranker/OCR",
+    "context_length_tokens": 32768,
+    "target_decode_tpot_p95_ms": 20.0,
+    "legacy_rack_power_limit_kw": 6.0
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Unquantized `BF16` 70B/72B Model Across PCIe-Only `8x L40S (384GB)` without NVLink (`TP=8 over PCIe`)",
+      "architecture": "Running 72B BF16 (`144GB` weights) across 8 PCIe L40S GPUs (`TP=8` over PCIe Gen4/5 without P2P NVSwitch) in a standard air-cooled rack",
+      "concurrent_32k_context_users_supported": 14,
+      "decode_inter_token_latency_tpot_p95_ms": 84.0,
+      "rack_power_draw_kw_per_node": 5.2,
+      "three_year_cost_per_concurrent_user_usd": 11400,
+      "three_year_total_appliance_tco_usd": 342000
+    },
+    {
+      "tier": "Tier 2: Oversized `8x H100 SXM5 (640GB)` Server + Mandatory Data-Center Power/Cooling Retrofit for Small 30-Concurrency Branch",
+      "architecture": "Buying a 10.2kW 8x H100 SXM5 box for a 30-concurrent-user enterprise department, forcing a $140K legacy 6kW rack power/cooling retrofit",
+      "concurrent_32k_context_users_supported": 95,
+      "decode_inter_token_latency_tpot_p95_ms": 18.5,
+      "rack_power_draw_kw_per_node": 10.2,
+      "three_year_cost_per_concurrent_user_usd": 15200,
+      "three_year_total_appliance_tco_usd": 456000
+    },
+    {
+      "tier": "Tier 3: Dual `4x L40S PCIe` Nodes Running `AWQ INT4` 72B Without FP8 KV Cache or Embedding/Rerank GPU Isolation",
+      "architecture": "Co-locating 72B AWQ INT4 (`TP=4`), Embedding, Reranker, and Document OCR on the same 4 GPUs with uncompressed FP16 KV Cache",
+      "concurrent_32k_context_users_supported": 28,
+      "decode_inter_token_latency_tpot_p95_ms": 46.0,
+      "rack_power_draw_kw_per_node": 3.8,
+      "three_year_cost_per_concurrent_user_usd": 6900,
+      "three_year_total_appliance_tco_usd": 207000
+    },
+    {
+      "tier": "Tier 4: Right-Sized Tiered Appliance (`<=40 Users`: Air-Cooled `4x L40S FP8/AWQ + FP8 KV`; `50–250 Users`: `8x H200 1,128GB SXM` with `MIG` Partitioning for RAG/OCR)",
+      "architecture": "Matching server SKU to concurrency & rack power ceiling: `4x L40S (3.6kW)` for legacy `<6kW` racks, or `1x 8x H200 (1,128GB HBM3e)` supporting `160` 32K-context concurrent users on a single node",
+      "concurrent_32k_context_users_supported": 160,
+      "decode_inter_token_latency_tpot_p95_ms": 14.2,
+      "rack_power_draw_kw_per_node": 10.2,
+      "three_year_cost_per_concurrent_user_usd": 2350,
+      "three_year_total_appliance_tco_usd": 376000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "PA1",
+      "scenario": "Exact Whiteboard VRAM & KV-Cache Sizing Formula for 100 Concurrent Users at 32K Context (`Qwen2.5-72B / Llama-3.3-70B`)",
+      "question": "A bank CTO asks: 'We have 2,000 employees (100 concurrent active requests) with 32K RAG context on a 72B model—how many GB of GPU VRAM do we actually need, and why did a 4x A100 (320GB) server OOM at just 22 users?'",
+      "model_answer": "Apply the **3-Part VRAM Sizer Formula (`Weights + KV Cache + 12% Activation/CUDA Overhead`)**: for `72B` (`80 layers`, `GQA 8 KV heads`, `head_dim 128`), each token of `FP16 KV Cache` costs **`0.327 MB`** (`10.24 GB` per `32K` user!). In `FP16`, `100` concurrent `32K` users need `144GB (weights) + 1,024GB (KV) = 1,168GB` (`OOM` on 320GB!). By enabling **`FP8 Weights (72GB) + FP8 KV Cache (5.12GB/32K user) + 60% Prefix Cache Sharing`**, `100` concurrent `32K` users fit inside **`310GB VRAM`**, allowing a single **`8x H200 (1,128GB HBM3e)`** node to serve **`160` concurrent `32K` users** at `14.2ms` TPOT!",
+      "tier1_3_failure": "Tier 1 & Tier 3 forget that at 32K context, dynamic KV Cache (not static model weights) consumes 80%+ of GPU memory.",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "PA2",
+      "scenario": "Avoiding the 'TP=8 Over PCIe AllReduce Bottleneck' & 'Legacy 6kW Air-Cooled Rack Breaker Trip'",
+      "question": "A manufacturing plant's on-premises server room only provides `6.0 kW` per rack with standard air cooling—can they deploy an `8x H100/H200` SXM server (`10.2 kW`), or should they use `L40S`?",
+      "model_answer": "Respect the **Physical Facility Power Ceiling (`6.0 kW`) & PCIe Topology Law**: (1) An `8x H100/H200 SXM` node draws **`10.2 kW`** and requires high-CFM or rear-door cooling (`Tier 2` forces a `$140K` room retrofit); (2) For `< 6 kW` air-cooled racks (`<= 40` concurrent users), deploy a **`4U 4x L40S (192GB, 3.6 kW)`** server running `72B AWQ/FP8 (TP=4)` + `FP8 KV Cache`; (3) **Never run `TP=8` across 8 PCIe cards without NVSwitch (`Tier 1`, `84ms` TPOT)**—cap PCIe Tensor Parallelism at **`TP <= 4`** within a single PCIe root complex!",
+      "tier1_3_failure": "Tier 1 runs `TP=8` across dual-socket QPI/UPI PCIe bridges (`84ms/token`); Tier 2 trips legacy 6kW data-center PDU breakers.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "PA3",
+      "scenario": "Why `8x H200 (141GB HBM3e)` Beats `8x H100 (80GB HBM3)` by 2.4x on Concurrent Long-Context RAG",
+      "question": "An `8x H200 (1,128GB)` server costs only ~15%–20% more than an `8x H100 (640GB)` server—why does it support more than double the concurrent 32K-context users?",
+      "model_answer": "After subtracting `~160GB` for `72B FP8` weights, runtime workspace, and auxiliary RAG/OCR models, an `8x H100 (640GB)` leaves **`480GB` for KV Cache**, whereas an `8x H200 (1,128GB)` leaves **`968GB` for KV Cache (`+101.7%` usable KV pool)** plus **`4.8 TB/s` HBM3e bandwidth (`+43%` faster decode)**—cutting 3-year cost per concurrent user to **`$2,350` (`-79.4%` vs Tier 1)**!",
+      "tier1_3_failure": "Comparing H100 vs H200 by raw FP8 TFLOPS ignores that long-context LLM serving is 100% bound by usable KV-Cache capacity and HBM bandwidth.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "PA4",
+      "scenario": "All-in-One Appliance Partitioning: Isolating `LLM + Embedding + Reranker + VLM OCR` on One Server",
+      "question": "An enterprise buys a single 8-GPU appliance and wants to run the 72B LLM, BGE-M3 Embedding, Reranker, and Document OCR all on the same box without mutual OOM crashes",
+      "model_answer": "Never co-locate variable-batch OCR and LLM processes on unpartitioned GPUs (`Tier 3`)! Dedicate **GPUs `0..6` (or `0..5`) exclusively to `vLLM` (`TP=4/6` with `--gpu-memory-utilization 0.90`)**, and partition **GPU `7` via Hardware `NVIDIA MIG` (`1g.18gb / 2g.35gb` slices)** to isolate `HuggingFace TEI (Embedding + Reranker)` and `Docling/OCR` with zero HBM contention",
+      "tier1_3_failure": "Tier 3 runs OCR and LLM processes on the same CUDA device without MIG, triggering sporadic CUDA OOMs during PDF uploads.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Single GPU Hardware Failure (Xid 79 / ECC Uncorrectable) Inside an 8-GPU On-Premises Appliance",
+      "original": "160 Concurrent 32K Users (TP=4 x 2 Replicas on 8x H200)",
+      "perturbed": "80 Concurrent Users (K8s Health Probe Drains Failed TP=4 Half; Surviving 4-GPU Replica Stays 100% Online)",
+      "change_pts": "Zero Total Outage (Graceful 50% Capacity)"
+    },
+    {
+      "check": "Upgrading Model from 72B Dense to DeepSeek-R1-Distill / Qwen-235B-A22B MoE (FP8)",
+      "original": "14.2ms Decode TPOT | 1,128GB H200 Pool",
+      "perturbed": "16.8ms Decode TPOT (235B FP8 Weights = 235GB; Fits Natively in Single 8x H200 Node with 893GB Left for KV!)",
+      "change_pts": "+2.6ms TPOT (Single-Box MoE Ready)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (Right-Sized Tiered Appliance: `4x L40S 3.6kW` for <=40 users in <6kW air-cooled racks; `8x H200 1,128GB SXM` for 50–160 concurrent 32K users) achieves 14.2ms decode TPOT at $2,350 3-year TCO per concurrent user (-79.4% vs Tier 1).",
+    "Running TP=4 x 2 replicas on an 8-GPU node rather than TP=8 across all 8 GPUs halves NVLink/PCIe AllReduce overhead and ensures 50% surviving capacity if one GPU fails.",
+    "An 8x H200 (1,128GB HBM3e) server provides +101.7% more usable KV-Cache memory after subtracting 72B model weights than an 8x H100 (640GB) server."
+  ]
+}

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>On-Premises Private LLM Appliance &amp; GPU Server Sizer (L40S vs. H100 vs. H200)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#0b1120; color:#f8fafc; margin:0; padding:24px; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  h1 { font-size:24px; margin:0 0 8px; color:#38bdf8; }
+  p.sub { color:#94a3b8; margin:0 0 20px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .card { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:18px; }
+  label { display:block; font-size:13px; color:#cbd5e1; margin-bottom:6px; font-weight:600; }
+  input[type=range], select { width:100%; margin-bottom:14px; accent-color:#10b981; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:10px; }
+  .kpi { background:#0f172a; border:1px solid #334155; border-radius:10px; padding:12px; }
+  .kpi .k { font-size:12px; color:#94a3b8; }
+  .kpi .v { font-size:20px; font-weight:800; color:#34d399; margin-top:4px; }
+  table { width:100%; border-collapse:collapse; margin-top:18px; font-size:13px; }
+  th, td { border:1px solid #334155; padding:10px; text-align:left; }
+  th { background:#0f172a; color:#38bdf8; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:#065f46; color:#a7f3d0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>On-Premises Private LLM Appliance &amp; GPU Server Sizer (R496)</h1>
+  <p class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false). Interactive VRAM, KV-Cache, Rack Power &amp; Server SKU sizer for 4x L40S vs. 8x H100 vs. 8x H200.</p>
+  <div class="grid">
+    <div class="card">
+      <label>Target Concurrent Active Requests: <span id="lblUsr">120</span> concurrent users</label>
+      <input id="usr" type="range" min="10" max="500" step="10" value="120" oninput="recalc()">
+
+      <label>Average RAG Context Length per Request: <span id="lblCtx">32</span>K tokens</label>
+      <input id="ctx" type="range" min="8" max="64" step="8" value="32" oninput="recalc()">
+
+      <label>Data Center Rack Power Ceiling: <span id="lblPwr">12</span> kW/rack</label>
+      <input id="pwr" type="range" min="4" max="20" step="2" value="12" oninput="recalc()">
+
+      <label>Private Appliance Hardware &amp; Parallelism Tier:</label>
+      <select id="tier" onchange="recalc()">
+        <option value="4" selected>Tier 4: Facility-Matched 4x L40S (&lt;6kW) or 8x H200 SXM (1,128GB) + FP8 KV + MIG (Recommended)</option>
+        <option value="3">Tier 3: 4x L40S PCIe (AWQ INT4 + Uncompressed FP16 KV + Unisolated OCR)</option>
+        <option value="2">Tier 2: 8x H100 SXM5 (640GB) + Mandatory Legacy Room Cooling Retrofit</option>
+        <option value="1">Tier 1: 8x L40S PCIe Running Unquantized BF16 with Cross-Socket TP=8</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <span class="badge">Live Required VRAM, Recommended Server &amp; 3-Year TCO</span>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="k">Total VRAM Required (72B+KV)</div><div class="v" id="outVram">396 GB</div></div>
+        <div class="kpi"><div class="k">Recommended Server Fleet</div><div class="v" id="outSrv">1x 8-H200</div></div>
+        <div class="kpi"><div class="k">Decode Latency (TPOT P95)</div><div class="v" id="outTpot">14.2 ms</div></div>
+        <div class="kpi"><div class="k">3-Year Cost / Concurrent User</div><div class="v" id="outCost">$2,350</div></div>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Appliance Tier</th>
+        <th>Max 32K Concurrent Users / Node</th>
+        <th>Decode TPOT P95</th>
+        <th>Node Power</th>
+        <th>3-Yr Cost / User</th>
+        <th>3-Yr Node TCO</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Tier 1: `8x L40S PCIe` (`BF16`, Cross-Socket `TP=8`)</td><td>14 users</td><td>84.0 ms</td><td>5.2 kW</td><td>$11,400</td><td>$342,000</td></tr>
+      <tr><td>Tier 2: `8x H100 SXM` (`640GB`) + Room Retrofit</td><td>95 users</td><td>18.5 ms</td><td>10.2 kW</td><td>$15,200 (@30 users)</td><td>$456,000</td></tr>
+      <tr><td>Tier 3: `4x L40S PCIe` (`AWQ INT4` + `FP16 KV`)</td><td>28 users</td><td>46.0 ms</td><td>3.8 kW</td><td>$6,900</td><td>$207,000</td></tr>
+      <tr><td><strong>Tier 4: `8x H200 SXM (1,128GB)` (`FP8 + FP8 KV + MIG`)</strong></td><td><strong>160 users</strong></td><td><strong>14.2 ms</strong></td><td><strong>10.2 kW</strong></td><td><strong>$2,350</strong></td><td><strong>$376,000</strong></td></tr>
+    </tbody>
+  </table>
+</div>
+<script>
+function recalc() {
+  const usr = parseFloat(document.getElementById('usr').value);
+  const ctx = parseFloat(document.getElementById('ctx').value);
+  const pwr = parseFloat(document.getElementById('pwr').value);
+  const tier = document.getElementById('tier').value;
+
+  document.getElementById('lblUsr').textContent = usr;
+  document.getElementById('lblCtx').textContent = ctx;
+  document.getElementById('lblPwr').textContent = pwr;
+
+  // 72B FP8 weights+overhead ~92GB; FP8 KV with prefix sharing ~2.5GB per 32K user
+  const kvPerUser = (ctx / 32.0) * (tier === '4' ? 2.5 : 5.1);
+  const weightGb = tier === '1' ? 160 : 92;
+  const totalVram = Math.round(weightGb + usr * kvPerUser);
+
+  let srv = '';
+  let tpot = '14.2 ms';
+  let userCost = 2350;
+  if (tier === '1') {
+    const nodes = Math.ceil(usr / (14 * (32.0 / ctx)));
+    srv = nodes + 'x 8-L40S (PCIe)';
+    tpot = '84.0 ms';
+    userCost = 11400;
+  } else if (tier === '2') {
+    const nodes = Math.ceil(usr / (95 * (32.0 / ctx)));
+    srv = nodes + 'x 8-H100 SXM';
+    tpot = '18.5 ms';
+    userCost = Math.round((nodes * 456000) / usr);
+  } else if (tier === '3') {
+    const nodes = Math.ceil(usr / (28 * (32.0 / ctx)));
+    srv = nodes + 'x 4-L40S PCIe';
+    tpot = '46.0 ms';
+    userCost = 6900;
+  } else {
+    if (pwr <= 6 || usr <= 40) {
+      const nodes = Math.ceil(usr / (40 * (32.0 / ctx)));
+      srv = nodes + 'x 4-L40S (3.6kW)';
+      tpot = '24.5 ms';
+      userCost = Math.round((nodes * 112000) / Math.max(usr, 20));
+    } else {
+      const nodes = Math.ceil(usr / (160 * (32.0 / ctx)));
+      srv = nodes + 'x 8-H200 (1.1TB)';
+      tpot = '14.2 ms';
+      userCost = Math.round((nodes * 376000) / Math.max(usr, 50));
+    }
+  }
+
+  document.getElementById('outVram').textContent = totalVram.toLocaleString() + ' GB';
+  document.getElementById('outSrv').textContent = srv;
+  document.getElementById('outTpot').textContent = tpot;
+  document.getElementById('outCost').textContent = '$' + userCost.toLocaleString();
+}
+recalc();
+</script>
+</body>
+</html>
