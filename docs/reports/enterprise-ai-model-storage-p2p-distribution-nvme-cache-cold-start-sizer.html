@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Enterprise AI Model Storage, P2P &amp; Cold-Start Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Enterprise AI Model Storage, P2P Distribution &amp; Cold-Start Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare S3 Direct Pull vs. Lustre vs. Dragonfly P2P + Local NVMe Cache</div>
+    <div class="grid">
+      <div class="card">
+        <label>Model Weight Checkpoint Size (GB): <strong id="mVal">140 GB</strong></label>
+        <input type="range" id="modelGb" min="20" max="800" step="20" value="140" oninput="recalc()">
+        <label>Concurrent Autoscaling GPU Nodes: <strong id="nVal">32 Nodes</strong></label>
+        <input type="range" id="nodes" min="4" max="128" step="4" value="32" oninput="recalc()">
+        <label>Daily Cluster Scale-Out Events: <strong id="eVal">12 / day</strong></label>
+        <input type="range" id="events" min="2" max="40" step="2" value="12" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t1Sec">1,110 s</div><div class="lbl">Tier 1 Cold Start (Direct S3 Pull)</div></div>
+          <div class="kpi"><div class="val" id="t4Sec">13.5 s</div><div class="lbl">Tier 4 Cold Start (P2P + Local NVMe)</div></div>
+          <div class="kpi"><div class="val" id="t1Cost">$98,000</div><div class="lbl">Tier 1 Monthly TCO (Idle GPU Buffer + Egress)</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$13,500</div><div class="lbl">Tier 4 Monthly TCO (-86.2% Savings)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Storage &amp; Distribution Tier</th><th>32-Node Cold Start</th><th>Per-Node Bandwidth</th><th>S3 Stampede Traffic</th><th>Monthly TCO</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Direct S3/Blob HTTP Pull per Pod</td><td>1,110.0 sec (18.5 m)</td><td>0.13 GB/s</td><td>4.48 TB / wave</td><td>$98,000 / mo</td></tr>
+          <tr><td>Tier 2: Shared Standard Cloud NAS (EFS / Azure Files)</td><td>380.0 sec (6.3 m)</td><td>0.37 GB/s</td><td>0.00 TB</td><td>$72,000 / mo</td></tr>
+          <tr><td>Tier 3: Always-On 100TB Managed Lustre (FSx / ANF Ultra)</td><td>28.0 sec</td><td>5.00 GB/s</td><td>0.00 TB</td><td>$64,000 / mo</td></tr>
+          <tr><td><strong>Tier 4: S3 + Dragonfly P2P + Free Node NVMe + Streamer</strong></td><td><strong>13.5 sec</strong></td><td><strong>10.40 GB/s</strong></td><td><strong>0.14 TB / wave</strong></td><td><strong>$13,500 / mo</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const m = parseInt(document.getElementById('modelGb').value, 10);
+      const n = parseInt(document.getElementById('nodes').value, 10);
+      const e = parseInt(document.getElementById('events').value, 10);
+      document.getElementById('mVal').textContent = m + ' GB';
+      document.getElementById('nVal').textContent = n + ' Nodes';
+      document.getElementById('eVal').textContent = e + ' / day';
+      const t1Sec = Math.round(1110 * (m / 140) * (0.4 + 0.6 * (n / 32)));
+      const t4Sec = (13.5 * (m / 140)).toFixed(1);
+      const scale = (m / 140) * (0.5 + 0.5 * (n / 32)) * (0.6 + 0.4 * (e / 12));
+      const t1Cost = Math.round(98000 * scale);
+      const t4Cost = Math.round(13500 * (0.5 + 0.5 * (m / 140)));
+      document.getElementById('t1Sec').textContent = t1Sec.toLocaleString() + ' s';
+      document.getElementById('t4Sec').textContent = t4Sec + ' s';
+      document.getElementById('t1Cost').textContent = '$' + t1Cost.toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + t4Cost.toLocaleString();
+    }
+  </script>
+</body>
+</html>
