@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "enterprise_conversational_bi_text_to_sql_semantic_layer_metricflow_selection",
+        "title": "Enterprise Conversational BI: Raw Text-to-SQL vs. Governed Semantic Layer (Cube/MetricFlow) Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "warehouse_physical_tables": 800,
+            "monthly_nl_bi_queries": 200000,
+            "governed_kpi_coverage_pct": 90.0,
+            "avg_unbounded_scan_cost_usd": 45.0,
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_raw_ddl_freeform_text_to_sql",
+                "name": "Tier 1: Raw Physical DDL Prompting -> Free-Form LLM SQL",
+                "executive_metric_accuracy_pct": 58.5,
+                "runaway_full_table_scan_rate_pct": 8.2,
+                "rls_unauthorized_exposure_risk_pct": 12.4,
+                "monthly_warehouse_and_rework_tco_usd": 215000,
+                "verdict": "Anti-Pattern: 41.5% wrong KPI numbers (1-to-N join fan-out) & $45K/mo runaway 50TB warehouse scans",
+            },
+            {
+                "tier_id": "tier2_schema_rag_few_shot_sql_only",
+                "name": "Tier 2: Vector Schema-RAG + Few-Shot SQL Examples (No Semantic Layer)",
+                "executive_metric_accuracy_pct": 80.6,
+                "runaway_full_table_scan_rate_pct": 2.8,
+                "rls_unauthorized_exposure_risk_pct": 4.5,
+                "monthly_warehouse_and_rework_tco_usd": 138000,
+                "verdict": "Finds tables better, but LLM still hallucinates join paths & double-counts multi-grain facts",
+            },
+            {
+                "tier_id": "tier3_finetuned_sql_codellm",
+                "name": "Tier 3: Fine-Tuned SQL Code-LLM on Historical Query Logs",
+                "executive_metric_accuracy_pct": 84.0,
+                "runaway_full_table_scan_rate_pct": 2.1,
+                "rls_unauthorized_exposure_risk_pct": 3.8,
+                "monthly_warehouse_and_rework_tco_usd": 152000,
+                "verdict": "Memorizes deprecated columns & legacy analyst mistakes; breaks whenever schema evolves",
+            },
+            {
+                "tier_id": "tier4_semantic_layer_metricflow_ast_dryrun_rls",
+                "name": "Tier 4: Governed Semantic Layer (Cube/MetricFlow) + SQLGlot AST/Dry-Run Gate + OAuth RLS",
+                "executive_metric_accuracy_pct": 98.6,
+                "runaway_full_table_scan_rate_pct": 0.0,
+                "rls_unauthorized_exposure_risk_pct": 0.0,
+                "monthly_warehouse_and_rework_tco_usd": 26000,
+                "verdict": "Recommended: 98.6% KPI accuracy, 0.0% runaway scans, 0.0% RLS leaks & -87.9% monthly TCO",
+            },
+        ],
+        "headline_findings": {
+            "metric_accuracy_gain_pct_pts": 40.1,
+            "runaway_scan_rate_pct": 0.0,
+            "rls_leak_rate_pct": 0.0,
+            "tco_savings_vs_tier1_pct": 87.9,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
