@@ -1,8 +1,8 @@
-# Cloud & AI Infrastructure Solution Architect Complete Bilingual Catalog (234 Playbooks)
+# Cloud & AI Infrastructure Solution Architect Complete Bilingual Catalog (290 Playbooks)
 
 > **Language / 语言**: [简体中文](./full-catalog-zh.md) | **English** · [10-Layer Stack Map](./stack-map.en.md) · [SA Competency Roadmap](./learning/roadmap.en.md) · [Repository Home](../README.en.md)
 
-> **Overview**: This master catalog indexes all **234 bilingual (`zh-CN` & `en`) Cloud & AI Infrastructure Solution Architect deliverables** in this repository (**2 Flagship Full-Stack Reference Architectures** + **232 Component Selection & Enterprise Architecture FAQs**). Every guide is structured with **Executive Summary, Real-World Scenario, Architecture Trade-offs, Quantitative Decision Matrix, and Pre-Production Checklist**, paired with self-contained **Interactive HTML Sizers**, **7-Card 4:5 Visual Decks**, and **Reproducible Python Models**.
+> **Overview**: This master catalog indexes all **290 bilingual (`zh-CN` & `en`) Cloud & AI Infrastructure Solution Architect deliverables** in this repository (**2 Flagship Full-Stack Reference Architectures** + **288 Component Selection & Enterprise Architecture FAQs**). Every guide is structured with **Executive Summary, Real-World Scenario, Architecture Trade-offs, Quantitative Decision Matrix, and Pre-Production Checklist**, paired with self-contained **Interactive HTML Sizers**, **7-Card 4:5 Visual Decks**, and **Reproducible Python Models**.
 
 ---
 
@@ -195,7 +195,7 @@
 
 ---
 
-## 8. Enterprise AI Gateway, Multi-Agent Fabrics & Industry Reference Architectures (Gateway · MCP/A2A) (116 Playbooks)
+## 8. Enterprise AI Gateway, Multi-Agent Fabrics & Industry Reference Architectures (Gateway · MCP/A2A) (172 Playbooks)
 
 > Covers enterprise AI Gateways (APIM/LiteLLM/Envoy), MCP & A2A multi-agent orchestration, runtime safety guardrails, LLMOps CI/CD gates, and vertical industry AI reference architectures.
 
