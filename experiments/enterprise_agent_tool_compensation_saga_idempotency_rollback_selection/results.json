@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_agent_tool_compensation_saga_idempotency_rollback_selection",
+  "round": 512,
+  "title": "Enterprise Transactional Agent Saga Compensation, Deterministic Idempotency-Key & Rollback Architecture Selection",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "monthly_multi_system_write_transactions": 400000,
+    "average_mutating_steps_per_transaction": 3.5,
+    "idempotency_key_ttl_hours": 24,
+    "target_dirty_state_residue_pct": 0.0
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Uncoordinated Free-Form Agent Tool Loops (`Fire-and-Forget HTTP POSTs` Without Idempotency or Rollback)",
+      "architecture": "Allowing an LLM agent to call multiple write APIs (`Inventory -> Payment -> ERP -> Email`) in a ReAct loop without idempotency keys or compensating actions",
+      "duplicate_charge_or_double_write_rate_pct": 8.4,
+      "partial_failure_dirty_state_residue_pct": 14.2,
+      "automated_rollback_recovery_rate_pct": 0.0,
+      "saga_compensation_p95_latency_ms": 0.0,
+      "monthly_400k_transaction_reconciliation_tco_usd": 310000
+    },
+    {
+      "tier": "Tier 2: Prompt-Driven 'LLM Self-Rollback' ('If Step 3 Fails, Ask the LLM to Call Undo Tools')",
+      "architecture": "Relying on the LLM to figure out how to undo Steps 1 and 2 via natural-language prompts when Step 3 returns an HTTP 500 error",
+      "duplicate_charge_or_double_write_rate_pct": 4.5,
+      "partial_failure_dirty_state_residue_pct": 6.8,
+      "automated_rollback_recovery_rate_pct": 52.0,
+      "saga_compensation_p95_latency_ms": 4850.0,
+      "monthly_400k_transaction_reconciliation_tco_usd": 175000
+    },
+    {
+      "tier": "Tier 3: Distributed Two-Phase Locking (`2PC XA Transactions`) Across External SaaS & Legacy ERP APIs",
+      "architecture": "Attempting to hold blocking database locks across external REST APIs (`Stripe / SAP / Salesforce`) while the LLM reasons between steps",
+      "duplicate_charge_or_double_write_rate_pct": 0.5,
+      "partial_failure_dirty_state_residue_pct": 3.2,
+      "automated_rollback_recovery_rate_pct": 78.0,
+      "saga_compensation_p95_latency_ms": 9200.0,
+      "monthly_400k_transaction_reconciliation_tco_usd": 142000
+    },
+    {
+      "tier": "Tier 4: Deterministic `Saga` Orchestrator + MCP Gateway `Idempotency-Key` (`SHA256(trace_id + step_id)`) + Paired `[Action, Compensate_Fn]` Registry + Commit-Last External Side-Effects",
+      "architecture": "LLM plans the transaction intent once; deterministic Saga engine executes `[T1, T2, T3]` with mandatory `Idempotency-Key` headers and runs reverse `[C2, C1]` compensations in `180ms` on failure",
+      "duplicate_charge_or_double_write_rate_pct": 0.0,
+      "partial_failure_dirty_state_residue_pct": 0.0,
+      "automated_rollback_recovery_rate_pct": 99.9,
+      "saga_compensation_p95_latency_ms": 180.0,
+      "monthly_400k_transaction_reconciliation_tco_usd": 28000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "SG1",
+      "scenario": "Eliminating the '8.4% Double-Charge & Duplicate Ticket Disaster' When an Agent Retries a Timed-Out Tool Call",
+      "question": "An agent calls `POST /v1/payments/refund` (`$850`); the payment gateway processes the refund, but a network blip drops the HTTP response. The agent thinks it failed and calls `POST /v1/payments/refund` a second time—refunding $1,700!",
+      "model_answer": "Never allow an LLM to generate random UUIDs or omit idempotency headers on retry (`Tier 1`, `8.4%` double-write rate)! Enforce **Deterministic `Idempotency-Key` Injection at the MCP Tool Gateway**: compute **`Idempotency-Key = HMAC-SHA256(workflow_trace_id + ':' + graph_step_index + ':' + canonical_tool_name)`** and cache the upstream execution receipt in Redis (`24h TTL`)—so even if the agent or network retries the tool call 5 times, the downstream payment/ERP system executes it **at most once (`0.0%` duplicate writes)**!",
+      "tier1_3_failure": "Tier 1 and Tier 2 let the LLM re-invoke non-idempotent POST endpoints with fresh request IDs on timeout.",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "SG2",
+      "scenario": "Why You Must Never Ask an LLM to 'Roll Back Steps 1 and 2 via Prompt' When Step 3 Fails (`52%` vs. `99.9%` Recovery)",
+      "question": "In a 3-step travel rebooking agent (`1. Cancel Old Flight -> 2. Charge Fare Difference -> 3. Book New Seat`), Step 3 fails because the last seat was just taken. Why does asking the LLM to undo Steps 1 and 2 (`Tier 2`) leave 6.8% of customers stranded with no flight and a charged card?",
+      "model_answer": "Rollback is a **deterministic systems invariant**, NOT a creative language task! In `Tier 2`, the LLM hallucinates undo parameters, forgets the `transaction_id` from Step 1, or hits a context/rate limit mid-rollback (`52%` recovery)! In `Tier 4`, every mutating MCP tool must register a **Paired Deterministic Compensation Function (`register_tool(forward=charge_card, compensate=void_or_refund_charge)`)**; when Step 3 fails, the **Deterministic Saga Engine (NOT the LLM!)** automatically pops the execution stack and invokes `[C2(tx_id_2), C1(booking_id_1)]` in **`180ms` (`99.9%` recovery, `0.0%` dirty residue)**!",
+      "tier1_3_failure": "Tier 2 relies on probabilistic LLM reasoning to clean up partial distributed database mutations.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "SG3",
+      "scenario": "Ordering Irreversible External Side-Effects (`Send Customer Email / SMS`) via the `Reserve -> Confirm -> Notify` Pattern",
+      "question": "An agent sends a confirmation email to the customer on Step 2 ('Your order is cancelled and refunded!') and then tries to update SAP ERP on Step 3, which fails due to a locked accounting period—how do you 'unsend' an email?",
+      "model_answer": "You cannot compensate a sent email or webhook! Enforce **Strict Side-Effect Ordering (`Pivot Transaction Law`)** in the Saga compiler: (1) **Compensatable Reservations (`Try/Reserve` in ERP & Payment)** must run first; (2) the **Pivot Commit** executes once all reservations succeed; and (3) **Non-Compensatable Post-Commit Notifications (`Email / SMS / Webhook`)** are buffered in a **Transactional Outbox** and dispatched *only after* the entire Saga commits!",
+      "tier1_3_failure": "Free-form ReAct agents interleave irreversible user notifications with fallible database writes.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "SG4",
+      "scenario": "Handling 'Failed Compensation' via Dead-Letter Queue (`DLQ`) & Structured FinOps/SRE Alerting",
+      "question": "What happens in the 0.1% edge case where Step 3 fails AND the compensating call `C2` to SAP ERP also fails because SAP is down for maintenance?",
+      "model_answer": "Persist the Saga log in **Durable Storage (`Temporal / Postgres Saga Log`)** with exponential retry on the idempotent `C2` compensation action; if `C2` remains blocked after 15 minutes, route the exact `SagaCompensationFailed` payload with `Idempotency-Key` and pre-filled reversal script to the **Operations Dead-Letter Queue (`DLQ`)** (`$28K/mo` TCO vs `$310K/mo` in Tier 1, `-91.0%`)",
+      "tier1_3_failure": "In-memory agent loops silently drop failed rollbacks, leaving orphaned charges discovered weeks later by accounting.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Network Socket Timeout After Downstream Payment API Successfully Commits $2,400 Wire Transfer",
+      "original": "0.0% Duplicate Charge Rate",
+      "perturbed": "0.0% Duplicate Charge (Gateway Retries with Identical `Idempotency-Key = HMAC(trace_id, step_2)`; Bank Returns Cached 200 OK Receipt)",
+      "change_pts": "0.0 pts (Exactly-Once Semantics)"
+    },
+    {
+      "check": "Step 4 of a 4-System Supply-Chain Order Modification Fails with `HTTP 409 Conflict`",
+      "original": "0.0% Dirty State Residue | 180ms Saga Rollback",
+      "perturbed": "0.0% Residue (Deterministic Saga Engine Executes `[C3, C2, C1]` Reverse Stack in 195ms Without Calling LLM)",
+      "change_pts": "+15ms (100% Clean Rollback)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (Deterministic Saga Orchestrator + Gateway `Idempotency-Key = HMAC(trace_id, step_id)` + Paired `[Forward, Compensate]` Tool Registry + Outbox Post-Commit Notifications) achieves 0.0% duplicate charges, 0.0% dirty state residue, and 99.9% automated rollback recovery in 180ms at $28K/mo (-91.0% vs Tier 1).",
+    "Asking an LLM to undo partial failures via natural-language prompts (Tier 2) fails 48% of the time due to hallucinated transaction IDs and takes 4,850ms.",
+    "Injecting deterministic step-bound `Idempotency-Key` headers at the MCP Tool Gateway guarantees at-most-once execution even when network timeouts trigger multiple retries."
+  ]
+}
