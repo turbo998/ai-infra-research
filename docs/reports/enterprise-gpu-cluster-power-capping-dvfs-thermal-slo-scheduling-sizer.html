@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Enterprise GPU Cluster Power Capping &amp; Rack Density Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Enterprise GPU Cluster Power Capping, Phase-Aware DVFS &amp; Rack Density Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare Uncapped 700W TDP vs. Phase-Aware 600W/450W Power Capping</div>
+    <div class="grid">
+      <div class="card">
+        <label>Total Cluster GPUs (H100 / H200 700W): <strong id="gVal">256 GPUs</strong></label>
+        <input type="range" id="gpus" min="64" max="1024" step="64" value="256" oninput="recalc()">
+        <label>Decode vs. Prefill GPU Pool Split (% Decode): <strong id="dVal">65%</strong></label>
+        <input type="range" id="decodePct" min="40" max="85" step="5" value="65" oninput="recalc()">
+        <label>Effective Power + PUE Rate ($/kWh): <strong id="pVal">$0.14</strong></label>
+        <input type="range" id="rate" min="8" max="26" step="1" value="14" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t4Rack">32 GPUs</div><div class="lbl">GPUs per 32kW Rack (+33.3% vs 24 in T1)</div></div>
+          <div class="kpi"><div class="val" id="t4Pwr">-28.0%</div><div class="lbl">Cluster Power Reduction (98.8% Goodput)</div></div>
+          <div class="kpi"><div class="val" id="t1Cost">$185,000</div><div class="lbl">Tier 1 Monthly Rack + Power TCO</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$118,000</div><div class="lbl">Tier 4 Monthly TCO (-36.2% Savings)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Power &amp; Thermal Management Tier</th><th>GPUs per 32kW Rack</th><th>SLO Goodput Retention</th><th>Cluster Power Savings</th><th>Monthly Rack + Power TCO</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Uncapped 700W TDP + Nameplate Rack Sizing</td><td>24 GPUs (11 Racks)</td><td>93.2% (thermal throttle)</td><td>0.0%</td><td>$185,000 / mo</td></tr>
+          <tr><td>Tier 2: Blind Static 400W Cap Across All Nodes</td><td>32 GPUs (8 Racks)</td><td>74.5% (+32% TTFT lag)</td><td>35.0%</td><td>$142,000 / mo</td></tr>
+          <tr><td>Tier 3: Unguarded 32-GPU Overbooking (No Clamp)</td><td>32 GPUs (8 Racks)</td><td>88.0% (4.2% PDU trips)</td><td>4.0%</td><td>$156,000 / mo</td></tr>
+          <tr><td><strong>Tier 4: Phase-Aware DVFS (600W Prefill / 450W Decode) + Clamp</strong></td><td><strong>32 GPUs (8 Racks)</strong></td><td><strong>98.8%</strong></td><td><strong>28.0%</strong></td><td><strong>$118,000 / mo</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const g = parseInt(document.getElementById('gpus').value, 10);
+      const d = parseInt(document.getElementById('decodePct').value, 10);
+      const r = parseInt(document.getElementById('rate').value, 10) / 100.0;
+      document.getElementById('gVal').textContent = g + ' GPUs';
+      document.getElementById('dVal').textContent = d + '%';
+      document.getElementById('pVal').textContent = '$' + r.toFixed(2);
+      const scale = (g / 256) * (0.5 + 0.5 * (r / 0.14));
+      const t1Cost = Math.round(185000 * scale);
+      const t4Cost = Math.round(118000 * scale * (1.0 - 0.1 * ((d - 65) / 35)));
+      document.getElementById('t1Cost').textContent = '$' + t1Cost.toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + t4Cost.toLocaleString();
+    }
+  </script>
+</body>
+</html>
