@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_rag_embedding_reranker_serving_gpu_cpu_onnx_tei_selection",
+  "round": 493,
+  "title": "Enterprise RAG Embedding & Cross-Encoder Reranker Serving Engine (TEI vs. ONNX vs. Cloud API) & GPU/CPU Sizing Selection",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "online_rag_query_qps": 300,
+    "candidates_reranked_per_query": 50,
+    "monthly_bulk_ingested_chunks": 100000000,
+    "target_rerank_p99_latency_ms": 40.0
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Unbatched PyTorch `FP16` Flask/FastAPI Wrapper on Expensive `H100` GPUs",
+      "architecture": "Serving `bge-m3` (568M) and `bge-reranker-v2-m3` (568M) via naive Python FastAPI `model.forward()` with padded batching on H100 80GB GPUs",
+      "rerank_top50_p99_latency_ms": 640.0,
+      "ndcg_at_10_retrieval_accuracy_pct": 89.2,
+      "bulk_ingestion_throughput_chunks_per_sec": 380,
+      "gpu_compute_utilization_pct": 14.0,
+      "monthly_300_qps_and_100m_chunk_tco_usd": 42000
+    },
+    {
+      "tier": "Tier 2: 100% Cloud Managed Embedding & Rerank API (`Cohere Rerank / OpenAI Embedding PAYGO`)",
+      "architecture": "Sending all 300 QPS online queries (50 docs reranked per query) and 100M monthly document chunks to external PAYGO APIs",
+      "rerank_top50_p99_latency_ms": 295.0,
+      "ndcg_at_10_retrieval_accuracy_pct": 89.5,
+      "bulk_ingestion_throughput_chunks_per_sec": 1200,
+      "gpu_compute_utilization_pct": 0.0,
+      "monthly_300_qps_and_100m_chunk_tco_usd": 68500
+    },
+    {
+      "tier": "Tier 3: CPU-Only `AVX-512 / AMX INT8 ONNX Runtime` for Both Embedding & 568M Cross-Encoder Reranking",
+      "architecture": "Running INT8 quantized embedding and 50-candidate cross-encoder reranking exclusively on 64-vCPU Xeon/EPYC nodes",
+      "rerank_top50_p99_latency_ms": 480.0,
+      "ndcg_at_10_retrieval_accuracy_pct": 87.8,
+      "bulk_ingestion_throughput_chunks_per_sec": 450,
+      "gpu_compute_utilization_pct": 0.0,
+      "monthly_300_qps_and_100m_chunk_tco_usd": 19500
+    },
+    {
+      "tier": "Tier 4: `L4 / L40S GPU` + `HuggingFace TEI` (FlashAttention + Token-Based Unpadded Batching) + `Matryoshka 512d` + Two-Stage `50->15` Rerank",
+      "architecture": "Serving `bge-m3 / Qwen3-Embedding` & `bge-reranker-v2-m3` via Rust `HuggingFace TEI` (`ORT / TensorRT / FlashAttention-2`) on cost-effective `L4 (24GB) / L40S (48GB)` GPUs with unpadded token batching",
+      "rerank_top50_p99_latency_ms": 34.0,
+      "ndcg_at_10_retrieval_accuracy_pct": 91.4,
+      "bulk_ingestion_throughput_chunks_per_sec": 9400,
+      "gpu_compute_utilization_pct": 88.5,
+      "monthly_300_qps_and_100m_chunk_tco_usd": 7800
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "ER1",
+      "scenario": "Eliminating the '640ms Reranker Tail Latency' That Eats Half the RAG SLA Budget",
+      "question": "An enterprise Copilot has a 1,000ms total TTFT budget, but cross-encoder reranking 50 candidate chunks (`50 x 512 tokens`) in a Python FastAPI service takes 640ms P99 before the LLM even starts",
+      "model_answer": "Replace padded Python `FastAPI + PyTorch` wrappers (`Tier 1`, `86%` wasted compute on `<pad>` tokens) with **Rust-based `HuggingFace TEI (Text Embeddings Inference)` or `Triton + TensorRT`** using **Unpadded Cumulative-Sequence (`cu_seqlens`) FlashAttention Batching** on **`NVIDIA L4 / L40S` GPUs**, and prune `BM25+Vector RRF Top-50 -> Top-20` before Cross-Encoder scoring—slashing rerank P99 latency from `640ms` to **`34ms` (`-94.7%`)**!",
+      "tier1_3_failure": "Tier 1 pads every short 80-token chunk in a 50-chunk batch to the longest 512-token chunk, wasting 4x FLOPs; Tier 3 CPU saturates on 50x512 cross-attention.",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "ER2",
+      "scenario": "Avoiding the 'H100 Overkill Trap' vs. 'Cloud Rerank API Bill Shock' at 300 QPS",
+      "question": "Should we deploy 568M-parameter Embedding and Reranker models on $3.50/hr H100 GPUs, call a $1.00/1K-search Cloud Rerank API, or use $0.80/hr L4 / $1.50/hr L40S GPUs?",
+      "model_answer": "Encoder models (`300M–1.5B` params) are **compute-bound on short sequences with tiny weights (`1.2GB–3GB` FP16)**—they completely underutilize `H100` HBM3 bandwidth (`14%` util)! Calling a PAYGO Rerank API at `300 QPS` (`777M searches/mo`) costs **`$68,500/mo`** (`Tier 2`). Deploying **`HuggingFace TEI` on `NVIDIA L4 (24GB)` or `L40S (48GB)` GPUs** delivers `34ms` P99 at **`$7,800/mo` (`-88.6%` vs Cloud API, `-81.4%` vs H100)**!",
+      "tier1_3_failure": "Tier 1 wastes expensive H100 NVLink/HBM3 capacity on 1.2GB encoder weights; Tier 2 per-search API pricing explodes above 30 QPS.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "ER3",
+      "scenario": "When to Use CPU `AVX-512 / AMX INT8 ONNX` vs. Dedicated `L4 / L40S` GPUs",
+      "question": "For a small branch or edge RAG service with `< 25 QPS`, do we even need a GPU for query embedding?",
+      "model_answer": "Use a **Clear Hardware Inflection Boundary**: (1) For **Query Embedding Only at `< 30 QPS`** (1 vector per query), **`CPU AVX-512 / Intel AMX INT8 ONNX Runtime`** hits `12ms` latency at zero GPU cost; (2) For **Cross-Encoder Reranking (`20–50 pairs/query`) or Bulk Ingestion (`> 5M chunks/mo`)**, always use **`L4 / A10G / L40S GPUs` with `TEI`** (`9,400 chunks/sec` vs `450 chunks/sec` on CPU)",
+      "tier1_3_failure": "Running 50-pair Cross-Encoder Reranking on CPU (`Tier 3`) causes `480ms` P99 queueing spikes under burst traffic.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "ER4",
+      "scenario": "Cutting Vector Database RAM by 50%–75% via `Matryoshka Representation Learning (MRL)` & Binary Quantization",
+      "question": "Storing 100M chunks at 1,024–3,072 FP32 dimensions consumes 400GB–1.2TB of expensive Vector DB RAM",
+      "model_answer": "Select **Matryoshka-capable Embedding Models (`text-embedding-3-large`, `Qwen3-Embedding`, `Nomic-Embed`, `BGE-M3`)** truncated to **`512d / 768d` + Binary/Scalar Quantization (`BQ/SQ8`) in RAM** with `Top-50` disk/FP16 rescoring + Cross-Encoder Rerank—cutting Vector DB memory by **68%** while raising `nDCG@10` to **`91.4%`**",
+      "tier1_3_failure": "Storing uncompressed 1536d–3072d FP32 vectors in HNSW RAM inflates vector database cluster costs by 3x.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Nightly Bulk Re-Indexing Surge of 25 Million New Enterprise Document Chunks",
+      "original": "9,400 Chunks/Sec | 34.0ms Online Rerank P99",
+      "perturbed": "9,150 Chunks/Sec (Separate Offline Spot L40S TEI Pool Protects Online L4 SLA at 35.2ms)",
+      "change_pts": "+1.2ms Online P99 (Isolated)"
+    },
+    {
+      "check": "Long-Chunk Distribution Shift (10% of Chunks Are 1,024-Token Legal Tables vs. 256-Token Mean)",
+      "original": "34.0ms Rerank P99 | 88.5% GPU Utilization",
+      "perturbed": "38.5ms Rerank P99 (TEI Token-Budget Batching Prevents OOM & Padding Blowup)",
+      "change_pts": "+4.5ms P99 (Zero Padding Waste)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (`NVIDIA L4 / L40S` GPUs + `HuggingFace TEI` unpadded token batching + `Matryoshka 512d` + two-stage reranking) achieves 34.0ms rerank P99 latency and 9,400 chunks/sec bulk throughput at $7,800/mo (-88.6% vs Tier 2 Cloud API and -81.4% vs Tier 1 H100 wrapper).",
+    "Cross-encoder reranking evaluates 20–50 `(query, passage)` pairs per request; naive Python padded batching wastes up to 80% of FLOPs on `<pad>` tokens.",
+    "Encoder models (`300M–1.5B` parameters) should be deployed on mid-tier inference GPUs (`L4 / A10G / L40S`) rather than `H100/H200` GPUs, while query-only embedding under `30 QPS` can run on CPU `AVX-512/AMX INT8 ONNX`."
+  ]
+}
