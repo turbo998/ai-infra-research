@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_llm_streaming_sse_websocket_grpc_backpressure_proxy_selection",
+  "round": 507,
+  "title": "Enterprise LLM Streaming Protocol (HTTP/2 SSE vs. WebSocket vs. gRPC), Proxy Unbuffering & Client Disconnect Cancellation Selection",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "monthly_streamed_tokens": 50000000000,
+    "user_early_abort_or_stop_rate_pct": 28.0,
+    "sse_heartbeat_interval_seconds": 15,
+    "redis_stream_resume_ttl_seconds": 60
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Default Reverse-Proxy Buffered HTTP (`proxy_buffering on` + `60s` Idle Timeout + Zero Abort Propagation)",
+      "architecture": "Deploying vLLM/LLM behind default Nginx / K8s Ingress / WAF with response buffering enabled, 60s read timeouts, and ignoring client `Stop Generating` disconnects",
+      "perceived_client_ttft_p99_ms": 14800.0,
+      "mid_stream_timeout_drop_rate_pct": 18.4,
+      "wasted_zombie_decode_tokens_on_abort_pct": 24.0,
+      "mobile_network_reconnect_resume_rate_pct": 0.0,
+      "monthly_50b_token_streaming_waste_and_ops_tco_usd": 168000
+    },
+    {
+      "tier": "Tier 2: Stateful WebSockets Across Multi-Hop L7 Corporate Firewalls Without Stream Offset Resumption",
+      "architecture": "Forcing all browser/mobile chat clients onto persistent WebSockets (`ws:// / wss://`) without sticky session draining or Redis stream offset replay",
+      "perceived_client_ttft_p99_ms": 480.0,
+      "mid_stream_timeout_drop_rate_pct": 9.6,
+      "wasted_zombie_decode_tokens_on_abort_pct": 12.0,
+      "mobile_network_reconnect_resume_rate_pct": 15.0,
+      "monthly_50b_token_streaming_waste_and_ops_tco_usd": 112000
+    },
+    {
+      "tier": "Tier 3: Unbuffered HTTP/2 `SSE` Without Upstream `vLLM / Cloud API` Cancellation Propagation or `Last-Event-ID` Buffer",
+      "architecture": "Setting `X-Accel-Buffering: no` for fast SSE delivery, but when users click 'Stop Generating' or close the tab, the backend GPU keeps generating 1,500 zombie tokens",
+      "perceived_client_ttft_p99_ms": 420.0,
+      "mid_stream_timeout_drop_rate_pct": 3.2,
+      "wasted_zombie_decode_tokens_on_abort_pct": 21.5,
+      "mobile_network_reconnect_resume_rate_pct": 25.0,
+      "monthly_50b_token_streaming_waste_and_ops_tco_usd": 89000
+    },
+    {
+      "tier": "Tier 4: Edge HTTP/2 `SSE` (`X-Accel-Buffering: no` + `15s` Heartbeat) + Internal `gRPC` + End-to-End `AbortSignal -> vLLM Engine.abort()` + `Redis Stream Last-Event-ID` Resume",
+      "architecture": "HTTP/2 SSE for text/agent apps (WebRTC only for real-time audio), internal gRPC between Gateway and vLLM, `<10ms` client-disconnect cancellation propagation to free GPU KV Cache, and Redis ring-buffer stream resumption",
+      "perceived_client_ttft_p99_ms": 385.0,
+      "mid_stream_timeout_drop_rate_pct": 0.0,
+      "wasted_zombie_decode_tokens_on_abort_pct": 0.4,
+      "mobile_network_reconnect_resume_rate_pct": 99.6,
+      "monthly_50b_token_streaming_waste_and_ops_tco_usd": 24000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "ST1",
+      "scenario": "Curing the 'vLLM Generates in 380ms, But Browser Waits 14.8 Seconds' Reverse-Proxy Buffering Disease",
+      "question": "In local testing, `vLLM` emits the first SSE token in 380ms; after deploying behind enterprise Kubernetes NGINX Ingress + Cloud WAF/CDN (`Tier 1`), the browser sits blank for 14.8 seconds and then dumps the entire 800-word response at once",
+      "model_answer": "By default, `NGINX / Kong / Envoy / Cloud CDN` buffer upstream HTTP responses (`proxy_buffering on`, `4KB–64KB` buffers) and gzip-compress chunks before flushing to the client! Explicitly enforce **Four Unbuffered Streaming Headers & Directives**: (1) response header **`X-Accel-Buffering: no`**, (2) **`Cache-Control: no-cache, no-transform`** (disables proxy gzip buffering!), (3) **`proxy_read_timeout 600s`** with **`15-second` `: keepalive` SSE comment heartbeats** (prevents 60s idle firewall drops during long `DeepSeek-R1 / o3` thinking pauses)—restoring browser P99 TTFT from `14,800ms` to **`385ms`** (`0.0%` mid-stream drops)!",
+      "tier1_3_failure": "Tier 1 buffers SSE chunks in 32KB proxy RAM buffers and kills connections after 60s of silent reasoning.",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "ST2",
+      "scenario": "Stopping the '24% Zombie GPU Decode Waste' When Users Click 'Stop Generating' or Close Browser Tabs",
+      "question": "In enterprise chat and coding copilots, 28% of users click 'Stop Generating' or edit their prompt after reading the first 3 lines (`80 tokens`), yet the backend GPU continues generating the remaining 1,200 tokens into a dead socket (`24%` total GPU decode waste!)",
+      "model_answer": "Wire **End-to-End Cooperative Cancellation Propagation (`Browser AbortController -> Gateway TCP FIN/RST -> vLLM engine.abort(request_id)`)**: when the client disconnects, the AI Gateway catches `request.is_disconnected()` within **`< 10ms`**, immediately cancels the upstream HTTP/gRPC stream, and triggers `vLLM` to **free the sequence's PagedAttention KV-Cache blocks on the very next decode step**—cutting zombie token waste from `24.0%` to **`0.4%` (saving `$144K/month` in GPU/PTU capacity)**!",
+      "tier1_3_failure": "Tier 1 and Tier 3 catch the closed client socket only after the LLM finishes generating the full 1,200-token response.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "ST3",
+      "scenario": "Protocol Selection: When to Use `HTTP/2 SSE` vs. `WebSockets` vs. `gRPC` vs. `WebRTC`",
+      "question": "An engineering team debates whether to build their enterprise Copilot streaming layer on WebSockets (`Tier 2`), HTTP Server-Sent Events (`SSE`), or gRPC",
+      "model_answer": "Follow the **3-Layer Streaming Protocol Matrix**: (1) **Browser/Mobile-to-Gateway (Text & Agent Events)** $\\rightarrow$ **100% `HTTP/2 / HTTP/3 SSE` (`POST` via `@microsoft/fetch-event-source`)**: firewall-friendly, stateless L7 load-balancing, and native standard `OpenAI / MCP Streamable HTTP` compatibility; (2) **Gateway-to-Internal Inference Engine (`vLLM / Triton / TEI`)** $\\rightarrow$ **Bidirectional `gRPC` over HTTP/2** (multiplexed binary protobuf, instant `Cancel` frame); (3) **Real-Time Full-Duplex Voice/Video Only** $\\rightarrow$ **`WebRTC` (`UDP RTP`)**!",
+      "tier1_3_failure": "Tier 2 uses stateful WebSockets for text chat, suffering 9.6% connection drops across corporate proxies and Kubernetes rolling deploys.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "ST4",
+      "scenario": "Seamless Mobile Wi-Fi-to-5G Handover Without Losing an In-Flight 60-Second Agent Response (`Last-Event-ID` Replay)",
+      "question": "An executive on a train switches from Wi-Fi to 5G 40 seconds into a complex financial report generation; standard SSE/WebSocket drops the connection and loses the entire response",
+      "model_answer": "Buffer active token streams in a **60-Second TTL `Redis Stream` Ring Buffer** keyed by `stream_id` and stamp every SSE event with an incremental `id: <token_seq>`; when the mobile client reconnects with header **`Last-Event-ID: 142`**, the gateway replays tokens `143..current` from Redis and re-attaches to the live stream (`99.6%` mobile resume success rate)!",
+      "tier1_3_failure": "Tier 1 and Tier 2 have no token-offset ring buffer, forcing mobile users to re-run the entire prompt from scratch.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Reasoning Model (`DeepSeek-R1 / o3`) Takes 75 Seconds of Silent Internal Thinking Before Emitting First Visible Token",
+      "original": "0.0% Mid-Stream Timeout Drop Rate",
+      "perturbed": "0.0% Drop Rate (Gateway Emits `: heartbeat\\n\\n` SSE Comment Every 15s, Keeping Corporate Firewalls & ALB Alive)",
+      "change_pts": "0.0 pts (Zero 504 Gateway Timeouts)"
+    },
+    {
+      "check": "Slow Mobile 3G Client Reading at 2 KB/s While vLLM Generates at 80 Tokens/Sec (Backpressure Memory Bloat)",
+      "original": "385ms TTFT | Bounded Gateway RAM",
+      "perturbed": "Bounded RAM (Redis Stream Ring Buffer Decouples Fast GPU Producer from Slow Mobile Consumer; GPU Frees KV Immediately!)",
+      "change_pts": "0.0 pts (Zero GPU Backpressure Stall)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (Edge HTTP/2 SSE with `X-Accel-Buffering: no` + `15s` Heartbeat + Internal gRPC + `<10ms` Client-Disconnect Cancellation + `Last-Event-ID` Redis Resume) cuts perceived browser P99 TTFT from 14,800ms (Tier 1 buffered proxy) to 385ms and eliminates 98.3% of zombie GPU decode waste ($24K/mo vs $168K/mo).",
+    "Propagating client `AbortController` disconnects through the AI Gateway to `vLLM engine.abort()` reclaims 24% of total GPU decode capacity otherwise wasted on abandoned tabs.",
+    "Decoupling fast GPU token generation from slow mobile consumers via a 60s Redis Stream ring buffer prevents slow clients from holding expensive GPU HBM KV-Cache blocks."
+  ]
+}
