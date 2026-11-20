@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Enterprise RAG Multi-Stage Reranker Cascade Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Enterprise RAG Multi-Stage Retrieval &amp; Reranking Cascade Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare Top-25 Stuffing vs. Top-100 Heavy Rerank vs. 100-&gt;25-&gt;5 Cascade</div>
+    <div class="grid">
+      <div class="card">
+        <label>Peak RAG Queries per Second (QPS): <strong id="qVal">500 QPS</strong></label>
+        <input type="range" id="qps" min="50" max="2000" step="50" value="500" oninput="recalc()">
+        <label>Stage-1 Hybrid RRF Candidate Pool: <strong id="cVal">100 Chunks</strong></label>
+        <input type="range" id="cands" min="50" max="200" step="25" value="100" oninput="recalc()">
+        <label>Stage-2 Pruned Pool Sent to Cross-Encoder: <strong id="pVal">25 Chunks</strong></label>
+        <input type="range" id="pruned" min="10" max="50" step="5" value="25" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t4Ndcg">96.8%</div><div class="lbl">Tier 4 NDCG@5 (vs 71.2% Vector-Only)</div></div>
+          <div class="kpi"><div class="val" id="t4Lat">42.0 ms</div><div class="lbl">Cascade P99 Latency (vs 485ms Tier 3)</div></div>
+          <div class="kpi"><div class="val" id="t2Cost">$185,000</div><div class="lbl">Tier 2 Monthly TCO (Top-25 Context Stuffing)</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$19,000</div><div class="lbl">Tier 4 Monthly TCO (-89.7% Savings)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Retrieval &amp; Reranking Architecture Tier</th><th>NDCG@5 Precision</th><th>Retrieval + Rerank P99</th><th>LLM Context Token Savings</th><th>Monthly TCO</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Single-Stage Dense Vector Top-5 Only</td><td>71.2%</td><td>14.0 ms</td><td>0.0% (baseline 5 chunks)</td><td>$128,000 / mo</td></tr>
+          <tr><td>Tier 2: Top-25 Unreranked Prompt Stuffing</td><td>78.5%</td><td>22.0 ms</td><td>-400.0% (5x token bloat)</td><td>$185,000 / mo</td></tr>
+          <tr><td>Tier 3: Heavy Cross-Encoder on All Top-100 Candidates</td><td>95.4%</td><td>485.0 ms</td><td>+40.0%</td><td>$96,000 / mo</td></tr>
+          <tr><td><strong>Tier 4: 3-Stage Cascade (100 RRF -&gt; 25 Pruner -&gt; 5 CE + Cutoff)</strong></td><td><strong>96.8%</strong></td><td><strong>42.0 ms</strong></td><td><strong>+62.0% (score &gt;= 0.35 gate)</strong></td><td><strong>$19,000 / mo</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const q = parseInt(document.getElementById('qps').value, 10);
+      const c = parseInt(document.getElementById('cands').value, 10);
+      const p = parseInt(document.getElementById('pruned').value, 10);
+      document.getElementById('qVal').textContent = q + ' QPS';
+      document.getElementById('cVal').textContent = c + ' Chunks';
+      document.getElementById('pVal').textContent = p + ' Chunks';
+      const lat = (14 + 28 * (p / 25)).toFixed(1);
+      const t2Cost = Math.round(185000 * (q / 500));
+      const t4Cost = Math.round(19000 * (q / 500) * (0.6 + 0.4 * (p / 25)));
+      document.getElementById('t4Lat').textContent = lat + ' ms';
+      document.getElementById('t2Cost').textContent = '$' + t2Cost.toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + t4Cost.toLocaleString();
+    }
+  </script>
+</body>
+</html>
