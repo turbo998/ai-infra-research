@@ -1,0 +1,109 @@
+{
+  "experiment_id": "enterprise_multi_cloud_ai_disaster_recovery_active_active_gateway_failover_selection",
+  "round": 492,
+  "title": "Enterprise Multi-Cloud AI Active-Active High Availability, Disaster Recovery & Cross-Provider Model Failover Architecture Selection",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "baseline_workload": {
+    "monthly_enterprise_tokens": 80000000000,
+    "target_effective_availability_sla_pct": 99.99,
+    "brownout_ttft_threshold_ms": 900,
+    "provider_split": "70% Primary Cloud PTU + 20% Secondary Cloud + 10% Self-Hosted K8s vLLM"
+  },
+  "tiers": [
+    {
+      "tier": "Tier 1: Single-Cloud Single-Region Endpoint with Client Exponential Backoff (`30s–60s` Retry Loop)",
+      "architecture": "All enterprise apps call one cloud region (`Azure OpenAI East US 2` or `AWS Bedrock us-east-1`) with client-side `tenacity` retries on HTTP 429/503",
+      "effective_service_availability_sla_pct": 99.1,
+      "brownout_failover_recovery_p99_latency_ms": 28500.0,
+      "cross_model_schema_and_quality_parity_pct": 100.0,
+      "idle_dr_standby_capacity_waste_pct": 0.0,
+      "monthly_80b_token_ha_platform_tco_usd": 248000
+    },
+    {
+      "tier": "Tier 2: Dual-Cloud 100% Duplicated Active-Passive Reserved Capacity (`2x Full PTU / Provisioned Throughput`)",
+      "architecture": "Buying 100% peak PTU in Azure and 100% standby Provisioned Throughput in AWS Bedrock, switching only on hard HTTP 500/503 outages",
+      "effective_service_availability_sla_pct": 99.85,
+      "brownout_failover_recovery_p99_latency_ms": 6400.0,
+      "cross_model_schema_and_quality_parity_pct": 78.5,
+      "idle_dr_standby_capacity_waste_pct": 50.0,
+      "monthly_80b_token_ha_platform_tco_usd": 312000
+    },
+    {
+      "tier": "Tier 3: Naive Round-Robin Multi-Cloud Proxy Without Prompt/Tool Canonicalization or TTFT Probe",
+      "architecture": "Spraying requests across GPT-4o, Claude 3.7 Sonnet, and Gemini 1.5 Pro with identical raw prompts and default 60s HTTP timeouts",
+      "effective_service_availability_sla_pct": 99.6,
+      "brownout_failover_recovery_p99_latency_ms": 14200.0,
+      "cross_model_schema_and_quality_parity_pct": 74.0,
+      "idle_dr_standby_capacity_waste_pct": 18.0,
+      "monthly_80b_token_ha_platform_tco_usd": 196000
+    },
+    {
+      "tier": "Tier 4: Weighted Active-Active Multi-Cloud AI Gateway (`70% Primary PTU + 20% Secondary Cloud + 10% Self-Hosted K8s vLLM`) + `900ms TTFT` Hedged Failover + Canonical Prompt/Schema Adapter",
+      "architecture": "AI Gateway routes 70% baseline to Primary Cloud PTU, 20% live canary to Secondary Cloud, and 10% to Self-Hosted AKS/EKS vLLM (`Qwen2.5-72B / Llama-3.3-70B`) with `<900ms` first-token brownout hedging and canonical JSON/MCP schema adapters",
+      "effective_service_availability_sla_pct": 99.99,
+      "brownout_failover_recovery_p99_latency_ms": 920.0,
+      "cross_model_schema_and_quality_parity_pct": 99.2,
+      "idle_dr_standby_capacity_waste_pct": 0.0,
+      "monthly_80b_token_ha_platform_tco_usd": 134000
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "MC1",
+      "scenario": "Surviving Upstream Cloud LLM 'Silent Brownouts' (HTTP 200 Connection Accepted, 25s Zero-Token Stall)",
+      "question": "During a regional capacity brownout on the primary cloud provider, the TCP connection succeeds and returns HTTP 200 SSE headers, but no first token arrives for 25 seconds",
+      "model_answer": "Standard HTTP status health checks (`Tier 1/2`) stay blind to SSE stream stalls! Configure the AI Gateway with a **First-Token Watchdog (`TTFT > 900ms`) + Speculative Hedged Request** that immediately cancels or shadows the stalled stream onto the secondary cloud (`AWS Bedrock Claude` / `Vertex Gemini`)—recovering P99 TTFT in **`920ms`** vs `28,500ms`",
+      "tier1_3_failure": "Tier 1 & Tier 2 wait for the full 30s–60s HTTP socket timeout before triggering a retry, freezing customer-facing Copilots.",
+      "action": "Act automatically",
+      "confidence": 1.0
+    },
+    {
+      "id": "MC2",
+      "scenario": "Eliminating the '$156K/Month Idle DR Tax' of 100% Duplicated Standby PTUs",
+      "question": "The Risk Committee mandates multi-cloud LLM disaster recovery for 80B tokens/month, but buying 100% duplicate Provisioned Throughput on a second cloud wastes $156,000/month in idle capacity",
+      "model_answer": "Replace Cold Active-Passive `2x PTU` (`Tier 2`, `50%` idle waste) with **Weighted Active-Active Routing (`70% Primary Cloud PTU + 20% Secondary Cloud Warm Pool + 10% Self-Hosted K8s vLLM`)** plus on-demand **Burst PAYGO Spillover** during regional failovers (`0.0%` idle standby waste, `$134K/mo` vs `$312K/mo`, `-57.1%` TCO)",
+      "tier1_3_failure": "Tier 2 pays full monthly commitment for a passive secondary PTU pool that processes 0 tokens 99.5% of the year.",
+      "action": "Act automatically",
+      "confidence": 0.99
+    },
+    {
+      "id": "MC3",
+      "scenario": "Preventing Downstream JSON & Tool-Call Breakage During Cross-Provider Model Failover (`GPT-4o <-> Claude <-> Qwen/Llama`)",
+      "question": "When traffic fails over from Azure OpenAI (`GPT-4o`) to AWS Bedrock (`Claude 3.7 Sonnet`) or self-hosted `vLLM` (`Qwen2.5-72B`), 26% of downstream agent tool calls fail due to system-prompt formatting and JSON schema dialect differences",
+      "model_answer": "Never forward raw model-specific prompts across clouds (`Tier 3`, `74.0%` parity)! Enforce a **Canonical Model-Agnostic Contract Layer** in the AI Gateway: (1) normalize tool definitions to **OpenAI/MCP JSON Schema**, (2) apply per-family **Prompt & System-Role Templates**, and (3) run continuous **20% Live Traffic Golden-Set Evaluation** across all three providers (`99.2%` schema & quality parity)",
+      "tier1_3_failure": "Tier 3 swaps the backend model endpoint without translating tool-choice syntax or XML/JSON behavioral formatting, breaking 26% of workflows.",
+      "action": "Confirm",
+      "confidence": 0.99
+    },
+    {
+      "id": "MC4",
+      "scenario": "Cross-Cloud Conversation State & RAG Vector Index Continuity During Regional Outage (`RPO = 0`)",
+      "question": "If the primary cloud region goes down mid-conversation, how does the secondary cloud resume a 15-turn enterprise Copilot session and execute RAG retrieval without losing context?",
+      "model_answer": "Decouple **Session State & RAG Storage** from any single LLM endpoint: persist conversation history in **Geo-Replicated Redis / Cosmos DB / DynamoDB Global Tables** and replicate the **Hot Vector Index (or Read-Replica Snapshot)** to the secondary cloud, achieving `99.99%` effective availability with `RPO = 0`",
+      "tier1_3_failure": "Storing conversation threads inside provider-locked stateful Assistants APIs traps session state inside the failed region.",
+      "action": "Send to a human",
+      "confidence": 0.99
+    }
+  ],
+  "perturbation_checks": [
+    {
+      "check": "Simultaneous Primary Region HTTP 429 Quota Exhaustion + 18-Second Upstream TTFT Brownout",
+      "original": "99.99% Availability | 920ms Failover P99",
+      "perturbed": "99.98% Availability (900ms TTFT Breaker + EWMA Load Balancer Shifts 85% Traffic in 1.5s)",
+      "change_pts": "-0.01 pts (Zero Outage)"
+    },
+    {
+      "check": "Provider-Wide Public Cloud Control-Plane Outage Requiring Sovereign On-Premises / K8s Fallback",
+      "original": "99.2% Cross-Provider Parity",
+      "perturbed": "98.4% Parity (10% Self-Hosted AKS/EKS vLLM `Qwen2.5-72B/Llama-3.3-70B` Scales Out via KEDA + P2P Weights)",
+      "change_pts": "-0.8 pts (Business Continuity Preserved)"
+    }
+  ],
+  "key_findings": [
+    "Tier 4 (Weighted Active-Active Multi-Cloud Gateway `70/20/10` + `900ms TTFT` Hedged Failover + Canonical Prompt/Schema Adapter) achieves 99.99% availability and 920ms failover P99 latency at $134K/mo (-57.1% vs Tier 2 duplicated standby PTU).",
+    "Relying on HTTP 500/503 status codes alone misses upstream LLM 'silent brownouts' where HTTP 200 SSE headers return immediately but token generation stalls for 15–30 seconds.",
+    "Keeping 20% live production traffic on a secondary cloud and 10% on self-hosted K8s vLLM eliminates the 50% idle DR capacity tax while continuously validating cross-model schema parity (99.2%)."
+  ]
+}
