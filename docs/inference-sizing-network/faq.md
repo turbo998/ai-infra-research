@@ -182,8 +182,8 @@ FP8 70.6B，5% 元数据余量 → 权重 74.13 GB；加上一例 KV 85.90 GB。
 ```text
 TPOT_weight_floor ≈ active_weight_GB/(N_GPU×BW_GBps×MBU)
 带宽场景还要加每步 KV 读取
-Prefill FLOPs ≈ 2×active_params×S×B_prefill
-              +2×L×hidden×S²×B_prefill
+Prefill FLOPs ≈ 2×active_params×S_p×B_prefill
+              +2×L×hidden×S_p²×B_prefill
 ```
 
 同一默认算例使用 H200 4.8 TB/s、MBU 0.6、目标 TPOT 20 ms，权重+KV 读带宽场景下界为 **3 卡**。Prefill 使用 dense BF16 989.5 TFLOPS、MFU 0.4、TTFT 800 ms 减预留 100 ms，1 个完整 8K Prefill 的算力下界为 **5 卡**。取三者最大值，再给待压测的 2 的幂候选 **8 卡**，仍不是采购保证或已验证 TP 配置。

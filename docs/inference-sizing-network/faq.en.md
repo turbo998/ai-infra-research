@@ -64,11 +64,11 @@ Throughput counts all completed requests/tokens; goodput counts those meeting ag
 
 H5 tradeoff curves derive from adjustable deterministic teaching models, not hardware Pareto frontiers. With equal output lengths, request pass fraction can multiply token TPS. Unequal lengths require actual token weighting.
 
-The numeric timestamp workbench keeps seven teaching requests and 18 visible tokens, including failures, rejection, quality failure and a single token. The burst gaps `0,0,60 ms` average20 ms: they pass a mean-TPOT35 ms contract but fail a max-ITL35 ms contract. The same raw18 tok/s therefore yields **9 versus5 compliant tok/s**. These synthetic traces do not predict production P99, and repeated chunk timestamps do not mean zero-ms GPU decode.
+The numeric timestamp workbench keeps seven teaching requests and 18 visible tokens, including failures, rejection, quality failure and a single token. The burst gaps `0,0,60 ms` average 20 ms: they pass a mean-TPOT 35 ms contract but fail a max-ITL 35 ms contract. The same raw 18 tok/s therefore yields **9 versus 5 compliant tok/s**. These synthetic traces do not predict production P99, and repeated chunk timestamps do not mean zero-ms GPU decode.
 
-Concurrency is calculated from interval area. With a one-second, fully contained client-boundary trace, `L=1.475` equals `λ×meanW` as a finite-trace identity, not proof of steady capacity. Clip the window to200 ms: area `L=4.695`, but in-window terminal rate×terminal mean residence is **1.345**. Do not turn boundary bias into a scaling decision. The admitted boundary can include server queueing, not just GPU busy time.
+Concurrency is calculated from interval area. With a one-second, fully contained client-boundary trace, `L=1.475` equals `λ×meanW` as a finite-trace identity, not proof of steady capacity. Clip the window to 200 ms: area `L=4.695`, but in-window terminal rate×terminal mean residence is **1.345**. Do not turn boundary bias into a scaling decision. The admitted boundary can include server queueing, not just GPU busy time.
 
-For new profiling, consider **NVIDIA AIPerf**. As reviewed on2026-11-21, official GenAI-Perf docs announce phased-out feature development and recommend AIPerf. The learning page installs nothing, connects to no serving endpoint and does not borrow example performance from different machines.
+For new profiling, consider **NVIDIA AIPerf**. As reviewed on 2026-11-21, official GenAI-Perf docs announce phased-out feature development and recommend AIPerf. The learning page installs nothing, connects to no serving endpoint and does not borrow example performance from different machines.
 
 **Lifecycle example**: queue 120 ms + prefill/first-token compute 300 ms + delivery 30 ms = TTFT 450 ms. At 128 output tokens and TPOT 20 ms, E2EL = 450 + 127×20 = **2990 ms**, with about **50 tok/s** subsequent streaming.
 
@@ -100,9 +100,9 @@ Output TPM = 13×512×60 = 399,360
 
 Targets are **assumed planning means**, not established observations. Replace with measured E[W] for observed verification; test bursts, growing queues and rejection separately.
 
-Do not multiply separately averaged output length and TPOT for mixed traffic. The teaching IDE/RAG/reasoning mix is50%/40%/10%, with residence1.145/18.685/206.75s. MeanW is **28.7215s** and13 planned QPS gives L=373.3795. Reasoning is10% of requests but **71.98% of mean in-flight population**; the incorrect separate-mean shortcut gives17.7231s. Verify class means on the same workload; L is not automatically GPU residency.
+Do not multiply separately averaged output length and TPOT for mixed traffic. The teaching IDE/RAG/reasoning mix is 50%/40%/10%, with residence 1.145/18.685/206.75 s. Mean W is **28.7215 s** and 13 planned QPS gives L=373.3795. Reasoning is 10% of requests but **71.98% of mean in-flight population**; the incorrect separate-mean shortcut gives 17.7231 s. Verify class means on the same workload; L is not automatically GPU residency.
 
-Burst end is not immediate recovery: service10 RPS, base8 QPS and a30-second3× burst yield **420 request-equivalents**. Two spare RPS need **210 seconds** to drain. A300ms queue-only budget holds about three fluid request-equivalents, so about417 need rejection/routing. This fixed-average-μ approximation neither predicts actual P99 nor creates extra service capacity.
+Burst end is not immediate recovery: service 10 RPS, base 8 QPS and a 30-second 3× burst yield **420 request-equivalents**. Two spare RPS need **210 seconds** to drain. A 300 ms queue-only budget holds about three fluid request-equivalents, so about 417 need rejection/routing. This fixed-average-μ approximation neither predicts actual P99 nor creates extra service capacity.
 
 ### Q7. How are instance counts derived?
 
@@ -129,9 +129,9 @@ Normalized TPM = Input TPM×[(1−cache)+cache×cached_weight]
 
 Microsoft Learn's GPT-5.2 Data Zone example: 200K input TPM, 20K output TPM, output weight 8 and 3400 input-equivalent TPM/PTU. With 50% cache and zero cached weight: **260K normalized TPM → 76.47 PTU → 80 PTU**. H5 minimum is a manual example field; verify the real deployment table. GPT-6+, cache writes, images and context tiers may need extra weights, not an assumed free category.
 
-The2026-11-21 GPT-6.1/6.2 snapshot assigns each token once to short/long ordinary input, cached read,30-minute write,12-hour write or output. Short/long weights are: cached read0.05/0.1, ordinary input1/2, output5/7.5,30-minute write1.25/2.5,12-hour write2.5/5. GPT-6 Sol/Luna/Astra reads use0.1/0.2. Context tiers follow the specific model/pricing definition, not a universal128K cutoff.
+The 2026-11-21 GPT-6.1/6.2 snapshot assigns each token once to short/long ordinary input, cached read, 30-minute write, 12-hour write or output. Short/long weights are: cached read 0.05/0.1, ordinary input 1/2, output 5/7.5, 30-minute write 1.25/2.5, 12-hour write 2.5/5. GPT-6 Sol/Luna/Astra reads use 0.1/0.2. Context tiers follow the specific model/pricing definition, not a universal 128K cutoff.
 
-H5default categories convert264K raw TPM into **271K normalized TPM**. `gpt-6.2-sol /2026-11-17` supplies2950 normalized TPM/PTU: raw91.86, rounded **95 PTU** for Global/Data Zone minimum15/increment5 or **100 PTU** for Regional25/25. Incorrectly treating reads as free gives90 Global PTU. Do not count cache writes again as ordinary input. This is not a subscription-quota, regional-capacity or price query; no new demand does not erase idle costs of existing deployments.
+H5 default categories convert 264K raw TPM into **271K normalized TPM**. `gpt-6.2-sol / 2026-11-17` supplies 2950 normalized TPM/PTU: raw 91.86, rounded **95 PTU** for Global/Data Zone minimum 15/increment 5 or **100 PTU** for Regional 25/25. Incorrectly treating reads as free gives 90 Global PTU. Do not count cache writes again as ordinary input. This is not a subscription-quota, regional-capacity or price query; no new demand does not erase idle costs of existing deployments.
 
 Whole self-hosted cluster cost `$40/h`, compliant output `5000 tok/s`:
 
@@ -182,8 +182,8 @@ Read bandwidth and compute are separate:
 ```text
 TPOT_weight_floor ≈ active_weight_GB/(N_GPU×BW_GBps×MBU)
 The bandwidth scenario also includes full KV reads per step
-Prefill FLOPs ≈ 2×active_params×S×B_prefill
-              +2×L×hidden×S²×B_prefill
+Prefill FLOPs ≈ 2×active_params×S_p×B_prefill
+              +2×L×hidden×S_p²×B_prefill
 ```
 
 The default example uses H200 4.8 TB/s, MBU 0.6 and TPOT 20 ms: weight+KV-read scenario floor **3 GPUs**. For one full 8K prefill, dense BF16 989.5 TFLOPS, MFU 0.4 and TTFT 800 ms minus 100 ms reserve give a compute floor of **5 GPUs**. Take the maximum and suggest the next power-of-two test candidate, **8 GPUs**. This is still not procurement assurance or a validated TP layout.
@@ -223,17 +223,17 @@ With 10 ms verified overlap and 0.2 ms fixed overhead: **23.754432 ms** exposed.
 
 Logical KV, actual wire bytes and D referenced state are different quantities. Multiply wire traffic only when the real transport sends extra copies; D-local NVLink broadcast need not double network bytes. A D-cached prefix reduces new transfer but still consumes referenced state, including future output. Opaque packing/scales can override theoretical bytes/token only with the unique, nonduplicated logical size.
 
-The PD workbench inherits one transfer case and takes the minimum P-input, D-output, D-slot and network capacity. Default teaching bounds P200K input TPS, D12K output TPS,256 D slots and10 QPS yield a D-output constraint of **23.4375 requests/s** and12K candidate system-output TPS, not measured goodput. Verify per-rank memory, model/tokenizer/dtype/block/layout and same-workload latency separately.
+The PD workbench inherits one transfer case and takes the minimum P-input, D-output, D-slot and network capacity. Default teaching bounds P: 200K input TPS, D: 12K output TPS, 256 D slots and 10 QPS yield a D-output constraint of **23.4375 requests/s** and 12K candidate system-output TPS, not measured goodput. Verify per-rank memory, model/tokenizer/dtype/block/layout and same-workload latency separately.
 
-First-visible-token origin changes the contract: after D handoff, TTFT budget is about **573.75 ms**; early P output can be about **500 ms** yet produce a **93.75 ms** first subsequent gap, missing a35 ms streaming budget. These sum engineering budgets, not stage P99s. Deduct overlap only when the backend supports it and traces confirm it; some pull paths begin transfer after P finishes.
+First-visible-token origin changes the contract: after D handoff, TTFT budget is about **573.75 ms**; early P output can be about **500 ms** yet produce a **93.75 ms** first subsequent gap, missing a 35 ms streaming budget. These sum engineering budgets, not stage P99s. Deduct overlap only when the backend supports it and traces confirm it; some pull paths begin transfer after P finishes.
 
 ### Q16. Are Mooncake, Dynamo, vLLM and SGLang mutually exclusive?
 
 No. Dynamo provides orchestration/routing/scaling; Mooncake a KV-centric transfer/store ecosystem; vLLM/SGLang serving engines and connectors/runtimes. A deployment can combine them. Verify backend release, KV layout/dtype, TP reshaping, cache correctness, recovery and both pools.
 
-Each H5point generates **200 requests with32 output tokens**,31 subsequent gaps/request and **6200 ITL samples**. Request-P99 TPOT uses the200 per-request means; pooled-P99 ITL uses the same6200 gaps, not the same statistic. Ordinary requests interfere about once per20 gaps, with extra bursts in2% of requests. First output is assumed already D-visible, excluding startup handoff and overload prediction. PD retains residual jitter rather than promising none.
+Each H5 point generates **200 requests with 32 output tokens**, 31 subsequent gaps/request and **6200 ITL samples**. Request-P99 TPOT uses the 200 per-request means; pooled-P99 ITL uses the same 6200 gaps, not the same statistic. Ordinary requests interfere about once per 20 gaps, with extra bursts in 2% of requests. First output is assumed already D-visible, excluding startup handoff and overload prediction. PD retains residual jitter rather than promising none.
 
-GitHub release metadata observed2026-11-21 lists Dynamo **v1.6.2**, vLLM **v0.34.0**, SGLang **v0.5.23** and Mooncake **v0.3.14**. This is not a validated combined stack; main/indexed docs can be newer. Some hybrid-attention recipes require matching P/D TP or restrict MTP+PD, and NIXL pull/push differ in PCP/DCP support. Available NVLink does not prove cross-Pod CUDA IPC; verify PID namespaces and actual transfer logs.
+GitHub release metadata observed 2026-11-21 lists Dynamo **v1.6.2**, vLLM **v0.34.0**, SGLang **v0.5.23** and Mooncake **v0.3.14**. This is not a validated combined stack; main/indexed docs can be newer. Some hybrid-attention recipes require matching P/D TP or restrict MTP+PD, and NIXL pull/push differ in PCP/DCP support. Available NVLink does not prove cross-Pod CUDA IPC; verify PID namespaces and actual transfer logs.
 
 ## Chapter 5: parallelism and acceleration
 
@@ -271,9 +271,9 @@ Four stages and eight microbatches take `8+4−1=11` ideal forward-only stage sl
 
 Payload bypasses host-DRAM staging; a NIC DMAs into registered GPU memory. CPU/drivers still set up connections, registration, pinning, queues, control and errors. Check PCIe affinity, IOMMU/ACS, peer-memory/DMA-BUF and drivers. Zero host copy is not zero overhead.
 
-Payload still crosses actual PCIe endpoints/switch paths. Gen3/4/5 one-way encoded bandwidth is `GT/s×lanes×128/130÷8`: Gen5x16 is about **63.02 GB/s**, or **53.56 GB/s** at the assumed85% payload fraction. An800G port's100 GB/s line rate can still hit PCIe first. Active ports differ from NIC PCIe-card links; dual ports share their card budget. Gen6/7 PAM4/FLIT needs different accounting.
+Payload still crosses actual PCIe endpoints/switch paths. Gen3/4/5 one-way encoded bandwidth is `GT/s×lanes×128/130÷8`: Gen5x16 is about **63.02 GB/s**, or **53.56 GB/s** at the assumed 85% payload fraction. An 800G port's 100 GB/s line rate can still hit PCIe first. Active ports differ from NIC PCIe-card links; dual ports share their card budget. Gen6/7 PAM4/FLIT needs different accounting.
 
-Default eight GPU endpoints/eight400G single-port cards provide320 GB/s at80% network efficiency. Shared-path300 and allocated-fabric240 cap the model at **240 GB/s**, with a4.27ms fully striped1024 MB floor. One participating GPU endpoint can reduce it to53.56 GB/s. Branding does not determine negotiated generation/lanes, and these are not model-throughput promises.
+Default eight GPU endpoints/eight 400G single-port cards provide 320 GB/s at 80% network efficiency. Shared-path 300 and allocated-fabric 240 cap the model at **240 GB/s**, with a 4.27 ms fully striped 1024 MB floor. One participating GPU endpoint can reduce it to 53.56 GB/s. Branding does not determine negotiated generation/lanes, and these are not model-throughput promises.
 
 Same-node pods do not prove NVLink. Indexed Dynamo/UCX CUDA IPC requires PID namespace/peer-GPU visibility conditions; otherwise RDMA/TCP fallback can occur without a NIXL error. Inspect logs/payloads rather than making privileged/hostPID a default fix; tenant isolation needs approved configuration.
 
@@ -283,7 +283,7 @@ Classic lossless-RoCE baseline: switch ECN marks CE early → receiver RNIC send
 
 ECN is early feedback; PFC is a hop-level brake, not end-to-end congestion control. Validate deadlock/HOL mitigation, watchdogs, counters and incast. Modern fabrics may use alternative congestion control, receiver credits or loss-tolerant RDMA; this guide is not the sole configuration recipe.
 
-Headroom absorbs traffic arriving before pause takes effect. An engineering floor is `link_Bps×reaction_seconds+max_frame+guard`:400G,10µs,9KB frame and50KB guard need about **0.559 MB**. A16MB teaching buffer keeps3.2MB beyond80% Xoff. At800G/100µs, the requirement is about **10.059 MB**, so the same threshold fails. Percentages are not vendor profiles; verify ASIC/line-card/shared-buffer limits.
+Headroom absorbs traffic arriving before pause takes effect. An engineering floor is `link_Bps×reaction_seconds+max_frame+guard`: 400G, 10 µs, 9 KB frame and 50 KB guard need about **0.559 MB**. A 16 MB teaching buffer keeps 3.2 MB beyond 80% Xoff. At 800G/100 µs, the requirement is about **10.059 MB**, so the same threshold fails. Percentages are not vendor profiles; verify ASIC/line-card/shared-buffer limits.
 
 ### Q23. How are 900/1800 GB/s NVLink and 400/800G NICs compared?
 
@@ -291,7 +291,7 @@ Normalize scope first. NVLink 4/5 advertises 900/1800 GB/s per-GPU aggregate bid
 
 Rail optimization maps corresponding GPU/NIC indices onto rails for affinity and controllable paths. Cross-rail traffic still uses spine/routing; “rails×line rate” is not automatic.
 
-In the toy mapping, eight GPUs send1GB each over four400G rails at80% efficiency. Balanced2/2/2/2GB yields a **50ms** floor; one-rail collision yields **200ms**. Remapping after one failed rail gives3/3/2GB and **75ms**, not automatic3×40GB/s full bandwidth. Without remapping the whole transfer cannot finish; blocked bytes remain rather than becoming successful throughput. Hotspots/fabric budgets add bottlenecks; actual routing/recovery is not simulated.
+In the toy mapping, eight GPUs send 1 GB each over four 400G rails at 80% efficiency. Balanced 2/2/2/2 GB yields a **50 ms** floor; one-rail collision yields **200 ms**. Remapping after one failed rail gives 3/3/2 GB and **75 ms**, not automatic 3×40 GB/s full bandwidth. Without remapping the whole transfer cannot finish; blocked bytes remain rather than becoming successful throughput. Hotspots/fabric budgets add bottlenecks; actual routing/recovery is not simulated.
 
 ### Q24. Why do NCCL algbw and busbw differ?
 
@@ -304,7 +304,7 @@ Broadcast / Reduce / SendRecv: factor=1
 
 1000 MB/20 ms gives algbw **50 GB/s**. An 8-rank AllReduce gives busbw **87.5 GB/s**. This normalizes communication volume, not one-port wire overspeed. AllGather/ReduceScatter S is the total array, not one rank's shard. Align operation, size scope, path, topology, dtype, warmup and errors.
 
-When entering API `count×dtype_bytes`, AllGather(sendcount), ReduceScatter(recvcount) and fixed AllToAll(per-peer count) multiply byn to get totalS; AllReduce does not. At eight ranks,1000 MB/API chunk and20ms, AllGather has S8000 MB, algbw400 and busbw350 GB/s, not50/43.75. Use actual aligned counts/reported sizes. Variable AllToAllv needs max send/recv bytes, not mean expert traffic in the fixed formula.
+When entering API `count×dtype_bytes`, AllGather(sendcount), ReduceScatter(recvcount) and fixed AllToAll(per-peer count) multiply by n to get total S; AllReduce does not. At eight ranks, 1000 MB/API chunk and 20 ms, AllGather has S=8000 MB, algbw=400 and busbw=350 GB/s, not 50/43.75. Use actual aligned counts/reported sizes. Variable AllToAllv needs max send/recv bytes, not mean expert traffic in the fixed formula.
 
 ## Decision matrix: identify the failure before choosing a technique
 
