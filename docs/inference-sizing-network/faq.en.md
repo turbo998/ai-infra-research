@@ -225,9 +225,15 @@ Prefer frequent TP synchronization in the fast domain, but server names do not d
 
 Speculation depends on acceptance, draft/verification cost, batch saturation, sampling and constraints, with extra draft/MTP memory. Prefix reuse needs identical tokenized prefixes and mainly saves prefill, not a direct decode doubling. FP8/INT4 changes storage/kernels, but quality, hardware, scales, dequantization and implementation determine net gain.
 
+Speculative hand check: with i.i.d. acceptance α=0.8 and γ=4 drafts, expected committed tokens are `1+0.8+0.64+0.512+0.4096=3.3616`, not five every cycle. With baseline target 20 ms, draft 2 ms/token, extra verification 1 ms/draft and commit overhead 1 ms, a cycle costs 33 ms: conditional mean service **9.82 ms/token, 2.04×**. This formula example does not replace measured acceptance, verification, quality or P99 ITL; multi-token bursts can conceal periodic stalls.
+
+Prefix hand check: 4096 shared tokens within an 8192-token input and 70% request hits avoid `0.7×4096=2867.2 tokens`, only **35% of input work**. At 20K prefill TPS and 2 ms lookup, mean prefill falls from 409.6 ms to **268.24 ms**. All misses add 2 ms instead. Ten independent 70B BF16 prefix entries require about **13.42 GB KV**, with shared blocks, duplication and eviction budgeted separately.
+
 ### Q20. Are more PP microbatches always better?
 
 Ideal balanced-pipeline utilization `m/(m+p−1)` rises with microbatches. Real systems add unequal request lengths, slow stages, KV residency, queues and communication. A request still visits every stage; system throughput does not automatically imply low TTFT.
+
+Four stages and eight microbatches take `8+4−1=11` ideal forward-only stage slots, yielding **8/11=72.73%** utilization. The first request still traverses four stages; extra batches do not shorten its serial path. H5 follows one microbatch diagonally through stages and switches among TP column/row shards, DP replicas and toy EP top-2 dispatch/combine. Toy top-2 is not DeepSeek's real top-8.
 
 ## Chapter 6: RDMA, RoCEv2, NVLink and NCCL
 

@@ -186,6 +186,41 @@ test("non-finite, negative and fractional request-count inputs fail explicitly",
   assert.throws(() => M.capacity({ ...capacity, output: 1.2 }), RangeError);
   assert.throws(() => M.lifecycle({ queue: 0, prefill: 1, delivery: 0, output: 0, tpot: 20 }), RangeError);
 });
+test("balanced forward PP schedules each microbatch serially without treating more batches as lower request latency", () => {
+  const r = M.pipeline({ ranks: 4, batch: 8 });
+  assert.equal(r.slots, 11);
+  near(r.utilization, 8 / 11);
+  assert.equal(r.latencySlots, 4);
+  assert.equal(r.idleSlots, 12);
+  assert.deepEqual(r.schedule.map((row) => row[0].start), [0, 1, 2, 3]);
+  assert.equal(r.schedule[3][7].end, 11);
+  assert.equal(M.pipeline({ ranks: 4, batch: 64 }).latencySlots, 4);
+});
+test("speculative expected commit length uses the acceptance geometric sum and counts every cycle cost", () => {
+  const p = { draftTokens: 4, acceptance: 0.8, targetMs: 20, draftMs: 2, verifyExtraMs: 1, overheadMs: 1 };
+  const r = M.speculative(p);
+  near(r.expectedTokens, 3.3616);
+  assert.equal(r.cycleMs, 33);
+  near(r.probabilities.reduce((a, v) => a + v, 0), 1);
+  near(r.probabilities.reduce((a, v, i) => a + v * (i + 1), 0), r.expectedTokens);
+  near(r.speedup, 20 * 3.3616 / 33);
+  assert.equal(M.speculative({ ...p, acceptance: 0 }).expectedTokens, 1);
+  assert.equal(M.speculative({ ...p, acceptance: 1 }).expectedTokens, 5);
+  assert.ok(M.speculative({ ...p, acceptance: 0 }).speedup < 1);
+  assert.throws(() => M.speculative({ ...p, acceptance: 1.1 }), RangeError);
+});
+test("prefix request hit rate is not the fraction of all input avoided; misses and lookup can hurt", () => {
+  const p = { model: "llama70", kvBytes: 2, prompt: 8192, prefix: 4096, hitRate: 0.7, prefillRate: 20000, lookupMs: 2, entries: 10 };
+  const r = M.prefixCaching(p);
+  near(r.avoidedTokens, 2867.2);
+  near(r.inputComputeTokens, 5324.8);
+  near(r.baselineMs, 409.6);
+  near(r.expectedMs, 268.24);
+  near(r.cacheGB, 13.4217728);
+  assert.equal(M.prefixCaching({ ...p, hitRate: 0 }).savedMs, -2);
+  assert.equal(M.prefixCaching({ ...p, prefix: 0 }).cacheGB, 0);
+  assert.throws(() => M.prefixCaching({ ...p, prefix: 8193 }), RangeError);
+});
 test("all seven pages are standalone, CSP hashes seal actual scripts, bilingual structure and local navigation are present", () => {
   const files = readdirSync(directory).filter((f) => f.endsWith(".html"));
   assert.equal(files.length, 7);

@@ -206,7 +206,43 @@
     const paused = queue >= pfc || (wasPaused && queue > xon);
     return { paused, marked: queue >= ecn, recovering: wasPaused && !paused };
   }
-  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, transfer, percentile, pdSamples, collective, goodput, cost, congestion };
+  function pipeline({ ranks, batch }) {
+    integer(ranks, "pipeline stages", 2, 128);
+    integer(batch, "microbatches", 1, 4096);
+    const slots = batch + ranks - 1;
+    const schedule = Array.from({ length: ranks }, (_, stage) =>
+      Array.from({ length: batch }, (_, microbatch) => ({ stage, microbatch, start: stage + microbatch, end: stage + microbatch + 1 })));
+    return { slots, utilization: batch / slots, latencySlots: ranks, idleSlots: ranks * (ranks - 1), schedule };
+  }
+  function speculative({ draftTokens, acceptance, targetMs, draftMs, verifyExtraMs, overheadMs }) {
+    integer(draftTokens, "draft tokens", 1, 32);
+    number(acceptance, "acceptance", 0, 1);
+    number(targetMs, "target time", 0.001);
+    [draftMs, verifyExtraMs, overheadMs].forEach((v) => number(v, "cycle cost"));
+    const survival = Array.from({ length: draftTokens + 1 }, (_, i) => acceptance ** i);
+    const expectedTokens = survival.reduce((sum, value) => sum + value, 0);
+    const probabilities = survival.map((value, i) => i === draftTokens ? value : value * (1 - acceptance));
+    const verificationMs = targetMs + draftTokens * verifyExtraMs;
+    const cycleMs = draftTokens * draftMs + verificationMs + overheadMs;
+    return { expectedTokens, survival, probabilities, verificationMs, cycleMs, meanServiceMs: cycleMs / expectedTokens, speedup: targetMs * expectedTokens / cycleMs, userTPS: 1000 * expectedTokens / cycleMs };
+  }
+  function prefixCaching({ model: key, kvBytes, prompt, prefix, hitRate, prefillRate, lookupMs, entries }) {
+    const model = preset(models, key);
+    integer(prompt, "prompt tokens", 1);
+    integer(prefix, "shared prefix tokens", 0, prompt);
+    number(hitRate, "prefix hit rate", 0, 1);
+    number(prefillRate, "prefill rate", 0.001);
+    number(lookupMs, "cache lookup");
+    integer(entries, "distinct prefix cache entries", 1);
+    const baselineMs = prompt / prefillRate * 1000;
+    const hitMs = (prompt - prefix) / prefillRate * 1000 + lookupMs;
+    const missMs = baselineMs + lookupMs;
+    const expectedMs = hitRate * hitMs + (1 - hitRate) * missMs;
+    const avoidedTokens = hitRate * prefix;
+    const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
+    return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
+  }
+  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);

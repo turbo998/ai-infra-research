@@ -15,7 +15,7 @@
     const id = `interactive-chart-${chartId++}`;
     return `<figure class="chart"><svg viewBox="0 0 800 ${height}" role="img" aria-labelledby="${id}"><title id="${id}">${esc(caption)}</title>${body}</svg><figcaption>${esc(caption)}</figcaption></figure>`;
   }
-  function plot(series, xLabel, yLabel, caption, gate = null) {
+  function plot(series, xLabel, yLabel, caption, gate = null, gateLabel = "SLO") {
     const width = 640;
     const height = 200;
     const x0 = 100;
@@ -32,7 +32,7 @@
       body += `<text x="${x(valueX)}" y="${y0 + height + 25}" text-anchor="middle">${fmt(valueX, 0)}</text>`;
     }
     body += `<path d="M ${x0} ${y0} V ${y0 + height} H ${x0 + width}" class="axis"/>`;
-    if (gate !== null) body += `<path d="M ${x0} ${y(gate)} H ${x0 + width}" class="line tertiary" stroke-dasharray="6 5"/><text x="${x0 + width}" y="${y(gate) - 8}" text-anchor="end">SLO ${fmt(gate)}</text>`;
+    if (gate !== null) body += `<path d="M ${x0} ${y(gate)} H ${x0 + width}" class="line tertiary" stroke-dasharray="6 5"/><text x="${x0 + width}" y="${y(gate) - 8}" text-anchor="end">${esc(gateLabel)} ${fmt(gate)}</text>`;
     series.forEach((s, index) => {
       const cls = ["primary", "secondary", "tertiary"][index % 3];
       body += `<polyline class="line ${cls}" points="${s.values.map((v) => `${x(v.x)},${y(v.y)}`).join(" ")}"/>`;
@@ -176,30 +176,114 @@
     M.number(p.payload, "payload", 0.001);
     M.number(p.bandwidth, "bandwidth", 0.001);
     const n = p.ranks;
-    const utilization = p.batch / (p.batch + n - 1);
+    const pipe = M.pipeline(p);
     const transferMs = p.payload / p.bandwidth;
-    const mode = {
-      tp: { title: t("TP：同一层的张量切片", "TP: tensor shards of one layer"), subtitle: "AllReduce / RS+AG", caption: t("一个请求进入所有 TP ranks，张量分片再归约；通信往往每层发生。", "One request uses all TP ranks; tensor shards are reduced, often each layer.") },
-      pp: { title: t("PP：连续层分为 stages", "PP: layer ranges become stages"), subtitle: "SendRecv activations", caption: t("同一请求顺序经过所有 stage；更多 microbatch 填满流水线，不把单请求路径变成并行完成。", "One request visits stages serially; microbatches fill the pipeline without parallelizing its entire path.") },
-      dp: { title: t("DP：请求/Attention 分片", "DP: request/attention shards"), subtitle: "Router → shards", caption: t("普通 DP 是独立副本；Attention DP + EP 时只画 attention 请求分片，expert pool 是共享并行组。", "Ordinary DP uses replicas; with attention DP + EP, these are attention request shards with a shared expert group.") },
-      ep: { title: t("EP：专家分布在 ranks", "EP: experts distributed over ranks"), subtitle: "AllToAll dispatch/combine", caption: t("Token 只路由所选 experts；图展示 dispatch/combine，不表示所有请求均匀命中每张卡。", "Tokens route to selected experts; dispatch/combine does not imply uniform rank load.") }
-    };
-    if (!Object.hasOwn(mode, p.kind)) throw new RangeError("Unknown parallel kind");
-    const m = mode[p.kind];
-    let body = `<text x="20" y="28">${esc(m.title)}</text><rect x="20" y="60" width="180" height="95" rx="8" class="primary"/><text x="110" y="97" text-anchor="middle" class="inverse">${p.kind === "dp" ? "Request router" : "Input tokens"}</text><text x="110" y="127" text-anchor="middle" class="inverse">${esc(m.subtitle)}</text>`;
-    const x0 = 250;
-    const width = 480 / n;
-    for (let i = 0; i < n; i += 1) {
-      const x = x0 + i * width;
-      const label = p.kind === "tp" ? `W/${n}` : p.kind === "pp" ? `stage ${i + 1}` : p.kind === "dp" ? `Req ${i + 1}` : `E${i + 1}`;
-      body += `<rect x="${x}" y="65" width="${width - 10}" height="90" rx="6" class="surface"/><text x="${x + (width - 10) / 2}" y="102" text-anchor="middle" class="label">${esc(label)}</text><text x="${x + (width - 10) / 2}" y="128" text-anchor="middle" class="label">rank ${i}</text>`;
-      if (p.kind !== "pp" || i === 0) body += `<path d="M 200 107 L ${x + width / 2} 50 L ${x + width / 2} 60" class="line secondary"/>`;
-      if (p.kind === "pp" && i < n - 1) body += `<path d="M ${x + width - 10} 110 H ${x + width}" class="line primary"/>`;
-    }
-    body += `<rect x="250" y="205" width="470" height="50" rx="8" class="surface"/><text x="485" y="236" text-anchor="middle">${p.kind === "ep" ? "combine → original request shards" : p.kind === "dp" ? "independent outputs / shared expert group when MoE" : "output / communication and synchronization"}</text>`;
-    return kpis([[String(n), `${p.kind.toUpperCase()} ranks`], [fmt(transferMs) + " ms", t("单步骤裸传输估算", "Bare transfer estimate/step")], [p.kind === "pp" ? fmt(utilization * 100) + "%" : "N/A", t("平衡 PP 理想流水利用率", "Ideal balanced-PP utilization")]]) +
-      svg(body, m.caption) +
+    const node = (x, y, width, lines, cls = "surface") =>
+      `<rect x="${x}" y="${y}" width="${width}" height="58" rx="8" class="${cls}"/>` +
+      lines.map((line, i) => `<text x="${x + width / 2}" y="${y + 23 + i * 20}" text-anchor="middle" class="${cls === "primary" ? "inverse" : "label"}">${esc(line)}</text>`).join("");
+    const connect = (x1, y1, x2, y2, cls = "secondary") =>
+      `<path d="M ${x1} ${y1} C ${(x1 + x2) / 2} ${y1}, ${(x1 + x2) / 2} ${y2}, ${x2} ${y2}" class="line ${cls}"/><path d="M ${x2 - 6} ${y2 - 4} L ${x2} ${y2} L ${x2 - 6} ${y2 + 4}" class="line ${cls}"/>`;
+    let body = "";
+    let height;
+    let caption;
+    if (p.kind === "tp") {
+      height = n * 70 + 145;
+      const middle = 55 + n * 35;
+      body = `<text x="15" y="25">TP / two-linear MLP: column-up, row-down, then sum</text>`;
+      body += node(15, middle - 29, 140, ["Same input X", "[B, H]"], "primary");
+      body += node(655, middle - 29, 135, ["AllReduce ΣZ_i", "Output [B,H]"]);
+      for (let i = 0; i < n; i += 1) {
+        const y = 55 + i * 70;
+        body += node(215, y, 215, [`rank ${i}: W_up_i [H,F/${n}]`, `W_down_i [F/${n},H]`]);
+        body += node(475, y, 140, [`Partial Z_${i}`, "[B,H]"]);
+        body += connect(155, middle, 215, y + 29) + connect(430, y + 29, 475, y + 29) + connect(615, y + 29, 655, middle);
+      }
+      body += `<text x="15" y="${height - 28}">Z = Σ GELU(X W_up_i) W_down_i · toy FFN shapes, not measured traffic</text>`;
+      caption = t("同一个 X 进入所有 ranks；每卡持有列切/行切权重，产生同形状部分结果再求和。忽略 gated FFN 细节，图宽不编码通信量。", "The same X reaches all ranks; column/row weight shards produce same-shaped partials that are summed. Gated-FFN details are omitted; widths do not encode traffic.");
+    } else if (p.kind === "pp") {
+      const shown = Math.min(p.batch, 8);
+      const shownSlots = shown + n - 1;
+      const cellWidth = 640 / shownSlots;
+      height = 240 + n * 42;
+      body = `<text x="15" y="25">PP / one request follows the complete serial layer path</text>`;
+      const stageWidth = 710 / n;
+      for (let i = 0; i < n; i += 1) {
+        const x = 50 + i * stageWidth;
+        body += node(x, 52, stageWidth - 12, [`stage ${i}`, "layer group"]);
+        if (i < n - 1) body += connect(x + stageWidth - 12, 81, x + stageWidth, 81);
+      }
+      body += `<text x="15" y="153">Forward-only balanced pipeline · ${shown}/${p.batch} microbatches shown</text>`;
+      for (let stage = 0; stage < n; stage += 1) {
+        const y = 175 + stage * 42;
+        body += `<text x="15" y="${y + 25}">stage ${stage}</text>`;
+        for (let slot = 0; slot < shownSlots; slot += 1) {
+          const microbatch = slot - stage;
+          const active = microbatch >= 0 && microbatch < shown;
+          const x = 130 + slot * cellWidth;
+          body += `<rect x="${x}" y="${y}" width="${cellWidth - 4}" height="32" rx="4"${active ? ` data-microbatch="${microbatch}" data-stage="${stage}"` : ""} class="${active ? (microbatch === 0 ? "primary" : "secondary") : "surface"}"/>`;
+          if (active) body += `<text x="${x + (cellWidth - 4) / 2}" y="${y + 22}" text-anchor="middle" class="inverse">m${microbatch + 1}</text>`;
+        }
+      }
+      body += `<text x="15" y="${height - 28}">Full schedule: ${pipe.slots} slots; one-request path: ${pipe.latencySlots} stage slots</text>`;
+      caption = t(`完整 ${p.batch} 个 microbatch 的理想利用率 ${fmt(pipe.utilization * 100)}%；只显示前 ${shown} 个的填充/排空。stage 等成本假设不预测不等长生产负载。`, `Ideal utilization for all ${p.batch} microbatches is ${fmt(pipe.utilization * 100)}%; only the first ${shown} show fill/drain. Equal stage cost does not predict mixed-length production traffic.`);
+    } else if (p.kind === "dp") {
+      height = n * 70 + (p.attentionDP ? 220 : 140);
+      const middle = 55 + n * 35;
+      body = `<text x="15" y="25">${p.attentionDP ? "Attention DP / request shards with a shared EP group" : "Inference DP / independent complete-weight replicas"}</text>`;
+      body += node(15, middle - 29, 140, ["Request router", "R0...Rk"], "primary");
+      for (let i = 0; i < n; i += 1) {
+        const y = 55 + i * 70;
+        body += node(225, y, 220, [`rank ${i}: requests shard`, p.attentionDP ? "attention weights / work" : "complete model W copy"]);
+        body += node(525, y, 250, [p.attentionDP ? `Attention hidden / owner ${i}` : `Independent output / owner ${i}`, p.attentionDP ? "to shared expert group" : "no gradient AllReduce"]);
+        body += connect(155, middle, 225, y + 29) + connect(445, y + 29, 525, y + 29);
+      }
+      if (p.attentionDP) {
+        const y = 75 + n * 70;
+        body += node(225, y, 550, ["Shared EP domain: dispatch → experts → combine", "Return hidden states to their request owners"]);
+        for (let i = 0; i < n; i += 1) body += `<path d="M 775 ${84 + i * 70} H 790 V ${y + 29} H 775" class="line secondary"/>`;
+      }
+      caption = p.attentionDP ? t("Attention 请求分片送入共享专家组，并行组语义要按引擎确认；不能误画成每 rank 完整复制所有 MoE 专家。", "Attention request shards feed a shared expert group; confirm engine group semantics rather than drawing full MoE-expert copies per rank.") : t("普通 DP 把不同请求交给独立完整副本，不对推理输出做 AllReduce；系统 TPS 扩容不等于单请求变快。", "Ordinary DP sends different requests to complete replicas with no output AllReduce; system scale-out does not accelerate one request.");
+    } else if (p.kind === "ep") {
+      height = n * 70 + 145;
+      body = `<text x="15" y="25">EP / toy 64 experts, top-2 routing · real DeepSeek uses top-8</text>`;
+      const shards = Array.from({ length: n }, (_, i) => ({ start: Math.floor(i * 64 / n), end: Math.floor((i + 1) * 64 / n) - 1 }));
+      const tokens = [[0, 17], [17, 33], [33, 49], [0, 49]];
+      shards.forEach((shard, i) => { body += node(310, 55 + i * 70, 220, [`rank ${i}: expert shard`, `E${shard.start}...E${shard.end}`]); });
+      tokens.forEach((experts, i) => {
+        const y = 55 + i * Math.max(70, (n - 1) * 70 / 3);
+        body += node(15, y, 170, [`Token ${String.fromCharCode(65 + i)}`, `route E${experts[0]}, E${experts[1]}`], "primary");
+        body += node(615, y, 170, [`Owner ${String.fromCharCode(65 + i)}`, "weighted combine"]);
+        for (const expert of experts) {
+          const owner = shards.findIndex((shard) => expert >= shard.start && expert <= shard.end);
+          const targetY = 84 + owner * 70;
+          body += connect(185, y + 29, 310, targetY) + connect(530, targetY, 615, y + 29);
+        }
+      });
+      height = Math.max(height, 4 * 70 + 145);
+      caption = t("固定 64 专家的玩具 top-2 路由展示 dispatch 与 combine，不假装每 Token 访问全部 ranks；部分路由可留在同 rank。专家可整除/分组要求仍以真实 kernel 为准。", "A fixed 64-expert toy top-2 route shows dispatch/combine without every token visiting every rank; some routes are rank-local. Real kernels determine expert divisibility/grouping requirements.");
+    } else throw new RangeError("Unknown parallel kind");
+    return kpis([[String(n), `${p.kind.toUpperCase()} ranks`], [fmt(transferMs) + " ms", t("单步骤裸传输估算", "Bare transfer estimate/step")], [p.kind === "pp" ? fmt(pipe.utilization * 100) + "%" : "N/A", t("平衡 PP 理想流水利用率", "Ideal balanced-PP utilization")]]) +
+      svg(body, caption, height).replace("<svg ", `<svg data-parallel-kind="${p.kind}" data-attention-dp="${Boolean(p.attentionDP)}" `) +
       note(t("图解不是实测缩放率；切分合法性、层数、heads、专家容量和通信重叠必须由实际引擎配置确认。", "The diagram is not measured scaling. Validate partition legality, layers, heads, expert capacity and overlap in the actual engine."));
+  }
+  function speculative(p) {
+    const r = M.speculative(p);
+    const acceptanceSweep = Array.from({ length: 21 }, (_, i) => ({ x: i * 5, y: M.speculative({ ...p, acceptance: i / 20 }).speedup }));
+    return kpis([[fmt(r.expectedTokens, 4), t("每轮期望提交 Token", "Expected committed tokens/cycle")], [fmt(r.cycleMs) + " ms", t("完整 cycle 成本", "Whole-cycle cost")], [fmt(r.speedup) + "×", t("条件性平均服务加速", "Conditional mean-service speedup")], [fmt(r.meanServiceMs) + " ms", t("平均服务/提交 Token，非 P99 ITL", "Mean service/committed token, not P99 ITL")], [fmt(r.userTPS) + " tok/s", t("条件性单流速率", "Conditional single-stream rate")], ["i.i.d.", t("接受率假设", "Acceptance assumption")]]) +
+      barChart(r.probabilities.map((value, i) => ({ label: `P[N=${i + 1}]`, value: value * 100 })), t("每轮提交长度的几何分布：最后一桶包含全部候选接受后的 bonus。坐标来自公式，非测量。", "Geometric commit-length distribution: final bucket includes the all-accepted bonus. Coordinates are formula-derived, not measured."), "%") +
+      plot([{ label: t("条件性加速倍数", "Conditional speedup"), values: acceptanceSweep }], "Acceptance %", "Speedup ×", t("固定成本假设下扫接受率；1× 以下表示额外成本压过收益。", "Acceptance sweep with fixed cost assumptions; below 1× means overhead outweighs benefit."), 1, t("收支平衡", "Break-even")) +
+      dataTable([t("成本组成", "Cycle component"), "ms"], [
+        ["Serial draft", fmt(p.draftTokens * p.draftMs)], ["Target verification", fmt(r.verificationMs)], ["Commit/scheduler", fmt(p.overheadMs)], ["Whole cycle", fmt(r.cycleMs)]
+      ], t("每轮一次完整计费，不把 draft 开销漏掉", "Count each full cycle once, including draft cost"));
+  }
+  function prefixCaching(p) {
+    const r = M.prefixCaching(p);
+    return kpis([[fmt(r.avoidedTokens), t("平均避免输入计算 Token", "Mean avoided input-work tokens")], [fmt(r.inputComputeTokens), t("仍需输入计算 Token", "Remaining input-work tokens")], [fmt(r.expectedMs) + " ms", t("平均 Prefill+lookup（假设）", "Mean prefill+lookup (assumption)")], [fmt(r.savedMs) + " ms", t("净节约，可为负", "Net saving, possibly negative")], [fmt(r.cacheGB) + " GB", t("独立前缀条目 KV 预算", "Independent prefix-entry KV budget")], [fmt(p.hitRate * p.prefix / p.prompt * 100) + "%", t("实际平均避免的输入比例", "Mean avoided-input fraction")]]) +
+      barChart([{ label: "No cache", value: r.baselineMs }, { label: "Hit + lookup", value: r.hitMs }, { label: "Miss + lookup", value: r.missMs }, { label: "Weighted mean", value: r.expectedMs }], t("命中、未命中与加权平均分开；70% 请求命中不等于70%输入都免费。", "Separate hit, miss and weighted mean; 70% request hits do not make 70% of all input free."), "ms") +
+      dataTable([t("条件", "Case"), t("概率", "Probability"), t("输入计算 Token", "Input-work tokens"), t("Prefill+lookup ms", "Prefill+lookup ms")], [
+        ["Hit", fmt(p.hitRate * 100) + "%", p.prompt - p.prefix, fmt(r.hitMs)], ["Miss", fmt((1 - p.hitRate) * 100) + "%", p.prompt, fmt(r.missMs)], ["Mean", "100%", fmt(r.inputComputeTokens), fmt(r.expectedMs)]
+      ], t("相同 Prompt 形状下的线性教学近似", "Linear teaching approximation for the same prompt shape")) +
+      (!r.contextSupported ? note(t("Prompt 超过该模型原始配置上下文；缓存不会赋予长上下文能力。", "Prompt exceeds the stock model context; caching does not confer longer-context capability.")) : "");
   }
   function network(p) {
     const r = M.collective(p);
@@ -233,7 +317,7 @@
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, goodput, capacity, ptu, cost, sizing, pd, parallel, network, congestion };
+  const renderers = { lifecycle, goodput, capacity, ptu, cost, sizing, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
@@ -256,6 +340,11 @@
     if (form.dataset.lab === "sizing") {
       const input = form.querySelector('[data-key="mtp"]');
       input.disabled = form.querySelector('[data-key="model"]').value !== "deepseek";
+      if (input.disabled) input.checked = false;
+    }
+    if (form.dataset.lab === "parallel") {
+      const input = form.querySelector('[data-key="attentionDP"]');
+      input.disabled = form.querySelector('[data-key="kind"]').value !== "dp";
       if (input.disabled) input.checked = false;
     }
   }

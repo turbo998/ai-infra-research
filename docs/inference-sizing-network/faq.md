@@ -225,9 +225,15 @@ H5 P99 曲线来自每点 **200 个确定性 ITL 样本**、5% 干扰和 nearest
 
 投机收益依接受率、draft/验证成本、batch 饱和、采样与约束模式；额外 draft/MTP 占显存。Prefix Caching 只复用相同 tokenized 前缀，主要节省 Prefill，不直接把 Decode 翻倍。FP8/INT4 改变存储/算子，但质量、硬件、scale、反量化和 kernel 决定净收益。
 
+投机手算：接受率独立同分布、α=0.8、每轮 draft γ=4，则期望提交 `1+0.8+0.64+0.512+0.4096=3.3616 Token`，不是每轮都 5 Token。基线 target 20 ms、每候选 draft 2 ms、每候选增加验证 1 ms、提交固定 1 ms，则 cycle=33 ms，条件性平均服务时间约 **9.82 ms/Token，2.04×**。这是公式算例，不能替代实际接受率、验证成本、质量或 P99 ITL；多 Token 突发提交还可能掩盖周期停顿。
+
+前缀手算：8192 输入中有 4096 可共享 Token，70% 请求命中只平均避免 `0.7×4096=2867.2 Token`，即 **35% 输入计算**。20K Prefill TPS 与 2 ms 查找开销下，平均 Prefill 从 409.6 ms 变成 **268.24 ms**；缓存全部 miss 时反而多出 2 ms。10 个独立 70B BF16 前缀条目要额外预算约 **13.42 GB KV**，共享 block 和复制/驱逐策略另算。
+
 ### Q20. PP microbatch 越多越好么？
 
 理想平衡流水线利用率 `m/(m+p−1)` 随 microbatch 增多而提高，但真实系统还有不等长请求、慢 stage、KV 驻留、队列与通信。单请求仍走所有 stages；高系统吞吐不自动等于低 TTFT。
+
+4 stages、8 microbatches 的理想 forward-only 时序共 `8+4−1=11` 个 stage 时间槽，利用率 **8/11=72.73%**。第一条请求仍走 4 个 stage，新增 batch 不会把这条串行路径缩短。H5 可看到同一 microbatch 沿各 stage 对角线移动，也可切换 TP 列切/行切、DP 独立副本与 EP top-2 玩具 dispatch/combine；玩具 top-2 不冒充 DeepSeek 的实际 top-8。
 
 ## 专题 6：RDMA、RoCEv2、NVLink 与 NCCL
 

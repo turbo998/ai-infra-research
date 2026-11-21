@@ -76,6 +76,36 @@ async function probe(exercise, expectedWidth) {
         assert(/Correct|正确/.test(quiz.querySelector(".quiz-result").textContent), "Correct quiz answer failed");
         cases += 2;
       }
+      const parallel = document.querySelector('form[data-lab="parallel"]');
+      if (parallel) {
+        const kind = parallel.querySelector('[data-key="kind"]');
+        for (const value of ["tp", "pp", "dp", "ep"]) {
+          kind.value = value;
+          kind.dispatchEvent(new Event("input", { bubbles: true }));
+          assert(document.querySelector(`[data-parallel-kind="${value}"]`), "Parallel view did not change: " + value);
+          if (value === "pp") {
+            const ranks = Number(parallel.querySelector('[data-key="ranks"]').value);
+            assert(document.querySelectorAll('[data-microbatch="0"]').length === ranks, "First PP microbatch does not traverse every stage");
+          }
+          cases += 1;
+        }
+        const speculative = document.querySelector('[data-results="speculative"]');
+        if (speculative) {
+          const expected = document.documentElement.lang === "en" ? "Break-even" : "收支平衡";
+          assert(speculative.textContent.includes(expected), "Speculation plot mislabeled its economic break-even line as an SLO");
+          cases += 1;
+        }
+        kind.value = "dp";
+        kind.dispatchEvent(new Event("input", { bubbles: true }));
+        const attention = parallel.querySelector('[data-key="attentionDP"]');
+        assert(!attention.disabled, "Attention DP toggle should be enabled in DP mode");
+        attention.checked = true;
+        attention.dispatchEvent(new Event("input", { bubbles: true }));
+        assert(document.querySelector('[data-attention-dp="true"]'), "Attention DP shared-expert view is missing");
+        parallel.reset();
+        await wait();
+        cases += 1;
+      }
       const oldLanguage = document.documentElement.lang;
       document.querySelector("#language").click();
       assert(document.documentElement.lang !== oldLanguage, "Language did not change");
@@ -90,6 +120,24 @@ async function probe(exercise, expectedWidth) {
     assert(window.AcademyDiagnostics.length === 0, "JS/runtime diagnostics: " + window.AcademyDiagnostics.join("; "));
     assert(window.AcademyPolicyDiagnostics.length === 0, "Unexpected CSP policy violation in true offline Edge");
     assert(performance.getEntriesByType("resource").length === 0, "External resource request in offline document");
+    if (expectedWidth <= 600) {
+      const rail = document.querySelector(".chapter-rail");
+      if (rail) {
+        assert(rail.scrollWidth > rail.clientWidth, "Mobile chapter cards have no horizontal rail");
+        assert(getComputedStyle(rail).scrollSnapType.includes("mandatory"), "Mobile card rail has no snap behavior");
+        rail.scrollLeft = rail.scrollWidth - rail.clientWidth;
+        assert(rail.scrollLeft > 0, "Mobile chapter rail cannot scroll");
+        rail.scrollLeft = 0;
+        cases += 1;
+      }
+      const chart = [...document.querySelectorAll(".chart")].find((el) => el.scrollWidth > el.clientWidth);
+      if (chart) {
+        chart.scrollLeft = 50;
+        assert(chart.scrollLeft > 0, "Wide mobile chart cannot scroll within its frame");
+        chart.scrollLeft = 0;
+        cases += 1;
+      }
+    }
     assert(document.documentElement.scrollWidth <= innerWidth + 1, "Page overflow after interactions");
   } catch (error) {
     failures.push(error.stack || error.message);
@@ -161,7 +209,7 @@ try {
   for (const file of files) {
     for (const variant of [
       { width: 1440, language: "zh", theme: "light", exercise: true },
-      { width: 390, language: "en", theme: "dark", exercise: false }
+      { width: 390, language: "en", theme: "dark", exercise: true }
     ]) {
       const script = `(${probe.toString()})(${variant.exercise},${variant.width});`;
       const hash = createHash("sha256").update(script).digest("base64");
@@ -198,6 +246,25 @@ try {
         if (bounds.value) {
           const { data: figure } = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: bounds.value }, sessionId);
           writeFileSync(join(screenshots, `${file.replace(".html", "")}-${variant.width}-figure.png`), Buffer.from(figure, "base64"));
+        }
+        if (file === "05-parallelism-acceleration.html") {
+          for (const view of ["tp", "pp", "dp", "ep", "attention-dp"]) {
+            const { result: viewBounds } = await client.send("Runtime.evaluate", {
+              expression: `(() => {
+                const form=document.querySelector('form[data-lab="parallel"]');
+                const kind=form.querySelector('[data-key="kind"]');
+                kind.value=${JSON.stringify(view === "attention-dp" ? "dp" : view)};
+                kind.dispatchEvent(new Event("input",{bubbles:true}));
+                const attention=form.querySelector('[data-key="attentionDP"]');
+                if (!attention.disabled) { attention.checked=${view === "attention-dp"}; attention.dispatchEvent(new Event("input",{bubbles:true})); }
+                const r=document.querySelector('[data-results="parallel"] figure').getBoundingClientRect();
+                return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};
+              })()`,
+              returnByValue: true
+            }, sessionId);
+            const { data: diagram } = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: viewBounds.value }, sessionId);
+            writeFileSync(join(screenshots, `${file.replace(".html", "")}-${variant.width}-${view}.png`), Buffer.from(diagram, "base64"));
+          }
         }
       }
       await client.send("Target.closeTarget", { targetId });

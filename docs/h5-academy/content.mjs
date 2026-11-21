@@ -24,7 +24,7 @@ export const chapters = [
   { id: "capacity", file: "02-tpm-tps-capacity.html", zh: "50 TPS/用户，不等于 50 TPS/集群", en: "50 TPS per user is not 50 TPS per cluster", subtitleZh: "TPM/TPS 边界 · Little's Law · 峰值规划 · PTU 权重", subtitleEn: "TPM/TPS boundaries · Little's Law · peak sizing · PTU weights", minutes: 25, sources: ["ptu", "ptu-concept", "vllm"] },
   { id: "sizing", file: "03-gpu-sizing.html", zh: "放得下、吐得快、首字快，是三道不同水位线", en: "Memory fit, decode speed and first-token speed are three different bounds", subtitleZh: "Dense / MoE · GQA / MLA · 显存堆叠 · HBM / FLOPs", subtitleEn: "Dense / MoE · GQA / MLA · memory stacks · HBM / FLOPs", minutes: 30, sources: ["h100", "h200", "b200", "l40s", "deepseek-config", "deepseek", "llama", "qwen", "vllm"] },
   { id: "pd", file: "04-pd-disaggregation.html", zh: "PD 分离消除一类干扰，却增加一次 KV 交接", en: "PD removes one interference source but adds a KV handoff", subtitleZh: "混部 / Chunked Prefill / PD · KV 传输 · 决策边界", subtitleEn: "Colocated / chunked prefill / PD · KV transfer · decision boundaries", minutes: 25, sources: ["vllm", "vllm-pd", "dynamo", "mooncake", "sglang", "gpudirect"] },
-  { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell"] },
+  { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell", "tensor-parallel", "speculative", "prefix"] },
   { id: "network", file: "06-rdma-roce-nvlink.html", zh: "900 GB/s NVLink 和 400 Gb/s 网卡，先统一口径", en: "Normalize units before comparing 900 GB/s NVLink with a 400 Gb/s NIC", subtitleZh: "GPUDirect RDMA · RoCEv2 流控 · 多轨拓扑 · NCCL 带宽", subtitleEn: "GPUDirect RDMA · RoCEv2 congestion · rail topology · NCCL bandwidth", minutes: 25, sources: ["gpudirect", "nccl", "blackwell", "h100", "ib", "ecn"] }
 ];
 
@@ -292,7 +292,22 @@ function parallelContent() {
     field("parallel", "ranks", "并行 ranks（示意）", "Parallel ranks (illustration)", 4, 2, 8, 1, "range") +
     field("parallel", "batch", "调度 microbatches", "Scheduled microbatches", 8, 1, 128, 1, "range") +
     field("parallel", "payload", "每通信步骤 payload MB（假设）", "Payload MB/communication step (assumption)", 32, 0.1, 10000, 0.1) +
-    field("parallel", "bandwidth", "实测单向等效通信 GB/s（假设）", "Measured one-way equivalent GB/s (assumption)", 100, 0.1, 1000, 0.1);
+    field("parallel", "bandwidth", "实测单向等效通信 GB/s（假设）", "Measured one-way equivalent GB/s (assumption)", 100, 0.1, 1000, 0.1) +
+    check("parallel", "attentionDP", "DP 图切换为 Attention DP + 共享 EP", "Show attention DP + shared EP instead of replicas");
+  const speculation = field("speculative", "draftTokens", "每轮候选 Token 数 γ", "Draft tokens per cycle γ", 4, 1, 16, 1, "range") +
+    field("speculative", "acceptance", "每位置平均接受率 α（独立同分布假设）", "Per-position acceptance α (i.i.d. assumption)", 0.8, 0, 1, 0.01) +
+    field("speculative", "targetMs", "基线 target 单步 ms", "Baseline target step ms", 20, 0.1, 1000, 0.1) +
+    field("speculative", "draftMs", "每候选串行 draft ms", "Serial draft ms/token", 2, 0, 1000, 0.1) +
+    field("speculative", "verifyExtraMs", "每候选额外验证 ms（线性假设）", "Extra verification ms/draft (linear assumption)", 1, 0, 1000, 0.1) +
+    field("speculative", "overheadMs", "每轮固定提交/调度 ms", "Fixed commit/scheduling ms/cycle", 1, 0, 1000, 0.1);
+  const caching = select("prefix", "model", "缓存 geometry 模型", "Cache-geometry model", models, "llama70") +
+    select("prefix", "kvBytes", "缓存 KV 精度", "Cached KV precision", [["2", "BF16 2 B"], ["1", "FP8 1 B (verify kernel)"]], "2") +
+    field("prefix", "prompt", "完整 Prompt Token", "Full prompt tokens", 8192, 256, 131072, 256, "range") +
+    field("prefix", "prefix", "可共享的精确前缀 Token", "Exact shareable prefix tokens", 4096, 0, 131072, 256, "range") +
+    field("prefix", "hitRate", "请求缓存命中比例（假设）", "Request cache-hit fraction (assumption)", 0.7, 0, 1, 0.05) +
+    field("prefix", "prefillRate", "Prefill TPS（同形状近似）", "Prefill TPS (same-shape approximation)", 20000, 1, 10000000) +
+    field("prefix", "lookupMs", "每请求查缓存开销 ms", "Cache lookup ms/request", 2, 0, 1000, 0.1) +
+    field("prefix", "entries", "常驻的不同前缀条目数", "Distinct resident prefix entries", 10, 1, 1000000);
   return section("concepts", "并行度不是越大越好：切分粒度决定通信频率", "More ranks are not always better: the partition sets communication frequency",
     table([b("方式 / 切分维度", "Mode / partition"), b("通信原语", "Communication"), b("延迟/吞吐方向（条件性）", "Latency/throughput direction (conditional)"), b("放在哪里", "Placement")], [
       ["TP / weight tensors", "AllReduce / ReduceScatter + AllGather", b("单 GPU 工作/显存减少；低延迟通信可帮助 TTFT/TPOT，过度 TP 反而拖慢；单实例吞吐不一定线性。", "Less work/memory per GPU; fast collectives can help TTFT/TPOT, excessive TP can hurt. Instance throughput is not necessarily linear."), b("优先低延迟高带宽 NVLink 域，跨域必须实测", "Prefer a low-latency NVLink domain; test across domains")],
@@ -319,6 +334,20 @@ function parallelContent() {
       ], b("条件性收益/代价热力矩阵：文字是语义，颜色不是虚构百分比", "Conditional benefit/cost heatmap: text carries meaning; colors are not invented percentages")) +
       p("不要声称 FP8 必然 2× 或投机必然无损 3×。正确投机采样可保持目标分布，但 greedy、温度、约束解码、draft 接受率和实现细节都要核对。前缀缓存只命中 tokenizer 后的相同前缀，不等于语义缓存。",
         "Do not promise FP8=2× or speculation=lossless 3×. Correct speculative sampling can preserve the target distribution, but greedy mode, temperature, constrained decoding, acceptance and implementation still need validation. Prefix reuse requires the same tokenized prefix; it is not semantic caching.")) +
+    section("speculative", "接受率 80% 不等于无条件 5 Token/轮", "80% acceptance does not imply five tokens every cycle",
+      lab("speculative", speculation) +
+      formula("E[committed_tokens] = 1 + α + α² + … + α^γ<br>Verify_ms = target_step_ms + γ×extra_verify_ms<br>Cycle_ms = γ×draft_ms + Verify_ms + fixed_overhead_ms<br>Conditional speedup = target_step_ms×E[tokens] / Cycle_ms") +
+      p("ICML 2023 原始分析在接受率独立同分布的简化假设下得到几何和；最后一枚是拒绝后的修正 Token 或全部接受后的额外 Token。α=0.8、γ=4，E[N]=3.3616，而不是固定 5。默认每轮成本 4×2+(20+4×1)+1=33 ms，条件性平均服务时间 9.82 ms/Token、约 2.04×，不是硬件实测。",
+        "The ICML 2023 analysis gives the geometric sum under an i.i.d. acceptance assumption. The last token is a correction after rejection or a bonus after all drafts pass. At α=0.8, γ=4, E[N]=3.3616, not a fixed five. Default cycle cost is 4×2+(20+4×1)+1=33 ms: conditional mean service 9.82 ms/token and about 2.04×, not a hardware measurement.") +
+      note("多 Token 一起提交会形成突发流式：平均每 Token 服务时间不是 P99 ITL。真实验证成本随 γ、batch、上下文与 kernel 改变，MTP/EAGLE 也不一定逐 Token 串行 draft；必须换成实测 cycle breakdown 并验证采样正确性。",
+        "Multi-token commits create bursty streams: mean service/token is not P99 ITL. Verification changes with γ, batch, context and kernels, and MTP/EAGLE need not draft serially. Replace costs with measured cycle breakdown and validate sampling correctness.")) +
+    section("prefix", "70% 请求命中半段前缀，只避免 35% 输入计算", "70% of requests hitting half the prefix avoids only 35% of input work",
+      lab("prefix", caching) +
+      formula("E[avoided_input_tokens] = request_hit_rate × shared_prefix_tokens<br>E[prefill_ms] = hit_rate×hit_compute_ms + (1−hit_rate)×miss_compute_ms + lookup_ms<br>Resident_prefix_GB = distinct_entries×prefix_tokens×KV_bytes_per_token / 10⁹") +
+      p("默认 8192 输入、4096 精确共享前缀、70% 请求命中，平均避免 2867.2 Token，仍处理 5324.8 Token；20K Prefill TPS 和 2 ms 查找下，409.6 ms 基线变成 268.24 ms 平均 Prefill。10 个独立 Llama 70B BF16 前缀条目需约 13.42 GB KV。命中率低或查找很贵时，净收益可为负。",
+        "Default 8192 input, 4096 exact-prefix tokens and 70% request hits avoid 2867.2 tokens on average, leaving 5324.8. At 20K prefill TPS with 2 ms lookup, baseline 409.6 ms becomes mean 268.24 ms. Ten distinct Llama 70B BF16 entries use about 13.42 GB KV. Low hits or expensive lookup can produce a negative net benefit.") +
+      note("此线性 Prefill 近似不计长上下文 attention 非线性。不同前缀条目按独立存储估算；共享 block、驱逐、层级 cache、跨副本复制、kernel dtype 与租户隔离要另外核对，不能把缓存当免费显存。",
+        "This linear prefill approximation omits long-context attention nonlinearity. Entries are budgeted as independent storage; verify shared blocks, eviction, tiered cache, replica duplication, kernel dtype and tenant isolation. Cache is not free memory.")) +
     section("placement", "把高频同步留在快域，但别把域边界写成绝对禁令", "Keep frequent synchronization in fast domains without making absolute bans",
       diagram("domains", "并行组与快慢通信域", "Parallel groups and communication domains",
         `<rect x="20" y="20" width="330" height="180" rx="12" class="surface"/><rect x="450" y="20" width="330" height="180" rx="12" class="surface"/><text x="40" y="48">NVLink / NVSwitch domain A</text><text x="470" y="48">NVLink / NVSwitch domain B</text>` +
