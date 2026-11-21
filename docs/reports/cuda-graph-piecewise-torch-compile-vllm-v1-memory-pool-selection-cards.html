@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7-Card Report · Piecewise CUDA Graphs &amp; torch.compile (#389)</title>
+<style>
+  body { background: #090d16; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1480px; margin: 0 auto; }
+  .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+  .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.5px; }
+  h2 { font-size: 20px; margin: 10px 0; color: #f8fafc; line-height: 1.3; }
+  p, li { font-size: 13.5px; color: #cbd5e1; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+  th { color: #93c5fd; }
+  .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11.5px; color: #6ee7b7; }
+  .bar-row { margin: 8px 0; }
+  .bar-bg { background: #0f172a; height: 14px; border-radius: 7px; overflow: hidden; }
+  .bar-fill { background: #3b82f6; height: 100%; }
+  .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; background: #065f46; color: #6ee7b7; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <section class="card">
+    <div>
+      <div class="meta">1 / 7 · HANDS-ON · PIECEWISE CUDA GRAPHS &amp; TORCH.COMPILE</div>
+      <h2>vLLM V1 Piecewise CUDA Graphs Accelerate Mixed Chunked-Prefill Batches by 1.54x &amp; Save 3.3 GB HBM</h2>
+      <p>Legacy V0 full-model CUDA Graphs only work when every request has query_len=1 (pure Decode), falling back to slow Eager Mode during Chunked Prefill. Piecewise CUDA Graphs capture token-wise Linear/MLP subgraphs across all batches.</p>
+    </div>
+    <div class="code">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">2 / 7 · SCENARIO: WHY CHUNKED PREFILL BREAKS FULL CUDA GRAPHS</div>
+      <h2>Dynamic Per-Request Sequence Lengths in Attention Prevent End-to-End Static Graph Capture</h2>
+      <p>While Attention metadata varies dynamically per request, 90% of kernels (RMSNorm, QKV/O GEMM, RoPE, SwiGLU) depend only on total flat `num_tokens`—making Piecewise Graph splitting around Attention ideal.</p>
+      <span class="pill">Act automatically · Piecewise CUDA Graph + Inductor Fusion</span>
+    </div>
+    <div class="code">[Piecewise Graph 1: Norm+QKV+RoPE] -&gt; Eager FlashAttn -&gt; [Graph 2: O+MLP]</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">3 / 7 · WHAT I TESTED</div>
+      <h2>4-Tier CUDA Graph &amp; Compilation Matrix</h2>
+      <table>
+        <thead><tr><th>SCENARIO</th><th>MIXED STEP</th><th>GRAPH HBM</th><th>ACTION</th></tr></thead>
+        <tbody>
+          <tr><td>Tier 1 Eager Mode</td><td>22.5 ms ✕</td><td>0.0 GB</td><td>Debug Only</td></tr>
+          <tr><td>Tier 2 V0 Decode-Only Graph</td><td>21.8 ms ✕</td><td>4.8 GB ✕</td><td>Legacy</td></tr>
+          <tr><td>Tier 3 Uncached Compile</td><td>20.5 ms</td><td>4.2 GB</td><td>Slow Boot</td></tr>
+          <tr><td>Tier 4 V1 Piecewise + Cache</td><td>14.2 ms ✓</td><td>1.5 GB ✓</td><td>Deploy</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code">Miss Marker (✕): Tier 2 wastes 4.8 GB HBM and drops to Eager on mixed steps</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">4 / 7 · UNDER THE HOOD</div>
+      <h2>Persistent Compilation Cache Mounting in Kubernetes</h2>
+      <div class="code"># Mount shared volume for Triton + TorchInductor + vLLM cache:
+export VLLM_USE_V1=1
+export VLLM_TORCH_COMPILE_CACHE_DIR=/mnt/nvme-cache/vllm_compile_cache
+export TORCHINDUCTOR_CACHE_DIR=/mnt/nvme-cache/inductor_cache
+export TRITON_CACHE_DIR=/mnt/nvme-cache/triton_cache</div>
+    </div>
+    <div class="code">&lt;answer&gt;Persistent compilation cache cuts warm pod startup from 145s to 3.8s&lt;/answer&gt;</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Hybrid Mamba/SSM &amp; MLA Compatibility Perturbation</h2>
+      <table>
+        <thead><tr><th>GRAPH MODE</th><th>STANDARD GQA</th><th>MIXED PREFILL+DECODE</th><th>HYBRID MAMBA/MLA</th></tr></thead>
+        <tbody>
+          <tr><td>Tier 2 Legacy Full Graph</td><td>10.6 ms</td><td>21.8 ms (Fallback!)</td><td>Fails / Eager</td></tr>
+          <tr><td>Tier 4 V1 Piecewise Graph</td><td>8.9 ms</td><td>14.2 ms (Captured!)</td><td>11.4 ms (Captured!)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code">Piecewise splitting cleanly handles dynamic Mamba state updates and MLA</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">6 / 7 · LATENCY &amp; HBM POOL</div>
+      <h2>Mixed Chunked-Prefill + Decode Step Execution Time (ms)</h2>
+      <div class="bar-row"><div>Tier 4 V1 Piecewise CUDA Graph + Compile (14.2 ms · 1.5 GB)</div><div class="bar-bg"><div class="bar-fill" style="width:63%"></div></div></div>
+      <div class="bar-row"><div>Tier 3 Uncached Compile + Full Graph (20.5 ms · 4.2 GB)</div><div class="bar-bg"><div class="bar-fill" style="width:91%"></div></div></div>
+      <div class="bar-row"><div>Tier 2 V0 Decode-Only Full Graph (21.8 ms · 4.8 GB)</div><div class="bar-bg"><div class="bar-fill" style="width:97%"></div></div></div>
+      <div class="bar-row"><div>Tier 1 PyTorch Eager Mode (22.5 ms · 0.0 GB)</div><div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444"></div></div></div>
+    </div>
+    <div class="code">1.54x faster mixed-step execution while reclaiming 3.3 GB/GPU for KV Cache</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For &amp; Production Readiness</h2>
+      <p>✅ <strong>Good fit</strong>: All production vLLM V1 and SGLang deployments running Chunked Prefill (`--enable-chunked-prefill`) and continuous batching.</p>
+      <p>⛔ <strong>Not for</strong>: Leaving `--enforce-eager` enabled in production or forgetting to mount a persistent `VLLM_TORCH_COMPILE_CACHE_DIR` volume.</p>
+    </div>
+    <div class="code">Readiness: Default compilation architecture in vLLM V1 (`-O2 / -O3`)</div>
+  </section>
+</div>
+</body>
+</html>
