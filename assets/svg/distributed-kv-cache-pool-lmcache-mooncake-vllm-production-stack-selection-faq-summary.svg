@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#38BDF8" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">大模型分布式 KV Cache 共享池选型：LMCache + vLLM Stack vs. Mooncake vs. Dynamo KV Router</text>
+  <text x="52" y="94" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="15">突破单 Pod HBM 孤岛：L1 GPU HBM → L2 节点锁页内存 → L3 集群级 RDMA/NVMe 共享池 + 逐层流水异步预取</text>
+
+  <!-- Left: Why Local-Only Prefix Caching Fails Across Replicas -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么开了 `enable_prefix_caching` 在 32 副本集群仍经常失效？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 痛点 A：单实例 HBM 容量极小 + 轮询负载均衡打散 (Tier 1)</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 单套 70B 副本仅剩 ~40 GB 空余 HBM（只够缓存 7~8 条 32K 长会话，秒级被挤出）</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 32 副本轮询下全局命中率跌至 14.5%，78% 的 GPU 算力在重复重算历史上下文！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 痛点 B：仅靠 Session 粘性路由无法共享跨用户 RAG 文档块 (Tier 2)</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 用户 A 在 Pod-1 读过的 50 页财报 PDF 块，用户 B 被分到 Pod-2 时必须从头重算 Prefill</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 热点 Pod 排队过载溢出时，迁移到新 Pod 的长会话瞬间丢失全部本地 KV Cache！</text>
+
+  <!-- Right: LMCache + Mooncake + Dynamo KV Router -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. 分布式 KV Cache 全局池化三剑客 (LMCache / Mooncake / Dynamo)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 全局 KV 索引感知路由 (Dynamo KV Router / vLLM Production Stack)</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">路由层实时维护全集群 Prefix Hash 树，按 `Overlap_KV_Cost - Queue_Wait` 智能派单</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② 集群级 16TB 分布式主机内存池 (Mooncake Store / LMCache Connector)</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">Pod-1 生成的 KV 块异步刷入分布式 DRAM/NVMe 池，Pod-2 通过 GPUDirect RDMA 直接拉取！</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ 非前缀任意块复用 (Sub-Sequence Chunk Reuse) + 逐层流水拉取</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">LMCache 支持复用 RAG 中间文档块 KV + CacheGen 压缩，32K 首字延迟从 1,240ms 降至 98ms！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 32 副本集群（32K 上下文多轮 Agent + 共享 RAG · 160 RPS）四档 KV 池化架构对比</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">KV Cache 池化与路由方案</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">全集群 KV 命中率</text>
+  <text x="620" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">32K P95 TTFT</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">重复 Prefill 浪费</text>
+  <text x="960" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">所需 H200 卡数</text>
+  <text x="1120" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">月度集群成本</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 单 Pod 孤立 HBM 缓存 + 轮询负载均衡</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">14.5% ✕</text>
+  <text x="620" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">1,240.0 ms ✕</text>
+  <text x="790" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">78.0% 算力浪费</text>
+  <text x="960" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14">64 GPUs</text>
+  <text x="1120" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14">$179,200/mo</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: Session 粘性路由 + 单机本地 DRAM 卸载</text>
+  <text x="450" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">58.0%</text>
+  <text x="620" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">590.0 ms</text>
+  <text x="790" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">38.0% 算力浪费</text>
+  <text x="960" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">48 GPUs</text>
+  <text x="1120" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">$134,400/mo</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: LMCache + vLLM Stack (TCP 共享池 + CacheGen 压缩)</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">86.5% ✓</text>
+  <text x="620" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">215.0 ms ✓</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">11.5%</text>
+  <text x="960" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">32 GPUs</text>
+  <text x="1120" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$92,800/mo</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): Dynamo KV 全局路由 + Mooncake/LMCache RDMA 池</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">95.8% ✓</text>
+  <text x="620" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">98.0 ms (-92%)</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">3.2% ✓</text>
+  <text x="960" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">24 GPUs (-62.5%)</text>
+  <text x="1120" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$69,600/mo (-61%)</text>
+</svg>
