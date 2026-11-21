@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>端云协同 (Hybrid Edge-Cloud AI) 端侧 NPU/MLX 卸载率与 TCO 计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #6EE7B7; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #38BDF8; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #6EE7B7; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业端云协同（Apple MLX / AI PC NPU + 云端大模型）算力卸载与成本计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>企业终端总坐席数 (人) <span id="v_seats" class="val">50,000</span></label>
+      <input type="range" id="seats" min="5000" max="200000" step="5000" value="50000" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>终端硬件统一内存带宽 (GB/s) <span id="v_bw" class="val">135</span></label>
+      <select id="bw" onchange="calc()">
+        <option value="100">主流笔记本 LPDDR5 (100 GB/s)</option>
+        <option value="135" selected>AI PC Copilot+ NPU (135 GB/s)</option>
+        <option value="273">Apple M4 Pro (273 GB/s)</option>
+        <option value="546">Apple M4 Max (546 GB/s)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>端侧可闭环简单任务占比 <span id="v_off" class="val">66%</span></label>
+      <input type="range" id="off" min="20" max="85" step="2" value="66" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>端云协同路由架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 100% 纯云端大模型推理</option>
+        <option value="2">Tier 2: 100% 纯端侧 7B-Q4 小模型</option>
+        <option value="3">Tier 3: 静态功能切分 (42% 端侧)</option>
+        <option value="4" selected>Tier 4: 置信度动态路由 + 端侧 PII 脱敏 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>端侧 7B-Q4 吐字速度</div><div id="k_tps" class="num">29.7 tok/s</div></div>
+    <div class="kpi"><div>云端所需 H200 卡数</div><div id="k_gpus" class="num">32 GPUs</div></div>
+    <div class="kpi"><div>综合任务准确率</div><div id="k_acc" class="num">93.9%</div></div>
+    <div class="kpi"><div>月度云端推理成本</div><div id="k_tco" class="num">$89,600</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const seats = parseFloat(document.getElementById('seats').value);
+  const bw = parseFloat(document.getElementById('bw').value);
+  const off = parseFloat(document.getElementById('off').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_seats').textContent = seats.toLocaleString();
+  document.getElementById('v_bw').textContent = bw;
+  document.getElementById('v_off').textContent = Math.round(off * 100) + '%';
+
+  const edgeTPS = +((bw * 0.88) / 4.0).toFixed(1);
+  const baseCloudGPUs = Math.ceil((seats / 50000) * 96);
+  let gpus = 32, acc = 93.9;
+  if (mode === '1') {
+    gpus = baseCloudGPUs;
+    acc = 94.2;
+  } else if (mode === '2') {
+    gpus = 0;
+    acc = 76.5;
+  } else if (mode === '3') {
+    gpus = Math.ceil(baseCloudGPUs * 0.58);
+    acc = 91.8;
+  } else {
+    gpus = Math.max(2, Math.ceil(baseCloudGPUs * (1 - off)));
+    acc = +(94.2 - off * 0.45).toFixed(1);
+  }
+  const tco = gpus * 2800 + (mode === '2' ? 12000 : 0);
+  document.getElementById('k_tps').textContent = edgeTPS + ' tok/s';
+  document.getElementById('k_gpus').textContent = gpus + ' GPUs';
+  document.getElementById('k_acc').textContent = acc + '%';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
