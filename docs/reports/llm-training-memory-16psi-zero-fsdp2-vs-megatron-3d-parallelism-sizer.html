@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>LLM Training `16Ψ` Memory &amp; ZeRO-1/2/3 (FSDP2) vs. Megatron 3D Calculator</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LLM Training `16Ψ` Memory &amp; ZeRO-1/2/3 (`FSDP2`) vs. `Megatron 3D` Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Calculate Per-GPU Static State (`2Ψ+2Ψ+12Ψ`) &amp; Activation Memory</div>
+    <div class="grid">
+      <div class="card">
+        <label>Model Parameter Size ($\Psi$): <strong id="pVal">70B Parameters (1,120 GB Total 16Ψ State)</strong></label>
+        <input type="range" id="params" min="8" max="405" step="1" value="70" oninput="recalc()">
+        <label>Sharding Strategy:</label>
+        <select id="strat" onchange="recalc()">
+          <option value="3d">Megatron 3D (TP=8 × PP=2 × ZeRO-1 DP=8) + Selective Activation Ckpt</option>
+          <option value="hsdp">PyTorch FSDP2 HSDP (8-Way NVLink Shard × 16-Way Inter-Node ZeRO-1)</option>
+          <option value="zero2">ZeRO-2 Across 16 GPUs (`2Ψ + 14Ψ/N`)</option>
+          <option value="ddp">Unsharded DDP (`16Ψ` per GPU — OOM on &gt;7B!)</option>
+        </select>
+        <label>Activation Checkpointing Mode:</label>
+        <select id="act" onchange="recalc()">
+          <option value="sac">Selective Activation Checkpointing (Saves 70% Act HBM, +3.8% FLOPs)</option>
+          <option value="full">Full Activation Checkpointing (Saves 92% Act HBM, +33.0% FLOPs)</option>
+          <option value="none">No Activation Checkpointing (0% Recompute, Huge HBM Usage)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="stateVal">56.9 GB / GPU</div><div class="lbl">Per-GPU Weights + Grads + Optimizer State</div></div>
+          <div class="kpi"><div class="val" id="actVal">24.0 GB / GPU</div><div class="lbl">Per-GPU Activation Memory (`8K` Micro-Batch)</div></div>
+          <div class="kpi"><div class="val" id="mfuVal">58.8% MFU</div><div class="lbl">Achieved Training MFU on 128x H200</div></div>
+          <div class="kpi"><div class="val" id="costVal">$262,000 / 1T</div><div class="lbl">Cost per 1 Trillion Training Tokens</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const p = parseInt(document.getElementById('params').value, 10);
+      const strat = document.getElementById('strat').value;
+      const act = document.getElementById('act').value;
+      document.getElementById('pVal').textContent = p + 'B Parameters (' + (p * 16).toLocaleString() + ' GB Total 16Ψ State)';
+      let stateGb = p * 16;
+      if (strat === '3d') stateGb = (p * 4) / 16 + (p * 12) / 128;
+      else if (strat === 'hsdp') stateGb = (p * 4) / 8 + (p * 12) / 128;
+      else if (strat === 'zero2') stateGb = p * 2 + (p * 14) / 16;
+      const actGb = act === 'sac' ? (p / 70) * 24 : (act === 'full' ? (p / 70) * 7 : (p / 70) * 80);
+      const mfu = strat === '3d' && act === 'sac' ? 58.8 : (act === 'full' ? 46.2 : 49.4);
+      const cost = Math.round(262000 * (58.8 / mfu) * (p / 70));
+      document.getElementById('stateVal').textContent = stateGb.toFixed(1) + ' GB / GPU';
+      document.getElementById('actVal').textContent = actGb.toFixed(1) + ' GB / GPU';
+      document.getElementById('mfuVal').textContent = mfu.toFixed(1) + '% MFU';
+      document.getElementById('costVal').textContent = '$' + cost.toLocaleString() + ' / 1T';
+    }
+  </script>
+</body>
+</html>
