@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+  <title>企业大模型容量规划与三道水位线手算交互工作台 · TPM/TPS/PTU/Little's Law · AI Infra H5</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --purple: #a78bfa;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+    }
+    .topbar {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .badge {
+      background: linear-gradient(135deg, #10b981, #0284c7);
+      color: #fff;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .nav-links a, .lang-btn {
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    main { max-width: 1320px; margin: 20px auto; padding: 0 16px 48px; }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .hero h1 { margin: 0 0 10px; font-size: 24px; color: #f8fafc; }
+    .hero p { margin: 0; color: #cbd5e1; font-size: 14.5px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 680px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .formula {
+      background: #0f172a;
+      border-left: 4px solid var(--green);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+      color: #6ee7b7;
+      margin: 10px 0;
+      overflow-x: auto;
+    }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select {
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .kpi {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .kpi .v { font-size: 19px; font-weight: 800; color: var(--green); }
+    .kpi .l { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; }
+    th { color: #93c5fd; background: rgba(15, 23, 42, 0.65); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 16px; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <span class="badge">H5 STUDY LAB · #399</span>
+        <strong style="margin-left:8px;" data-lang="zh">企业大模型容量规划终极沙盘：三道水位线算卡、TPM/TPS/PTU 换算与五大场景 SLA</strong>
+        <strong style="margin-left:8px;" data-lang="en">Three-Watermark GPU Sizer, TPM/TPS/PTU Converter, Little's Law &amp; SLA Lab</strong>
+      </div>
+      <div class="nav-links">
+        <a href="index.html">🎓 全景精学馆 / Hub</a>
+        <a href="ai-infra-learning-hub.html">🔥 7大模块工作台</a>
+        <a href="../h5-academy/index.html">📚 6册精学馆</a>
+        <a href="../components/enterprise-llm-capacity-planning-tpm-tps-three-watermarks-ptu-tco-sizing-selection-faq.md">📖 双语 FAQ</a>
+        <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div data-lang="zh">
+        <h1>📐 3 分钟看懂核心结论：如何从业务 DAU / QPS 一路手算出所需 GPU 卡数、TPM/TPS 与云端 PTU？</h1>
+        <p><strong>四大黄金公式</strong>：① <strong>端到端延迟</strong> $\text{E2EL} = \text{TTFT} + (N_{\text{out}}-1)\times \text{TPOT}$，单用户流式速率 $= 1/\text{TPOT}$；② <strong>Little's Law 并发槽位</strong> $B_{\text{active}} = \text{RPS}_{\text{peak}} \times \text{E2EL}$（R1 思考模型输出涨 6 倍会导致并发 KV 显存暴涨 6 倍！）；③ <strong>云端 PTU 加权折算</strong> $\text{TPM}_{\text{PTU}} = \text{TPM}_{\text{in}}(1-0.5\eta) + 4\times\text{TPM}_{\text{out}}$；④ <strong>三道水位线拍板卡数</strong> $N_{\text{GPU}} = \max(N_{\text{HBM容量}}, N_{\text{HBM带宽}}, N_{\text{Prefill算力}})$！</p>
+      </div>
+      <div data-lang="en">
+        <h1>📐 3-Minute Executive Takeaway: End-to-End GPU Capacity Sizing from Business DAU/RPS to Three Watermarks &amp; PTU TCO</h1>
+        <p><strong>Four Golden Equations</strong>: (1) $\text{E2EL} = \text{TTFT} + (N_{\text{out}}-1)\cdot\text{TPOT}$; (2) Little's Law active sessions $B_{\text{active}} = \text{RPS}_{\text{peak}} \times \text{E2EL}$; (3) Cloud PTU weighted TPM $= \text{TPM}_{\text{in}}(1-0.5\eta) + 4\cdot\text{TPM}_{\text{out}}$; (4) Three GPU Watermarks $N_{\text{GPU}} = \max(N_{\text{HBM}}, N_{\text{Bandwidth}}, N_{\text{Compute}})$.</p>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- Interactive Full-Pipeline Sizer -->
+      <div class="card">
+        <h2>🎛️ 交互式五步闭环手算器：从 RPS / 场景 SLA 正推 TPM/TPS、并发槽位与三道水位线卡数</h2>
+        <div class="formula">
+          B_active = RPS * [ TTFT + (S_out - 1) * TPOT ] &nbsp;|&nbsp; N_GPU = max( N_HBM, N_BW, N_Compute )<br>
+          M_total = ( M_weights + B_inst * S_ctx * KV_KB + M_act ) / 0.85
+        </div>
+
+        <label>1. 选择业务场景预设 (自动加载对应黄金 SLA 阈值) 或自定义：</label>
+        <select id="scenSel" onchange="applyPreset()">
+          <option value="rag" selected>场景 3：企业知识库长文 RAG 助手 (TTFT&lt;=800ms, TPOT&lt;=20ms)</option>
+          <option value="voice">场景 1：实时语音对话 Agent WebRTC (TTFT&lt;=250ms, ITL&lt;=16ms)</option>
+          <option value="code">场景 2：IDE 实时代码补全 Tab FIM (TTFT&lt;=150ms, TPOT&lt;=10ms)</option>
+          <option value="cot">场景 4：深度推理 / 编程 Agent CoT (S_out=3200, KV 并发膨胀 6x!)</option>
+          <option value="batch">场景 5：离线文档批处理 / 知识抽取 ETL (吞吐与 $/1M 优先)</option>
+        </select>
+
+        <label>2. 选择目标大模型与硬件机型：</label>
+        <select id="hwModelSel" onchange="calcAll()">
+          <option value="ds671_h200" selected>DeepSeek-V3/R1 671B FP8 (MLA 35.1KB/tok) on NVIDIA H200 (141GB, 4.8TB/s)</option>
+          <option value="llama70_h200">Llama-3.3-70B FP8 (GQA-8 163.8KB/tok) on NVIDIA H200 (141GB, 4.8TB/s)</option>
+          <option value="llama70_h100">Llama-3.3-70B FP8 (GQA-8 163.8KB/tok) on NVIDIA H100 (80GB, 3.35TB/s)</option>
+          <option value="ds671_b200">DeepSeek-V3/R1 671B FP8 (MLA 35.1KB/tok) on NVIDIA B200 (192GB, 8.0TB/s)</option>
+        </select>
+
+        <label>3. 高峰并发请求率 ($\text{RPS}_{\text{peak}}$): <strong id="rpsTxt">50 RPS (3,000 RPM)</strong></label>
+        <input type="range" id="rpsRange" min="5" max="200" step="5" value="50" oninput="calcAll()">
+
+        <label>4. 平均输入 Token 数 ($\bar{S}_{\text{in}}$): <strong id="sinTxt">4,096 Tokens</strong></label>
+        <input type="range" id="sinRange" min="512" max="32768" step="512" value="4096" oninput="calcAll()">
+
+        <label>5. 平均生成输出 Token 数 ($\bar{S}_{\text{out}}$，含 `<think>`): <strong id="soutTxt">600 Tokens</strong></label>
+        <input type="range" id="soutRange" min="64" max="4096" step="64" value="600" oninput="calcAll()">
+
+        <label>6. 目标流式吐字间隔 ($\text{TPOT}_{\text{SLA}}$): <strong id="tpotTxt">18 ms (55.6 tok/s)</strong></label>
+        <input type="range" id="tpotRange" min="8" max="40" step="2" value="18" oninput="calcAll()">
+
+        <div class="kpi-grid">
+          <div class="kpi"><div class="v" id="kpiSysTps">205K In / 30K Out</div><div class="l">系统每秒吞吐 (System TPS)</div></div>
+          <div class="kpi"><div class="v" id="kpiRawTpm">14.1M TPM</div><div class="l">原始总 TPM (In + Out)</div></div>
+          <div class="kpi"><div class="v" id="kpiPtuTpm">15.8M 加权 TPM</div><div class="l">PTU 加权等效 TPM (含缓存抵扣)</div></div>
+          <div class="kpi"><div class="v" id="kpiBact">570 并发会话</div><div class="l">Little's Law 峰值活跃 KV 槽位</div></div>
+          <div class="kpi"><div class="v" id="kpiWatermarks">8 / 8 / 16 卡</div><div class="l">三道水位线 (显存/带宽/集群总卡)</div></div>
+          <div class="kpi"><div class="v" id="kpiTco">$49,000 / 月</div><div class="l">Tier 4 (P80基线+P20溢出) TCO</div></div>
+        </div>
+      </div>
+
+      <!-- Visual Stacked Watermarks & TCO Crossover Chart -->
+      <div class="card">
+        <h2>📊 实时动态图表：三道水位线对比柱状图 &amp; PAYGO vs. PTU vs. 自建 K8s 成本拐点图</h2>
+        <svg viewBox="0 0 600 370">
+          <text x="18" y="24" fill="#f8fafc" font-size="13" font-weight="700" id="wmSvgTitle">1. 三道物理水位线 GPU 卡数对比：最终配置取 max(显存, 带宽, 并发算力)</text>
+          <!-- Watermark 1 Bar -->
+          <text x="18" y="56" fill="#93c5fd" font-size="11.5">① 第一道水位线 (HBM 显存装得下)</text>
+          <rect x="235" y="42" width="140" height="18" rx="4" fill="#3b82f6" id="wmBar1"/>
+          <text x="385" y="56" fill="#93c5fd" font-size="11.5" font-weight="700" id="wmTxt1">8 GPUs (含 15% 余量)</text>
+
+          <!-- Watermark 2 Bar -->
+          <text x="18" y="86" fill="#6ee7b7" font-size="11.5">② 第二道水位线 (HBM 带宽保 TPOT)</text>
+          <rect x="235" y="72" width="140" height="18" rx="4" fill="#10b981" id="wmBar2"/>
+          <text x="385" y="86" fill="#6ee7b7" font-size="11.5" font-weight="700" id="wmTxt2">8 GPUs (TPOT &lt;= 18ms)</text>
+
+          <!-- Watermark 3 Bar -->
+          <text x="18" y="116" fill="#fde68a" font-size="11.5" font-weight="700">③ 第三道水位线 (集群并发 + Prefill)</text>
+          <rect x="235" y="102" width="240" height="18" rx="4" fill="#f59e0b" id="wmBar3"/>
+          <text x="485" y="116" fill="#fde68a" font-size="11.5" font-weight="700" id="wmTxt3">16 GPUs 🏆</text>
+
+          <!-- Section 2: TCO Crossover Chart (PAYGO vs PTU vs Self-Hosted K8s + Spillover) -->
+          <text x="18" y="156" fill="#f8fafc" font-size="13" font-weight="700">2. 月度总成本 (Monthly TCO) 对比：纯峰值买卡 vs. P80 基线池 + P20 PAYGO 溢出</text>
+          <text x="18" y="186" fill="#fca5a5" font-size="11.5">Tier 2 纯峰值 100% 静态买满 (48x H100)</text>
+          <rect x="255" y="172" width="310" height="18" rx="4" fill="#ef4444" id="tcoBar2"/>
+          <text x="480" y="186" fill="#fff" font-size="11" font-weight="700" id="tcoTxt2">$138,000 / 月</text>
+
+          <text x="18" y="216" fill="#93c5fd" font-size="11.5">Tier 3 三道水位线纯自建 (24x H200 FP8)</text>
+          <rect x="255" y="202" width="160" height="18" rx="4" fill="#3b82f6" id="tcoBar3"/>
+          <text x="425" y="216" fill="#93c5fd" font-size="11.5" font-weight="700" id="tcoTxt3">$68,000 / 月</text>
+
+          <text x="18" y="246" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 P80 基线池 + P20 PAYGO 溢出 🏆</text>
+          <rect x="255" y="232" width="115" height="18" rx="4" fill="#10b981" id="tcoBar4"/>
+          <text x="380" y="246" fill="#34d399" font-size="11.5" font-weight="800" id="tcoTxt4">$49,000 / 月 (-64.5% 🏆)</text>
+
+          <!-- Section 3: Little's Law Concurrency Multiplier Visual -->
+          <rect x="18" y="272" width="564" height="82" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+          <text x="30" y="296" fill="#38bdf8" font-size="12.5" font-weight="700">💡 Little's Law 实时诊断方程 (B_active = RPS_peak × E2EL)</text>
+          <text x="30" y="318" fill="#e2e8f0" font-size="12" id="llFormulaLive">单次请求 E2EL = 0.60s + 599 × 0.018s = 11.38s  ===&gt;  峰值在途并发 B_active = 50 × 11.38s = 570 会话</text>
+          <text x="30" y="340" fill="#fbbf24" font-size="11.5" id="llKvLive">全集群实时驻留 KV Cache 显存 = 570 会话 × 4,696 Tok × 35.14 KB = 94.1 GB</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 5 Business Scenarios Golden SLA Benchmark Table -->
+    <div class="card">
+      <h2>📊 企业五大核心 AI 业务场景黄金评估指标（TTFT / TPOT / ITL / E2EL / Goodput）与定容速查表</h2>
+      <table>
+        <thead>
+          <tr><th>业务场景</th><th>P95 TTFT 红线</th><th>P99 TPOT / ITL 红线</th><th>单流最低速率</th><th>主导水位线瓶颈</th><th>推荐架构与算力配型</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>1. 实时语音对话 Agent (WebRTC)</strong></td><td><strong>&lt;= 250 ms</strong></td><td><strong>&lt;= 18 ms (P99 ITL)</strong></td><td>&gt;= 55 tok/s</td><td>步间抖动敏感 (怕混部抢占)</td><td><code>PD 分离 + Prefix Cache + MTP + 流式 TTS</code></td></tr>
+          <tr><td><strong>2. IDE 实时代码补全 (Tab FIM)</strong></td><td><strong>&lt;= 150 ms</strong></td><td><strong>&lt;= 10 ms</strong></td><td>&gt;= 100 tok/s</td><td>第二道 HBM 带宽水位线</td><td><code>7B/14B FP8 + TP=2/4 + EAGLE-3</code></td></tr>
+          <tr><td><strong>3. 企业知识库长文 RAG 助手</strong></td><td><strong>&lt;= 800 ms</strong></td><td><strong>&lt;= 25 ms</strong></td><td>&gt;= 40 tok/s</td><td>第三道 Prefill 算力 + KV 传输</td><td><code>H100/H200 FP8 + Radix 路由 + PD 分离</code></td></tr>
+          <tr><td><strong>4. 深度推理 / 编程 Agent (&lt;think&gt;)</strong></td><td><strong>&lt;= 1,500 ms</strong></td><td><strong>&lt;= 15 ms</strong></td><td>&gt;= 65 tok/s</td><td>第一道 KV 容量水位 (Little's Law 6x)</td><td><code>8x H200/B200 + DeepSeek MLA FP8 + MTP</code></td></tr>
+          <tr><td><strong>5. 离线文档批处理 / 抽取 (ETL)</strong></td><td>&lt; 30 s (宽松)</td><td>&lt; 80 ms (宽松)</td><td>吞吐优先</td><td>单卡极限 Goodput / $</td><td><code>长度预排序分桶 + B=384 + Spot/夜间回填</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained H5 Study Page · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function applyPreset() {
+      const s = document.getElementById('scenSel').value;
+      if (s === 'voice') {
+        document.getElementById('sinRange').value = 1536;
+        document.getElementById('soutRange').value = 128;
+        document.getElementById('tpotRange').value = 16;
+      } else if (s === 'code') {
+        document.getElementById('sinRange').value = 2048;
+        document.getElementById('soutRange').value = 64;
+        document.getElementById('tpotRange').value = 10;
+      } else if (s === 'rag') {
+        document.getElementById('sinRange').value = 4096;
+        document.getElementById('soutRange').value = 600;
+        document.getElementById('tpotRange').value = 18;
+      } else if (s === 'cot') {
+        document.getElementById('sinRange').value = 2048;
+        document.getElementById('soutRange').value = 3200;
+        document.getElementById('tpotRange').value = 14;
+      } else {
+        document.getElementById('sinRange').value = 8192;
+        document.getElementById('soutRange').value = 512;
+        document.getElementById('tpotRange').value = 36;
+      }
+      calcAll();
+    }
+
+    function calcAll() {
+      const hm = document.getElementById('hwModelSel').value;
+      const rps = parseInt(document.getElementById('rpsRange').value, 10);
+      const sin = parseInt(document.getElementById('sinRange').value, 10);
+      const sout = parseInt(document.getElementById('soutRange').value, 10);
+      const tpotMs = parseInt(document.getElementById('tpotRange').value, 10);
+
+      document.getElementById('rpsTxt').textContent = rps + ' RPS (' + (rps * 60).toLocaleString() + ' RPM)';
+      document.getElementById('sinTxt').textContent = sin.toLocaleString() + ' Tokens';
+      document.getElementById('soutTxt').textContent = sout.toLocaleString() + ' Tokens';
+      document.getElementById('tpotTxt').textContent = tpotMs + ' ms (' + (1000 / tpotMs).toFixed(1) + ' tok/s)';
+
+      const isDs = hm.startsWith('ds671');
+      const pTotal = isDs ? 685 : 70;
+      const pActive = isDs ? 37 : 70;
+      const kvKb = isDs ? 35.14 : 163.84;
+      const hbm = hm.endsWith('h200') ? 141 : (hm.endsWith('b200') ? 192 : 80);
+      const bw = hm.endsWith('h200') ? 4800 : (hm.endsWith('b200') ? 8000 : 3350);
+
+      const inTps = rps * sin;
+      const outTps = rps * sout;
+      const rawTpmM = ((inTps + outTps) * 60) / 1e6;
+      const ptuTpmM = ((inTps * 0.70 + outTps * 4.0) * 60) / 1e6;
+
+      const ttftSec = Math.max(0.20, (sin * 0.4) / 3500.0);
+      const e2elSec = ttftSec + ((sout - 1) * tpotMs) / 1000.0;
+      const bActive = Math.ceil(rps * e2elSec);
+      const kvClusterGb = (bActive * (sin + sout) * kvKb) / (1024 * 1024);
+
+      const instMemGb = (pTotal + Math.min(96, kvClusterGb) + 18) / 0.85;
+      const rawNmem = Math.ceil(instMemGb / hbm);
+      const nMem = rawNmem <= 2 ? 2 : (rawNmem <= 4 ? 4 : (rawNmem <= 8 ? 8 : 16));
+
+      const rawNbw = Math.ceil((pActive + 12) / ((tpotMs / 1000.0) * bw * 0.72));
+      const nBw = rawNbw <= 2 ? 2 : (rawNbw <= 4 ? 4 : (rawNbw <= 8 ? 8 : 16));
+      const nInst = Math.max(nMem, nBw);
+
+      const replicas = Math.max(1, Math.ceil(bActive / 260.0));
+      const nCluster = Math.max(nInst, replicas * nInst);
+      const p80Gpus = Math.max(nInst, Math.round(nCluster * 0.67));
+      const tco4 = Math.round(p80Gpus * 3060);
+      const tco3 = Math.round(nCluster * 2850 + 18000);
+      const tco2 = Math.round(tco4 * 2.81);
+
+      document.getElementById('kpiSysTps').textContent = Math.round(inTps / 1000) + 'K In / ' + Math.round(outTps / 1000) + 'K Out';
+      document.getElementById('kpiRawTpm').textContent = rawTpmM.toFixed(1) + 'M TPM';
+      document.getElementById('kpiPtuTpm').textContent = ptuTpmM.toFixed(1) + 'M 加权 TPM';
+      document.getElementById('kpiBact').textContent = bActive.toLocaleString() + ' 并发会话';
+      document.getElementById('kpiWatermarks').textContent = nMem + ' / ' + nBw + ' / ' + p80Gpus + ' 卡';
+      document.getElementById('kpiTco').textContent = '$' + tco4.toLocaleString() + ' / 月';
+
+      document.getElementById('wmBar1').setAttribute('width', Math.min(310, nMem * 16));
+      document.getElementById('wmTxt1').textContent = nMem + ' GPUs (HBM 容量)';
+      document.getElementById('wmBar2').setAttribute('width', Math.min(310, nBw * 16));
+      document.getElementById('wmTxt2').textContent = nBw + ' GPUs (保 TPOT<=' + tpotMs + 'ms)';
+      document.getElementById('wmBar3').setAttribute('width', Math.min(310, p80Gpus * 14));
+      document.getElementById('wmTxt3').textContent = p80Gpus + ' GPUs (P80 基线池) 🏆';
+
+      document.getElementById('tcoTxt2').textContent = '$' + tco2.toLocaleString() + ' / 月';
+      document.getElementById('tcoTxt3').textContent = '$' + tco3.toLocaleString() + ' / 月';
+      document.getElementById('tcoTxt4').textContent = '$' + tco4.toLocaleString() + ' / 月 (-64.5% 🏆)';
+
+      document.getElementById('llFormulaLive').textContent =
+        '单次 E2EL = ' + ttftSec.toFixed(2) + 's + ' + (sout - 1) + ' × ' + (tpotMs / 1000).toFixed(3) + 's = ' + e2elSec.toFixed(2) + 's ===> 峰值并发 B_active = ' + rps + ' × ' + e2elSec.toFixed(2) + 's = ' + bActive + ' 会话';
+      document.getElementById('llKvLive').textContent =
+        '全集群实时驻留 KV Cache 显存 = ' + bActive + ' 会话 × ' + (sin + sout).toLocaleString() + ' Tok × ' + kvKb + ' KB = ' + kvClusterGb.toFixed(1) + ' GB';
+    }
+
+    calcAll();
+  </script>
+</body>
+</html>
