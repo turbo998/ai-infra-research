@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>大模型零算力权重融合 (MergeKit: SLERP / DARE-TIES / DELLA) 精度与 TCO 计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #C084FC; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业级零训练模型融合（MergeKit: SLERP / DARE-TIES / DELLA）收益计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>待合并同源专精模型数 <span id="v_cnt" class="val">4</span></label>
+      <input type="range" id="cnt" min="2" max="8" step="1" value="4" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>DARE 稀疏丢弃率 (p) <span id="v_drop" class="val">85%</span></label>
+      <input type="range" id="drop" min="50" max="92" step="5" value="85" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>单套 70B 高可用池卡数 <span id="v_gpus" class="val">4 GPUs</span></label>
+      <select id="gpus" onchange="calc()">
+        <option value="2">2 张 H200 (单副本)</option>
+        <option value="4" selected>4 张 H200 (双副本 HA)</option>
+        <option value="8">8 张 H200 (四副本高并发)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>多专精模型整合方案</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 独立部署 N 套 70B 推理池 (不合并)</option>
+        <option value="2">Tier 2: 汇总数据从头多任务重训练 (Joint SFT)</option>
+        <option value="3">Tier 3: 简单线性平均 (Linear Task Arithmetic)</option>
+        <option value="4" selected>Tier 4: MergeKit DARE-TIES / DELLA 稀疏融合 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>多领域综合评测得分</div><div id="k_acc" class="num">87.9%</div></div>
+    <div class="kpi"><div>单次融合合成成本</div><div id="k_syn" class="num">$18</div></div>
+    <div class="kpi"><div>在线服务所需 H200</div><div id="k_srv" class="num">4 GPUs</div></div>
+    <div class="kpi"><div>月度推理集群 TCO</div><div id="k_tco" class="num">$11,200</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const cnt = parseFloat(document.getElementById('cnt').value);
+  const drop = parseFloat(document.getElementById('drop').value) / 100.0;
+  const gpusPerPool = parseFloat(document.getElementById('gpus').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_cnt').textContent = cnt;
+  document.getElementById('v_drop').textContent = Math.round(drop * 100) + '%';
+  document.getElementById('v_gpus').textContent = gpusPerPool + ' GPUs';
+
+  let acc = 87.9, syn = 18, srvGpus = gpusPerPool;
+  if (mode === '1') {
+    acc = 88.4;
+    syn = 0;
+    srvGpus = cnt * gpusPerPool;
+  } else if (mode === '2') {
+    acc = 86.5;
+    syn = Math.round(cnt * 7125);
+    srvGpus = gpusPerPool;
+  } else if (mode === '3') {
+    acc = +(88.4 - (cnt - 1) * 2.87).toFixed(1);
+    syn = 12;
+    srvGpus = gpusPerPool;
+  } else {
+    acc = +(88.4 - (cnt - 1) * 0.17 - Math.abs(drop - 0.85) * 3.0).toFixed(1);
+    syn = 18;
+    srvGpus = gpusPerPool;
+  }
+  const tco = srvGpus * 2800;
+  document.getElementById('k_acc').textContent = acc + '%';
+  document.getElementById('k_syn').textContent = '$' + syn.toLocaleString();
+  document.getElementById('k_srv').textContent = srvGpus + ' GPUs';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
