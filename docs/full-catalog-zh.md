@@ -1,8 +1,8 @@
-# 云与 AI 基础设施解决方案架构师（SA）双语知识库完整总目录（290 篇）
+# 云与 AI 基础设施解决方案架构师（SA）双语知识库完整总目录（397 篇）
 
-> **Language / 语言**: **简体中文** | [English](./full-catalog-en.md) · [全栈分层地图](./stack-map.md) · [SA 能力进阶路线](./learning/roadmap.md) · [返回首页](../README.md)
+> **Language / 语言**: **简体中文** | [English](./full-catalog-en.md) · [全栈分层地图](./stack-map.md) · [SA 能力进阶路线](./learning/roadmap.md) · [AI Infra 交互精学中心 H5](./h5/ai-infra-learning-hub.html) · [返回首页](../README.md)
 
-> **总览**：本目录汇总仓库内全部 **290 篇中英双语解决方案架构师（SA）技术资产**（**2 篇全栈旗舰深度架构报告** + **288 篇核心组件选型与行业架构 FAQ**），所有条目均按照 **业务场景、架构权衡、选型决策矩阵与上线核对清单** 标准编写，并配套自包含 **交互式容量计算器（Sizer）**、**7-Card 4:5 视觉评测卡** 与 **可复核 Python 模型**。
+> **总览**：本目录汇总仓库内全部 **397 篇中英双语解决方案架构师（SA）技术资产**（**2 篇全栈旗舰深度架构报告** + **395 篇核心组件选型与行业架构 FAQ**），所有条目均按照 **业务场景、架构权衡、选型决策矩阵与上线核对清单** 标准编写，并配套自包含 **交互式容量计算器（Sizer）**、**7-Card 4:5 视觉评测卡** 与 **可复核 Python 模型**。
 
 ---
 
@@ -13,6 +13,7 @@
 | **F-01** | **阿里云 AI Infra 全栈架构深度测评（平头哥芯片 → 磐久/HPN 7.0 → 灵骏/PAI → 百炼）** | 系统拆解公有云 L0–L3 垂直整合架构、真武 PPU 四代演进、HPN 7.0 双平面多轨网络、PAI 训推潮汐抢占与百炼 PAYGO/PTU/DTU/MU 选型树 | [中文报告](./alibaba-cloud-ai-infra/README.md) · [English](./alibaba-cloud-ai-infra/README.en.md) |
 | **F-02** | **1024-GPU 训练与 PD 分离推理混合集群端到端参考架构** | 覆盖千卡级训练 + 在线推理混合智算中心的 SLA 契约、8 轨网络、两阶段异步 Checkpoint、PD 分离与 126 kW 冷板液冷完整预算 | [中文报告](./architectures/end-to-end-ai-infra-case.md) · [English](./architectures/end-to-end-ai-infra-case.en.md) |
 | **F-03** | **云与 AI 基础设施架构师交互式工作台（Architect Workbench）** | 浏览器本地即开即用的 5 合 1 测算台：100K-GPU TCO、NVLS/SHARP 集合通信、PD 分离配比、671B MoE 量化并行与异步 Checkpoint/KV 卸载 | [打开交互式工作台](./reports/ai-infra-architect-workbench.html) |
+| **F-04** | **AI Infra 全景可视化精学中心 H5（7 大核心模块 + 动态图表 + 实时手算沙盘）** | 涵盖 PD 分离边界、TP/PP/DP/EP 并行、NVLink vs IB/RoCEv2、三道水位线 GPU 估算器、TPM/TPS & Little's Law 换算、TTFT/TPOT/Goodput 与完整学习目录 | [中文 H5 精学中心](./h5/ai-infra-learning-hub.html) · [English H5](./h5/ai-infra-learning-hub.en.html) |
 
 ---
 
@@ -195,7 +196,7 @@
 
 ---
 
-## 8. 企业 AI 网关、多智能体编排与行业场景参考架构（AI Gateway · MCP/A2A · Guardrails · 行业方案）（共 172 篇）
+## 8. 企业 AI 网关、多智能体编排与行业场景参考架构（AI Gateway · MCP/A2A · Guardrails · 行业方案）（共 279 篇）
 
 > 聚焦企业统一 AI Gateway（APIM/LiteLLM/Envoy）、MCP 与 A2A 多智能体状态编排、实时安全护栏、LLMOps 评测门禁，以及金融、制造、医疗、电信、零售、能源等重点行业 AI 落地参考架构。
 

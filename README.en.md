@@ -1,8 +1,8 @@
 # Cloud & AI Infrastructure Solution Architect Playbook & Sizing Hub (`ai-infra-research`)
 
-> **Language / 语言**: [简体中文](./README.md) | **English** · [Complete 290-Playbook Catalog](./docs/full-catalog-en.md) · [L0–L9 Stack Map](./docs/stack-map.en.md) · [SA Competency Roadmap](./docs/learning/roadmap.en.md) · [Interactive Sizing Workbench](./docs/reports/ai-infra-architect-workbench.html)
+> **Language / 语言**: [简体中文](./README.md) | **English** · [Complete 397-Playbook Catalog](./docs/full-catalog-en.md) · [Interactive H5 Learning Hub](./docs/h5/ai-infra-learning-hub.en.html) · [L0–L9 Stack Map](./docs/stack-map.en.md) · [SA Competency Roadmap](./docs/learning/roadmap.en.md) · [Interactive Sizing Workbench](./docs/reports/ai-infra-architect-workbench.html)
 
-A bilingual (`zh-CN` & `en`), quantitative architecture decision hub purpose-built for **Cloud & AI Infrastructure Solution Architects**. Stripped of obscure non-SA scientific simulations and low-level commit noise, this repository focuses squarely on the **8 high-stakes infrastructure domains** architects face when designing GPU clusters, evaluating cloud vs. self-hosted platforms, and scaling production LLM/Agent systems — backed by **290 bilingual architecture guides, 569 self-contained interactive HTML sizers & 7-card visual benchmark decks, and 304 reproducible Python 3.12 analytical models**.
+A bilingual (`zh-CN` & `en`), quantitative architecture decision hub purpose-built for **Cloud & AI Infrastructure Solution Architects**. Stripped of obscure non-SA scientific simulations and low-level commit noise, this repository focuses squarely on the **8 high-stakes infrastructure domains** architects face when designing GPU clusters, evaluating cloud vs. self-hosted platforms, and scaling production LLM/Agent systems — backed by **397 bilingual architecture guides, 783 self-contained interactive HTML sizers & 7-card visual benchmark decks, and 403 reproducible Python 3.12 analytical models**.
 
 ---
 
@@ -39,12 +39,13 @@ flowchart TB
 | **Alibaba Cloud Full-Stack AI Infrastructure Review (`L0–L3`)** | Evaluating hyperscaler custom silicon, supernodes, RoCE fabrics, and managed MaaS tiers | Full-stack teardown of T-Head Zhenwu PPUs (`810E`→`M890 144G`→`V900 216G`), Panjiu `AL128` supernodes, `HPN 7.0` dual-plane multi-rail RDMA (`+14.9%` training goodput), `PAI` tidal preemption, and `Bailian` (`PAYGO / PTU / DTU / MU`) sizing | [English](./docs/alibaba-cloud-ai-infra/README.en.md) · [中文](./docs/alibaba-cloud-ai-infra/README.md) |
 | **End-to-End 1,024-GPU Training & PD-Disaggregated Serving Architecture** | Designing a ~1,000-GPU enterprise hybrid training + low-latency inference cluster | 8-rail lossless fabric + two-phase async checkpointing (`9 TB` stall cut to `3.1 s`) + Dynamo/Mooncake PD disaggregation (`26.5%–34.2%` fewer GPUs under bursty traffic) + `126 kW` cold-plate DLC rack budgets | [English](./docs/architectures/end-to-end-ai-infra-case.en.md) · [中文](./docs/architectures/end-to-end-ai-infra-case.md) |
 | **Cloud & AI Infrastructure Solution Architect Workbench (5-in-1 Console)** | Live customer sizing for 3-year TCO, PD instance ratios, 671B MoE precision, and KV offload | Zero-dependency single-file HTML console modeling `$/1M tokens`, NVLS+SHARP collective scaling, PD disaggregation ROI, MoE FP8/NVFP4 parallelism, and checkpoint/KV tiering | [Open Workbench](./docs/reports/ai-infra-architect-workbench.html) |
+| **AI Infrastructure Interactive H5 Learning Center (7 Modules + Charts + Sandboxes)** | Interactive visual study hub for PD Disaggregation, TP/PP/DP/EP, NVLink vs. RDMA, 3-Watermark GPU Sizer, TPM/TPS & Little's Law, and TTFT/TPOT/Goodput | Self-contained responsive H5 app with Colocated vs. PD bar charts, stacked HBM waterfalls, Roofline ridge diagrams, Pareto curves, and live interactive sliders | [English H5 Hub](./docs/h5/ai-infra-learning-hub.en.html) · [中文 H5](./docs/h5/ai-infra-learning-hub.html) |
 
 ---
 
 ## 3. Curated Solution Architect Playbooks Across 8 Core Domains
 
-Every component guide follows the absorbable decision-guide standard modeled on [`ib-vs-ethernet-roce-selection-faq.en.md`](./docs/components/ib-vs-ethernet-roce-selection-faq.en.md): **Executive Summary → Scenario Q&A → Architecture Trade-offs → Quantitative Decision Matrix → Pre-Production Checklist**. Browse all **290** deliverables in the **[Complete Bilingual Catalog](./docs/full-catalog-en.md)**.
+Every component guide follows the absorbable decision-guide standard modeled on [`ib-vs-ethernet-roce-selection-faq.en.md`](./docs/components/ib-vs-ethernet-roce-selection-faq.en.md): **Executive Summary → Scenario Q&A → Architecture Trade-offs → Quantitative Decision Matrix → Pre-Production Checklist**. Browse all **397** deliverables in the **[Complete Bilingual Catalog](./docs/full-catalog-en.md)**。
 
 ### 3.1 AI Networking & High-Speed Interconnects
 
@@ -104,7 +105,7 @@ Every component guide follows the absorbable decision-guide standard modeled on 
 |---|---|---|---|
 | Governing enterprise LLM traffic, MCP/A2A multi-agent workflows, & safety guardrails | Direct app-to-provider calls scatter API keys, trip 429 rate limits, and expose PII; stateful multi-agent loops require durable checkpointing and bounded tool scopes | Centralize traffic through an **Enterprise AI Gateway (token quotas, semantic caching, multi-region/provider failover)**; pair **MCP + OBO (`User ∩ Agent`) identity delegation + durable state orchestration** with dual-layer guardrails | [Enterprise AI Gateway](./docs/components/enterprise-ai-gateway-apim-litellm-kong-envoy-higress-selection-faq.en.md) · [Agent Orchestration](./docs/components/enterprise-agentic-orchestration-langgraph-temporal-autogen-foundry-selection-faq.en.md) · [Agent Identity & MCP OBO](./docs/components/enterprise-ai-agent-identity-delegated-auth-obo-tool-permission-selection-faq.en.md) · [Low-Latency Guardrails](./docs/components/enterprise-llm-guardrails-prompt-shield-content-safety-latency-selection-faq.en.md) |
 | Full-TCO Cloud (`PAYGO vs PTU`) vs Self-Hosted K8s, Copilot Build-vs-Buy (`Adopt vs Extend vs Build`), & Multimodal RAG | Omitting 24×7 SRE payroll makes sub-scale GPU clusters cost-negative; building all 100+ enterprise scenarios in custom pro-code creates multi-month backlogs; naive 1-FPS video/VLM OCR explodes ingestion bills | Include SRE payroll: cross to **P55 PTU + PAYGO spillover at `>2,250 TPM`** and **Self-Hosted K8s above `4.6B tokens/mo`**; allocate **`50%` M365 Declarative + `30%` Copilot Studio + `20%` Foundry Pro-Code**; use **complexity-routed OCR & `pHash` keyframe Video-RAG** | [PAYGO vs PTU vs K8s Full TCO](./docs/components/enterprise-cloud-managed-paas-ptu-paygo-vs-self-hosted-k8s-tco-selection-faq.en.md) · [M365 vs Studio vs Foundry](./docs/components/enterprise-m365-copilot-extensibility-foundry-studio-pro-code-selection-faq.en.md) · [Multimodal Document Parsing](./docs/components/enterprise-multimodal-document-parsing-ocr-vlm-rag-ingestion-selection-faq.en.md) · [Video-RAG Selection](./docs/components/enterprise-multimodal-video-image-understanding-indexing-rag-selection-faq.en.md) |
-| Delivering regulated vertical AI platforms (Finance, Manufacturing, Healthcare, Telco, Retail, Energy) | Industry deployments face strict sovereign residency, edge latency, multimodal document/DICOM pipelines, and legacy ERP/MES integration gates | Apply **170+ end-to-end platform & industry reference architectures** covering compliance boundaries, cloud-edge sizing, RAG/Agent topology, and TCO payback | Browse [Section 8 of the Complete Bilingual Catalog (172 Platform & Industry Playbooks)](./docs/full-catalog-en.md) |
+| Delivering regulated vertical AI platforms (Finance, Manufacturing, Healthcare, Telco, Retail, Energy) | Industry deployments face strict sovereign residency, edge latency, multimodal document/DICOM pipelines, and legacy ERP/MES integration gates | Apply **270+ end-to-end platform & industry reference architectures** covering compliance boundaries, cloud-edge sizing, RAG/Agent topology, and TCO payback | Browse [Section 8 of the Complete Bilingual Catalog (279 Platform & Industry Playbooks)](./docs/full-catalog-en.md) |
 
 ---
 
@@ -114,15 +115,16 @@ Every component guide follows the absorbable decision-guide standard modeled on 
 ai-infra-research/
 ├── README.md / README.en.md                 # Bilingual Solution Architect hub & decision matrices
 ├── docs/
-│   ├── full-catalog-zh.md / full-catalog-en.md  # Complete categorized index of all 290 SA deliverables
+│   ├── full-catalog-zh.md / full-catalog-en.md  # Complete categorized index of all 397 SA deliverables
+│   ├── h5/ai-infra-learning-hub.{html,en.html}  # Interactive H5 AI Infra Learning Center (charts & sandboxes)
 │   ├── stack-map.md / stack-map.en.md           # L0–L9 Cloud & AI Infrastructure Stack Map
-│   ├── learning/roadmap.{md,en.md}              # Cloud Architect → AI Infra SA 6-Stage Roadmap
+│   ├── learning/roadmap.{md,en.md}              # Cloud Architect → AI Infra SA 6-Stage Roadmap (incl. 7-Day Sprint)
 │   ├── alibaba-cloud-ai-infra/README.{md,en.md} # Flagship: Alibaba Cloud L0–L3 Full-Stack Review
 │   ├── architectures/end-to-end-ai-infra-case.{md,en.md} # Flagship: 1,024-GPU Training + PD Serving Blueprint
-│   ├── components/*.{md,en.md}                  # 288 bilingual SA selection & architecture FAQs (576 files)
-│   └── reports/*.html                           # 569 self-contained HTML sizers, 7-card decks & workbench
+│   ├── components/*.{md,en.md}                  # 395 bilingual SA selection & architecture FAQs (790 files)
+│   └── reports/*.html                           # 783 self-contained HTML sizers, 7-card decks & workbench
 ├── assets/svg/*.svg                         # High-readability architecture summary SVGs
-├── experiments/*/                           # 304 Python 3.12 stdlib capacity, latency & TCO models
+├── experiments/*/                           # 403 Python 3.12 stdlib capacity, latency & TCO models
 ├── scripts/validate_research.py             # Broken-link, ledger, and sanitization validator
 └── tests/                                   # Automated unit & validation test suite
 ```

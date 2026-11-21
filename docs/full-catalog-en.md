@@ -1,8 +1,8 @@
-# Cloud & AI Infrastructure Solution Architect Complete Bilingual Catalog (290 Playbooks)
+# Cloud & AI Infrastructure Solution Architect Complete Bilingual Catalog (397 Playbooks)
 
-> **Language / 语言**: [简体中文](./full-catalog-zh.md) | **English** · [10-Layer Stack Map](./stack-map.en.md) · [SA Competency Roadmap](./learning/roadmap.en.md) · [Repository Home](../README.en.md)
+> **Language / 语言**: [简体中文](./full-catalog-zh.md) | **English** · [10-Layer Stack Map](./stack-map.en.md) · [SA Competency Roadmap](./learning/roadmap.en.md) · [Interactive H5 Learning Hub](./h5/ai-infra-learning-hub.en.html) · [Repository Home](../README.en.md)
 
-> **Overview**: This master catalog indexes all **290 bilingual (`zh-CN` & `en`) Cloud & AI Infrastructure Solution Architect deliverables** in this repository (**2 Flagship Full-Stack Reference Architectures** + **288 Component Selection & Enterprise Architecture FAQs**). Every guide is structured with **Executive Summary, Real-World Scenario, Architecture Trade-offs, Quantitative Decision Matrix, and Pre-Production Checklist**, paired with self-contained **Interactive HTML Sizers**, **7-Card 4:5 Visual Decks**, and **Reproducible Python Models**.
+> **Overview**: This master catalog indexes all **397 bilingual (`zh-CN` & `en`) Cloud & AI Infrastructure Solution Architect deliverables** in this repository (**2 Flagship Full-Stack Reference Architectures** + **395 Component Selection & Enterprise Architecture FAQs**). Every guide is structured with **Executive Summary, Real-World Scenario, Architecture Trade-offs, Quantitative Decision Matrix, and Pre-Production Checklist**, paired with self-contained **Interactive HTML Sizers**, **7-Card 4:5 Visual Decks**, and **Reproducible Python Models**.
 
 ---
 
@@ -13,6 +13,7 @@
 | **F-01** | **Alibaba Cloud Full-Stack AI Infrastructure Architecture Review (`L0–L3`)** | End-to-end teardown of T-Head Zhenwu PPUs (`810E`→`V900`), Panjiu `AL128` supernodes, `HPN 7.0` dual-plane RDMA fabric, `PAI` tidal preemption, and `Bailian` (`PAYGO/PTU/DTU/MU`) sizing | [English](./alibaba-cloud-ai-infra/README.en.md) · [中文](./alibaba-cloud-ai-infra/README.md) |
 | **F-02** | **End-to-End 1,024-GPU Training & PD-Disaggregated Serving Reference Architecture** | Production blueprint spanning 8-rail lossless networking, two-phase async checkpointing, Dynamo/Mooncake PD disaggregation, Kueue TAS scheduling, and 126 kW cold-plate DLC racks | [English](./architectures/end-to-end-ai-infra-case.en.md) · [中文](./architectures/end-to-end-ai-infra-case.md) |
 | **F-03** | **Cloud & AI Infrastructure Solution Architect Interactive Workbench** | Self-contained 5-in-1 browser console for 100K-GPU 3-year TCO, NVLS/SHARP collectives, PD disaggregation sizing, 671B MoE FP8/NVFP4 parallelism, and async checkpoint/KV tiering | [Open Workbench](./reports/ai-infra-architect-workbench.html) |
+| **F-04** | **AI Infrastructure Interactive H5 Learning Center (7 Modules + Live SVG Charts + Calculators)** | Interactive H5 study app covering PD Disaggregation, TP/PP/DP/EP, NVLink vs. IB/RoCEv2, 3-Watermark GPU Sizer, TPM/TPS & Little's Law, TTFT/TPOT/Goodput, and full directory | [English H5 Hub](./h5/ai-infra-learning-hub.en.html) · [中文 H5](./h5/ai-infra-learning-hub.html) |
 
 ---
 
@@ -195,7 +196,7 @@
 
 ---
 
-## 8. Enterprise AI Gateway, Multi-Agent Fabrics & Industry Reference Architectures (Gateway · MCP/A2A) (172 Playbooks)
+## 8. Enterprise AI Gateway, Multi-Agent Fabrics & Industry Reference Architectures (Gateway · MCP/A2A) (279 Playbooks)
 
 > Covers enterprise AI Gateways (APIM/LiteLLM/Envoy), MCP & A2A multi-agent orchestration, runtime safety guardrails, LLMOps CI/CD gates, and vertical industry AI reference architectures.
 
