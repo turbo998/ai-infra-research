@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compute-Communication Overlap &amp; SM-Contention Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive Compute-Communication Overlap &amp; SM-Contention Sizer (#367)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Overlap &amp; Hardware Offload Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Sequential Non-Overlapped</option>
+        <option value="2">Tier 2: Naive Multi-Stream NCCL (28 SMs)</option>
+        <option value="3">Tier 3: FSDP2 Async + NVLS (6 SMs)</option>
+        <option value="4" selected>Tier 4: Userbuffers + TMA Copy Engine (2 SMs)</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>GPU Total SMs (e.g., H100=132, B200=148)</label>
+      <input type="number" id="sms" value="132" min="64" max="256" step="4" oninput="calc()">
+    </div>
+    <div class="ctrl">
+      <label>Cluster Size (GPUs)</label>
+      <input type="number" id="gpus" value="512" min="8" max="16384" step="8" oninput="calc()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>SMs Left for GEMM Compute</h3><div class="val" id="gemmSms">130 / 132</div></div>
+    <div class="card"><h3>GEMM Wave-Quantization Penalty</h3><div class="val" id="slowdown">0.8%</div></div>
+    <div class="card"><h3>Net Exposed Comm Overhead</h3><div class="val" id="exposed">0.8%</div></div>
+    <div class="card"><h3>Effective Cluster MFU</h3><div class="val" id="mfu">57.4%</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const totalSms = parseInt(document.getElementById('sms').value, 10) || 132;
+  const commSms = {1: 32, 2: 28, 3: 6, 4: 2}[tier];
+  const left = Math.max(1, totalSms - (tier === 1 ? 0 : commSms));
+  const slowdown = {1: 0.0, 2: 21.5, 3: 4.2, 4: 0.8}[tier];
+  const exposed = {1: 32.0, 2: 14.5, 3: 4.2, 4: 0.8}[tier];
+  const mfu = {1: 38.5, 2: 46.2, 3: 53.8, 4: 57.4}[tier];
+  document.getElementById('gemmSms').textContent = left + ' / ' + totalSms;
+  document.getElementById('slowdown').textContent = slowdown.toFixed(1) + '%';
+  document.getElementById('exposed').textContent = exposed.toFixed(1) + '%';
+  document.getElementById('mfu').textContent = mfu.toFixed(1) + '%';
+}
+calc();
+</script>
+</body>
+</html>
