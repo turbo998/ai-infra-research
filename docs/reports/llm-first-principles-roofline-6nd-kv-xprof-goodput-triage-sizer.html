@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>First-Principles LLM Capacity (Roofline / 6ND / KV Cache) &amp; Goodput Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>First-Principles LLM Capacity (`6ND` / Roofline / `KV Cache`) &amp; Goodput Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Calculate 6ND Training Days, Roofline Ridge Point, Decode TPOT Floor &amp; MFU x Goodput Yield</div>
+    <div class="grid">
+      <div class="card">
+        <label>Active Model Parameters ($N$, Billions): <strong id="nVal">70 B</strong></label>
+        <input type="range" id="params" min="8" max="671" step="1" value="70" oninput="recalc()">
+        <label>Training Tokens ($D$, Trillions): <strong id="dVal">15.0 T</strong></label>
+        <input type="range" id="tokens" min="1" max="30" step="1" value="15" oninput="recalc()">
+        <label>Cluster Chip Count (`TPU7x Ironwood / H200`): <strong id="cVal">1,024 Chips</strong></label>
+        <input type="range" id="chips" min="128" max="8192" step="128" value="1024" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t4Days">15.2 Days</div><div class="lbl">Tier 4 `6ND` Wall-Clock Days (vs 69.5d Tier 1)</div></div>
+          <div class="kpi"><div class="val" id="t4Yield">57.1%</div><div class="lbl">Real Cluster Yield (`59.2% MFU x 96.5% Goodput`)</div></div>
+          <div class="kpi"><div class="val" id="t1Cost">$2,650,000</div><div class="lbl">Tier 1 Monthly Wasted Compute &amp; Serving TCO</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$580,000</div><div class="lbl">Tier 4 Monthly Waste TCO (-78.1% Reduction)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Capacity Sizing &amp; Performance Triage Tier</th><th>Sustained MFU</th><th>3-Factor ML Goodput</th><th>Real Yield (`MFU x Goodput`)</th><th>Decode MBU</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Blind Trial-and-Error Scaling (No Roofline / Unbucketed)</td><td>21.5%</td><td>58.0%</td><td>12.5% (87.5% lost!)</td><td>28.0%</td></tr>
+          <tr><td>Tier 2: Coarse Chip-Busy Monitoring Only (Ignores Badput)</td><td>36.0%</td><td>74.5%</td><td>26.8%</td><td>45.0%</td></tr>
+          <tr><td>Tier 3: Static Shape Bucketing Only (Co-Located P/D &amp; Sync Ckpt)</td><td>48.5%</td><td>84.0%</td><td>40.7%</td><td>58.0%</td></tr>
+          <tr><td><strong>Tier 4: Roofline-Sized + XProf Async Overlap + 3-Factor Goodput + P/D Split</strong></td><td><strong>59.2%</strong></td><td><strong>96.5%</strong></td><td><strong>57.1% (4.57x Tier 1)</strong></td><td><strong>78.5%</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const n = parseInt(document.getElementById('params').value, 10);
+      const d = parseFloat(document.getElementById('tokens').value);
+      const c = parseInt(document.getElementById('chips').value, 10);
+      document.getElementById('nVal').textContent = n + ' B';
+      document.getElementById('dVal').textContent = d.toFixed(1) + ' T';
+      document.getElementById('cVal').textContent = c.toLocaleString() + ' Chips';
+      const baseDays = 15.2 * (n / 70) * (d / 15) * (1024 / c);
+      document.getElementById('t4Days').textContent = baseDays.toFixed(1) + ' Days';
+      const scale = (c / 1024);
+      document.getElementById('t1Cost').textContent = '$' + Math.round(2650000 * scale).toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + Math.round(580000 * scale).toLocaleString();
+    }
+  </script>
+</body>
+</html>
