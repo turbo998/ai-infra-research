@@ -1,0 +1,414 @@
+import math from "./academy-math.cjs";
+
+export const esc = (text) => String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+export const b = (zh, en) => `<span data-lang="zh-CN">${zh}</span><span data-lang="en">${en}</span>`;
+const p = (zh, en) => `<p>${b(zh, en)}</p>`;
+const formula = (text) => `<div class="formula">${text}</div>`;
+const note = (zh, en) => `<div class="notice">${b(zh, en)}</div>`;
+const section = (id, zh, en, content) => `<section class="lesson" id="${id}"><h2>${b(zh, en)}</h2>${content}</section>`;
+const faq = (zh, en, answerZh, answerEn) => `<details><summary>${b(zh, en)}</summary>${p(answerZh, answerEn)}</details>`;
+const table = (headers, rows, caption) => `<div class="table-wrap"><table>${caption ? `<caption>${caption}</caption>` : ""}<thead><tr>${headers.map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v, i) => i === 0 ? `<th scope="row">${v}</th>` : `<td>${v}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+const field = (lab, key, zh, en, value, min, max, step = 1, type = "number") => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><input id="${lab}-${key}" data-key="${key}" name="${key}" type="${type}" value="${value}" min="${min}" max="${max}" step="${step}" required>${type === "range" ? `<output for="${lab}-${key}" data-for="${key}">${value}</output>` : ""}</div>`;
+const select = (lab, key, zh, en, choices, selected) => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><select id="${lab}-${key}" data-key="${key}" name="${key}">${choices.map(([value, label]) => `<option value="${esc(value)}"${value === selected ? " selected" : ""}>${esc(label)}</option>`).join("")}</select></div>`;
+const check = (lab, key, zh, en) => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><input type="checkbox" id="${lab}-${key}" name="${key}" data-key="${key}"></div>`;
+const models = Object.entries(math.models).map(([id, m]) => [id, m.name]);
+const gpus = Object.entries(math.gpus).map(([id, g]) => [id, g.name]);
+const lab = (id, controls) => `<div class="lab" data-workbench="${id}"><form data-lab="${id}" class="controls" novalidate>${controls}<button type="reset">${b("恢复算例", "Reset example")}</button></form><div class="results"><div class="error" role="alert" hidden></div><div data-results="${id}" aria-live="polite" aria-atomic="false"></div><noscript>${b("请启用 JavaScript 使用沙盘；下方公式、FAQ 与算例仍可离线阅读。", "Enable JavaScript for the workbench; formulas, FAQ and worked examples remain readable offline.")}</noscript></div></div>`;
+const quiz = (id, zh, en, answers, correct, explainZh, explainEn) => `<div class="quiz" data-quiz="${id}" data-correct="${correct}"><fieldset><legend>${b(zh, en)}</legend>${answers.map(([z, e], i) => `<label><input type="radio" name="quiz-${id}" value="${i}">${b(z, e)}</label>`).join("")}<button type="button" data-check-quiz>${b("核对答案", "Check answer")}</button><div class="quiz-result" role="status"></div><template data-explanation>${b(explainZh, explainEn)}</template></fieldset></div>`;
+const checklist = (items) => `<div class="checklist">${items.map(([z, e]) => `<label><input type="checkbox">${b(z, e)}</label>`).join("")}</div>`;
+const diagram = (id, titleZh, titleEn, content, captionZh, captionEn, height = 260) => `<figure class="chart"><svg viewBox="0 0 800 ${height}" role="img" aria-labelledby="${id}-title"><title id="${id}-title">${titleZh} / ${titleEn}</title>${content}</svg><figcaption>${b(captionZh, captionEn)}</figcaption></figure>`;
+const node = (x, y, w, title, subtitle, cls = "surface") => `<rect x="${x}" y="${y}" width="${w}" height="68" rx="10" class="${cls}"/><text x="${x + w / 2}" y="${y + 27}" text-anchor="middle" class="${cls === "primary" ? "inverse" : "label"}">${title}</text><text x="${x + w / 2}" y="${y + 49}" text-anchor="middle" class="${cls === "primary" ? "inverse" : "label"}">${subtitle}</text>`;
+const arrow = (x1, y1, x2, y2) => `<path d="M ${x1} ${y1} L ${x2} ${y2}" class="line secondary"/><path d="M ${x2 - 8} ${y2 - 5} L ${x2} ${y2} L ${x2 - 8} ${y2 + 5}" class="line secondary"/>`;
+export const chapters = [
+  { id: "metrics", file: "01-metrics.html", zh: "先看用户体验，再看机器吞吐", en: "User experience comes before peak throughput", subtitleZh: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · 成本", subtitleEn: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · cost", minutes: 20, sources: ["vllm", "ptu-concept"] },
+  { id: "capacity", file: "02-tpm-tps-capacity.html", zh: "50 TPS/用户，不等于 50 TPS/集群", en: "50 TPS per user is not 50 TPS per cluster", subtitleZh: "TPM/TPS 边界 · Little's Law · 峰值规划 · PTU 权重", subtitleEn: "TPM/TPS boundaries · Little's Law · peak sizing · PTU weights", minutes: 25, sources: ["ptu", "ptu-concept", "vllm"] },
+  { id: "sizing", file: "03-gpu-sizing.html", zh: "放得下、吐得快、首字快，是三道不同水位线", en: "Memory fit, decode speed and first-token speed are three different bounds", subtitleZh: "Dense / MoE · GQA / MLA · 显存堆叠 · HBM / FLOPs", subtitleEn: "Dense / MoE · GQA / MLA · memory stacks · HBM / FLOPs", minutes: 30, sources: ["h100", "h200", "b200", "l40s", "deepseek-config", "deepseek", "llama", "qwen", "vllm"] },
+  { id: "pd", file: "04-pd-disaggregation.html", zh: "PD 分离消除一类干扰，却增加一次 KV 交接", en: "PD removes one interference source but adds a KV handoff", subtitleZh: "混部 / Chunked Prefill / PD · KV 传输 · 决策边界", subtitleEn: "Colocated / chunked prefill / PD · KV transfer · decision boundaries", minutes: 25, sources: ["vllm", "vllm-pd", "dynamo", "mooncake", "sglang", "gpudirect"] },
+  { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell"] },
+  { id: "network", file: "06-rdma-roce-nvlink.html", zh: "900 GB/s NVLink 和 400 Gb/s 网卡，先统一口径", en: "Normalize units before comparing 900 GB/s NVLink with a 400 Gb/s NIC", subtitleZh: "GPUDirect RDMA · RoCEv2 流控 · 多轨拓扑 · NCCL 带宽", subtitleEn: "GPUDirect RDMA · RoCEv2 congestion · rail topology · NCCL bandwidth", minutes: 25, sources: ["gpudirect", "nccl", "blackwell", "h100", "ib", "ecn"] }
+];
+
+export function indexContent() {
+  return section("route", "今晚先走一条业务问题驱动的学习路线", "Follow a business-question learning route tonight",
+    p("不从缩写背诵开始。先问「用户为什么觉得卡」→「高峰需要多大吞吐」→「买多少卡才合理」→「是否拆 P/D」→「怎么并行」→「网络瓶颈在哪里」。每册都带可调沙盘、手算复核、FAQ、自测与上线核对清单。",
+      "Start with a business question, not an acronym list: why users see stalls → how much peak throughput is needed → how many GPUs are plausible → whether to split P/D → how to parallelize → where the network bottleneck sits. Each chapter includes a workbench, hand calculation, FAQ, quiz and production checklist.") +
+    `<div class="grid three chapter-rail">${chapters.map((c, i) => `<article class="card module-card"><span class="chapter-number">0${i + 1}</span><span class="tag">${c.minutes} MIN · OFFLINE</span><h3>${b(c.zh, c.en)}</h3>${p(c.subtitleZh, c.subtitleEn)}<a class="button" data-carry href="${c.file}">${b("进入专题", "Open chapter")} →</a></article>`).join("")}</div>`) +
+    section("quick", "三分钟总览：别让吞吐数字掩盖 SLA 失败", "Three-minute overview: throughput can conceal an SLO failure",
+      table([b("客户问题", "Customer question"), b("先看哪个量", "Start with"), b("下一步动作", "Next action")], [
+        [b("首字太慢", "Slow first token"), "P95/P99 TTFT + queue + prefill", b("拆开排队、输入长度、缓存命中与网络预算", "Separate queue, input length, cache hits and transport budget")],
+        [b("流式断断续续", "Stuttering stream"), "P99 ITL + per-request TPOT", b("看长 Prefill 干扰、KV 读取、通信与调度", "Inspect long-prefill interference, KV reads, collectives and scheduling")],
+        [b("用户多了就排队", "Queues grow under load"), "Goodput + active concurrency", b("用稳态均值做 Little's Law，再做突发压测", "Use steady-state means in Little's Law, then test bursts")],
+        [b("模型到底放不放得下", "Will the model fit?"), "Total weights + KV + per-rank runtime", b("总参数定存储，激活参数定部分计算；别混淆", "Total parameters govern storage; active parameters govern part of compute")],
+        [b("网络明明 400G 还很慢", "400G network still feels slow"), "Payload / effective one-way bandwidth", b("先统一 bit/byte、方向、端口数，再看拥塞", "Normalize bits/bytes, direction and port count before congestion")]
+      ]) +
+      note("所有 SLA 目标、负载分布、价格和曲线都是明确标记的教学假设。没有真实 GPU 运行记录，不冒充实测，也不把容量下界写成采购保证。",
+        "All SLO targets, traffic distributions, prices and curves are explicitly labeled teaching assumptions. There is no hardware run record; bounds are not measurements or procurement guarantees.")) +
+    section("map", "六个概念串成一张架构决策图", "Six concepts form one architecture decision map",
+      diagram("academy-map", "业务到网络的六步决策", "Six decisions from business to fabric",
+        node(20, 30, 230, "01 / SLO", "TTFT · ITL · Goodput", "primary") + node(285, 30, 230, "02 / Demand", "QPS × tokens · Little") + node(550, 30, 230, "03 / GPU", "Weights + KV + roofline") +
+        node(20, 150, 230, "06 / Network", "RDMA · NVLink · NCCL") + node(285, 150, 230, "05 / Parallel", "TP · PP · DP · EP") + node(550, 150, 230, "04 / P-D", "Isolation vs handoff") +
+        arrow(252, 64, 280, 64) + arrow(517, 64, 545, 64) + `<path d="M 665 100 L 665 140" class="line secondary"/>` +
+        `<path d="M 548 185 L 520 185 M 281 185 L 253 185" class="line secondary"/>`,
+        "先满足体验指标，再求达标吞吐；网络服务于并行与 KV 交接，不是孤立采购参数。",
+        "Satisfy user experience before maximizing goodput; fabric supports parallelism and KV handoff, not an isolated purchasing spec.")) +
+    section("study", "每次只改一个变量，才知道瓶颈转移到了哪里", "Change one variable at a time to see the bottleneck move",
+      `<div class="grid"><article class="card"><h3>${b("30 分钟速读", "30-minute fast route")}</h3>${p("先读 01 的生命周期，02 的 QPS→TPM，03 的三道水位线。再把自己的业务 QPS、输入/输出长度和目标延迟代入。", "Read the lifecycle in 01, QPS→TPM in 02 and the three bounds in 03. Substitute your traffic, token lengths and latency targets.")}</article><article class="card"><h3>${b("两小时精读", "Two-hour deep route")}</h3>${p("完整走六册。把 batch 从 1 改到 32，再把上下文从 2K 改到 32K，观察显存、专家并集、Goodput 和 KV 网络负载如何变化。", "Walk through all six chapters. Increase batch from 1 to 32 and context from 2K to 32K; observe memory, expert union, goodput and KV fabric load.")}</article></div>` +
+      p("离线使用：保留整个 h5-academy 目录，双击 index.html。每一册本身是独立 HTML，无需服务器；中英切换、明暗主题、交互、图表和自测全部内联。手机首页可左右滑动专题卡片，长图和表格可在自身区域横滑。",
+        "Offline: keep the h5-academy folder and double-click index.html. Every chapter is a standalone HTML file with embedded language switching, themes, interactions, charts and quizzes. On mobile, swipe the chapter cards; wide figures and tables scroll within their own regions."));
+}
+
+function metricsContent() {
+  const lifeControls = field("lifecycle", "queue", "排队 ms", "Queue ms", 120, 0, 30000) +
+    field("lifecycle", "prefill", "Prefill + 首 Token 计算 ms", "Prefill + first-token compute ms", 300, 0, 60000) +
+    field("lifecycle", "delivery", "网络 / 网关交付 ms", "Network / gateway delivery ms", 30, 0, 10000) +
+    field("lifecycle", "output", "输出 Token 数（含首 Token）", "Output tokens (including first)", 128, 1, 32768) +
+    field("lifecycle", "tpot", "后续平均 TPOT ms/token", "Mean subsequent TPOT ms/token", 20, 0.1, 1000, 0.1);
+  const goodControls = field("goodput", "batch", "活跃 decode batch", "Active decode batch", 32, 1, 128, 1, "range") +
+    field("goodput", "base", "基础 ITL ms（假设）", "Base ITL ms (assumption)", 12, 0.1, 200, 0.1) +
+    field("goodput", "slope", "每 batch 增量 ms（假设）", "Increment per batch ms (assumption)", 0.25, 0.01, 10, 0.01) +
+    field("goodput", "knee", "饱和拐点 batch（假设）", "Saturation knee batch (assumption)", 48, 1, 128) +
+    field("goodput", "ttftLimit", "达标 TTFT 上限 ms", "TTFT SLO limit ms", 800, 1, 30000) +
+    field("goodput", "tpotLimit", "达标平均 TPOT 上限 ms", "Mean TPOT SLO limit ms", 35, 1, 1000);
+  return section("concepts", "TTFT 包含排队；平均 TPOT 不等于尾部 ITL", "TTFT includes queueing; mean TPOT is not tail ITL",
+    table([b("指标", "Metric"), b("严格定义 / 单位", "Definition / unit"), b("架构含义与易错点", "Meaning and trap")], [
+      ["TTFT", b("请求发出到首 Token 可见，ms 或 s", "Request sent → first visible token, ms or s"), b("包含客户端/网关/排队/Prefill/首字传输。服务端 TTFT 与端到端 TTFT 要分别命名。", "Includes client/gateway/queue/prefill/first delivery. Name server-side and end-to-end TTFT separately.")],
+      ["TPOT / ITL", "(t_last − t_first) / (N_out − 1); ITL_i = t_i − t_(i−1)", b("TPOT 是一个请求的平均后续间隔；P99 ITL 捕捉短时卡顿。N_out=1 时 TPOT 未定义，不写成 0。", "TPOT is mean subsequent interval for one request; P99 ITL captures stalls. TPOT is undefined for N_out=1, not zero.")],
+      ["E2EL", "t_last − t_request = TTFT + (N_out−1) × TPOT", b("适用于非投机逐 Token 可见时间。分块流式时，网络 chunk 不一定是一枚 Token。", "Based on visible-token timestamps. A streamed network chunk need not contain one token.")],
+      ["RPS / QPS", b("requests/s；分别记录 offered / admitted / completed", "requests/s; distinguish offered / admitted / completed"), b("一个请求会生成多枚 Token；RPS 不是 TPS。", "One request produces many tokens; RPS is not TPS.")],
+      ["Goodput", b("单位时间内同时满足约定 SLA 的请求或 Token 数", "SLO-compliant requests or tokens per unit time"), b("必须声明请求口径还是输出 Token 口径，以及双门槛。高吞吐可以伴随零 Goodput。", "Declare request vs output-token goodput and both gates. High throughput can coexist with zero goodput.")],
+      ["$/1M tokens", b("成本 ÷ 同口径 Token × 10⁶", "Cost ÷ same-scope tokens × 10⁶"), b("输入/输出单价不同；集群成本应含闲置、网络、运维并用达标输出作分母。", "Input/output prices differ. Cluster cost includes idle capacity, fabric and operations; use compliant output as denominator.")]
+    ])) +
+    section("lifecycle", "128 个输出 Token 只有 127 个后续间隔", "128 output tokens contain 127 subsequent intervals",
+      lab("lifecycle", lifeControls) +
+      formula("TTFT = queue + prefill_and_first_compute + delivery<br>E2EL = TTFT + max(N_out − 1, 0) × TPOT<br>Streaming TPS ≈ 1000 / TPOT_ms, only when N_out &gt; 1") +
+      p("默认手算：120 + 300 + 30 = 450 ms TTFT；E2EL = 450 + 127×20 = 2,990 ms；单用户后续流式速率约 50 tok/s。不要用 128×20 又重复计算首 Token。",
+        "Default hand check: 120 + 300 + 30 = 450 ms TTFT; E2EL = 450 + 127×20 = 2,990 ms; subsequent streaming rate is about 50 tok/s. Multiplying 128×20 counts the first token twice.")) +
+    section("scenarios", "语音的 300 ms 是端到端预算，不是 LLM 全部预算", "A 300 ms voice target is an end-to-end budget, not all for the LLM",
+      `<div data-static-chart="scenarios"></div>` +
+      table([b("五类场景", "Five scenarios"), b("教学目标（非行业 SLA）", "Teaching target (not an industry SLA)"), b("优先优化", "Prioritize")], [
+        [b("实时语音", "Real-time voice"), "End-to-end turn response &lt;300 ms; LLM TTFT budget 120 ms; TPOT 15 ms", b("VAD、ASR、网络、LLM、TTS 分摊预算；首音频与首文本分开测。", "Allocate VAD, ASR, network, LLM and TTS budgets; measure first audio separately.")],
+        [b("IDE 补全", "IDE completion"), "TTFT 200 ms; TPOT 15 ms; 64 output tokens", b("取消过时请求、短输出、低并发低延迟池。", "Cancel stale requests; short outputs and a low-latency pool.")],
+        [b("企业对话", "Enterprise chat"), "TTFT 800 ms; TPOT 35 ms; 512 output tokens", b("RAG 输入长度、Prefix Caching、平滑流式与双门槛 Goodput。", "RAG input length, prefix caching, smooth streaming and dual-gated goodput.")],
+        [b("R1 深度推理", "R1 deep reasoning"), "TTFT 2,000 ms; TPOT 50 ms; 4,096 output tokens", b("长输出预算、质量、首可见答案 vs 隐藏推理 Token；不只看首字。", "Long-output budget and quality; visible answer vs hidden reasoning tokens.")],
+        [b("离线批处理", "Offline batch"), b("用小时级截止时间，不设交互 TTFT SLA", "Use an hours-scale deadline, not an interactive TTFT SLO"), b("总完成时间、成本、重试、失败率与吞吐；不要拿离线指标评价语音体验。", "Completion deadline, cost, retry/failure and throughput; not a voice-experience metric.")]
+      ]) +
+      note("对比图只绘制有定义的交互延迟目标。离线批处理的交互 TTFT 为 N/A，不把缺失值画成 0，也不使用不同比例的雷达图制造视觉误导。",
+        "The chart only plots defined interactive latency targets. Batch TTFT is N/A, not zero. Different metric scales are not mixed into a misleading radar chart.")) +
+    section("goodput", "越过 SLA 门槛后，更多 batch 反而减少达标吞吐", "Beyond the SLO gate, a larger batch can reduce goodput",
+      lab("goodput", goodControls) +
+      formula("Synthetic ITL = base + slope×B + 2×slope×max(0, B−knee) + deterministic_jitter<br>Synthetic TTFT_i = 100 + 4×B + 3×((13×i) mod 29)<br>Output TPS ≈ B×1000 / mean_TPOT; Goodput = TPS×(passed_requests/B)") +
+      p("这是稳态 decode 近似沙盘，不是实测帕累托前沿。每个 batch 的请求数就是样本分母；同长输出 128 Token 时，达标请求比例等于达标输出比例。不同输出长度必须按 Token 加权，不能照搬比例。",
+        "This is a steady-decode approximation, not a measured Pareto frontier. Batch size is the request sample denominator. With equal 128-token outputs, request and output-token pass fractions coincide; unequal lengths require token weighting.")) +
+    section("faq", "平均值、尾分位数、Token 定义必须一起交付", "Ship means, tails and token definitions together",
+      faq("为什么单用户 TPS 很高，企业平台仍然很慢？", "Why can high single-user TPS coexist with a slow platform?", "测试可能没有排队或只用短输入。生产需要混合长度、持续 offered load、P95/P99 TTFT 与 ITL、拒绝率、质量门槛和 Goodput；先固定同一 tokenizer、模型版本与输出条件。", "The test may have no queue or only short inputs. Production requires mixed lengths, sustained offered load, TTFT/ITL tails, rejection rate, quality gates and goodput under the same tokenizer, model and output conditions.") +
+      faq("为什么不能把每个请求的 P99 相加得到 E2EL P99？", "Why not add P99 stage latencies to get P99 E2EL?", "分位数不线性可加。要保留同一请求 trace 的相关性，先对请求求总时延，再对总时延分布取分位数。阶段预算相加只是工程上界预算。", "Quantiles are not additive. Keep correlated stage traces, compute each request's total, then take the total distribution percentile. Adding stage budgets is a planning bound.") +
+      quiz("metrics", "输出只有一个 Token，TPOT 应记为什么？", "For a one-token output, what is TPOT?", [["0 ms", "0 ms"], ["未定义 / N/A", "Undefined / N/A"], ["TTFT", "TTFT"]], 1, "分母 N_out−1=0。TTFT 仍然有意义，但没有后续 Token 间隔。", "N_out−1 is zero. TTFT remains meaningful, but there is no subsequent token interval.")) +
+    section("checklist", "先写清测量合同，再选引擎和 GPU", "Specify the measurement contract before choosing an engine or GPU",
+      checklist([["同一模型、tokenizer、提示词分布、输出长度与质量门槛", "Same model, tokenizer, prompt distribution, output lengths and quality gate"],
+        ["分别命名服务端 TTFT、端到端 TTFT、首音频、首可见答案", "Name server TTFT, end-to-end TTFT, first audio and first visible answer separately"],
+        ["同时采集平均 TPOT 与 P99 ITL；记录失败、取消和拒绝", "Collect mean TPOT and P99 ITL; record failures, cancellations and rejections"],
+        ["声明 Goodput 门槛、分母、时间窗口与成本范围", "Declare goodput gates, denominator, window and cost scope"]]));
+}
+
+function capacityContent() {
+  const controls = select("capacity", "mode", "需求输入模式", "Demand input mode", [["qps", "Direct peak QPS"], ["business", "DAU → peak QPS"]], "qps") +
+    field("capacity", "qps", "业务峰值 QPS", "Business peak QPS", 10, 0, 100000, 0.1) +
+    field("capacity", "dau", "日活用户 DAU", "Daily active users", 20000, 0, 100000000) +
+    field("capacity", "requests", "每用户每日请求数", "Requests per user per day", 10, 0, 10000, 0.1) +
+    field("capacity", "hours", "活跃业务小时/日", "Active business hours/day", 10, 0.1, 24, 0.1) +
+    field("capacity", "peak", "峰值/活跃时段平均倍率", "Peak/active-hours mean factor", 3, 1, 100, 0.1) +
+    field("capacity", "headroom", "需求余量倍率", "Demand headroom multiplier", 1.3, 1, 10, 0.1) +
+    field("capacity", "prompt", "平均输入 Token", "Mean input tokens", 2048, 0, 1048576) +
+    field("capacity", "output", "平均输出 Token（含首字）", "Mean output tokens (including first)", 512, 1, 65536) +
+    field("capacity", "ttft", "目标/假设平均 TTFT ms", "Target / assumed mean TTFT ms", 800, 0, 60000) +
+    field("capacity", "tpot", "目标/假设平均 TPOT ms", "Target / assumed mean TPOT ms", 20, 0.1, 1000, 0.1) +
+    field("capacity", "inputCapacity", "实例实测输入 TPS（示例值）", "Measured input TPS/instance (example)", 20000, 1, 10000000) +
+    field("capacity", "outputCapacity", "实例实测输出 TPS（示例值）", "Measured output TPS/instance (example)", 1500, 1, 10000000) +
+    field("capacity", "batch", "实例活跃请求上限（示例值）", "Active-request cap/instance (example)", 128, 1, 4096) +
+    field("capacity", "utilization", "实测容量使用比例", "Fraction of measured capacity used", 0.7, 0.1, 1, 0.05);
+  const ptus = field("ptu", "inputTPM", "输入 TPM", "Input TPM", 200000, 0, 1e12) +
+    field("ptu", "outputTPM", "输出 TPM", "Output TPM", 20000, 0, 1e12) +
+    field("ptu", "cache", "输入缓存命中比例", "Input cache-hit fraction", 0.5, 0, 1, 0.05) +
+    field("ptu", "cachedWeight", "缓存输入权重（相对未缓存=1）", "Cached-input weight (uncached=1)", 0, 0, 100, 0.1) +
+    field("ptu", "outputWeight", "输出相对输入权重", "Output/input weight", 8, 0.1, 100, 0.1) +
+    field("ptu", "capacity", "每 PTU 归一化 TPM（手工录入）", "Normalized TPM/PTU (manual)", 3400, 1, 1e9) +
+    field("ptu", "minimum", "部署最小 PTU（手工录入）", "Minimum deployment PTU (manual)", 15, 1, 10000) +
+    field("ptu", "step", "扩容步长 PTU（手工录入）", "PTU scale increment (manual)", 5, 1, 10000);
+  const costs = field("cost", "hourly", "完整集群成本 $/小时（假设）", "Whole-cluster cost $/hour (assumption)", 40, 0, 100000, 0.1) +
+    field("cost", "outputTPS", "达标输出 Goodput tok/s", "Compliant output goodput tok/s", 5000, 0, 1e9) +
+    field("cost", "inputTPS", "API 输入 TPS", "API input TPS", 20000, 0, 1e9) +
+    field("cost", "hours", "同负载持续小时", "Hours at the same load", 8, 0, 8760, 0.1) +
+    field("cost", "priceIn", "API 输入 $/1M Token（假设）", "API input $/1M tokens (assumption)", 1, 0, 1000, 0.01) +
+    field("cost", "priceOut", "API 输出 $/1M Token（假设）", "API output $/1M tokens (assumption)", 5, 0, 1000, 0.01);
+  return section("concepts", "TPM=60×TPS 只在同一 Token 口径、同一窗口下成立", "TPM=60×TPS only for the same token scope and window",
+    table([b("范围", "Scope"), b("公式", "Formula"), b("不要混淆", "Do not confuse")], [
+      [b("单用户流式速率", "Per-user streaming"), "TPS_user ≈ 1000 / TPOT_ms", b("不含首字等待；不是系统吞吐。", "Excludes first-token wait; not system throughput.")],
+      [b("系统输入吞吐", "System input throughput"), "Input TPS = completed_RPS × E[input_tokens]", b("稳定系统中 offered≈completed；过载时不成立。", "Offered≈completed only in a stable system.")],
+      [b("系统输出吞吐", "System output throughput"), "Output TPS = completed_RPS × E[output_tokens]", b("计入首 Token；不要乘活跃 batch 又重复统计。", "Includes first token; do not multiply by batch again.")],
+      [b("输入/输出 TPM", "Input/output TPM"), "TPM = 60 × same_scope_TPS", b("云 quota 可能按短窗口估算 max_tokens；不是实测一分钟速率。", "Cloud quota may estimate max_tokens in shorter windows; not measured minute throughput.")],
+      ["Little's Law", "L = λ × E[W]", b("L 为平均在系统中请求数；W 为对应系统平均停留时间。不可代入 P99 假装严格等式。", "L is mean in-system requests and W their mean residence. Substituting P99 is not the exact law.")],
+      ["PTU", b("带模型/部署权重的归一化容量", "Model/deployment-weighted normalized capacity"), b("没有通用 1 PTU = X TPM，也没有通用 PTU→GPU 换算。", "No universal PTU→TPM or PTU→GPU conversion.")]
+    ])) +
+    section("capacity", "峰值 QPS 同时决定输入、输出和在途并发", "Peak QPS drives input, output and in-flight concurrency",
+      lab("capacity", controls) +
+      formula("QPS_peak = DAU × requests_per_day × peak_factor / (active_hours × 3600)<br>λ_plan = QPS_peak × demand_headroom<br>W_plan = (mean_TTFT_ms + (N_out−1)×mean_TPOT_ms) / 1000<br>L_plan = λ_plan × W_plan<br>instances ≥ max(ceil(inputTPS/C_input), ceil(outputTPS/C_output), ceil(L/batch_cap))") +
+      note("这里的目标 TTFT/TPOT 被当作规划均值假设，而非已证实均值或 P99。用实测 E[W] 替换后才是 Little's Law 的观测验证。输入和输出容量必须来自同一混合负载实测，不能拼两个独立峰值。",
+        "Targets are treated as assumed planning means, not observed means or P99. Replace them with measured E[W] to verify Little's Law. Input/output capacities must come from the same mixed workload, not two independent peak tests.") +
+      p("默认手算：10 QPS×1.3=13 QPS；输入 26,624 TPS→1,597,440 TPM；输出 6,656 TPS→399,360 TPM；W=0.8+511×0.02=11.02 s，平均在途 L=143.26。使用 70% 容量时，输入/输出/并发约束分别给出 2/7/2 个实例，先取 7，再压测。实例不是一张 GPU。",
+        "Default hand check: 10×1.3=13 QPS; input 26,624 TPS→1,597,440 TPM; output 6,656 TPS→399,360 TPM; W=0.8+511×0.02=11.02 s and L=143.26. At 70% of example capacity, input/output/concurrency bounds require 2/7/2 instances: start from 7, then validate. An instance is not one GPU.")) +
+    section("ptu", "缓存与输出权重改变 PTU，却不改变原始 Token 计数", "Caching and output weights change PTU, not raw token counts",
+      lab("ptu", ptus) +
+      formula("Normalized TPM = Input TPM × [(1−cache_hit) + cache_hit×cached_weight]<br>                 + Output TPM × output_weight<br>Raw PTU = Normalized TPM / normalized_TPM_per_PTU<br>Deploy PTU = minimum + max(0, ceil((Raw PTU−minimum)/step))×step") +
+      p("这个两权重沙盘的默认数值对应 Microsoft Learn 中 GPT-5.2 Data Zone 的教学算例：输入 200K、输出 20K、输出权重 8、每 PTU 3,400 输入等价 TPM。50% 缓存且缓存权重 0 时得 260K 归一化 TPM→76.47 PTU→80。最小值 15 是手工演示参数，使用前核对实际部署表；不是自动读取的当前 Azure SKU 配额。",
+        "Default weights mirror the GPT-5.2 Data Zone worked example in Microsoft Learn: 200K input, 20K output, output weight 8, 3,400 input-equivalent TPM/PTU. With 50% cache and zero cached weight: 260K normalized TPM→76.47 PTU→80. Minimum 15 is a manual demonstration setting; check the actual deployment table, not a live quota feed.") +
+      note("GPT-6+、多模态、长上下文档位、缓存写入等可能采用更多权重。本沙盘只适合两类输入+输出模型的讲解；额外类别必须按当前官方公式单独扩展，不能把它们默认当作免费或零。",
+        "GPT-6+, multimodal inputs, context tiers and cache writes can require additional weights. This workbench only explains two input categories plus output. Extra categories must use current official formulas, not silently become free or zero.")) +
+    section("cost", "达标输出作分母，才不会奖励失败的峰值吞吐", "Use compliant output as the denominator, not failed peak throughput",
+      lab("cost", costs) +
+      formula("Self-hosted $/1M_output = whole_cluster_$per_hour × 10⁶ / (3600×output_goodput)<br>API period cost = hours×3600×(inputTPS×price_input + outputTPS×price_output)/10⁶") +
+      p("默认自建成本：40×10⁶/(3600×5000)=$2.22/1M 达标输出。API 示例：8 小时、20K 输入 TPS×$1 + 5K 输出 TPS×$5，合计 $1,296。两种成本不是同一种商业范围：云单价、输入处理、自建闲置/冗余/人工都要对齐。输出 Goodput=0 时单位成本未定义，不显示 $0。",
+        "Default self-hosted cost: 40×10⁶/(3600×5000)=$2.22/1M compliant output. API example: 8 hours of 20K input TPS at $1 and 5K output TPS at $5 totals $1,296. These are different commercial scopes; align rates, input work, idle/resilience and staffing. At zero output goodput, unit cost is undefined, not $0.")) +
+    section("faq", "活跃请求数既不是在线用户数，也不是静态 batch", "Active requests are neither online users nor a fixed batch",
+      faq("为什么 DAU 不能直接变成并发数？", "Why cannot DAU directly become concurrency?", "DAU 需要请求频率、活跃时段、峰值集中度与响应时间才能映射到 QPS 和在途请求。用户在线但没有生成请求，不占 decode slot。", "DAU needs request frequency, active hours, peak concentration and response time to map to QPS and in-flight requests. An online user with no generation does not occupy a decode slot.") +
+      faq("为什么输出 4K 的 R1 会比输出 512 的聊天更难规划？", "Why is 4K-token reasoning harder to size than 512-token chat?", "输出拉长 decode 停留时间，增加在途并发和驻留 KV；还可能包含不显示但消耗算力、quota 和费用的推理 Token。要区分业务可见输出、模型生成输出和供应商计费口径。", "Longer output increases decode residence, in-flight concurrency and resident KV. Hidden reasoning tokens may consume compute, quota and billing. Separate visible answer, generated output and provider accounting.") +
+      quiz("capacity", "10 QPS、每请求 512 输出 Token，系统 Output TPS 是？", "At 10 QPS with 512 output tokens/request, what is system output TPS?", [["50", "50"], ["5,120", "5,120"], ["307,200", "307,200"]], 1, "10×512=5,120 tok/s；再乘 60 才是 307,200 TPM。", "10×512=5,120 tok/s; multiply by 60 for 307,200 TPM.")) +
+    section("checklist", "用同一业务画像同时验证吞吐、并发和 quota", "Validate throughput, concurrency and quota against one traffic profile",
+      checklist([["高峰输入、输出长度保留分布，而不只有均值", "Keep peak input/output length distributions, not only means"],
+        ["压测包括排队、拒绝、超时、取消与缓存冷热两种状态", "Include queues, rejection, timeout, cancellation and cold/warm cache"],
+        ["输入/输出容量为同一配置、同一混合负载测量", "Measure input/output capacities on the same configuration and mixed load"],
+        ["PTU 模型版本、区域、部署类型、权重、最小值与步长独立核对", "Verify PTU model version, region, deployment, weights, minimum and increment"]]));
+}
+
+function sizingContent() {
+  const controls = select("sizing", "model", "模型 / 架构预设", "Model / architecture preset", models, "llama70") +
+    select("sizing", "gpu", "GPU 预设（名义 GB）", "GPU preset (nominal GB)", gpus, "h200") +
+    select("sizing", "weightBytes", "权重存储精度", "Weight storage precision", [["2", "BF16 / FP16: 2 B"], ["1", "FP8: 1 B"], ["0.5", "INT4: 0.5 B"]], "1") +
+    select("sizing", "kvBytes", "KV 存储精度（单独选择）", "KV precision (independent)", [["2", "BF16 / FP16: 2 B"], ["1", "FP8: 1 B (kernel-dependent)"]], "2") +
+    field("sizing", "batch", "同时驻留 / decode 请求数 B", "Resident / decode requests B", 32, 1, 512, 1, "range") +
+    field("sizing", "context", "每请求驻留上下文 Token S", "Resident context tokens/request S", 8192, 256, 131072, 256, "range") +
+    field("sizing", "prefillBatch", "同时做完整 Prefill 的请求数", "Simultaneous full-prefill requests", 1, 1, 512) +
+    field("sizing", "safe", "规划显存安全水位", "Planning safe memory fraction", 0.85, 0.5, 0.95, 0.01) +
+    field("sizing", "runtime", "每卡运行时预留 GB（假设）", "Runtime reserve GB/GPU (assumption)", 3, 0, 1000, 0.5) +
+    field("sizing", "overhead", "量化 scales / padding 开销比例", "Quantization scales / padding fraction", 0.05, 0, 1, 0.01) +
+    field("sizing", "replication", "聚合 KV 复制倍率（手工）", "Aggregate KV replication (manual)", 1, 1, 64, 0.1) +
+    field("sizing", "mbu", "HBM 有效带宽比例 MBU（假设）", "HBM bandwidth fraction MBU (assumption)", 0.6, 0.01, 1, 0.01) +
+    field("sizing", "mfu", "Prefill dense BF16 MFU（假设）", "Prefill dense BF16 MFU (assumption)", 0.4, 0.01, 1, 0.01) +
+    field("sizing", "tpot", "目标 TPOT ms", "Target TPOT ms", 20, 0.1, 1000, 0.1) +
+    field("sizing", "ttft", "目标 TTFT ms", "Target TTFT ms", 800, 1, 60000) +
+    field("sizing", "reserve", "TTFT 非算力预留 ms", "Non-compute TTFT reserve ms", 100, 0, 60000) +
+    check("sizing", "mtp", "DeepSeek 额外加载 14B MTP 模块", "Load DeepSeek's extra 14B MTP module");
+  return section("concepts", "37B 激活参数能省计算，不能把 671B 权重变没", "37B active parameters save compute, not 671B weight storage",
+    `<div class="grid three"><article class="card"><h3>${b("水位线 1：放得下", "Bound 1: fit")}</h3>${p("总权重 + KV Cache + 激活、CUDA Graph、通信缓冲与碎片。先做聚合下界，再核对最忙 rank。", "Total weights + KV + activations, CUDA graphs, communication buffers and fragmentation. Start with an aggregate floor, then check the busiest rank.")}</article><article class="card"><h3>${b("水位线 2：吐得快", "Bound 2: decode")}</h3>${p("低 batch Decode 常受内存带宽限制，但 batch 放大后也会转为算力或通信瓶颈。MoE 批内专家并集会增加实际权重流量。", "Low-batch decode is often bandwidth-bound; larger batches can become compute/communication-bound. MoE's batch expert union increases weight traffic.")}</article><article class="card"><h3>${b("水位线 3：首字快", "Bound 3: prefill")}</h3>${p("Prefill 要在扣除排队、网关与交接后的 TTFT 预算内完成。长上下文注意力有近似二次项。", "Prefill must finish within TTFT after queue, gateway and handoff reserves. Long-context attention contributes an approximate quadratic term.")}</article></div>` +
+    formula("M_w [GB] = (total_params_B + optional_MTP_B) × weight_bytes × (1+metadata_fraction)<br>M_KV [B] = 2×layers×KV_heads×head_dim×S×B×KV_bytes   [MHA / GQA]<br>M_MLA [B] = layers×(latent_rank+RoPE_dim)×S×B×KV_bytes [compressed cache]<br>N_mem ≥ ceil((M_w + M_KV_GB) / (GPU_GB×safe_fraction − runtime_GB_per_GPU))") +
+    p("MHA 有一份每个 query head 对应的 K/V；GQA 让多个 query head 共享 KV head。MLA 存压缩 latent 与 RoPE key，不能把 128 个 attention head 直接代入标准公式。DeepSeek 默认每 Token BF16 KV = 61×(512+64)×2 = 70,272 B。",
+      "MHA has K/V per query head; GQA shares fewer KV heads across query heads. MLA stores compressed latent and RoPE key, not 128 standard K/V heads. DeepSeek's modeled BF16 KV/token = 61×(512+64)×2 = 70,272 B.")) +
+    section("sizing", "拖动并发和上下文，看哪道水位线先越界", "Drag batch and context to see which bound is crossed first",
+      lab("sizing", controls) +
+      note("沙盘是理想可切分的聚合下界，2 的幂候选只是待压测配置，不是可直接运行的 TP 配置。TP 超过 KV heads 时 KV 可能复制；MLA、DP Attention、PP、EP 的分片方式随引擎变化。逐 rank 内存峰值才是最终依据。",
+        "The workbench gives an ideal aggregate-sharding floor. A power-of-two candidate is for testing, not automatically a valid TP configuration. KV may replicate when TP exceeds KV heads; MLA, attention DP, PP and EP sharding vary by engine. Per-rank peak memory is decisive.") +
+      note("规格纠偏：L40S 是 GDDR6，不是 HBM，而且没有 NVLink；B200 192 GB 为设计/假设预设，DGX B200 官方交付表为 1,440 GB/8=180 GB 每卡。模型和精度预设不等于已验证 kernel 支持。",
+        "Spec correction: L40S uses GDDR6, not HBM, and has no NVLink. B200 192 GB is a design/what-if preset; official DGX B200 lists 1,440 GB/8=180 GB per GPU. Model/precision presets do not prove kernel support.")) +
+    section("roofline", "单 Token 带宽下界不能预测大 batch MoE 的速度", "A single-token bandwidth bound cannot predict large-batch MoE speed",
+      formula("TPOT_weight_floor_ms ≈ active_weight_GB / (N_GPU×BW_GBps×MBU) × 1000<br>Uniform expert union = E×[1−(1−k/E)^B]<br>shared_params = (active_params−total_params×k/E)/(1−k/E)<br>batch_active_params = shared_params + routed_params×[1−(1−k/E)^B]<br>Prefill_FLOPs ≈ 2×active_params×S×B_prefill + 2×layers×hidden×S²×B_prefill<br>TTFT_compute_floor = Prefill_FLOPs / (N_GPU×dense_BF16_FLOPs×MFU)") +
+      p("37B 激活只描述每 Token。32 个不同请求可能触发大量不同专家，不能仍假设整个 batch 只读 37B。沙盘给出「单 Token 乐观下界」和「均匀路由批内并集场景」两条读权重估算，并额外显示读全 KV 的时间；均匀路由只是解释模型，不是现实路由预测。",
+        "37B active describes one token. A batch of 32 distinct requests can activate many experts; the batch need not read only 37B. The workbench shows a single-token optimistic bound and a uniform-routing batch-union scenario, plus a full-KV read estimate. Uniform routing explains the effect; it does not predict real routing.") +
+      p("Prefill 使用 dense BF16 标称 FLOPs×假设 MFU，而不是把权重量化自动当成算力翻倍。MoE 通信、内核效率、量化转换、attention 具体实现与首 Token decode 均可能让实际 TTFT 更高。",
+        "Prefill uses nominal dense BF16 FLOPs×assumed MFU, not an automatic compute doubling from quantized storage. MoE communication, kernels, dequantization, attention implementation and first-token decode can all increase real TTFT.") +
+      p("沙盘保守地把完整驻留上下文 S 也作为一次完整 Prefill 的输入长度。B_prefill 是同时做完整 Prefill 的请求数，与驻留/decode 请求数 B 分开。实际 Prompt 比 S 短时，应把 Prefill 输入长度与 KV 峰值上下文分别测量，而不是把本例当预测。",
+        "The workbench conservatively uses full resident context S as the input length of a full prefill. B_prefill counts simultaneous full-prefill requests separately from resident/decode B. When actual prompts are shorter, measure prefill length and peak KV context separately; this example is not a prediction.")) +
+    section("worked", "70B FP8 权重约 70.6 GB；32×8K BF16 KV 另需 85.90 GB", "70B FP8 weights are about 70.6 GB; 32×8K BF16 KV adds 85.90 GB",
+      formula("Llama 70B GQA: 2×80×8×128×2 = 327,680 B/token<br>KV at S=8,192, B=32: 327,680×8,192×32 = 85,899,345,920 B = 85.90 GB = 80 GiB<br>Weights with 5% allowance: 70.6×1.05 = 74.13 GB<br>H200 safe payload/GPU: 141×0.85−3 = 116.85 GB<br>Memory floor: ceil((74.13+85.90)/116.85) = 2 GPUs") +
+      p("上例只证明理想聚合内存至少 2 卡，不证明 2 卡必达 SLA。BF16 权重将权重项翻倍；FP8 KV 将 KV 项减半；长输出、KV 复制、专家冗余和额外 MTP 要独立计入。GB=10⁹ B，GiB=2³⁰ B；这里故意展示两者。",
+        "This only proves an ideal aggregate floor of 2 GPUs, not that 2 meet the SLO. BF16 doubles the weight term; FP8 KV halves the KV term. Long outputs, KV replication, expert redundancy and extra MTP are separate. GB=10⁹ B and GiB=2³⁰ B; both are shown deliberately.")) +
+    section("faq", "模型名、存储精度和 GPU 商品名都不是完整配置", "Model names, storage dtype and GPU branding are not full configurations",
+      faq("DeepSeek 能用激活 37B 来算加载显存吗？", "Can DeepSeek loaded memory use its 37B active size?", "不能。GPU 常驻全模型的目标下，用 671B 总参数算主权重；加载额外 MTP 再加 14B。CPU/NVMe offload 是另一种部署边界，吞吐必须把搬运和 CPU 计算计入。", "No. For a GPU-resident full model, use 671B main weights and add 14B if MTP is loaded. CPU/NVMe offload is a different deployment boundary; include transfers and CPU compute.") +
+      faq("MLA 是否让所有实现的 KV 都自动只占 35 KB/token？", "Does MLA guarantee 35 KB/token in every implementation?", "不保证。61×576×1=35,136 B/token 只在压缩表示且所有分量按 1 B 存储时成立。RoPE、scale、padding、TP 复制、MTP state 与 kernel 支持都会改变真实占用。", "No. 61×576×1=35,136 B/token requires compressed cache and one byte for every component. RoPE dtype, scales, padding, TP replication, MTP state and kernels can change occupancy.") +
+      faq("80–85% 水位是 vLLM 当前默认值吗？", "Is an 80–85% watermark vLLM's current default?", "不是。这是可调的架构规划余量，不是引擎默认宣称。运行时测量/内存策略在版本之间变化，必须记录实际 flags、启动 profile、图捕获与稳态峰值。", "No. It is an adjustable architectural planning margin, not an engine default claim. Runtime profiling and memory policies change by version; record actual flags, startup profile, graph capture and steady-state peak.") +
+      quiz("sizing", "DeepSeek 的主权重容量应使用哪个参数数？", "Which parameter count should size DeepSeek main weights?", [["37B", "37B"], ["671B（加载 MTP 时再加 14B）", "671B (add 14B when loading MTP)"], ["8 个专家", "8 experts"]], 1, "总参数决定存储，激活参数只是每 Token 计算与访问的线索。", "Total parameters govern storage; active parameters only inform per-token work and access.")) +
+    section("checklist", "采购前必须从聚合估算下沉到每个 rank", "Before procurement, move from aggregate estimates to each rank",
+      checklist([["核对 checkpoint 参数/geometry、上下文上限与量化 scales", "Verify checkpoint parameters/geometry, context limit and quantization scales"],
+        ["检查单 rank 权重、复制 KV、CUDA Graph、通信和峰值激活", "Inspect per-rank weights, replicated KV, CUDA graphs, collectives and peak activations"],
+        ["记录实际可见显存字节，不能混用名义 GB 与 GiB", "Record actual visible memory bytes; do not mix nominal GB with GiB"],
+        ["用冷/热缓存和混合负载同时验证 TTFT、ITL、Goodput、质量", "Verify TTFT, ITL, goodput and quality on cold/warm caches and mixed traffic"]]));
+}
+
+function pdContent() {
+  const controls = select("pd", "model", "KV 模型预设", "KV model preset", models, "llama70") +
+    field("pd", "context", "待交接输入 Token 数", "Prompt tokens to hand off", 8192, 256, 131072, 256, "range") +
+    select("pd", "kvBytes", "KV 存储字节", "KV storage bytes", [["2", "BF16 / FP16 2 B"], ["1", "FP8 1 B (verify kernel)"]], "1") +
+    field("pd", "cache", "已在 D 池的前缀比例", "Prefix fraction already in D pool", 0, 0, 1, 0.05) +
+    select("pd", "rate", "单端口单向线速 Gb/s", "One-port one-way line rate Gb/s", [["25", "25G"], ["100", "100G"], ["200", "200G"], ["400", "400G"], ["800", "800G"]], "400") +
+    field("pd", "efficiency", "有效网络效率（假设）", "Effective network fraction (assumption)", 0.8, 0.05, 1, 0.05) +
+    field("pd", "rails", "真正可并行的端口/轨数", "Actually parallel ports/rails", 1, 1, 16) +
+    field("pd", "setup", "握手/调度固定耗时 ms", "Fixed handshake/scheduling ms", 0.2, 0, 10000, 0.1) +
+    field("pd", "overlap", "已证实可重叠传输时间 ms", "Verified overlap window ms", 10, 0, 10000, 0.1) +
+    field("pd", "qps", "KV 新请求 QPS", "New-KV request QPS", 10, 0, 100000, 0.1) +
+    field("pd", "base", "基础 ITL ms（模拟）", "Base ITL ms (synthetic)", 20, 0.1, 1000, 0.1) +
+    field("pd", "prefillRate", "共池 Prefill TPS（模拟）", "Colocated prefill TPS (synthetic)", 80000, 1, 10000000) +
+    field("pd", "chunk", "Chunked Prefill Token 数", "Chunked prefill tokens", 1024, 1, 131072) +
+    field("pd", "residual", "PD 池残留尾部干扰 ms（模拟）", "Residual PD-tail interference ms (synthetic)", 2, 0, 1000, 0.1);
+  return section("concepts", "Prefill 和 Decode 混部会争资源，不只是争 FLOPs", "Colocated prefill and decode compete for more than FLOPs",
+    p("Prefill 一次处理大量输入 Token，矩阵计算往往更密集；低 batch Decode 每步生成一枚 Token，反复读权重和 KV，通常更吃带宽。二者还竞争 kernel 调度、SM、缓存、显存容量与通信。边界并不绝对：短 Prefill 也可能受带宽/启动开销限制，大 batch Decode 也可能算力受限。",
+      "Prefill processes many input tokens with denser matrix work; low-batch decode generates one token per step and repeatedly reads weights and KV, often stressing bandwidth. They also compete for kernel scheduling, SMs, caches, capacity and communication. Short prefill can be launch/bandwidth-bound; large-batch decode can be compute-bound.") +
+    p("Chunked Prefill 把长输入拆小，并优先调度 Decode，降低单次阻塞，但资源仍在共池。PD 用独立资源池隔离这类干扰，代价是第二份模型驻留、KV 交接、路由与两池配比。不要把 P/D isolation 误译成「系统没有抖动」。",
+      "Chunking splits long inputs and prioritizes decode, reducing individual stalls while keeping shared resources. PD isolates this interference with separate pools but adds duplicate model residency, KV handoff, routing and pool-ratio management. Isolation does not mean a jitter-free system.")) +
+    section("pd", "1.34 GB KV 在 400G、80% 效率下也要约 33.55 ms", "1.34 GB of KV still needs about 33.55 ms at 400G and 80% efficiency",
+      lab("pd", controls) +
+      formula("KV_payload = KV_bytes_per_token × prompt_tokens × (1−prefix_already_on_D)<br>Effective_BW_Bps = port_Gbps×10⁹/8 × efficiency × usable_parallel_rails<br>Raw_transfer_ms = KV_payload / Effective_BW_Bps × 1000<br>Exposed_handoff_ms = max(0, Raw_transfer_ms−verified_overlap_ms) + fixed_ms<br>Fabric_load = new_request_QPS × KV_payload / Effective_BW_Bps") +
+      p("默认 Llama 70B FP8 KV：2×80×8×128×1×8192=1,342,177,280 B。400G 单向理论 50 GB/s，80% 效率为 40 GB/s；原始传输 33.554 ms。即便重叠 10 ms，仍暴露 23.754 ms（含 0.2 ms 固定开销）。只有计算与传输确实流水重叠，才允许扣除重叠时间。",
+        "Default Llama 70B FP8 KV: 2×80×8×128×8192=1,342,177,280 B. A 400G link is theoretically 50 GB/s one-way, 40 GB/s at 80% efficiency. Raw transfer is 33.554 ms. With 10 ms verified overlap and 0.2 ms fixed overhead, exposed handoff is still 23.754 ms.")) +
+    section("boundary", "没有固定的「16 卡以上必须 PD」阈值", "There is no universal 'PD is mandatory above 16 GPUs' threshold",
+      table([b("判断维度", "Decision dimension"), b("优先混部+Chunked", "Prefer colocated + chunking"), b("进入 PD 验证", "Evaluate PD")], [
+        [b("SLA 干扰证据", "SLO interference"), b("Chunked 已达 TTFT/ITL 双门槛", "Chunking meets both TTFT/ITL gates"), b("trace 证实 Prefill 导致 Decode 尾延迟，调 chunk 仍不达标", "Traces show prefill-driven decode tails despite chunk tuning")],
+        [b("KV 交接预算", "KV handoff budget"), b("传输/握手占 TTFT 预算过大", "Transfer/handshake consumes too much TTFT"), b("暴露交接+两池排队+计算仍低于 TTFT 目标", "Exposed handoff + both queues + compute fit TTFT")],
+        [b("持续网络负载", "Sustained fabric load"), b("KV 到达量≥有效带宽，或网络已被 EP 占满", "KV arrival≥effective bandwidth, or EP occupies fabric"), b("留有峰值和故障余量并通过真实 payload 压测", "Peak/failure headroom validated with real payloads")],
+        [b("池化成本", "Pool cost"), b("小规模/低利用率，双池复制浪费大", "Small/low utilization with expensive duplicated pools"), b("达标 Goodput/成本提升能支付复制、运维与容灾", "Goodput/cost gain pays for duplication, operations and resilience")],
+        [b("硬件与网络", "Hardware/fabric"), b("普通 TCP 也可能适合低 QPS/小 KV，先测预算", "TCP may suit low QPS/small KV; test budget"), b("RDMA/NVLink 支持且版本、注册与 topology 已验证", "RDMA/NVLink supported with verified version, registration and topology")]
+      ]) +
+      note("PD 不是只看 RDMA 有无或 GPU 张数的机械规则。网络负载≥100% 时，本沙盘明确提示不稳定：它不生成排队延迟假数字，也不把图上的 PD 曲线当作达标预测。",
+        "PD is not a mechanical rule based on RDMA or GPU count. At fabric load≥100%, the workbench flags instability instead of inventing queue latency or claiming the PD curve predicts compliance.")) +
+    section("engines", "Dynamo 是编排层，Mooncake 是 KV 中心生态，vLLM/SGLang 是引擎", "Dynamo orchestrates, Mooncake centers on KV, vLLM/SGLang execute",
+      table([b("方案", "Project"), b("主要职责", "Primary role"), b("评估时真正要核对", "What to verify")], [
+        ["NVIDIA Dynamo", b("跨引擎路由、PD、缓存与弹性编排", "Cross-engine routing, PD, cache and scaling"), b("后端版本、connector、KV layout、两池容量与故障恢复", "Backend version, connector, KV layout, both pools and recovery")],
+        ["Mooncake", b("KV-centric 架构、Transfer Engine 与 Store 生态", "KV-centric architecture, Transfer Engine and Store ecosystem"), b("传输路径、CPU/GPU staging、注册开销、缓存复用与网络", "Transfer path, staging, registration, reuse and fabric")],
+        ["vLLM", b("通用推理引擎与 KV connector 接口", "General serving engine and KV connector interfaces"), b("当前 release 的 connector、chunk 默认策略、TP/DP 支持", "Connector, chunk defaults and TP/DP support in the chosen release")],
+        ["SGLang", b("推理运行时、前缀复用和 PD 生态", "Serving runtime, prefix reuse and PD ecosystem"), b("选定模型的 MLA/MoE/FP8、缓存路由与 connector 支持", "Model-specific MLA/MoE/FP8, cache routing and connector support")]
+      ]) +
+      p("比较的是层次与职责，不是无条件速度排行榜。固定模型、输入/输出分布、网络、引擎 commit 和 SLA 后再做 A/B；禁止拼接作者不同机器的吞吐来得出生产排序。",
+        "This compares roles, not unconditional speed rankings. Run A/B with a fixed model, token distributions, network, engine commit and SLO. Do not combine author results from different hardware into a production ranking.")) +
+    section("faq", "KV 交接影响 TTFT；隔离效果主要看 Decode 尾延迟", "KV handoff affects TTFT; isolation primarily targets decode tails",
+      faq("图中的 P99 从哪里来？", "Where do the plotted P99 values come from?", "每个上下文点生成 200 个确定性 ITL 样本：5% 注入 Prefill 干扰，共池注入整段、chunk 注入 min(S,chunk)，PD 注入可调残留干扰。用 nearest-rank 取 P99。它是可复算教学模拟，不是硬件 P99，也不预测网络过载。", "Each context point generates 200 deterministic ITLs: 5% inject full-prefill, min(S,chunk) or adjustable residual PD interference. Nearest-rank computes P99. This is reproducible teaching simulation, not hardware P99 or an overload predictor.") +
+      faq("PD 交接时间能直接加到每个 decode Token 的 ITL 吗？", "Should handoff time be added to every decode token's ITL?", "通常不能。交接主要是请求开始/首字路径的一次成本；Decode 中后续抖动由 D 池排队、网络争用和运行时决定。图把交接时间与尾部模拟分开，避免重复计费。", "Usually no. Handoff is primarily a one-time request-start/first-token cost. Later decode jitter depends on D-pool scheduling, contention and runtime. Handoff and ITL simulation are shown separately.") +
+      quiz("pd", "400 Gb/s 单端口的单向理论字节带宽是？", "What is the theoretical one-way byte bandwidth of a 400 Gb/s port?", [["400 GB/s", "400 GB/s"], ["50 GB/s", "50 GB/s"], ["100 GB/s（直接加双向）", "100 GB/s (sum both directions)"]], 1, "400÷8=50 GB/s。单次 KV 单向发送不能直接把双向带宽相加。", "400÷8=50 GB/s. A one-way KV transfer cannot sum both directions.")) +
+    section("checklist", "先验证混部基线，再验证 PD 的净收益", "Validate the colocated baseline before PD's net benefit",
+      checklist([["固定 chunked-prefill 基线并保留带请求关联的 trace", "Fix a chunked baseline and retain correlated request traces"],
+        ["分别测原始传输、已重叠部分与暴露交接时间", "Measure raw transfer, overlapped portion and exposed handoff separately"],
+        ["验证 KV dtype/layout、TP 重分片、prefix correctness 与失败回退", "Verify KV dtype/layout, TP reshaping, prefix correctness and failure recovery"],
+        ["同时计 P 池、D 池、复制权重、网络、容灾与达标成本", "Count P/D pools, duplicate weights, fabric, resilience and compliant cost"]]));
+}
+
+function parallelContent() {
+  const controls = select("parallel", "kind", "观察哪一种切分", "Which partition to inspect", [["tp", "TP / Tensor"], ["pp", "PP / Pipeline"], ["dp", "DP / Requests & Attention"], ["ep", "EP / Experts"]], "tp") +
+    field("parallel", "ranks", "并行 ranks（示意）", "Parallel ranks (illustration)", 4, 2, 8, 1, "range") +
+    field("parallel", "batch", "调度 microbatches", "Scheduled microbatches", 8, 1, 128, 1, "range") +
+    field("parallel", "payload", "每通信步骤 payload MB（假设）", "Payload MB/communication step (assumption)", 32, 0.1, 10000, 0.1) +
+    field("parallel", "bandwidth", "实测单向等效通信 GB/s（假设）", "Measured one-way equivalent GB/s (assumption)", 100, 0.1, 1000, 0.1);
+  return section("concepts", "并行度不是越大越好：切分粒度决定通信频率", "More ranks are not always better: the partition sets communication frequency",
+    table([b("方式 / 切分维度", "Mode / partition"), b("通信原语", "Communication"), b("延迟/吞吐方向（条件性）", "Latency/throughput direction (conditional)"), b("放在哪里", "Placement")], [
+      ["TP / weight tensors", "AllReduce / ReduceScatter + AllGather", b("单 GPU 工作/显存减少；低延迟通信可帮助 TTFT/TPOT，过度 TP 反而拖慢；单实例吞吐不一定线性。", "Less work/memory per GPU; fast collectives can help TTFT/TPOT, excessive TP can hurt. Instance throughput is not necessarily linear."), b("优先低延迟高带宽 NVLink 域，跨域必须实测", "Prefer a low-latency NVLink domain; test across domains")],
+      ["PP / layers", "SendRecv activations", b("层权重分布到多卡；单请求仍依次过各 stage。microbatch 填流水线提升吞吐，但 bubble/排队可伤延迟。", "Distributes layer weights; one request still visits stages serially. Microbatches fill the pipeline but bubbles/queues can hurt latency."), b("常可跨节点；stage 平衡与链路至关重要", "Often spans nodes; stage balance and links matter")],
+      ["DP / independent requests", b("副本路由；推理无训练梯度 AllReduce", "Replica routing; no training gradient AllReduce"), b("独立副本通常提升系统 TPS，不会凭空加快一个请求；也复制权重与缓存。", "Replicas usually increase system TPS, not a single request's speed; weights/cache are duplicated."), b("副本跨节点，靠路由分流与缓存亲和", "Replicas across nodes with routing and cache affinity")],
+      ["Attention DP + EP", "Expert dispatch/combine AllToAll", b("Attention 在 DP 请求分片上执行，专家层进入共享 EP 域。并行组正交；不是给每张卡完整复制专家。", "Attention executes on DP request shards while expert layers enter a shared EP domain. Groups are orthogonal; not full expert replication on every GPU."), b("利用 NVLink / RDMA 高效域，计入专家热点和 all-to-all", "Use efficient NVLink/RDMA domains; account for expert skew and all-to-all")],
+      ["EP / routed experts", "AllToAll dispatch → compute → combine", b("专家权重分散，降低每 rank 驻留；路由倾斜与跨机 token 交换会限制 TTFT/TPOT 和 Goodput。", "Expert weights are distributed; routing skew and cross-node token exchange constrain TTFT/TPOT and goodput."), b("MoE 才有专家维度；Dense 模型不启用 EP", "MoE has experts; dense models do not use EP")]
+    ])) +
+    section("parallel", "看张量流向，而不是只记 TP/PP/DP/EP 四个缩写", "Follow the tensor flow, not just four acronyms",
+      lab("parallel", controls) +
+      note("图解是切分语义，不是实际 NCCL 时间线。通信量、步数、融合和重叠依实现变化；单步 payload/BW 是裸传输估算，不是总 Token 时延。PP 的理想利用率 m/(m+p−1) 只适用于平衡 stage、等长 microbatch 的简化流水线。",
+        "The diagram explains partitions, not an actual NCCL timeline. Payload, step counts, fusion and overlap vary. One-step payload/BW is bare transfer, not total token latency. Ideal PP utilization m/(m+p−1) assumes balanced stages and equal microbatches.")) +
+    section("acceleration", "Prefix Caching 降 Prefill，投机解码赌的是验证摊薄", "Prefix caching reduces prefill; speculation amortizes verification",
+      table([b("手段", "Technique"), "TTFT", "TPOT / ITL", "System TPS", b("代价 / 验证门槛", "Cost / validation gate")], [
+        ["TP", b("可能改善", "Can improve"), b("可能改善或恶化", "Can improve or hurt"), b("非线性", "Nonlinear"), b("集合通信、碎片/复制与并行合法性", "Collectives, fragmentation/replication and valid partition")],
+        ["PP", b("可能增大", "Can increase"), b("依 stage/流水", "Stage/pipeline-dependent"), b("充分填充时提升", "Improves when filled"), b("Bubble、慢 stage 与串行请求路径", "Bubbles, slow stages and serial request path")],
+        ["DP", b("减少排队，不降单次计算", "Less queueing, not less compute"), b("通常不改善单流", "Usually not a single-stream gain"), b("副本扩容提升", "Replica scale-out gain"), b("权重复制、缓存路由与故障冗余", "Weight duplication, cache routing and failover")],
+        ["EP / Attention DP", b("可能改善/恶化", "Can improve/hurt"), b("依路由和网络", "Routing/fabric-dependent"), b("MoE 高 batch 可受益", "MoE large batch can benefit"), b("AllToAll、专家热点、容量 padding", "All-to-all, expert skew and capacity padding")],
+        ["Speculative decoding / MTP", b("通常不是主要目标", "Usually not the main target"), b("接受率高且验证便宜时改善", "Helps with high acceptance and cheap verification"), b("高 batch 饱和时收益递减", "Diminishing at saturated large batch"), b("Draft/MTP 额外显存与验证；质量/分布正确性", "Draft/MTP memory and verification; quality/distribution correctness")],
+        ["Prefix Caching", b("缓存命中时改善", "Improves on hits"), b("通常不直接加速 Decode", "Usually not direct decode acceleration"), b("节省重复 Prefill", "Saves repeated prefill"), b("命中率、KV 内存、租户隔离、精确前缀", "Hit rate, KV memory, tenant isolation, exact prefix")],
+        ["FP8 / INT4 storage", b("依 kernel / compute dtype", "Kernel/compute-dtype-dependent"), b("带宽压力可能下降", "Can reduce bandwidth pressure"), b("依质量与内核", "Quality/kernel-dependent"), b("尺度开销、反量化、硬件支持、质量回归", "Scale metadata, dequantization, hardware support, quality regression")],
+        ["Chunked Prefill", b("可能增加长输入等待", "May increase long-prompt wait"), b("缓解共池尾部干扰", "Reduces colocated tail interference"), b("依 token budget", "Token-budget-dependent"), b("更小 chunk 不是无条件最优", "Smaller chunks are not always optimal")],
+        ["PD", b("增加交接但隔离排队", "Adds handoff but isolates queues"), b("隔离 Prefill 干扰", "Isolates prefill interference"), b("看达标吞吐净收益", "Evaluate net goodput"), b("双池驻留、网络、路由、故障治理", "Duplicate pools, fabric, routing and recovery")]
+      ], b("条件性收益/代价热力矩阵：文字是语义，颜色不是虚构百分比", "Conditional benefit/cost heatmap: text carries meaning; colors are not invented percentages")) +
+      p("不要声称 FP8 必然 2× 或投机必然无损 3×。正确投机采样可保持目标分布，但 greedy、温度、约束解码、draft 接受率和实现细节都要核对。前缀缓存只命中 tokenizer 后的相同前缀，不等于语义缓存。",
+        "Do not promise FP8=2× or speculation=lossless 3×. Correct speculative sampling can preserve the target distribution, but greedy mode, temperature, constrained decoding, acceptance and implementation still need validation. Prefix reuse requires the same tokenized prefix; it is not semantic caching.")) +
+    section("placement", "把高频同步留在快域，但别把域边界写成绝对禁令", "Keep frequent synchronization in fast domains without making absolute bans",
+      diagram("domains", "并行组与快慢通信域", "Parallel groups and communication domains",
+        `<rect x="20" y="20" width="330" height="180" rx="12" class="surface"/><rect x="450" y="20" width="330" height="180" rx="12" class="surface"/><text x="40" y="48">NVLink / NVSwitch domain A</text><text x="470" y="48">NVLink / NVSwitch domain B</text>` +
+        node(45, 80, 130, "TP group", "frequent reduce", "primary") + node(195, 80, 130, "EP shards", "dispatch/combine") +
+        node(475, 80, 130, "TP group", "local tensor") + node(625, 80, 130, "EP shards", "shared experts") +
+        arrow(355, 114, 445, 114) + `<text x="400" y="84" text-anchor="middle">RDMA</text><text x="400" y="235" text-anchor="middle">PP stages / DP replicas / EP domain crossing: profile, don't assume</text>`,
+        "优先在 NVLink 域内做 TP。跨域 PP/DP 常见，跨域 EP 需高质量 all-to-all；超节点/MNNVL 可扩大快域，不等于节点名就是域边界。",
+        "Prefer TP within NVLink. PP/DP often span domains; EP needs efficient all-to-all. Supernodes/MNNVL expand the fast domain; a server hostname is not the domain definition.")) +
+    section("faq", "DP Attention 不是训练里的梯度数据并行", "Attention DP is not training gradient data parallelism",
+      faq("EP=16 就能把每用户 Decode 自动快 16 倍吗？", "Does EP=16 automatically make a user's decode 16× faster?", "不能。EP 分散专家权重，但一个 Token 仍路由少量专家；批内路由、专家负载、all-to-all、shared layers 与 attention 都影响速度。增加 EP 也可能引入更慢网络。", "No. EP distributes experts while each token uses a subset. Batch routing, expert balance, all-to-all, shared layers and attention govern speed. Larger EP can introduce slower fabric.") +
+      faq("如何选 DP、TP、PP 的乘积？", "How should DP, TP and PP group sizes be chosen?", "先按合法权重/attention 切分满足每实例内存，再选 fast-domain TP 与 stage-balanced PP，最后用独立副本承接 QPS。Attention DP 和 EP 属于不同并行组，不能不看引擎语义就直接相乘。", "First satisfy per-instance memory with a valid weight/attention partition. Choose fast-domain TP and balanced PP, then add replicas for QPS. Attention DP and EP use distinct groups; do not multiply sizes without engine semantics.") +
+      quiz("parallel", "Dense 模型需要 Expert Parallelism 吗？", "Does a dense model need expert parallelism?", [["需要，所有模型都有专家", "Yes, every model has experts"], ["不需要，EP 的专家维度属于 MoE", "No; EP's expert dimension belongs to MoE"]], 1, "Dense 可以 TP/PP/DP，但没有 routed expert dispatch/combine 这一维度。", "Dense models can use TP/PP/DP, but have no routed expert dispatch/combine dimension.")) +
+    section("checklist", "收益必须同时通过质量、内存、通信和 SLA 四道门", "Gains must pass quality, memory, communication and SLO gates",
+      checklist([["记录完整 parallel group 拓扑，而不是只写总卡数", "Record full parallel-group topology, not only GPU count"],
+        ["先验证模型输出质量和采样分布，再谈量化/投机加速", "Verify output quality/sampling before quantization/speculative gains"],
+        ["采集每 layer / rank 的通信、专家热点和非重叠时间", "Capture per-layer/rank communication, expert skew and non-overlapped time"],
+        ["冷热 prefix 分开测，避免缓存命中掩盖真实容量", "Test cold/warm prefixes separately so cache hits do not hide capacity"]]));
+}
+
+function networkContent() {
+  const controls = select("network", "operation", "NCCL 通信操作", "NCCL operation", [["allreduce", "AllReduce"], ["allgather", "AllGather"], ["reducescatter", "ReduceScatter"], ["alltoall", "AllToAll"], ["broadcast", "Broadcast"], ["reduce", "Reduce"], ["sendrecv", "Send/Recv"]], "allreduce") +
+    field("network", "ranks", "ranks 数 n", "Rank count n", 8, 2, 1024) +
+    field("network", "sizeMB", "NCCL 口径消息大小 MB（十进制）", "Message size MB (decimal, NCCL scope)", 1000, 0.001, 1e7, 0.001) +
+    field("network", "timeMs", "实测平均操作时间 ms（示例）", "Measured mean operation time ms (example)", 20, 0.001, 1e6, 0.001) +
+    select("network", "rate", "单端口 Gb/s", "One-port Gb/s", [["100", "100G"], ["200", "200G"], ["400", "400G"], ["800", "800G"]], "400") +
+    field("network", "rails", "端口/轨数（假设同时满载）", "Ports/rails (assume parallel)", 1, 1, 16) +
+    field("network", "efficiency", "payload 带宽效率", "Payload bandwidth efficiency", 0.8, 0.05, 1, 0.05);
+  const congestion = field("congestion", "queue", "当前队列占缓冲百分比（示意）", "Queue occupancy % (illustration)", 55, 0, 100, 1, "range") +
+    field("congestion", "ecn", "ECN 标记起点 %", "ECN marking start %", 40, 1, 95) +
+    field("congestion", "pfc", "PFC Xoff 起点 %", "PFC Xoff threshold %", 80, 2, 99) +
+    field("congestion", "xon", "PFC 恢复 Xon %", "PFC resume Xon %", 60, 0, 98);
+  return section("concepts", "RDMA 是内存访问能力，RoCEv2 是承载方式，NVLink 是另一类互连", "RDMA is a memory capability, RoCEv2 a transport, NVLink another interconnect",
+    table([b("层次", "Layer"), b("含义", "Meaning"), b("单位 / 比较边界", "Unit / comparison boundary")], [
+      ["RDMA", b("NIC 直接读写注册内存，降低数据面 CPU 拷贝/参与", "NIC reads/writes registered memory, reducing data-plane CPU copies/work"), b("不是线缆标准，也不自动等于 GPU direct", "Not a cable standard and not automatically GPU-direct")],
+      ["GPUDirect RDMA", b("NIC↔GPU 内存 DMA，绕过 CPU DRAM staging", "NIC↔GPU-memory DMA bypasses CPU-DRAM staging"), b("CPU 仍做控制、注册、调度；PCIe topology/驱动必须支持", "CPU still controls, registers and schedules; topology/drivers must support it")],
+      ["RoCEv2", b("RDMA over UDP/IP/Ethernet，可路由", "RDMA over UDP/IP/Ethernet, routable"), "400/800 Gb/s per port → 50/100 GB/s one-way before overhead"],
+      ["InfiniBand NDR / XDR", b("专用 RDMA fabric、原生链路流控与路由体系", "Dedicated RDMA fabric with native link flow control and routing"), "NDR 400 Gb/s; XDR 800 Gb/s (check lane/port/cable mode)"],
+      ["NVLink 4 / 5", b("GPU Scale-Up 域，总聚合双向营销口径", "GPU scale-up domain; advertised aggregate bidirectional scope"), "900 / 1800 GB/s per GPU aggregate ≠ one port or one flow"],
+      ["NVSwitch", b("扩展 NVLink GPU 通信域的交换网络", "Switch fabric expanding the NVLink GPU domain"), b("支持快域大于一台服务器；总带宽不能视作每请求独享", "Fast domain can exceed one server; aggregate is not dedicated per request")]
+    ])) +
+    section("paths", "GPUDirect 绕过主机 staging，不绕过注册和拓扑约束", "GPUDirect bypasses host staging, not registration or topology constraints",
+      diagram("gpu-path", "主机 staging 与 GPU Direct 对比", "Host staging versus GPU-direct path",
+        `<text x="25" y="30">Host-staged path: extra DRAM copies</text>` + node(25, 48, 155, "GPU A", "HBM") + node(210, 48, 155, "Host DRAM", "CPU control") + node(395, 48, 155, "NIC / fabric", "DMA") + node(585, 48, 190, "Host → GPU B", "staging again") +
+        arrow(185, 80, 205, 80) + arrow(370, 80, 390, 80) + arrow(555, 80, 580, 80) +
+        `<text x="25" y="155">GPUDirect RDMA: CPU controls, payload bypasses host DRAM</text>` +
+        node(25, 178, 185, "GPU A memory", "registered region", "primary") + node(305, 178, 190, "NIC / RDMA fabric", "peer DMA") + node(590, 178, 185, "GPU B memory", "registered region", "primary") +
+        arrow(215, 212, 300, 212) + arrow(500, 212, 585, 212),
+        "检查 GPU/NIC PCIe 亲和、IOMMU/ACS、peer-memory 或 DMA-BUF 支持、驱动与内存注册。零 host-copy 不代表零开销。",
+        "Check GPU/NIC PCIe affinity, IOMMU/ACS, peer-memory or DMA-BUF support, drivers and registration. No host copy does not mean no overhead.", 285)) +
+    section("scale-domains", "Scale-Up 看 NVLink 域，Scale-Out 看网络端口，不只看主机名", "Scale-up follows NVLink domains; scale-out follows fabric, not just hostnames",
+      diagram("scale-domains-figure", "NVSwitch 快域与 RDMA 网络域", "NVSwitch fast domain and RDMA network",
+        `<rect x="15" y="25" width="330" height="220" rx="12" class="surface"/><rect x="455" y="25" width="330" height="220" rx="12" class="surface"/><text x="35" y="53">Scale-Up / domain A</text><text x="475" y="53">Scale-Up / domain B</text>` +
+        node(35, 75, 120, "GPU 0", "NVLink", "primary") + node(190, 75, 130, "GPU 1", "NVLink", "primary") +
+        node(475, 75, 120, "GPU 2", "NVLink", "primary") + node(630, 75, 130, "GPU 3", "NVLink", "primary") +
+        node(90, 165, 180, "NVSwitch", "GPU fabric") + node(530, 165, 180, "NVSwitch", "GPU fabric") +
+        `<path d="M 95 145 L 160 162 M 255 145 L 200 162 M 535 145 L 600 162 M 695 145 L 640 162" class="line secondary"/>` +
+        arrow(350, 125, 450, 125) + `<text x="400" y="95" text-anchor="middle">NIC / RDMA</text><text x="400" y="155" text-anchor="middle">400 / 800 Gb/s</text><text x="400" y="280" text-anchor="middle">NVLink 4/5: 900/1800 GB/s per-GPU aggregate; NIC: 50/100 GB/s one-way</text>`,
+        "示意中的快域可以是单服务器或跨服务器超节点；速率为规格口径，不表示每对 GPU 或每个请求独占。",
+        "A fast domain may be one server or a multi-server supernode. Rates are specification scopes, not dedicated bandwidth for every GPU pair or request.", 315)) +
+    section("network", "8 ranks 的 AllReduce：busbw=1.75×algbw，不是压缩收益", "At 8 ranks, AllReduce busbw=1.75×algbw, not compression",
+      lab("network", controls) +
+      formula("algbw [GB/s] = size_MB / time_ms  [decimal MB and ms cancel to GB/s]<br>AllReduce busbw = algbw × 2(n−1)/n<br>AllGather / ReduceScatter / AllToAll busbw = algbw × (n−1)/n<br>Broadcast / Reduce / SendRecv factor = 1") +
+      p("默认消息 1,000 MB、20 ms：algbw=50 GB/s；8 ranks AllReduce busbw=87.5 GB/s。busbw 是标准化通信指标，不是「网络凭空超出线速」。AllGather/ReduceScatter 的 S 要用总数组大小，不是每 rank 的单块。",
+        "Default 1,000 MB in 20 ms: algbw=50 GB/s; 8-rank AllReduce busbw=87.5 GB/s. Bus bandwidth is a normalized collective metric, not magical wire speed. For AllGather/ReduceScatter, S is the total array, not one rank's shard.") +
+      note("单端口网络效率预算不能直接套到所有 GPU 集合通信：操作可能走 NVLink、多个 NIC、PCIe 或混合路径。若指标超过选定预算，先核对路径、方向、总消息定义和轨数，而不是自动宣告测量错误。",
+        "One-port network budgets do not apply automatically to every GPU collective; paths may use NVLink, multiple NICs, PCIe or a mix. If a metric exceeds the selected budget, check path, direction, size definition and rails before declaring an error.")) +
+    section("congestion", "ECN 是提前减速，PFC 是逐跳急刹，DCQCN 是端点反馈控制", "ECN signals early, PFC brakes a hop, DCQCN controls the sender",
+      lab("congestion", congestion) +
+      p("传统 lossless RoCE 基线：交换机队列到 ECN 区间先标记 CE；接收端 RNIC 产生 CNP；发送端 RNIC 的 DCQCN 降速，再逐步恢复。如果队列继续逼近溢出，PFC 按 priority 对上游链路发 pause；低于 Xon 再恢复。标记/减速不是丢包；PFC 不是端到端拥塞控制。",
+        "Classic lossless-RoCE baseline: the switch marks CE as queues enter the ECN range; the receiver RNIC emits CNP; sender RNIC DCQCN reduces rate then recovers. If queues keep nearing overflow, PFC pauses an upstream priority on a hop, resuming below Xon. Marking/rate reduction is not packet loss; PFC is not end-to-end congestion control.") +
+      note("阈值滑块是概念图，不是厂商配置。ECN/PFC/DCQCN 不是所有现代以太网 fabric 的唯一有效组合；替代拥塞控制、receiver credits 与可承受丢包的实现要按协议和负载验证。避免 PFC 死锁、head-of-line blocking，并启用可验证的 watchdog 与遥测。",
+        "Threshold sliders illustrate concepts, not vendor configuration. ECN/PFC/DCQCN is not the only valid modern fabric design; alternative congestion control, receiver credits and loss-tolerant implementations need protocol/workload validation. Address PFC deadlock/HOL blocking with verified watchdogs and telemetry.")) +
+    section("rails", "多轨拓扑要匹配 GPU↔NIC 亲和与集合通信映射", "Rail topology must match GPU↔NIC affinity and collective mapping",
+      diagram("rails-topology", "两节点双轨优化示意", "Two-node, two-rail example",
+        node(20, 20, 200, "Node A / GPU0 NIC0", "rail 0") + node(20, 145, 200, "Node A / GPU1 NIC1", "rail 1") +
+        node(300, 20, 200, "Leaf / rail 0", "same-index affinity", "primary") + node(300, 145, 200, "Leaf / rail 1", "independent failure", "primary") +
+        node(580, 20, 200, "Node B / GPU0 NIC0", "rail 0") + node(580, 145, 200, "Node B / GPU1 NIC1", "rail 1") +
+        arrow(225, 54, 295, 54) + arrow(505, 54, 575, 54) + arrow(225, 179, 295, 179) + arrow(505, 179, 575, 179) +
+        `<path d="M 400 90 L 400 143" class="grid-line"/><text x="420" y="122">spine / cross-rail routing</text>`,
+        "同索引 GPU/NIC 可形成对应轨；跨轨通信仍需 spine/路由。可用带宽受 PCIe、亲和、oversubscription、流分配和故障轨约束，不能简单 N×线速保证。",
+        "Same-index GPU/NIC pairs can form rails; cross-rail traffic still needs spine/routing. PCIe, affinity, oversubscription, flow mapping and failed rails limit usable bandwidth; N×line rate is not guaranteed.")) +
+    section("faq", "看 busbw 之前先看消息口径和路径", "Inspect message scope and path before busbw",
+      faq("RDMA 是否完全不使用 CPU？", "Does RDMA avoid the CPU entirely?", "数据面可以绕过 host staging，但连接建立、内存注册、页固定、队列配置、控制与错误处理仍需要 CPU/驱动。GPU-initiated 通信也不取消全部控制平面。", "Payload can bypass host staging, but connection setup, registration, pinning, queues, control and errors still involve CPU/drivers. GPU-initiated communication does not remove all control-plane work.") +
+      faq("NCCL busbw 可以跨不同 rank 数直接比较吗？", "Can NCCL busbw be compared across rank counts?", "可以作为标准化参考，但必须同操作、消息大小定义、路径、拓扑、dtype、warmup、迭代窗口与错误状态；小消息看 latency，大消息看带宽，并用实际训练/推理负载复验。", "It is a normalized reference, but compare the same operation, size scope, path, topology, dtype, warmup, iterations and error state. Use latency for small messages, bandwidth for large ones, then verify real workloads.") +
+      quiz("network", "8 ranks AllReduce 的 busbw/algbw 系数是多少？", "What is busbw/algbw for an 8-rank AllReduce?", [["1", "1"], ["1.75", "1.75"], ["8", "8"]], 1, "2×(8−1)/8=1.75；这是通信量归一化，不是增加硬件带宽。", "2×(8−1)/8=1.75; this normalizes communication volume, not hardware bandwidth.")) +
+    section("checklist", "网络验收必须覆盖微基准、拥塞和真实通信图", "Fabric acceptance needs microbenchmarks, congestion and real communication graphs",
+      checklist([["ib_write_bw/NCCL payload 与 topology 对齐，记录 correctness errors", "Align RDMA/NCCL payload and topology; record correctness errors"],
+        ["记录 GPU/NIC 亲和、单向/双向、端口与 oversubscription", "Record GPU/NIC affinity, direction, ports and oversubscription"],
+        ["测试 ECN/CNP/PFC、watchdog、incast、拥塞与单轨故障", "Test ECN/CNP/PFC, watchdogs, incast, congestion and one-rail failure"],
+        ["验证实际 EP all-to-all + KV handoff 共存的尾延迟和 Goodput", "Validate tail latency/goodput with real EP all-to-all plus KV handoff"]]));
+}
+
+export const bodies = { metrics: metricsContent, capacity: capacityContent, sizing: sizingContent, pd: pdContent, parallel: parallelContent, network: networkContent };

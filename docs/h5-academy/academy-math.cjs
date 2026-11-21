@@ -1,0 +1,212 @@
+(function (root) {
+  "use strict";
+  const models = {
+    llama8: { name: "Llama 3.1 8B", total: 8.03, active: 8.03, layers: 32, heads: 32, kvHeads: 8, headDim: 128, hidden: 4096, contextLimit: 131072 },
+    llama70: { name: "Llama 3.1 70B", total: 70.6, active: 70.6, layers: 80, heads: 64, kvHeads: 8, headDim: 128, hidden: 8192, contextLimit: 131072 },
+    llama405: { name: "Llama 3.1 405B", total: 405, active: 405, layers: 126, heads: 128, kvHeads: 8, headDim: 128, hidden: 16384, contextLimit: 131072 },
+    qwen72: { name: "Qwen2.5 72B (stock 32K)", total: 72.7, active: 72.7, layers: 80, heads: 64, kvHeads: 8, headDim: 128, hidden: 8192, contextLimit: 32768 },
+    deepseek: { name: "DeepSeek V3 / original R1 671B", total: 671, active: 37, layers: 61, heads: 128, kvHeads: 8, headDim: 128, hidden: 7168, latent: 512, rope: 64, experts: 256, topK: 8, mtp: 14, contextLimit: 131072 }
+  };
+  const gpus = {
+    h100: { name: "H100 SXM 80 GB", memory: 80, bandwidth: 3350, bf16: 989.5, nvlink: 900 },
+    h200: { name: "H200 SXM 141 GB", memory: 141, bandwidth: 4800, bf16: 989.5, nvlink: 900 },
+    b200: { name: "B200 192 GB (design / what-if)", memory: 192, bandwidth: 8000, bf16: 2250, nvlink: 1800 },
+    b200dgx: { name: "DGX B200 180 GB / GPU", memory: 180, bandwidth: 8000, bf16: 2250, nvlink: 1800 },
+    l40s: { name: "L40S 48 GB GDDR6", memory: 48, bandwidth: 864, bf16: 362.05, nvlink: 0 }
+  };
+  function number(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+      throw new RangeError(`${name}: expected a finite number in [${min}, ${max}]`);
+    }
+    return value;
+  }
+  function integer(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
+    number(value, name, min, max);
+    if (!Number.isInteger(value)) throw new RangeError(`${name}: expected an integer`);
+    return value;
+  }
+  function preset(items, key) {
+    if (!Object.hasOwn(items, key)) throw new RangeError("Unknown preset");
+    return items[key];
+  }
+  function lifecycle({ queue, prefill, delivery, output, tpot }) {
+    [queue, prefill, delivery].forEach((v) => number(v, "latency"));
+    integer(output, "output", 1);
+    number(tpot, "tpot", 0.001);
+    const ttft = queue + prefill + delivery;
+    const decode = (output - 1) * tpot;
+    return { ttft, decode, e2e: ttft + decode, userTPS: output > 1 ? 1000 / tpot : null, measuredTPOT: output > 1 ? tpot : null };
+  }
+  function capacity(p) {
+    number(p.qps, "qps");
+    number(p.headroom, "headroom", 1, 10);
+    integer(p.prompt, "prompt");
+    integer(p.output, "output", 1);
+    number(p.ttft, "ttft");
+    number(p.tpot, "tpot", 0.001);
+    number(p.inputCapacity, "inputCapacity", 1);
+    number(p.outputCapacity, "outputCapacity", 1);
+    integer(p.batch, "batch", 1);
+    number(p.utilization, "utilization", 0.01, 1);
+    const qps = p.qps * p.headroom;
+    const latency = lifecycle({ queue: 0, prefill: p.ttft, delivery: 0, output: p.output, tpot: p.tpot });
+    const inputTPS = qps * p.prompt;
+    const outputTPS = qps * p.output;
+    const residence = latency.e2e / 1000;
+    const active = qps * residence;
+    const decodeActive = qps * latency.decode / 1000;
+    const inputInstances = Math.ceil(inputTPS / (p.inputCapacity * p.utilization));
+    const outputInstances = Math.ceil(outputTPS / (p.outputCapacity * p.utilization));
+    const batchInstances = Math.ceil(active / p.batch);
+    return { qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, rpm: qps * 60, residence, active, decodeActive, inputInstances, outputInstances, batchInstances, instances: Math.max(inputInstances, outputInstances, batchInstances) };
+  }
+  function businessQPS({ dau, requests, hours, peak }) {
+    number(dau, "dau");
+    number(requests, "requests");
+    number(hours, "hours", 0.1, 24);
+    number(peak, "peak", 1, 100);
+    return dau * requests * peak / (hours * 3600);
+  }
+  function ptu({ inputTPM, outputTPM, cache, cachedWeight, outputWeight, capacity, minimum, step }) {
+    number(inputTPM, "inputTPM");
+    number(outputTPM, "outputTPM");
+    number(cache, "cache", 0, 1);
+    number(cachedWeight, "cachedWeight");
+    number(outputWeight, "outputWeight", 0.001);
+    number(capacity, "PTU capacity", 0.001);
+    integer(minimum, "minimum", 1);
+    integer(step, "step", 1);
+    const normalized = inputTPM * ((1 - cache) + cache * cachedWeight) + outputTPM * outputWeight;
+    const raw = normalized / capacity;
+    const provisioned = normalized === 0 ? 0 : minimum + Math.max(0, Math.ceil((raw - minimum) / step)) * step;
+    return { normalized, raw, provisioned };
+  }
+  function kvPerToken(model, bytes, architecture = "native") {
+    number(bytes, "KV bytes", 0.5, 4);
+    if (!["native", "mha", "gqa", "mla"].includes(architecture)) throw new RangeError("Unknown KV architecture");
+    const mode = architecture === "native" ? (model.latent ? "mla" : "gqa") : architecture;
+    if (mode === "mla") {
+      if (!model.latent) throw new RangeError("MLA is unavailable for this model");
+      return model.layers * (model.latent + model.rope) * bytes;
+    }
+    const heads = mode === "mha" ? model.heads : model.kvHeads;
+    return 2 * model.layers * heads * model.headDim * bytes;
+  }
+  function moeUnion(model, batch) {
+    integer(batch, "batch", 1);
+    if (!model.experts) return model.total;
+    // Solve shared + routed * topK/experts = active under uniform expert sizes.
+    const ratio = model.topK / model.experts;
+    const shared = (model.active - model.total * ratio) / (1 - ratio);
+    const union = -Math.expm1(batch * Math.log1p(-ratio));
+    return shared + (model.total - shared) * union;
+  }
+  function sizing(p) {
+    const model = preset(models, p.model);
+    const gpu = preset(gpus, p.gpu);
+    number(p.weightBytes, "weightBytes", 0.5, 2);
+    number(p.kvBytes, "kvBytes", 1, 2);
+    integer(p.context, "context", 1, 1048576);
+    integer(p.batch, "batch", 1, 4096);
+    integer(p.prefillBatch, "prefillBatch", 1, 4096);
+    number(p.safe, "safe", 0.5, 0.95);
+    number(p.runtime, "runtime");
+    number(p.overhead, "overhead", 0, 1);
+    number(p.replication, "replication", 1, 64);
+    number(p.mbu, "mbu", 0.01, 1);
+    number(p.mfu, "mfu", 0.01, 1);
+    number(p.tpot, "tpot", 0.001);
+    number(p.ttft, "ttft", 0.001);
+    number(p.reserve, "reserve");
+    const usable = gpu.memory * p.safe - p.runtime;
+    if (usable <= 0) throw new RangeError("Runtime reserve exhausts safe GPU memory");
+    if (p.ttft <= p.reserve) throw new RangeError("TTFT budget must exceed non-compute reserve");
+    const totalParams = model.total + (p.mtp ? (model.mtp || 0) : 0);
+    const weight = totalParams * p.weightBytes * (1 + p.overhead);
+    const kv = kvPerToken(model, p.kvBytes) * p.context * p.batch * p.replication / 1e9;
+    const memoryCards = Math.ceil((weight + kv) / usable);
+    const optimisticTraffic = model.active * p.weightBytes;
+    const unionTraffic = moeUnion(model, p.batch) * p.weightBytes;
+    const bandwidthCards = Math.ceil((unionTraffic + kv) / (gpu.bandwidth * p.mbu * p.tpot / 1000));
+    const prefillFLOPs = 2 * model.active * 1e9 * p.context * p.prefillBatch + 2 * model.layers * model.hidden * p.context ** 2 * p.prefillBatch;
+    const computeCards = Math.ceil(prefillFLOPs / (gpu.bf16 * 1e12 * p.mfu * (p.ttft - p.reserve) / 1000));
+    const floor = Math.max(1, memoryCards, bandwidthCards, computeCards);
+    const candidate = 2 ** Math.ceil(Math.log2(floor));
+    return { model, gpu, weight, kv, memoryCards, bandwidthCards, computeCards, floor, candidate, runtime: p.runtime * candidate, optimisticTPOT: optimisticTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, unionTPOT: unionTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, kvReadTPOT: kv / (candidate * gpu.bandwidth * p.mbu) * 1000, prefillMs: prefillFLOPs / (candidate * gpu.bf16 * 1e12 * p.mfu) * 1000, unionTraffic, contextSupported: p.context <= model.contextLimit };
+  }
+  function transfer(p) {
+    const model = preset(models, p.model);
+    integer(p.context, "context", 1);
+    number(p.kvBytes, "kvBytes", 1, 2);
+    number(p.cache, "cache", 0, 1);
+    number(p.rate, "rate", 0.001);
+    number(p.efficiency, "efficiency", 0.01, 1);
+    integer(p.rails, "rails", 1, 64);
+    number(p.setup, "setup");
+    number(p.overlap, "overlap");
+    number(p.qps, "qps");
+    const bytes = kvPerToken(model, p.kvBytes) * p.context * (1 - p.cache);
+    const bandwidth = p.rate * 1e9 / 8 * p.efficiency * p.rails;
+    const rawMs = bytes / bandwidth * 1000;
+    return { bytes, bandwidth, rawMs, exposedMs: Math.max(0, rawMs - p.overlap) + p.setup, utilization: bytes * p.qps / bandwidth, requiredGbps: bytes * p.qps * 8 / 1e9 / p.efficiency };
+  }
+  function percentile(values, fraction) {
+    if (!Array.isArray(values) || !values.length) throw new RangeError("Percentile requires samples");
+    number(fraction, "percentile", 0.001, 1);
+    values.forEach((v) => number(v, "sample"));
+    return [...values].sort((a, b) => a - b)[Math.ceil(fraction * values.length) - 1];
+  }
+  function pdSamples({ context, base, prefillRate, chunk, residual }) {
+    integer(context, "context", 1);
+    number(base, "base", 0.001);
+    number(prefillRate, "prefillRate", 0.001);
+    integer(chunk, "chunk", 1);
+    number(residual, "residual");
+    const block = context / prefillRate * 1000;
+    const burst = Math.min(context, chunk) / prefillRate * 1000;
+    const samples = { colocated: [], chunked: [], pd: [] };
+    for (let i = 0; i < 200; i += 1) {
+      const interference = i % 20 === 0;
+      const jitter = (i * 17 % 7) * 0.15;
+      samples.colocated.push(base + jitter + (interference ? block : 0));
+      samples.chunked.push(base + jitter + (interference ? burst : 0));
+      samples.pd.push(base + jitter + (interference ? residual : 0));
+    }
+    return { samples, p99: Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, percentile(values, 0.99)])) };
+  }
+  function collective({ operation, ranks, sizeMB, timeMs }) {
+    integer(ranks, "ranks", 2, 65536);
+    number(sizeMB, "sizeMB", 0.001);
+    number(timeMs, "timeMs", 0.001);
+    const factors = { allreduce: 2 * (ranks - 1) / ranks, allgather: (ranks - 1) / ranks, reducescatter: (ranks - 1) / ranks, alltoall: (ranks - 1) / ranks, broadcast: 1, reduce: 1, sendrecv: 1 };
+    const factor = preset(factors, operation);
+    const algbw = sizeMB / timeMs;
+    return { algbw, busbw: algbw * factor, factor };
+  }
+  function goodput({ batch, base, slope, knee, ttftLimit, tpotLimit }) {
+    integer(batch, "batch", 1, 4096);
+    [base, slope, knee, ttftLimit, tpotLimit].forEach((v) => number(v, "goodput parameter", 0.001));
+    const requests = Array.from({ length: batch }, (_, i) => ({
+      ttft: 100 + batch * 4 + (i * 13 % 29) * 3,
+      tpot: base + slope * batch + Math.max(0, batch - knee) * slope * 2 + (i * 7 % 13) * 0.2,
+      output: 128
+    }));
+    const meanTPOT = requests.reduce((sum, r) => sum + r.tpot, 0) / batch;
+    const throughput = batch * 1000 / meanTPOT;
+    const passed = requests.filter((r) => r.ttft <= ttftLimit && r.tpot <= tpotLimit).length;
+    return { requests, meanTPOT, throughput, passed, goodput: throughput * passed / batch };
+  }
+  function cost({ hourly, outputTPS, inputTPS, hours, priceIn, priceOut }) {
+    [hourly, outputTPS, inputTPS, hours, priceIn, priceOut].forEach((v) => number(v, "cost parameter"));
+    return { perMillionOutput: outputTPS === 0 ? null : hourly * 1e6 / (3600 * outputTPS), periodCost: hours * 3600 * (inputTPS * priceIn + outputTPS * priceOut) / 1e6 };
+  }
+  function congestion({ queue, ecn, pfc, xon }, wasPaused = false) {
+    [queue, ecn, pfc, xon].forEach((v) => number(v, "threshold", 0, 100));
+    if (ecn >= pfc || xon >= pfc) throw new RangeError("ECN and Xon must be below PFC Xoff");
+    const paused = queue >= pfc || (wasPaused && queue > xon);
+    return { paused, marked: queue >= ecn, recovering: wasPaused && !paused };
+  }
+  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, transfer, percentile, pdSamples, collective, goodput, cost, congestion };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.AcademyMath = Object.freeze(api);
+})(globalThis);
