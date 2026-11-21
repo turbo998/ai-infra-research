@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>GPU 容器热快照与显存挂起恢复 (CRIU + cuda-checkpoint / vLLM Sleep Mode) 计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #C084FC; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>大模型 GPU 容器热快照（CRIU + cuda-checkpoint / vLLM Sleep Mode）Scale-to-Zero 计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>托管间歇专精模型总数 <span id="v_mods" class="val">20</span></label>
+      <input type="range" id="mods" min="4" max="60" step="2" value="20" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>单模型活跃显存体积 (GB) <span id="v_gb" class="val">72 GB</span></label>
+      <input type="range" id="gb" min="16" max="160" step="8" value="72" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>平均模型占空比 (Duty Cycle) <span id="v_duty" class="val">25%</span></label>
+      <input type="range" id="duty" min="5" max="80" step="5" value="25" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>GPU 容器唤醒与迁移架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 标准从零冷启动 (重跑 Import + CUDA Graph)</option>
+        <option value="2">Tier 2: 24/7 常驻热 GPU 副本 (永不缩容)</option>
+        <option value="3">Tier 3: vLLM Sleep Mode (Level 1 本机锁页内存挂起)</option>
+        <option value="4" selected>Tier 4: CRIU + NVIDIA cuda-checkpoint 热快照恢复 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>唤醒至首字就绪耗时</div><div id="k_wake" class="num">3.2 sec</div></div>
+    <div class="kpi"><div>30s Spot 无感撤离率</div><div id="k_spot" class="num">98.5%</div></div>
+    <div class="kpi"><div>所需常备 H200 卡数</div><div id="k_gpus" class="num">6 GPUs</div></div>
+    <div class="kpi"><div>月度集群总成本 (TCO)</div><div id="k_tco" class="num">$16,800</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const mods = parseFloat(document.getElementById('mods').value);
+  const gb = parseFloat(document.getElementById('gb').value);
+  const duty = parseFloat(document.getElementById('duty').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_mods').textContent = mods;
+  document.getElementById('v_gb').textContent = gb + ' GB';
+  document.getElementById('v_duty').textContent = Math.round(duty * 100) + '%';
+
+  const gbScale = gb / 72.0;
+  let wake = 3.2, spot = 98.5, gpus = 6;
+  if (mode === '1') {
+    wake = +(26.5 + 22.0 * gbScale).toFixed(1);
+    spot = 0.0;
+    gpus = Math.max(4, Math.ceil(mods * duty * 3.2));
+  } else if (mode === '2') {
+    wake = 0.2;
+    spot = 15.0;
+    gpus = mods * 2;
+  } else if (mode === '3') {
+    wake = +(1.6 * gbScale).toFixed(1);
+    spot = 45.0;
+    gpus = Math.max(4, Math.ceil(mods * duty * 1.6));
+  } else {
+    wake = +(3.2 * gbScale).toFixed(1);
+    spot = 98.5;
+    gpus = Math.max(4, Math.ceil(mods * duty * 1.2));
+  }
+  const tco = gpus * 2800;
+  document.getElementById('k_wake').textContent = wake + ' sec';
+  document.getElementById('k_spot').textContent = spot + '%';
+  document.getElementById('k_gpus').textContent = gpus + ' GPUs';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>

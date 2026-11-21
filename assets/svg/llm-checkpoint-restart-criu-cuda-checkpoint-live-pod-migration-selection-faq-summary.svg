@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#C084FC" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">大模型 GPU 容器热快照、显存挂起恢复与无感迁移：CRIU + cuda-checkpoint vs. vLLM Sleep Mode</text>
+  <text x="52" y="94" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="15">跳过 22 秒 CUDA Graph 录制与 Python 初始化：1.6s 同机唤醒 (`Sleep Mode`) + 3.2s 跨机热恢复 (`CRIU + cuCheckpointProcess`)</text>
+
+  <!-- Left: Why Cold vLLM Startup Takes 48.5s Even With Local Weights -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么权重都在本地 NVMe 了，冷拉起 vLLM 还要 48.5 秒？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 隐藏耗时大户：Python 导入 + CUDA Context + 32 档 CUDA Graph 录制！</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• `import torch, vllm` (6.5s) + 初始化 NCCL/CUDA Context (5.0s) + 加载 72GB 权重 (15.0s)</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 录制 Batch=1..256 的 CUDA Graphs + Torch.compile 预热竟还需整整 22.0 秒 (总计 48.5s)！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 痛点：Spot 抢占式节点 30 秒回收通知根本来不及冷重拉 (Tier 1)</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 云厂商提前 30 秒发 SIGTERM 回收 Spot 机器，新机器冷拉起需 48.5s 导致长连接断流</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 而为 20 个低频模型 24 小时常驻 GPU 副本 (Tier 2) 每月白烧 $112,000！</text>
+
+  <!-- Right: vLLM Sleep Mode + CRIU & NVIDIA cuda-checkpoint -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. GPU 进程级挂起与跨机热快照两大黑科技 (Tier 3 / Tier 4)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 同机毫秒级分时切换：`vLLM Sleep Mode (Level 1)` (`1.6s` 唤醒)</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">保留进程与已录制的 CUDA Graph 拓扑，将 72GB 权重卸载至主机锁页内存，释放 98% HBM！</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② 驱动级 GPU 显存冻结：`NVIDIA cuda-checkpoint (cuCheckpointProcess)`</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">R550+ 驱动原生支持 Lock → Checkpoint (将 GPU 页表与显存状态透明迁入主机内存) → Restore！</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ `CRIU + cuda-checkpoint` 整容器快照：3.2s Scale-from-Zero 与无感迁移</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">将初始化完毕且录好 CUDA Graph 的完整容器冻结为快照，3.2 秒满血恢复，30s Spot 从容撤离！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 托管 20 个间歇调用 70B-FP8 专精模型（72GB 显存 + 32 档 CUDA Graph）四档对比</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">GPU 容器生命周期架构</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">唤醒至首字耗时</text>
+  <text x="620" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">30s Spot 无感撤离</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">闲置占用 HBM</text>
+  <text x="950" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">是否免重录 Graph</text>
+  <text x="1110" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">20模型月度总成本</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 标准从零冷启动 Pod (重跑 Import + 权重 + CUDA Graph)</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">48.5 sec ✕</text>
+  <text x="620" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">0.0% (超时断流) ✕</text>
+  <text x="790" y="524" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">0.0 GB</text>
+  <text x="950" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">否 (重录 22s)</text>
+  <text x="1110" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14">$44,800/mo</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: 24/7 常驻热 GPU 副本 (`minReplicas: 1` 永不缩容)</text>
+  <text x="450" y="568" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">0.2 sec</text>
+  <text x="620" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">15.0% ✕</text>
+  <text x="790" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">1,440.0 GB ✕</text>
+  <text x="950" y="568" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">常驻不放</text>
+  <text x="1110" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">$112,000/mo ✕</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: `vLLM Sleep Mode (Level 1)` 本机锁页内存挂起</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">1.6 sec ✓</text>
+  <text x="620" y="612" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">45.0% (仅限同机)</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">1.2 GB / 模型 ✓</text>
+  <text x="950" y="612" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">是 ✓</text>
+  <text x="1110" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$22,400/mo</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): `CRIU + NVIDIA cuda-checkpoint` 整进程+显存快照恢复</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">3.2 sec (15.2x) ✓</text>
+  <text x="620" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">98.5% ✓</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">0.0 GB ✓</text>
+  <text x="950" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">是 (保留 Graph) ✓</text>
+  <text x="1110" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$16,800/mo (-85%)</text>
+</svg>
