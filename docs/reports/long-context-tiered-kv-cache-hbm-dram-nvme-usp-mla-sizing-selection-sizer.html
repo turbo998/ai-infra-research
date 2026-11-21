@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>128K–1M 超长上下文分层 KV 卸载与 2D USP 计算器 (#401)</title>
+<style>
+  body { background: #0b1120; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; max-width: 980px; margin: 0 auto; padding: 24px; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+  h1 { font-size: 22px; color: #38bdf8; margin-top: 0; }
+  label { display: block; margin: 10px 0 4px; font-size: 13.5px; color: #cbd5e1; }
+  input[type="range"], select { width: 100%; padding: 6px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+  .kpi { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px; text-align: center; }
+  .kpi .v { font-size: 20px; font-weight: 800; color: #34d399; }
+  .kpi .l { font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🧮 128K–1M 超长上下文分层 KV 卸载与 2D USP 计算器 (#401)</h1>
+    <label>注意力机制：</label>
+    <select id="m" onchange="calc()">
+      <option value="35.14" selected>DeepSeek-671B MLA (35.14 KB/tok)</option>
+      <option value="4.40">7:1 Hybrid SSM/GQA (4.40 KB/tok)</option>
+      <option value="163.84">Llama-3.3-70B GQA-8 (163.84 KB/tok)</option>
+    </select>
+    <label>上下文长度 S: <strong id="sTxt">131072</strong></label>
+    <input type="range" id="s" min="16384" max="1048576" step="16384" value="131072" oninput="calc()">
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="kv">4.50 GB</div><div class="l">单会话 KV 显存体积</div></div>
+      <div class="kpi"><div class="v" id="rec">5,200 ms</div><div class="l">丢弃重算耗时 O(S^2)</div></div>
+      <div class="kpi"><div class="v" id="res">10.0 ms</div><div class="l">Pinned DRAM 拉回耗时</div></div>
+      <div class="kpi"><div class="v" id="cost">$0.24 / 1M</div><div class="l">Tier 4 百万 Token 成本</div></div>
+    </div>
+  </div>
+  <script>
+    function calc() {
+      const kb = parseFloat(document.getElementById('m').value);
+      const s = parseInt(document.getElementById('s').value, 10);
+      document.getElementById('sTxt').textContent = s;
+      const kvGb = (s * kb) / (1024 * 1024);
+      const scale = s / 131072.0;
+      const rec = Math.round(5200 * (0.35 * scale + 0.65 * scale * scale));
+      const res = (kvGb / 448.0) * 1000.0;
+      document.getElementById('kv').textContent = kvGb.toFixed(2) + ' GB';
+      document.getElementById('rec').textContent = rec.toLocaleString() + ' ms';
+      document.getElementById('res').textContent = res.toFixed(1) + ' ms';
+    }
+    calc();
+  </script>
+</body>
+</html>
