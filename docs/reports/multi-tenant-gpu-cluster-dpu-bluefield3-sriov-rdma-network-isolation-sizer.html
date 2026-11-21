@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Tenant GPU Cluster DPU &amp; RDMA Isolation Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive Multi-Tenant GPU Network Isolation (`BlueField-3 DPU` vs. `SR-IOV`) Sizer (#374)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Network Isolation &amp; Offload Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Shared hostNetwork: true</option>
+        <option value="2">Tier 2: Multus CNI + SR-IOV VF VLAN</option>
+        <option value="3">Tier 3: SR-IOV + P_Key / Per-VF Hardware QoS</option>
+        <option value="4" selected>Tier 4: NVIDIA BlueField-3 DPU + RTT CC</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>NIC Link Speed (Gbps)</label>
+      <select id="speed" onchange="calc()">
+        <option value="200">200 Gbps (HDR / 200GbE)</option>
+        <option value="400" selected>400 Gbps (NDR / 400GbE)</option>
+        <option value="800">800 Gbps (XDR / 800GbE)</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Cluster Nodes (8 GPUs / Node)</label>
+      <input type="number" id="nodes" value="128" min="4" max="2048" step="4" oninput="calc()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>Sustained GPUDirect RDMA Busbw</h3><div class="val" id="busbw">388 Gbps</div></div>
+    <div class="card"><h3>Noisy-Neighbor Victim Drop</h3><div class="val" id="drop">0.8%</div></div>
+    <div class="card"><h3>Host CPU Cores Saved / Cluster</h3><div class="val" id="cpus">2,304 Cores</div></div>
+    <div class="card"><h3>Zero-Trust Bare-Metal Isolation</h3><div class="val" id="zt">Enforced</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const speed = parseFloat(document.getElementById('speed').value) || 400;
+  const nodes = parseInt(document.getElementById('nodes').value, 10) || 128;
+  const scale = speed / 400.0;
+  const busbw = Math.round(({1: 340, 2: 365, 3: 376, 4: 388}[tier]) * scale);
+  const drop = {1: 62.0, 2: 28.5, 3: 4.2, 4: 0.8}[tier];
+  const cpuUsed = {1: 18, 2: 8, 3: 4, 4: 0}[tier];
+  const saved = (18 - cpuUsed) * nodes;
+  document.getElementById('busbw').textContent = busbw + ' Gbps';
+  document.getElementById('drop').textContent = drop.toFixed(1) + '%';
+  document.getElementById('cpus').textContent = saved.toLocaleString() + ' Cores';
+  document.getElementById('zt').textContent = tier === 4 ? 'Enforced (DPU)' : 'Shared Host OS';
+}
+calc();
+</script>
+</body>
+</html>
