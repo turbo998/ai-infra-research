@@ -1,0 +1,70 @@
+{
+  "Benchmark": "late_interaction_colbert_colpali_multi_vector_rag_vs_single_vector_selection",
+  "Provenance": {
+    "Data_Status": "synthetic + anonymized_reported",
+    "Independently_Reproduced": false,
+    "Physical_GPU_Cluster_Measurement": "not_measured",
+    "Harness_Policy": "enterprise_late_interaction_colbert_colpali_multivector_sizer_v1"
+  },
+  "Workload_Assumptions": {
+    "Target_Workload": "Enterprise 5,000,000-Page Visually Rich Technical & Financial Document Search (ViDoRe / Multi-Table RAG Benchmark, 300 QPS)",
+    "Total_Document_Pages": 5000000,
+    "Patches_Or_Tokens_Per_Page": 1030,
+    "Multi_Vector_Dim_Per_Token": 128,
+    "Single_Vector_Dim": 1536
+  },
+  "Configuration_Matrix": [
+    {
+      "Tier_ID": "Tier_1_Single_Vector_BiEncoder_Plus_OCR_Pipeline",
+      "Architecture_Name": "Standard Single-Vector Bi-Encoder (`1 × 1536d FP16` per Page) + Upstream OCR Pipeline",
+      "Indexing_And_Scoring": "Compress Entire Page into 1 Dense Vector; Cosine Dot Product",
+      "Index_Memory_Footprint_GB": 26.8,
+      "Search_P99_Latency_ms": 9.5,
+      "ViDoRe_Visual_Table_Recall_At_5_Pct": 72.4,
+      "Ingestion_Speed_Pages_Per_Sec_Per_GPU": 14.0,
+      "Monthly_Vector_DB_Infra_TCO_USD": 1250,
+      "Recommended_Scenario": "Plain-text homogeneous documents without complex visual tables, schematics, or dense part numbers"
+    },
+    {
+      "Tier_ID": "Tier_2_Uncompressed_ColPali_ColBERT_Full_Token_Vectors",
+      "Architecture_Name": "Uncompressed Full Multi-Vector (`1,030 × 128d BF16` = `263.7 KB/Page` Stored in HNSW)",
+      "Indexing_And_Scoring": "Store All 5.15 Billion Token/Patch Vectors in FP16 DRAM; Full `MaxSim` Scan",
+      "Index_Memory_Footprint_GB": 1318.0,
+      "Search_P99_Latency_ms": 84.0,
+      "ViDoRe_Visual_Table_Recall_At_5_Pct": 95.2,
+      "Ingestion_Speed_Pages_Per_Sec_Per_GPU": 68.0,
+      "Monthly_Vector_DB_Infra_TCO_USD": 22800,
+      "Recommended_Scenario": "Anti-pattern above 200K pages: 1,030 vectors per page causes a 49x RAM explosion ($22.8k/month)"
+    },
+    {
+      "Tier_ID": "Tier_3_PLAID_2Bit_Residual_Quantization",
+      "Architecture_Name": "`ColBERTv2 / PLAID` Centroid Interaction + 2-Bit Residual Quantization",
+      "Indexing_And_Scoring": "K-Means Centroid ID + 2-Bit Residual Deltas (`~36 KB/Page`) + Centroid Pruning",
+      "Index_Memory_Footprint_GB": 182.0,
+      "Search_P99_Latency_ms": 28.0,
+      "ViDoRe_Visual_Table_Recall_At_5_Pct": 94.4,
+      "Ingestion_Speed_Pages_Per_Sec_Per_GPU": 62.0,
+      "Monthly_Vector_DB_Infra_TCO_USD": 3800,
+      "Recommended_Scenario": "Dedicated text-only ColBERTv2 search indices with static centroid codebooks"
+    },
+    {
+      "Tier_ID": "Tier_4_TwoStage_Pooled_SingleVector_Prefetch_Plus_Binary_MaxSim_Rescore",
+      "Architecture_Name": "2-Stage Hybrid: Mean-Pooled Single-Vector Prefetch (`Top-200` in RAM) + `3x` Hierarchical Token-Pooled Binary `ColPali / ColBERT` `MaxSim` Rescore on NVMe Mmap",
+      "Indexing_And_Scoring": "Stage 1: 128d Pooled Vector HNSW (`Top-200`) -> Stage 2: 340 Binary Patch Vectors/Page (`5.4 KB/Page`) Mmap `MaxSim`",
+      "Index_Memory_Footprint_GB": 42.5,
+      "Search_P99_Latency_ms": 18.2,
+      "ViDoRe_Visual_Table_Recall_At_5_Pct": 94.6,
+      "Ingestion_Speed_Pages_Per_Sec_Per_GPU": 68.0,
+      "Monthly_Vector_DB_Infra_TCO_USD": 1950,
+      "Recommended_Scenario": "Production standard for ColPali/ColQwen2 & BGE-M3 multi-vector RAG (96.8% less RAM than raw ColPali, +22.2 pts Recall over Bi-Encoder)"
+    }
+  ],
+  "Decision_Summary": {
+    "Baseline_Tier": "Tier_2_Uncompressed_ColPali_ColBERT_Full_Token_Vectors",
+    "Recommended_Tier": "Tier_4_TwoStage_Pooled_SingleVector_Prefetch_Plus_Binary_MaxSim_Rescore",
+    "Memory_Footprint_Reduction_Pct": 96.8,
+    "Recall_Gain_Over_Single_Vector_Pts": 22.2,
+    "Search_P99_Latency_ms": 18.2,
+    "Monthly_TCO_Savings_Pct": 91.4
+  }
+}

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>多向量延迟交互检索 (ColBERTv2 / ColPali / MaxSim) 内存与成本估算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #6EE7B7; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #38BDF8; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #6EE7B7; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>多向量延迟交互检索（ColPali / ColBERTv2 / MaxSim）内存瘦身与 TCO 计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>图文 PDF 文档总页数 (万页) <span id="v_pg" class="val">500万</span></label>
+      <input type="range" id="pg" min="50" max="2000" step="50" value="500" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>单页原始 Token/Patch 向量数 <span id="v_tok" class="val">1030</span></label>
+      <input type="range" id="tok" min="256" max="1536" step="64" value="1030" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>Token 聚类池化压缩倍数 <span id="v_pool" class="val">3x</span></label>
+      <select id="pool" onchange="calc()">
+        <option value="1">1x (不池化)</option>
+        <option value="2">2x 层次聚类池化</option>
+        <option value="3" selected>3x 层次聚类池化 (无损甜点)</option>
+        <option value="4">4x 层次聚类池化</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>多向量索引与重排架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 传统单向量 Bi-Encoder (1×1536d + OCR)</option>
+        <option value="2">Tier 2: 原生未压缩 ColPali/ColBERT 全进内存</option>
+        <option value="3">Tier 3: PLAID 2-Bit 残差量化</option>
+        <option value="4" selected>Tier 4: 两阶段单向量粗排 + 池化二值化 Mmap MaxSim (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>集群所需内存 (DRAM)</div><div id="k_ram" class="num">42.5 GB</div></div>
+    <div class="kpi"><div>检索 P99 延迟</div><div id="k_lat" class="num">18.2 ms</div></div>
+    <div class="kpi"><div>ViDoRe 图表 Recall@5</div><div id="k_rec" class="num">94.6%</div></div>
+    <div class="kpi"><div>月度向量库成本 (TCO)</div><div id="k_tco" class="num">$1,950</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const pg = parseFloat(document.getElementById('pg').value);
+  const tok = parseFloat(document.getElementById('tok').value);
+  const pool = parseFloat(document.getElementById('pool').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_pg').textContent = pg + '万';
+  document.getElementById('v_tok').textContent = tok;
+  document.getElementById('v_pool').textContent = pool + 'x';
+
+  const scale = (pg / 500.0) * (tok / 1030.0);
+  let ram = 42.5, lat = 18.2, rec = 94.6;
+  if (mode === '1') {
+    ram = +((pg / 500.0) * 26.8).toFixed(1);
+    lat = 9.5;
+    rec = 72.4;
+  } else if (mode === '2') {
+    ram = +(1318.0 * scale / pool).toFixed(1);
+    lat = +(84.0 / Math.sqrt(pool)).toFixed(1);
+    rec = +(95.2 - (pool - 1) * 0.2).toFixed(1);
+  } else if (mode === '3') {
+    ram = +(182.0 * scale / pool).toFixed(1);
+    lat = 28.0;
+    rec = 94.4;
+  } else {
+    ram = +((pg / 500.0) * 18.5 + (72.0 * scale / pool)).toFixed(1);
+    lat = +(14.0 + 12.6 / pool).toFixed(1);
+    rec = +(95.0 - (pool - 1) * 0.2).toFixed(1);
+  }
+  const tco = Math.round(ram * 16.5 + 1250 * (pg / 500.0));
+  document.getElementById('k_ram').textContent = ram.toLocaleString() + ' GB';
+  document.getElementById('k_lat').textContent = lat + ' ms';
+  document.getElementById('k_rec').textContent = rec + '%';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
