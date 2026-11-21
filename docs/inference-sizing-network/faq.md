@@ -40,6 +40,8 @@ E2EL = TTFT + (N−1)×TPOT
 
 TPOT 是单请求后续间隔的平均值；P99 ITL 能揭示短时卡顿。输出仅一枚 Token 时 TPOT 为 **N/A**，不是 0。网络 chunk 可能包含多枚 Token；不要用 chunk 数冒充 tokenizer Token 数。
 
+实际采集有约定差别：vLLM 的逐请求 TPOT Prometheus histogram 可将 `N_out≤1` 记成0，而 `vllm bench serve` 可排除这些样本；其 ITL 还可能按 stream output event 而非逐 Token 计。数学 N/A、采集零值和 benchmark 过滤必须区分，不能用零值推出无限 TPS。单靠两个独立 histogram 不能精确按请求关联输出长度，应保留关联 trace。
+
 ### Q2. 可以把各阶段 P99 相加当作整体 P99 吗？
 
 不能。分位数不线性可加，且请求阶段彼此相关。保留同一请求 trace，先对每个请求求总时延，再取整体分位数。相加的阶段预算可以是工程预算，但不能宣称是观测到的 E2EL P99。
@@ -61,6 +63,12 @@ TPOT 是单请求后续间隔的平均值；P99 ITL 能揭示短时卡顿。输�
 Throughput 计所有完成的请求/Token；Goodput 只计同时满足约定 SLA 和质量门槛的部分。高 batch 可能增加 TPS，却使 TTFT 或 ITL 超标；此时 Goodput 下降甚至为零。
 
 H5 的 tradeoff 曲线来自可调确定性教学模型，不是硬件帕累托前沿。等输出长度下可用请求达标比例乘 Token TPS；不等输出长度要按实际 Token 加权。
+
+新增数值时间戳解剖台：7条教学请求、18枚可见 Token，保留失败、拒绝、品质未过与单 Token。burst 的可见间隔 `0,0,60 ms` 平均是20 ms，按平均 TPOT 35 ms 协议能过，按最大 ITL 35 ms 不能过；同一个原始18 tok/s，达标输出会从 **9降到5 tok/s**。这些是合成记录，不外推生产 P99；重复 chunk 时间不代表 GPU 每 Token 0 ms。
+
+并发直接由请求区间面积求得。默认 client 边界下 `L=1.475`，所有区间完整落在1秒测窗内，`λ×平均W` 恰好相等是有限追踪恒等式，不是稳态能力证明。把窗口截到200 ms，面积 `L=4.695`，而窗内终态率×终态平均停留时间仅 **1.345**；边界截断不能当扩容结论。admitted 边界也可能包含服务端排队，不等于 GPU busy。
+
+新性能采集可关注 **NVIDIA AIPerf**：截至2026-11-21，GenAI-Perf 官方已标明新功能开发退场并推荐 AIPerf。学习页不安装工具、不接推理端点、不引用不同机器的示例数字证明自己的性能。
 
 **生命周期算例**：排队 120 ms + Prefill/首字 300 ms + 交付 30 ms = TTFT 450 ms。128 输出 Token、TPOT 20 ms，则 E2EL = 450 + 127×20 = **2990 ms**，后续流式约 **50 tok/s**。
 

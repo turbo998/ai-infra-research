@@ -23,6 +23,9 @@ async function probe(exercise, expectedWidth) {
     const results = form.closest("[data-workbench]").querySelector("[data-results]");
     assert(error.hidden ? results.children.length > 0 : results.getAttribute("aria-invalid") === "true", "Inconsistent error/results state: " + form.dataset.lab);
     assert(!/NaN|Infinity/.test(results.innerHTML), "Non-finite result: " + form.dataset.lab);
+    for (const axis of results.querySelectorAll("svg path.axis")) {
+      assert(getComputedStyle(axis).fill === "none", "An open SVG axis was incorrectly filled as a data area");
+    }
     for (const el of results.querySelectorAll("svg [x], svg [y], svg [width], svg [height], svg [cx], svg [cy]")) {
       for (const key of ["x", "y", "width", "height", "cx", "cy"]) {
         if (el.hasAttribute(key)) assert(Number.isFinite(Number(el.getAttribute(key))), "Non-finite SVG coordinate");
@@ -43,7 +46,7 @@ async function probe(exercise, expectedWidth) {
     if (exercise) {
       for (const form of forms) {
         for (const input of form.querySelectorAll("[data-key]")) {
-          if (input.disabled) continue;
+          if (input.disabled || input.tagName === "TEXTAREA") continue;
           const choices = input.tagName === "SELECT" ? [...input.options].map((o) => o.value) : input.type === "checkbox" ? [false, true] : [input.min, input.max];
           for (const value of choices) {
             form.reset();
@@ -136,6 +139,24 @@ async function probe(exercise, expectedWidth) {
         rank.reset();
         await wait();
         cases += 4;
+      }
+      const trace = document.querySelector('form[data-lab="trace"]');
+      if (trace) {
+        const gate=trace.querySelector('[data-key="gateMode"]');
+        gate.value="mean";
+        gate.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(trace.closest("[data-workbench]").querySelector("[data-results]").textContent.includes("9 tok/s"), "Mean TPOT trace gate did not retain bursty goodput");
+        gate.value="max";
+        gate.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(trace.closest("[data-workbench]").querySelector("[data-results]").textContent.includes("5 tok/s"), "Max ITL trace gate did not remove bursty goodput");
+        const input=trace.querySelector('textarea[data-key="trace"]');
+        input.value="invalid JSON";
+        input.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(!trace.closest("[data-workbench]").querySelector(".error").hidden, "Malformed trace JSON did not surface an error");
+        trace.reset();
+        await wait();
+        validate(trace);
+        cases += 3;
       }
       const oldLanguage = document.documentElement.lang;
       document.querySelector("#language").click();
@@ -278,6 +299,14 @@ try {
           const { data: figure } = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: bounds.value }, sessionId);
           writeFileSync(join(screenshots, `${file.replace(".html", "")}-${variant.width}-figure.png`), Buffer.from(figure, "base64"));
         }
+        if (file === "01-metrics.html") {
+          const { result: traceBounds } = await client.send("Runtime.evaluate", {
+            expression: "(() => { const r=document.querySelector('[data-results=\"trace\"] figure').getBoundingClientRect(); return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}; })()",
+            returnByValue: true
+          }, sessionId);
+          const { data: traceChart } = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: traceBounds.value }, sessionId);
+          writeFileSync(join(screenshots, `${file.replace(".html", "")}-${variant.width}-trace.png`), Buffer.from(traceChart, "base64"));
+        }
         if (file === "05-parallelism-acceleration.html") {
           for (const view of ["tp", "pp", "dp", "ep", "attention-dp"]) {
             const { result: viewBounds } = await client.send("Runtime.evaluate", {
@@ -307,13 +336,28 @@ try {
     }
   }
 } finally {
+  let closeError;
   if (client) {
     try { await client.send("Browser.close"); }
+    catch (error) { closeError = error; }
     finally { client.socket.close(); }
   } else if (child.exitCode === null) child.kill();
   for (let i = 0; child.exitCode === null && i < 50; i += 1) await delay(100);
-  // Only remove the exact temporary directory created for this check.
-  rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  // Windows browser children can release profile handles after the launcher exits.
+  const cleanupDeadline = Date.now() + 30000;
+  for (;;) {
+    try {
+      rmSync(temporary, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
+      break;
+    } catch (error) {
+      if (!["EPERM", "EBUSY", "ENOTEMPTY"].includes(error.code) || Date.now() >= cleanupDeadline) {
+        if (closeError) throw new AggregateError([closeError, error], "Browser shutdown and exact temporary-profile cleanup failed");
+        throw error;
+      }
+      await delay(250);
+    }
+  }
+  if (closeError) throw closeError;
 }
 console.log(`Offline browser verification: ${totalCases} interaction cases; ${failed} failed variants.`);
 if (failed) process.exitCode = 1;

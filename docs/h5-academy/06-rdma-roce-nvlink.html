@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LHU851xqX37igYr/kC/rVmLFDDiZydpUqJEVcuRMk28=' 'sha256-ZaL/jqFsedG4TcqG3aJGkmLzAiuyi7zSDX/HJzi5T2U=' 'sha256-Gzf/7+LG5D+ZHLwZIi1muRqnlwCnUEA9rLMixej+reE='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LHU851xqX37igYr/kC/rVmLFDDiZydpUqJEVcuRMk28=' 'sha256-8NTSeRKONVxpTszjLA1fxhYVi5wGfmryyumsefkaeAk=' 'sha256-Zy1n2d7wl8hJwOkfMp/CJq4/DogZ/qR1Ybp29cvydDs='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="description" content="Offline bilingual Cloud &amp; AI Solution Architect academy: metrics, TPM/TPS, GPU sizing, PD, parallelism and RDMA fabric.">
 <title>900 GB/s NVLink 和 400 Gb/s 网卡，先统一口径 | Normalize units before comparing 900 GB/s NVLink with a 400 Gb/s NIC</title>
 <script>(() => {
@@ -123,6 +123,7 @@ p { margin: 0 0 16px; }
 .control { display: grid; gap: 4px; min-width: 0; }
 .control label { font-size: 14px; font-weight: 650; }
 .control input:not([type="checkbox"]), .control select { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; border: 1px solid var(--cp-border-strong); border-radius: 8px; color: var(--cp-text); background: var(--cp-surface); }
+.control textarea { width: 100%; min-width: 0; min-height: 300px; padding: 12px; border: 1px solid var(--cp-border-strong); border-radius: 8px; color: var(--cp-text); background: var(--cp-surface); resize: vertical; font: 12px/1.5 Consolas, "Courier New", Courier, monospace; }
 .control input[type="range"] { padding: 0; accent-color: var(--cp-accent); }
 .control input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--cp-accent); }
 .control output { color: var(--cp-accent); font: 700 14px Consolas, "Courier New", Courier, monospace; }
@@ -139,7 +140,7 @@ p { margin: 0 0 16px; }
 .chart { margin: 20px 0; min-width: 0; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 svg text { fill: var(--cp-text); font-family: "Segoe UI", Aptos, Calibri, sans-serif; font-size: 14px; }
-svg .axis { stroke: var(--cp-border-strong); stroke-width: 1; }
+svg .axis { fill: none; stroke: var(--cp-border-strong); stroke-width: 1; }
 svg .grid-line { stroke: var(--cp-border); stroke-dasharray: 3 5; }
 svg .primary { fill: var(--cp-accent); stroke: var(--cp-accent); }
 svg .secondary { fill: var(--cp-link); stroke: var(--cp-link); }
@@ -233,6 +234,15 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     b200dgx: { name: "DGX B200 180 GB / GPU", memory: 180, bandwidth: 8000, bf16: 2250, nvlink: 1800 },
     l40s: { name: "L40S 48 GB GDDR6", memory: 48, bandwidth: 864, bf16: 362.05, nvlink: 0 }
   };
+  const traceSamples = [
+    { id: "steady", arrival_ms: 0, admitted_ms: 20, visible_token_ms: [80, 100, 120, 140], ended_ms: 142, prompt_tokens: 512, status: "success", quality_pass: true },
+    { id: "burst", arrival_ms: 10, admitted_ms: 30, visible_token_ms: [200, 200, 200, 260], ended_ms: 262, prompt_tokens: 1024, status: "success", quality_pass: true },
+    { id: "cold-long", arrival_ms: 20, admitted_ms: 40, visible_token_ms: [520, 560, 600, 640], ended_ms: 642, prompt_tokens: 8192, status: "success", quality_pass: true },
+    { id: "single", arrival_ms: 30, admitted_ms: 50, visible_token_ms: [150], ended_ms: 152, prompt_tokens: 64, status: "success", quality_pass: true },
+    { id: "partial-failure", arrival_ms: 40, admitted_ms: 60, visible_token_ms: [180, 200], ended_ms: 220, prompt_tokens: 256, status: "failed", quality_pass: null },
+    { id: "rejection", arrival_ms: 50, admitted_ms: null, visible_token_ms: [], ended_ms: 55, prompt_tokens: 128, status: "rejected", quality_pass: null },
+    { id: "quality-failure", arrival_ms: 60, admitted_ms: 80, visible_token_ms: [180, 195, 210], ended_ms: 212, prompt_tokens: 512, status: "success", quality_pass: false }
+  ];
   function number(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
     if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
       throw new RangeError(`${name}: expected a finite number in [${min}, ${max}]`);
@@ -255,6 +265,89 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const ttft = queue + prefill + delivery;
     const decode = (output - 1) * tpot;
     return { ttft, decode, e2e: ttft + decode, userTPS: output > 1 ? 1000 / tpot : null, measuredTPOT: output > 1 ? tpot : null };
+  }
+  function traceMetrics({ requests, windowMs, ttftLimit, tpotLimit, gateMode, boundary, requireQuality }) {
+    number(windowMs, "measurement window", 1, 3600000);
+    number(ttftLimit, "TTFT gate", 0.001);
+    number(tpotLimit, "TPOT/ITL gate", 0.001);
+    if (!["mean", "max"].includes(gateMode) || !["client", "admitted"].includes(boundary)) throw new RangeError("Unknown trace gate or system boundary");
+    if (typeof requireQuality !== "boolean") throw new RangeError("Choose whether the quality gate is required");
+    if (!Array.isArray(requests) || !requests.length || requests.length > 2000) throw new RangeError("Trace requires 1–2000 request records");
+    const keys = ["id", "arrival_ms", "admitted_ms", "visible_token_ms", "ended_ms", "prompt_tokens", "status", "quality_pass"];
+    const ids = new Set();
+    let tokenCount = 0;
+    const time = (v) => number(v, "relative timestamp ms", -1e12, 1e12);
+    const inWindow = (v) => v >= 0 && v < windowMs;
+    const rows = requests.map((request, index) => {
+      if (!request || typeof request !== "object" || keys.some((key) => !Object.hasOwn(request, key)) || Object.keys(request).some((key) => !keys.includes(key))) {
+        throw new RangeError(`Record ${index + 1}: use the exact numeric trace schema`);
+      }
+      if (typeof request.id !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(request.id) || ids.has(request.id)) throw new RangeError("Trace IDs must be unique anonymous labels");
+      ids.add(request.id);
+      time(request.arrival_ms);
+      time(request.ended_ms);
+      if (request.admitted_ms !== null) time(request.admitted_ms);
+      integer(request.prompt_tokens, "prompt tokens");
+      if (!["success", "failed", "cancelled", "rejected"].includes(request.status)) throw new RangeError("Unknown terminal request status");
+      if (request.quality_pass !== null && typeof request.quality_pass !== "boolean") throw new RangeError("Quality annotation must be true, false or null");
+      if (request.ended_ms < request.arrival_ms || (request.admitted_ms !== null && (request.admitted_ms < request.arrival_ms || request.admitted_ms > request.ended_ms))) throw new RangeError("Trace times are inconsistent; align clocks and request boundaries");
+      if (!Array.isArray(request.visible_token_ms) || request.visible_token_ms.length > 32768) throw new RangeError("Visible-token timestamps must be an array of at most 32768 entries");
+      tokenCount += request.visible_token_ms.length;
+      if (tokenCount > 100000) throw new RangeError("Trace has too many visible-token timestamps");
+      const times = request.visible_token_ms;
+      times.forEach((value, i) => {
+        time(value);
+        if (value < request.arrival_ms || value > request.ended_ms || (request.admitted_ms !== null && value < request.admitted_ms) || (i && value < times[i - 1])) throw new RangeError("Token timestamps must be nondecreasing within the request; equal chunk timestamps are allowed");
+      });
+      if (request.status === "rejected" && (request.admitted_ms !== null || times.length)) throw new RangeError("Rejected requests cannot have admitted work or visible output");
+      const itls = times.slice(1).map((value, i) => value - times[i]);
+      const ttft = times.length ? times[0] - request.arrival_ms : null;
+      const tpot = itls.length ? itls.reduce((sum, value) => sum + value, 0) / itls.length : null;
+      const maxITL = itls.length ? Math.max(...itls) : null;
+      const e2eVisible = times.length ? times[times.length - 1] - request.arrival_ms : null;
+      const intervalMetric = gateMode === "mean" ? tpot : maxITL;
+      const latencyPass = ttft !== null && ttft <= ttftLimit && (intervalMetric === null || intervalMetric <= tpotLimit);
+      const qualityPass = !requireQuality || request.quality_pass === true;
+      const good = request.status === "success" && latencyPass && qualityPass;
+      return { ...request, ttft, tpot, maxITL, e2eVisible, terminalLatency: request.ended_ms - request.arrival_ms, itls, latencyPass, qualityPass, good, completeInWindow: inWindow(request.ended_ms), outputTokensInWindow: times.filter(inWindow).length, userTPS: tpot !== null && tpot > 0 ? 1000 / tpot : null };
+    });
+    if (!rows.some((row) => row.arrival_ms < windowMs && row.ended_ms >= 0)) throw new RangeError("Trace does not overlap the window; use relative timestamps or change the window");
+    const unknownAdmission = rows.filter((row) => row.status !== "rejected" && row.admitted_ms === null).length;
+    if (boundary === "admitted" && unknownAdmission) throw new RangeError("Admitted-boundary occupancy needs timestamps for every non-rejected request; unknown admission is not zero");
+    const selected = boundary === "client" ? rows : rows.filter((row) => row.admitted_ms !== null);
+    const events = [];
+    let residenceAreaMs = 0;
+    selected.forEach((row) => {
+      const start = boundary === "client" ? row.arrival_ms : row.admitted_ms;
+      const clippedStart = Math.max(0, start);
+      const clippedEnd = Math.min(windowMs, row.ended_ms);
+      if (clippedEnd > clippedStart) {
+        residenceAreaMs += clippedEnd - clippedStart;
+        events.push({ time: clippedStart, delta: 1 }, { time: clippedEnd, delta: -1 });
+      }
+    });
+    events.sort((a, b) => a.time - b.time);
+    const occupancy = [{ x: 0, y: 0 }];
+    let active = 0;
+    for (let i = 0; i < events.length;) {
+      const at = events[i].time;
+      occupancy.push({ x: at, y: active });
+      let delta = 0;
+      while (i < events.length && events[i].time === at) delta += events[i++].delta;
+      active += delta;
+      occupancy.push({ x: at, y: active });
+    }
+    occupancy.push({ x: windowMs, y: active });
+    const completed = selected.filter((row) => row.completeInWindow);
+    const meanResidenceMs = completed.length ? completed.reduce((sum, row) => sum + row.ended_ms - (boundary === "client" ? row.arrival_ms : row.admitted_ms), 0) / completed.length : null;
+    const seconds = windowMs / 1000;
+    const lambda = completed.length / seconds;
+    const allITLs = rows.flatMap((row) => row.itls.filter((_, i) => inWindow(row.visible_token_ms[i + 1])));
+    const ttfts = rows.filter((row) => row.ttft !== null && inWindow(row.visible_token_ms[0])).map((row) => row.ttft);
+    const requestTPOTs = rows.filter((row) => row.completeInWindow && row.tpot !== null).map((row) => row.tpot);
+    const goods = rows.filter((row) => row.completeInWindow && row.good);
+    const statuses = Object.fromEntries(["success", "failed", "cancelled", "rejected"].map((status) => [status, rows.filter((row) => row.completeInWindow && row.status === status).length]));
+    return { rows, statuses, occupancy, meanActive: residenceAreaMs / windowMs, meanResidenceMs, lambda, littleProduct: meanResidenceMs === null ? null : lambda * meanResidenceMs / 1000, closedWindow: selected.every((row) => (boundary === "client" ? row.arrival_ms : row.admitted_ms) >= 0 && row.ended_ms < windowMs), offeredRPS: rows.filter((row) => inWindow(row.arrival_ms)).length / seconds, admittedRPS: rows.filter((row) => row.admitted_ms !== null && inWindow(row.admitted_ms)).length / seconds, completedRPS: rows.filter((row) => row.completeInWindow).length / seconds, inputDemandTPS: rows.filter((row) => row.admitted_ms !== null && inWindow(row.admitted_ms)).reduce((sum, row) => sum + row.prompt_tokens, 0) / seconds, visibleOutputTPS: rows.reduce((sum, row) => sum + row.outputTokensInWindow, 0) / seconds, goodRequestRPS: goods.length / seconds, goodOutputTPS: goods.reduce((sum, row) => sum + row.outputTokensInWindow, 0) / seconds, goodRequests: goods.length, itlSamples: allITLs.length, meanRequestTPOT: requestTPOTs.length ? requestTPOTs.reduce((sum, value) => sum + value, 0) / requestTPOTs.length : null, meanObservedITL: allITLs.length ? allITLs.reduce((sum, value) => sum + value, 0) / allITLs.length : null, p99ITL: allITLs.length ? percentile(allITLs, 0.99) : null, p95TTFT: ttfts.length ? percentile(ttfts, 0.95) : null, unknownAdmission };
   }
   function capacity(p) {
     number(p.qps, "qps");
@@ -504,7 +597,7 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, traceSamples, number, integer, lifecycle, traceMetrics, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);
@@ -526,13 +619,14 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const id = `interactive-chart-${chartId++}`;
     return `<figure class="chart"><svg viewBox="0 0 800 ${height}" role="img" aria-labelledby="${id}"><title id="${id}">${esc(caption)}</title>${body}</svg><figcaption>${esc(caption)}</figcaption></figure>`;
   }
-  function plot(series, xLabel, yLabel, caption, gate = null, gateLabel = "SLO") {
+  function plot(series, xLabel, yLabel, caption, gate = null, gateLabel = "SLO", integerTicks = false) {
     const width = 640;
     const height = 200;
     const x0 = 100;
     const y0 = 30;
     const maxX = Math.max(...series.flatMap((s) => s.values.map((p) => p.x)), 1);
-    const maxY = Math.max(...series.flatMap((s) => s.values.map((p) => p.y)), gate === null ? 0 : gate, 1) * 1.1;
+    const peakY = Math.max(...series.flatMap((s) => s.values.map((p) => p.y)), gate === null ? 0 : gate, 1);
+    const maxY = integerTicks ? Math.max(4, Math.ceil(peakY / 4) * 4) : peakY * 1.1;
     const x = (v) => x0 + width * v / maxX;
     const y = (v) => y0 + height - height * v / maxY;
     let body = "";
@@ -584,6 +678,38 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     return kpis([[fmt(r.ttft) + " ms", "TTFT"], [fmt(r.e2e / 1000) + " s", "E2EL"], [fmt(r.userTPS) + (r.userTPS === null ? "" : " tok/s"), t("单用户后续流式速率", "Subsequent per-user streaming")]]) +
       legend(segments.map((s) => `${s.label} ${fmt(s.ms)} ms`)) + svg(body, t("时间轴由当前输入计算；首 Token 已计入 TTFT。", "Timeline is computed from inputs; the first token is already in TTFT.")) +
       dataTable([t("阶段", "Stage"), "ms", t("含义", "Meaning")], [[t("排队", "Queue"), fmt(p.queue), t("等待资源", "Waiting for resources")], ["Prefill", fmt(p.prefill), t("含首字计算", "Includes first-token computation")], [t("交付", "Delivery"), fmt(p.delivery), t("网关/网络", "Gateway/network")], ["Decode", fmt(r.decode), `${p.output - 1} × ${fmt(p.tpot)} ms`]], t("可手算的阶段分解", "Hand-checkable stage decomposition"));
+  }
+  function trace(p) {
+    if (p.trace.length > 250000) throw new RangeError(t("JSON 超过本页安全大小", "JSON exceeds this workbench's size limit"));
+    let requests;
+    try { requests = JSON.parse(p.trace); }
+    catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      throw new RangeError(t("JSON 语法错误：需要数组、双引号与正确逗号；不回显原始内容。", "Invalid JSON: use an array, double quotes and valid commas; raw content is not echoed."));
+    }
+    const r = M.traceMetrics({ ...p, requests });
+    const synthetic = JSON.stringify(requests) === JSON.stringify(M.traceSamples);
+    const terminated = r.rows.filter((row) => row.completeInWindow).length;
+    const state = { success: t("成功", "success"), failed: t("失败", "failed"), cancelled: t("取消", "cancelled"), rejected: t("拒绝", "rejected") };
+    return kpis([[fmt(r.visibleOutputTPS) + " tok/s", t("测窗内原始可见输出", "Raw visible output in window")], [fmt(r.goodOutputTPS) + " tok/s", t("完成且达标的可见输出 Goodput", "Completed compliant visible-output goodput")], [`${r.goodRequests}/${terminated}`, t("计入 Goodput / 全终态请求", "Goodput requests / all terminal requests")], [fmt(r.p99ITL) + " ms", `P99 visible ITL · n=${r.itlSamples}`], [fmt(r.meanRequestTPOT) + " ms", t("有间隔终态请求的 TPOT 均值", "Mean TPOT of terminal requests with intervals")], [fmt(r.meanObservedITL) + " ms", t("全部观察间隔的均值（不同权重）", "Mean observed gap (different weighting)")]]) +
+      plot([{ label: t("选定系统边界在途请求", "In-flight requests under selected boundary"), values: r.occupancy }], "Relative time ms", "Active requests", t("按时间戳直接重建阶梯并发；面积/测窗得到平均L，不是KV占用或GPU忙碌曲线。", "Step concurrency reconstructed from timestamps; area/window gives mean L, not KV occupancy or GPU-busy time."), null, "SLO", true) +
+      dataTable([t("同一窗口中的量", "Quantity in the same window"), t("值", "Value"), t("口径", "Scope")], [
+        ["Offered RPS", fmt(r.offeredRPS), t("arrival 事件，含拒绝", "Arrival events including rejections")],
+        ["Known admitted RPS", fmt(r.admittedRPS), t("已记录 admission 事件", "Recorded admission events")],
+        ["Terminal RPS", fmt(r.completedRPS), t("所有终态，含失败/取消/拒绝", "All terminal states, including failed/cancelled/rejected")],
+        ["Input demand TPS", fmt(r.inputDemandTPS), t("admission 时输入需求，非Prefill完成速率", "Input demand at admission, not prefill-completion rate")],
+        ["P95 TTFT", fmt(r.p95TTFT) + " ms", t("本窗观察到的首可见Token", "First visible-token events observed in window")],
+        ["L observed", fmt(r.meanActive, 4), t("所选边界时间面积 / 测窗", "Boundary occupancy area / window")],
+        ["λ × mean W", fmt(r.littleProduct, 4), `${fmt(r.lambda)} /s × ${fmt(r.meanResidenceMs)} ms / 1000`]
+      ], synthetic ? t("synthetic：原创7请求教学记录，未实机测量", "synthetic: original seven-request teaching trace, no hardware measurement") : t("user_supplied：本地录入，未验证测量/时钟/质量", "user_supplied: local input, measurement/clocks/quality unverified")) +
+      dataTable(["ID", t("终态", "Terminal state"), "Trace N_visible", "TTFT ms", "TPOT ms", "Max ITL ms", "Visible E2EL ms", "Terminal latency ms", t("品质注释", "Quality annotation"), "Goodput"], r.rows.map((row) => [
+        row.id, state[row.status], row.visible_token_ms.length, fmt(row.ttft), fmt(row.tpot), fmt(row.maxITL), fmt(row.e2eVisible), fmt(row.terminalLatency),
+        row.quality_pass === null ? t("未知", "unknown") : row.quality_pass ? t("标注通过", "marked pass") : t("标注未过", "marked fail"),
+        row.good && row.completeInWindow ? t("计入", "counted") : !row.completeInWindow ? t("窗外终态", "terminal outside window") : row.status !== "success" ? state[row.status] : !row.latencyPass ? t("时延未达/不可评估", "latency fails/not evaluable") : t("品质未过/未知", "quality fails/unknown")
+      ]), t("保留失败分母；N/A 不被写成0", "Failures remain in the denominator; N/A is not replaced with zero")) +
+      note(r.closedWindow ? t("本例所有所选区间完整落在测窗内，因此面积L与λ×平均W相同。这是有限追踪恒等式，不证明生产稳态容量。", "All selected intervals are fully contained, so area L equals λ×mean W. This is a finite-trace identity, not proof of steady production capacity.") : t("输入区间不全部完整包含于测窗：边界截断/选样会使面积L和窗口终态λ×平均W不同。不要把边界偏差当成扩容结论。", "Not all intervals are fully contained: window boundaries/cohort selection can make area L differ from terminal-rate λ×mean W. Do not interpret boundary bias as a scaling conclusion.")) +
+      note(t(`P99 样本只有 ${r.itlSamples} 个间隔，只用于演示定义，不可外推生产尾延迟。相同chunk时间产生0间隔，单用户速率在零均值或无间隔时为N/A。`, `P99 has only ${r.itlSamples} gap samples; it demonstrates a definition, not production tails. Equal chunk timestamps create zero gaps; per-user rate is N/A with zero mean or no intervals.`)) +
+      (r.unknownAdmission ? note(t("部分 admission 时间未观测，Known admitted RPS 只是已知子集；切换 admitted 边界前必须补齐，不能填0。", "Some admission times are unobserved; Known admitted RPS is only the known subset. Fill them before choosing the admitted boundary; never insert zero.")) : "");
   }
   function goodput(p) {
     const r = M.goodput(p);
@@ -856,13 +982,13 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, goodput, capacity, ptu, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, trace, goodput, capacity, ptu, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (["model", "gpu", "mode", "kind", "operation", "mlaCache"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);

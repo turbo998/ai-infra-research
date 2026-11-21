@@ -40,6 +40,8 @@ E2EL = TTFT + (N−1)×TPOT
 
 TPOT is a request's mean subsequent interval; P99 ITL reveals transient stalls. For a one-token output, TPOT is **N/A**, not zero. A network chunk may hold several tokens; do not substitute chunk count for tokenizer token count.
 
+Collection conventions differ: vLLM's per-request TPOT Prometheus histogram can record `N_out≤1` as zero, while `vllm bench serve` can exclude those samples. ITL may also be sampled per stream-output event, not token. Distinguish mathematical N/A, a collection zero and benchmark filtering; zero does not imply infinite TPS. Separate histograms cannot exactly correlate output length/request cohorts; retain joined traces.
+
 ### Q2. Can stage P99s be added to produce total P99?
 
 No. Quantiles are not additive, and stages are correlated. Retain each request's trace, compute its total latency, then take the total distribution percentile. Summed stage budgets may be engineering budgets, not observed E2EL P99.
@@ -61,6 +63,12 @@ Voice-budget exercise: VAD 20 + ASR 40 + LLM 120 + TTS 60 + network/gateway 30 =
 Throughput counts all completed requests/tokens; goodput counts those meeting agreed SLO and quality gates. Larger batches can raise TPS while violating TTFT or ITL, reducing goodput to zero.
 
 H5 tradeoff curves derive from adjustable deterministic teaching models, not hardware Pareto frontiers. With equal output lengths, request pass fraction can multiply token TPS. Unequal lengths require actual token weighting.
+
+The numeric timestamp workbench keeps seven teaching requests and 18 visible tokens, including failures, rejection, quality failure and a single token. The burst gaps `0,0,60 ms` average20 ms: they pass a mean-TPOT35 ms contract but fail a max-ITL35 ms contract. The same raw18 tok/s therefore yields **9 versus5 compliant tok/s**. These synthetic traces do not predict production P99, and repeated chunk timestamps do not mean zero-ms GPU decode.
+
+Concurrency is calculated from interval area. With a one-second, fully contained client-boundary trace, `L=1.475` equals `λ×meanW` as a finite-trace identity, not proof of steady capacity. Clip the window to200 ms: area `L=4.695`, but in-window terminal rate×terminal mean residence is **1.345**. Do not turn boundary bias into a scaling decision. The admitted boundary can include server queueing, not just GPU busy time.
+
+For new profiling, consider **NVIDIA AIPerf**. As reviewed on2026-11-21, official GenAI-Perf docs announce phased-out feature development and recommend AIPerf. The learning page installs nothing, connects to no serving endpoint and does not borrow example performance from different machines.
 
 **Lifecycle example**: queue 120 ms + prefill/first-token compute 300 ms + delivery 30 ms = TTFT 450 ms. At 128 output tokens and TPOT 20 ms, E2EL = 450 + 127×20 = **2990 ms**, with about **50 tok/s** subsequent streaming.
 

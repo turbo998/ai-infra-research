@@ -14,6 +14,15 @@
     b200dgx: { name: "DGX B200 180 GB / GPU", memory: 180, bandwidth: 8000, bf16: 2250, nvlink: 1800 },
     l40s: { name: "L40S 48 GB GDDR6", memory: 48, bandwidth: 864, bf16: 362.05, nvlink: 0 }
   };
+  const traceSamples = [
+    { id: "steady", arrival_ms: 0, admitted_ms: 20, visible_token_ms: [80, 100, 120, 140], ended_ms: 142, prompt_tokens: 512, status: "success", quality_pass: true },
+    { id: "burst", arrival_ms: 10, admitted_ms: 30, visible_token_ms: [200, 200, 200, 260], ended_ms: 262, prompt_tokens: 1024, status: "success", quality_pass: true },
+    { id: "cold-long", arrival_ms: 20, admitted_ms: 40, visible_token_ms: [520, 560, 600, 640], ended_ms: 642, prompt_tokens: 8192, status: "success", quality_pass: true },
+    { id: "single", arrival_ms: 30, admitted_ms: 50, visible_token_ms: [150], ended_ms: 152, prompt_tokens: 64, status: "success", quality_pass: true },
+    { id: "partial-failure", arrival_ms: 40, admitted_ms: 60, visible_token_ms: [180, 200], ended_ms: 220, prompt_tokens: 256, status: "failed", quality_pass: null },
+    { id: "rejection", arrival_ms: 50, admitted_ms: null, visible_token_ms: [], ended_ms: 55, prompt_tokens: 128, status: "rejected", quality_pass: null },
+    { id: "quality-failure", arrival_ms: 60, admitted_ms: 80, visible_token_ms: [180, 195, 210], ended_ms: 212, prompt_tokens: 512, status: "success", quality_pass: false }
+  ];
   function number(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
     if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
       throw new RangeError(`${name}: expected a finite number in [${min}, ${max}]`);
@@ -36,6 +45,89 @@
     const ttft = queue + prefill + delivery;
     const decode = (output - 1) * tpot;
     return { ttft, decode, e2e: ttft + decode, userTPS: output > 1 ? 1000 / tpot : null, measuredTPOT: output > 1 ? tpot : null };
+  }
+  function traceMetrics({ requests, windowMs, ttftLimit, tpotLimit, gateMode, boundary, requireQuality }) {
+    number(windowMs, "measurement window", 1, 3600000);
+    number(ttftLimit, "TTFT gate", 0.001);
+    number(tpotLimit, "TPOT/ITL gate", 0.001);
+    if (!["mean", "max"].includes(gateMode) || !["client", "admitted"].includes(boundary)) throw new RangeError("Unknown trace gate or system boundary");
+    if (typeof requireQuality !== "boolean") throw new RangeError("Choose whether the quality gate is required");
+    if (!Array.isArray(requests) || !requests.length || requests.length > 2000) throw new RangeError("Trace requires 1–2000 request records");
+    const keys = ["id", "arrival_ms", "admitted_ms", "visible_token_ms", "ended_ms", "prompt_tokens", "status", "quality_pass"];
+    const ids = new Set();
+    let tokenCount = 0;
+    const time = (v) => number(v, "relative timestamp ms", -1e12, 1e12);
+    const inWindow = (v) => v >= 0 && v < windowMs;
+    const rows = requests.map((request, index) => {
+      if (!request || typeof request !== "object" || keys.some((key) => !Object.hasOwn(request, key)) || Object.keys(request).some((key) => !keys.includes(key))) {
+        throw new RangeError(`Record ${index + 1}: use the exact numeric trace schema`);
+      }
+      if (typeof request.id !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(request.id) || ids.has(request.id)) throw new RangeError("Trace IDs must be unique anonymous labels");
+      ids.add(request.id);
+      time(request.arrival_ms);
+      time(request.ended_ms);
+      if (request.admitted_ms !== null) time(request.admitted_ms);
+      integer(request.prompt_tokens, "prompt tokens");
+      if (!["success", "failed", "cancelled", "rejected"].includes(request.status)) throw new RangeError("Unknown terminal request status");
+      if (request.quality_pass !== null && typeof request.quality_pass !== "boolean") throw new RangeError("Quality annotation must be true, false or null");
+      if (request.ended_ms < request.arrival_ms || (request.admitted_ms !== null && (request.admitted_ms < request.arrival_ms || request.admitted_ms > request.ended_ms))) throw new RangeError("Trace times are inconsistent; align clocks and request boundaries");
+      if (!Array.isArray(request.visible_token_ms) || request.visible_token_ms.length > 32768) throw new RangeError("Visible-token timestamps must be an array of at most 32768 entries");
+      tokenCount += request.visible_token_ms.length;
+      if (tokenCount > 100000) throw new RangeError("Trace has too many visible-token timestamps");
+      const times = request.visible_token_ms;
+      times.forEach((value, i) => {
+        time(value);
+        if (value < request.arrival_ms || value > request.ended_ms || (request.admitted_ms !== null && value < request.admitted_ms) || (i && value < times[i - 1])) throw new RangeError("Token timestamps must be nondecreasing within the request; equal chunk timestamps are allowed");
+      });
+      if (request.status === "rejected" && (request.admitted_ms !== null || times.length)) throw new RangeError("Rejected requests cannot have admitted work or visible output");
+      const itls = times.slice(1).map((value, i) => value - times[i]);
+      const ttft = times.length ? times[0] - request.arrival_ms : null;
+      const tpot = itls.length ? itls.reduce((sum, value) => sum + value, 0) / itls.length : null;
+      const maxITL = itls.length ? Math.max(...itls) : null;
+      const e2eVisible = times.length ? times[times.length - 1] - request.arrival_ms : null;
+      const intervalMetric = gateMode === "mean" ? tpot : maxITL;
+      const latencyPass = ttft !== null && ttft <= ttftLimit && (intervalMetric === null || intervalMetric <= tpotLimit);
+      const qualityPass = !requireQuality || request.quality_pass === true;
+      const good = request.status === "success" && latencyPass && qualityPass;
+      return { ...request, ttft, tpot, maxITL, e2eVisible, terminalLatency: request.ended_ms - request.arrival_ms, itls, latencyPass, qualityPass, good, completeInWindow: inWindow(request.ended_ms), outputTokensInWindow: times.filter(inWindow).length, userTPS: tpot !== null && tpot > 0 ? 1000 / tpot : null };
+    });
+    if (!rows.some((row) => row.arrival_ms < windowMs && row.ended_ms >= 0)) throw new RangeError("Trace does not overlap the window; use relative timestamps or change the window");
+    const unknownAdmission = rows.filter((row) => row.status !== "rejected" && row.admitted_ms === null).length;
+    if (boundary === "admitted" && unknownAdmission) throw new RangeError("Admitted-boundary occupancy needs timestamps for every non-rejected request; unknown admission is not zero");
+    const selected = boundary === "client" ? rows : rows.filter((row) => row.admitted_ms !== null);
+    const events = [];
+    let residenceAreaMs = 0;
+    selected.forEach((row) => {
+      const start = boundary === "client" ? row.arrival_ms : row.admitted_ms;
+      const clippedStart = Math.max(0, start);
+      const clippedEnd = Math.min(windowMs, row.ended_ms);
+      if (clippedEnd > clippedStart) {
+        residenceAreaMs += clippedEnd - clippedStart;
+        events.push({ time: clippedStart, delta: 1 }, { time: clippedEnd, delta: -1 });
+      }
+    });
+    events.sort((a, b) => a.time - b.time);
+    const occupancy = [{ x: 0, y: 0 }];
+    let active = 0;
+    for (let i = 0; i < events.length;) {
+      const at = events[i].time;
+      occupancy.push({ x: at, y: active });
+      let delta = 0;
+      while (i < events.length && events[i].time === at) delta += events[i++].delta;
+      active += delta;
+      occupancy.push({ x: at, y: active });
+    }
+    occupancy.push({ x: windowMs, y: active });
+    const completed = selected.filter((row) => row.completeInWindow);
+    const meanResidenceMs = completed.length ? completed.reduce((sum, row) => sum + row.ended_ms - (boundary === "client" ? row.arrival_ms : row.admitted_ms), 0) / completed.length : null;
+    const seconds = windowMs / 1000;
+    const lambda = completed.length / seconds;
+    const allITLs = rows.flatMap((row) => row.itls.filter((_, i) => inWindow(row.visible_token_ms[i + 1])));
+    const ttfts = rows.filter((row) => row.ttft !== null && inWindow(row.visible_token_ms[0])).map((row) => row.ttft);
+    const requestTPOTs = rows.filter((row) => row.completeInWindow && row.tpot !== null).map((row) => row.tpot);
+    const goods = rows.filter((row) => row.completeInWindow && row.good);
+    const statuses = Object.fromEntries(["success", "failed", "cancelled", "rejected"].map((status) => [status, rows.filter((row) => row.completeInWindow && row.status === status).length]));
+    return { rows, statuses, occupancy, meanActive: residenceAreaMs / windowMs, meanResidenceMs, lambda, littleProduct: meanResidenceMs === null ? null : lambda * meanResidenceMs / 1000, closedWindow: selected.every((row) => (boundary === "client" ? row.arrival_ms : row.admitted_ms) >= 0 && row.ended_ms < windowMs), offeredRPS: rows.filter((row) => inWindow(row.arrival_ms)).length / seconds, admittedRPS: rows.filter((row) => row.admitted_ms !== null && inWindow(row.admitted_ms)).length / seconds, completedRPS: rows.filter((row) => row.completeInWindow).length / seconds, inputDemandTPS: rows.filter((row) => row.admitted_ms !== null && inWindow(row.admitted_ms)).reduce((sum, row) => sum + row.prompt_tokens, 0) / seconds, visibleOutputTPS: rows.reduce((sum, row) => sum + row.outputTokensInWindow, 0) / seconds, goodRequestRPS: goods.length / seconds, goodOutputTPS: goods.reduce((sum, row) => sum + row.outputTokensInWindow, 0) / seconds, goodRequests: goods.length, itlSamples: allITLs.length, meanRequestTPOT: requestTPOTs.length ? requestTPOTs.reduce((sum, value) => sum + value, 0) / requestTPOTs.length : null, meanObservedITL: allITLs.length ? allITLs.reduce((sum, value) => sum + value, 0) / allITLs.length : null, p99ITL: allITLs.length ? percentile(allITLs, 0.99) : null, p95TTFT: ttfts.length ? percentile(ttfts, 0.95) : null, unknownAdmission };
   }
   function capacity(p) {
     number(p.qps, "qps");
@@ -285,7 +377,7 @@
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, traceSamples, number, integer, lifecycle, traceMetrics, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);

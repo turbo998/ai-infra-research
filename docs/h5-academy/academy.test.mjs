@@ -23,6 +23,79 @@ test("TTFT and E2EL count the first output token exactly once", () => {
   assert.equal(single.userTPS, null);
   assert.equal(single.measuredTPOT, null);
 });
+const traceOptions = { requests: M.traceSamples, windowMs: 1000, ttftLimit: 300, tpotLimit: 35, gateMode: "max", boundary: "client", requireQuality: true };
+test("visible traces preserve failure denominators and gate bursty streams by the agreed latency metric", () => {
+  const r = M.traceMetrics(traceOptions);
+  assert.equal(r.visibleOutputTPS, 18);
+  assert.equal(r.goodOutputTPS, 5);
+  assert.equal(r.goodRequests, 2);
+  assert.equal(r.completedRPS, 7);
+  assert.equal(r.admittedRPS, 6);
+  assert.equal(r.statuses.failed, 1);
+  assert.equal(r.statuses.rejected, 1);
+  assert.equal(r.itlSamples, 12);
+  assert.equal(r.p99ITL, 60);
+  assert.equal(r.rows.find((row) => row.id === "burst").tpot, 20);
+  assert.equal(M.traceMetrics({ ...traceOptions, gateMode: "mean" }).goodOutputTPS, 9);
+  assert.equal(M.traceMetrics({ ...traceOptions, gateMode: "mean", requireQuality: false }).goodOutputTPS, 12);
+  const cancelled = M.traceMetrics({ ...traceOptions, requests: [{ ...M.traceSamples[4], id: "cancelled", status: "cancelled" }] });
+  assert.equal(cancelled.statuses.cancelled, 1);
+  assert.equal(cancelled.visibleOutputTPS, 2);
+  assert.equal(cancelled.goodOutputTPS, 0);
+});
+test("one-token and zero-resolution chunk intervals keep mathematical N/A separate from measured zero", () => {
+  const single = M.traceMetrics({ ...traceOptions, requests: [M.traceSamples[3]] });
+  assert.equal(single.rows[0].tpot, null);
+  assert.equal(single.rows[0].userTPS, null);
+  assert.equal(single.p99ITL, null);
+  const chunk = M.traceMetrics({ ...traceOptions, requests: [{ ...M.traceSamples[0], visible_token_ms: [100, 100, 100] }] });
+  assert.equal(chunk.rows[0].tpot, 0);
+  assert.equal(chunk.rows[0].userTPS, null);
+  assert.equal(chunk.p99ITL, 0);
+});
+test("trace occupancy is an exact time-area calculation and distinguishes client from admitted boundaries", () => {
+  const r = M.traceMetrics(traceOptions);
+  near(r.meanActive, 1.475);
+  near(r.littleProduct, r.meanActive);
+  assert.equal(r.closedWindow, true);
+  const admitted = M.traceMetrics({ ...traceOptions, boundary: "admitted" });
+  near(admitted.meanActive, 1.35);
+  near(admitted.meanResidenceMs, 225);
+  assert.equal(admitted.lambda, 6);
+  assert.equal(admitted.completedRPS, 7);
+  const clipped = M.traceMetrics({ ...traceOptions, windowMs: 200 });
+  near(clipped.meanActive, 4.695);
+  near(clipped.littleProduct, 1.345);
+  assert.equal(clipped.closedWindow, false);
+});
+test("missing admission and unknown quality are not quietly replaced with zeros or passing annotations", () => {
+  const unknown = [{ ...M.traceSamples[3], admitted_ms: null, quality_pass: null }];
+  const r = M.traceMetrics({ ...traceOptions, requests: unknown });
+  assert.equal(r.unknownAdmission, 1);
+  assert.equal(r.goodOutputTPS, 0);
+  assert.equal(M.traceMetrics({ ...traceOptions, requests: unknown, requireQuality: false }).goodOutputTPS, 1);
+  assert.throws(() => M.traceMetrics({ ...traceOptions, requests: unknown, boundary: "admitted" }), RangeError);
+});
+test("trace schema rejects unsorted/mismatched timing, duplicate IDs and extra nonnumeric payload", () => {
+  assert.throws(() => M.traceMetrics({ ...traceOptions, requests: [{ ...M.traceSamples[0], visible_token_ms: [100, 90] }] }), RangeError);
+  assert.throws(() => M.traceMetrics({ ...traceOptions, requests: [{ ...M.traceSamples[0], ended_ms: 100 }] }), RangeError);
+  assert.throws(() => M.traceMetrics({ ...traceOptions, requests: [M.traceSamples[0], M.traceSamples[0]] }), RangeError);
+  assert.throws(() => M.traceMetrics({ ...traceOptions, requests: [{ ...M.traceSamples[0], prompt_text: "not part of the numeric schema" }] }), RangeError);
+  assert.throws(() => M.traceMetrics({ ...traceOptions, requests: [] }), RangeError);
+  assert.throws(() => M.traceMetrics({ ...traceOptions, requests: [{ ...M.traceSamples[0], arrival_ms: 10000, admitted_ms: 10020, visible_token_ms: [10080], ended_ms: 10142 }] }), RangeError);
+});
+test("correlated output lengths and TPOT cannot be replaced by the product of their separate means", () => {
+  const requests = [
+    { ...M.traceSamples[0], id: "short", visible_token_ms: [20, 30], ended_ms: 32, admitted_ms: 0 },
+    { ...M.traceSamples[0], id: "long", visible_token_ms: [20, 120, 220, 320, 420], ended_ms: 422, admitted_ms: 0 }
+  ];
+  const r = M.traceMetrics({ ...traceOptions, requests });
+  const meanDecode = r.rows.reduce((sum, row) => sum + row.e2eVisible - row.ttft, 0) / 2;
+  near(meanDecode, 205);
+  near(r.meanRequestTPOT, 55);
+  near(r.meanObservedITL, 82);
+  assert.notEqual(meanDecode, (3.5 - 1) * r.meanRequestTPOT);
+});
 test("capacity preserves independent input/output scopes and Little's Law units", () => {
   const r = M.capacity(capacity);
   assert.equal(r.qps, 13);

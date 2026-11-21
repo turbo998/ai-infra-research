@@ -15,13 +15,14 @@
     const id = `interactive-chart-${chartId++}`;
     return `<figure class="chart"><svg viewBox="0 0 800 ${height}" role="img" aria-labelledby="${id}"><title id="${id}">${esc(caption)}</title>${body}</svg><figcaption>${esc(caption)}</figcaption></figure>`;
   }
-  function plot(series, xLabel, yLabel, caption, gate = null, gateLabel = "SLO") {
+  function plot(series, xLabel, yLabel, caption, gate = null, gateLabel = "SLO", integerTicks = false) {
     const width = 640;
     const height = 200;
     const x0 = 100;
     const y0 = 30;
     const maxX = Math.max(...series.flatMap((s) => s.values.map((p) => p.x)), 1);
-    const maxY = Math.max(...series.flatMap((s) => s.values.map((p) => p.y)), gate === null ? 0 : gate, 1) * 1.1;
+    const peakY = Math.max(...series.flatMap((s) => s.values.map((p) => p.y)), gate === null ? 0 : gate, 1);
+    const maxY = integerTicks ? Math.max(4, Math.ceil(peakY / 4) * 4) : peakY * 1.1;
     const x = (v) => x0 + width * v / maxX;
     const y = (v) => y0 + height - height * v / maxY;
     let body = "";
@@ -73,6 +74,38 @@
     return kpis([[fmt(r.ttft) + " ms", "TTFT"], [fmt(r.e2e / 1000) + " s", "E2EL"], [fmt(r.userTPS) + (r.userTPS === null ? "" : " tok/s"), t("单用户后续流式速率", "Subsequent per-user streaming")]]) +
       legend(segments.map((s) => `${s.label} ${fmt(s.ms)} ms`)) + svg(body, t("时间轴由当前输入计算；首 Token 已计入 TTFT。", "Timeline is computed from inputs; the first token is already in TTFT.")) +
       dataTable([t("阶段", "Stage"), "ms", t("含义", "Meaning")], [[t("排队", "Queue"), fmt(p.queue), t("等待资源", "Waiting for resources")], ["Prefill", fmt(p.prefill), t("含首字计算", "Includes first-token computation")], [t("交付", "Delivery"), fmt(p.delivery), t("网关/网络", "Gateway/network")], ["Decode", fmt(r.decode), `${p.output - 1} × ${fmt(p.tpot)} ms`]], t("可手算的阶段分解", "Hand-checkable stage decomposition"));
+  }
+  function trace(p) {
+    if (p.trace.length > 250000) throw new RangeError(t("JSON 超过本页安全大小", "JSON exceeds this workbench's size limit"));
+    let requests;
+    try { requests = JSON.parse(p.trace); }
+    catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      throw new RangeError(t("JSON 语法错误：需要数组、双引号与正确逗号；不回显原始内容。", "Invalid JSON: use an array, double quotes and valid commas; raw content is not echoed."));
+    }
+    const r = M.traceMetrics({ ...p, requests });
+    const synthetic = JSON.stringify(requests) === JSON.stringify(M.traceSamples);
+    const terminated = r.rows.filter((row) => row.completeInWindow).length;
+    const state = { success: t("成功", "success"), failed: t("失败", "failed"), cancelled: t("取消", "cancelled"), rejected: t("拒绝", "rejected") };
+    return kpis([[fmt(r.visibleOutputTPS) + " tok/s", t("测窗内原始可见输出", "Raw visible output in window")], [fmt(r.goodOutputTPS) + " tok/s", t("完成且达标的可见输出 Goodput", "Completed compliant visible-output goodput")], [`${r.goodRequests}/${terminated}`, t("计入 Goodput / 全终态请求", "Goodput requests / all terminal requests")], [fmt(r.p99ITL) + " ms", `P99 visible ITL · n=${r.itlSamples}`], [fmt(r.meanRequestTPOT) + " ms", t("有间隔终态请求的 TPOT 均值", "Mean TPOT of terminal requests with intervals")], [fmt(r.meanObservedITL) + " ms", t("全部观察间隔的均值（不同权重）", "Mean observed gap (different weighting)")]]) +
+      plot([{ label: t("选定系统边界在途请求", "In-flight requests under selected boundary"), values: r.occupancy }], "Relative time ms", "Active requests", t("按时间戳直接重建阶梯并发；面积/测窗得到平均L，不是KV占用或GPU忙碌曲线。", "Step concurrency reconstructed from timestamps; area/window gives mean L, not KV occupancy or GPU-busy time."), null, "SLO", true) +
+      dataTable([t("同一窗口中的量", "Quantity in the same window"), t("值", "Value"), t("口径", "Scope")], [
+        ["Offered RPS", fmt(r.offeredRPS), t("arrival 事件，含拒绝", "Arrival events including rejections")],
+        ["Known admitted RPS", fmt(r.admittedRPS), t("已记录 admission 事件", "Recorded admission events")],
+        ["Terminal RPS", fmt(r.completedRPS), t("所有终态，含失败/取消/拒绝", "All terminal states, including failed/cancelled/rejected")],
+        ["Input demand TPS", fmt(r.inputDemandTPS), t("admission 时输入需求，非Prefill完成速率", "Input demand at admission, not prefill-completion rate")],
+        ["P95 TTFT", fmt(r.p95TTFT) + " ms", t("本窗观察到的首可见Token", "First visible-token events observed in window")],
+        ["L observed", fmt(r.meanActive, 4), t("所选边界时间面积 / 测窗", "Boundary occupancy area / window")],
+        ["λ × mean W", fmt(r.littleProduct, 4), `${fmt(r.lambda)} /s × ${fmt(r.meanResidenceMs)} ms / 1000`]
+      ], synthetic ? t("synthetic：原创7请求教学记录，未实机测量", "synthetic: original seven-request teaching trace, no hardware measurement") : t("user_supplied：本地录入，未验证测量/时钟/质量", "user_supplied: local input, measurement/clocks/quality unverified")) +
+      dataTable(["ID", t("终态", "Terminal state"), "Trace N_visible", "TTFT ms", "TPOT ms", "Max ITL ms", "Visible E2EL ms", "Terminal latency ms", t("品质注释", "Quality annotation"), "Goodput"], r.rows.map((row) => [
+        row.id, state[row.status], row.visible_token_ms.length, fmt(row.ttft), fmt(row.tpot), fmt(row.maxITL), fmt(row.e2eVisible), fmt(row.terminalLatency),
+        row.quality_pass === null ? t("未知", "unknown") : row.quality_pass ? t("标注通过", "marked pass") : t("标注未过", "marked fail"),
+        row.good && row.completeInWindow ? t("计入", "counted") : !row.completeInWindow ? t("窗外终态", "terminal outside window") : row.status !== "success" ? state[row.status] : !row.latencyPass ? t("时延未达/不可评估", "latency fails/not evaluable") : t("品质未过/未知", "quality fails/unknown")
+      ]), t("保留失败分母；N/A 不被写成0", "Failures remain in the denominator; N/A is not replaced with zero")) +
+      note(r.closedWindow ? t("本例所有所选区间完整落在测窗内，因此面积L与λ×平均W相同。这是有限追踪恒等式，不证明生产稳态容量。", "All selected intervals are fully contained, so area L equals λ×mean W. This is a finite-trace identity, not proof of steady production capacity.") : t("输入区间不全部完整包含于测窗：边界截断/选样会使面积L和窗口终态λ×平均W不同。不要把边界偏差当成扩容结论。", "Not all intervals are fully contained: window boundaries/cohort selection can make area L differ from terminal-rate λ×mean W. Do not interpret boundary bias as a scaling conclusion.")) +
+      note(t(`P99 样本只有 ${r.itlSamples} 个间隔，只用于演示定义，不可外推生产尾延迟。相同chunk时间产生0间隔，单用户速率在零均值或无间隔时为N/A。`, `P99 has only ${r.itlSamples} gap samples; it demonstrates a definition, not production tails. Equal chunk timestamps create zero gaps; per-user rate is N/A with zero mean or no intervals.`)) +
+      (r.unknownAdmission ? note(t("部分 admission 时间未观测，Known admitted RPS 只是已知子集；切换 admitted 边界前必须补齐，不能填0。", "Some admission times are unobserved; Known admitted RPS is only the known subset. Fill them before choosing the admitted boundary; never insert zero.")) : "");
   }
   function goodput(p) {
     const r = M.goodput(p);
@@ -345,13 +378,13 @@
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, goodput, capacity, ptu, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, trace, goodput, capacity, ptu, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (["model", "gpu", "mode", "kind", "operation", "mlaCache"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);
