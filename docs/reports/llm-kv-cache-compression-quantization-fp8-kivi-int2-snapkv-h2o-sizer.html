@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>大模型 KV Cache 压缩与非对称量化 (FP8 / KIVI / DuoAttention) 容量计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #38BDF8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>大模型 KV Cache 显存压缩（FP8 E4M3 / KIVI 非对称 INT4 / DuoAttention）容量计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>目标上下文长度 (K Tokens) <span id="v_seq" class="val">128K</span></label>
+      <input type="range" id="seq" min="16" max="512" step="16" value="128" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>节点可用 KV 显存池 (GB) <span id="v_pool" class="val">140 GB</span></label>
+      <input type="range" id="pool" min="40" max="600" step="20" value="140" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>DuoAttention 全量检索头占比 <span id="v_ret" class="val">25%</span></label>
+      <input type="range" id="ret" min="10" max="50" step="5" value="25" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>KV Cache 压缩方案</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 未压缩 BF16 全量 KV Cache</option>
+        <option value="2">Tier 2: 激进 Token 驱逐 (H2O/SnapKV 仅留 20%)</option>
+        <option value="3">Tier 3: 生产标准 FP8 E4M3 全量 KV</option>
+        <option value="4" selected>Tier 4: 非对称 KIVI INT4 + DuoAttention (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>单条请求 KV 显存占用</div><div id="k_kv" class="num">7.86 GB</div></div>
+    <div class="kpi"><div>单节点最大并发请求数</div><div id="k_conc" class="num">17 路</div></div>
+    <div class="kpi"><div>Decode 注意力访存加速</div><div id="k_spd" class="num">3.65x</div></div>
+    <div class="kpi"><div>多轮追问大海捞针召回</div><div id="k_rec" class="num">97.4%</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const seq = parseFloat(document.getElementById('seq').value);
+  const pool = parseFloat(document.getElementById('pool').value);
+  const ret = parseFloat(document.getElementById('ret').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_seq').textContent = seq + 'K';
+  document.getElementById('v_pool').textContent = pool + ' GB';
+  document.getElementById('v_ret').textContent = Math.round(ret * 100) + '%';
+
+  const bf16GB = (seq / 128.0) * 41.94;
+  let kv = 7.86, spd = 3.65, rec = 97.4;
+  if (mode === '1') {
+    kv = +bf16GB.toFixed(2);
+    spd = 1.0;
+    rec = 98.2;
+  } else if (mode === '2') {
+    kv = +(bf16GB * 0.2).toFixed(2);
+    spd = 3.4;
+    rec = 41.5;
+  } else if (mode === '3') {
+    kv = +(bf16GB * 0.5).toFixed(2);
+    spd = 1.82;
+    rec = 98.0;
+  } else {
+    kv = +(bf16GB * 0.25 * (ret + (1 - ret) * 0.5)).toFixed(2);
+    spd = +(1 / (0.25 * (ret + (1 - ret) * 0.5) * 1.46)).toFixed(2);
+    rec = +(94.9 + ret * 10.0).toFixed(1);
+  }
+  const conc = Math.max(1, Math.floor(pool / kv));
+  document.getElementById('k_kv').textContent = kv + ' GB';
+  document.getElementById('k_conc').textContent = conc + ' 路';
+  document.getElementById('k_spd').textContent = spd + 'x';
+  document.getElementById('k_rec').textContent = rec + '%';
+}
+calc();
+</script>
+</body>
+</html>

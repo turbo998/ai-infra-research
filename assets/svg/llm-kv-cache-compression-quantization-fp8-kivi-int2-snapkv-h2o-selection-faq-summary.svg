@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#38BDF8" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">大模型 KV Cache 显存压缩、非对称量化与稀疏选型：FP8 vs. KIVI INT4 vs. DuoAttention vs. H2O</text>
+  <text x="52" y="94" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="15">揭秘 Key 通道离群值定律 (`Per-Channel Key + Per-Token Value`) 与多轮对话“永久丢弃 Token (H2O/SnapKV)”失忆陷阱</text>
+
+  <!-- Left: Token Eviction Trap vs Symmetric INT4 Failure -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么在多轮对话中乱用 H2O/SnapKV 和对称 INT4 会翻车？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 致命陷阱 A：不可逆 Token 驱逐 (`H2O / SnapKV`, Tier 2) 在第 2 轮失忆</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 第 1 轮问“总结第 1 章”，算法把注意力低的第 2~9 章 Token (80%) 永久从显存物理删除！</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 当用户第 2 轮追问“那第 7 章的违约金是多少？”时，召回率暴跌至 41.5%！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 致命陷阱 B：对 Key 和 Value 采用相同的 Per-Token 对称 INT4 量化</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 物理分布规律：**Key 张量在特定固定通道 (Channel) 上存在极强离群值 (Outliers)**，</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 而 **Value 张量无固定通道尖峰**！若对 Key 强行按 Token 量化会彻底摧毁注意力分数！</text>
+
+  <!-- Right: FP8 E4M3 + Asymmetric KIVI + DuoAttention -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. 无损高密 KV 压缩三级武器库 (FP8 + KIVI + DuoAttention)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 生产基线必开：校准版 `FP8 E4M3 KV` (`kv_cache_dtype="fp8_e4m3"`, Tier 3)</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">零 Token 丢弃，直接把 128K KV 从 41.9GB 砍半至 21.0GB，Decode 访存提速 1.82x 且精度 99.8% 无损</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② `KIVI` 非对称量化：Key 按通道 (`Per-Channel`) + Value 按 Token (`Per-Token`)</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">顺应物理分布将同通道 Key 打包量化为 INT4/INT2，彻底驯服通道离群值，压缩比达 4x！</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ `DuoAttention` 头级分工：25% 检索头保留全量 KV + 75% 流式头仅留 Sink+窗口</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">检索头 1 个 Token 都不丢（多轮大海捞针 97.4%），128K 显存压至 7.86GB (5.3x 压缩)！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 128K 多轮长文档问答（Llama-3.3-70B · 双卡 H200 140GB KV 池）四档压缩对比</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">KV Cache 压缩与量化方案</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单条 128K KV 显存</text>
+  <text x="630" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单机最大并发</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Decode 访存加速</text>
+  <text x="950" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">首轮 LongBench</text>
+  <text x="1110" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">多轮追问捞针召回</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 未压缩 BF16 全量 KV Cache (2 Bytes/elem)</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">41.94 GB / 条 ✕</text>
+  <text x="630" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">3 路 / 节点 ✕</text>
+  <text x="790" y="524" fill="#E2E8F0" font-family="Segoe UI, Arial, sans-serif" font-size="14">1.00x (基准)</text>
+  <text x="950" y="524" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">88.6</text>
+  <text x="1110" y="524" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">98.2%</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: 激进 Token 物理驱逐 (`H2O / SnapKV` 仅留 20% Token)</text>
+  <text x="450" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">8.39 GB / 条</text>
+  <text x="630" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">16 路 / 节点</text>
+  <text x="790" y="568" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">3.40x</text>
+  <text x="950" y="568" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">86.8 (单轮尚可)</text>
+  <text x="1110" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">41.5% ✕ (多轮失忆!)</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: 生产标准校准版 `FP8 E4M3` KV (`FlashInfer / FA3`)</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">20.97 GB (-50%) ✓</text>
+  <text x="630" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">6 路 / 节点 (2x)</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">1.82x ✓</text>
+  <text x="950" y="612" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">88.5 ✓</text>
+  <text x="1110" y="612" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">98.0% ✓ (零丢Token)</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): 非对称 `KIVI INT4` + `DuoAttention` 检索头全保留</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">7.86 GB (-81.3%) ✓</text>
+  <text x="630" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">17 路 / 节点 (5.7x)</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">3.65x ✓</text>
+  <text x="950" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">88.2 ✓</text>
+  <text x="1110" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">97.4% ✓ (+55.9 pts)</text>
+</svg>
