@@ -1,6 +1,6 @@
 # 云架构师进阶 AI 基础设施解决方案架构师（SA）能力地图
 
-> **Language / 语言**: **简体中文** | [English](./roadmap.en.md) · [全栈分层地图](../stack-map.md) · [完整总目录](../full-catalog-zh.md)
+> **Language / 语言**: **简体中文** | [English](./roadmap.en.md) · [🔥 AI Infra 全景交互 H5 精学中心](../h5/ai-infra-learning-hub.html) · [全栈分层地图](../stack-map.md) · [完整总目录](../full-catalog-zh.md)
 
 > **核心理念**：面向已经具备云原生、网络、存储与高可用设计经验的云解决方案架构师，不把时间浪费在生僻底层语法或脱离业务的纸面峰值记忆上，而是围绕 **“容量屋脊线 → 智算网络 → 训推并行 → 存储与 KV 分层 → 云原生编排 → Token FinOps”** 六阶段建立可量化、可验证的架构决策能力。
 
