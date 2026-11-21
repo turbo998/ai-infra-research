@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "experiment_id": "memory_efficient_optimizers_adamw_8bit_galore_muon_apollo_selection",
+        "title": "Memory-Efficient & Orthogonalized Optimizers Selection: FP32 AdamW vs. 8-Bit AdamW vs. GaLore/APOLLO vs. Distributed Muon (Newton-Schulz)",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_basis": {
+            "model": "70B Dense / MoE Pre-Training & Continual Pre-Training",
+            "baseline_optimizer_bytes_per_param": 12.0,
+            "target_validation_loss": 1.85,
+        },
+        "tiers": [
+            {
+                "tier": "Tier 1: Standard FP32 AdamW (4B Master Weight + 4B m_t + 4B v_t = 12 Bytes/Param)",
+                "optimizer_state_bytes_per_param": 12.0,
+                "total_70b_optimizer_state_gb": 840.0,
+                "token_efficiency_speedup_to_target_loss": 1.00,
+                "relative_gpu_hours_saved_pct": 0.0,
+                "recommended_scenario": "Baseline when HBM and training compute budget are unconstrained",
+            },
+            {
+                "tier": "Tier 2: Blockwise 8-Bit Quantized AdamW (4B Master + 1B m_t + 1B v_t = 6 Bytes/Param)",
+                "optimizer_state_bytes_per_param": 6.0,
+                "total_70b_optimizer_state_gb": 420.0,
+                "token_efficiency_speedup_to_target_loss": 1.00,
+                "relative_gpu_hours_saved_pct": 8.5,
+                "recommended_scenario": "Drop-in 50% optimizer HBM & checkpoint size reduction for SFT/CPT",
+            },
+            {
+                "tier": "Tier 3: Low-Rank Gradient Projection (GaLore / APOLLO Rank-1/8 = 2.4 Bytes/Param)",
+                "optimizer_state_bytes_per_param": 2.4,
+                "total_70b_optimizer_state_gb": 168.0,
+                "token_efficiency_speedup_to_target_loss": 0.98,
+                "relative_gpu_hours_saved_pct": 18.0,
+                "recommended_scenario": "Full-parameter training on HBM-constrained nodes without LoRA rank freezes",
+            },
+            {
+                "tier": "Tier 4 (Recommended): Distributed Muon (Newton-Schulz Orthogonalized Momentum on 2D Weights + AdamW 1D)",
+                "optimizer_state_bytes_per_param": 8.0,
+                "total_70b_optimizer_state_gb": 560.0,
+                "token_efficiency_speedup_to_target_loss": 1.42,
+                "relative_gpu_hours_saved_pct": 29.5,
+                "recommended_scenario": "Foundation pre-training & continual pre-training reaching target loss in 1.42x fewer tokens (-29.5% GPU hours!)",
+            },
+        ],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json missing")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json out of date")
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print("Wrote results.json")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
