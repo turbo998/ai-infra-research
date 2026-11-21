@@ -440,14 +440,85 @@
     }
     return { samples, requestTPOT, requestCount: 200, outputTokens: 32, gapCount: 6200, p99: Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, percentile(values, 0.99)])), p99TPOT: Object.fromEntries(Object.entries(requestTPOT).map(([key, values]) => [key, percentile(values, 0.99)])) };
   }
-  function collective({ operation, ranks, sizeMB, timeMs }) {
+  function collective({ operation, ranks, sizeMB, timeMs, sizeMode = "reported" }) {
     integer(ranks, "ranks", 2, 65536);
     number(sizeMB, "sizeMB", 0.001);
     number(timeMs, "timeMs", 0.001);
+    if (!["reported", "api-count"].includes(sizeMode)) throw new RangeError("Choose reported array size or NCCL API-count bytes");
     const factors = { allreduce: 2 * (ranks - 1) / ranks, allgather: (ranks - 1) / ranks, reducescatter: (ranks - 1) / ranks, alltoall: (ranks - 1) / ranks, broadcast: 1, reduce: 1, sendrecv: 1 };
     const factor = preset(factors, operation);
-    const algbw = sizeMB / timeMs;
-    return { algbw, busbw: algbw * factor, factor };
+    const sizeMultiplier = sizeMode === "api-count" && ["allgather", "reducescatter", "alltoall"].includes(operation) ? ranks : 1;
+    const effectiveSizeMB = sizeMB * sizeMultiplier;
+    const algbw = effectiveSizeMB / timeMs;
+    return { algbw, busbw: algbw * factor, factor, effectiveSizeMB, sizeMultiplier };
+  }
+  function pcieBandwidth(gen, lanes, payloadFraction) {
+    integer(gen, "PCIe generation", 3, 5);
+    if (![1, 2, 4, 8, 16].includes(lanes)) throw new RangeError("PCIe lane count must be 1,2,4,8 or16");
+    number(payloadFraction, "PCIe payload efficiency", 0.01, 1);
+    const gtPerLane = { 3: 8, 4: 16, 5: 32 }[gen];
+    const encodedGBps = gtPerLane * lanes * (128 / 130) / 8;
+    return { encodedGBps, payloadGBps: encodedGBps * payloadFraction };
+  }
+  function networkBudget(p) {
+    const gpu = preset(gpus, p.gpu);
+    integer(p.gpuEndpoints, "active GPU PCIe endpoints", 1, 256);
+    integer(p.nicPorts, "active NIC ports", 1, 256);
+    integer(p.nicCards, "active NIC PCIe cards", 1, p.nicPorts);
+    number(p.rate, "port rate Gb/s", 0.001);
+    number(p.networkEfficiency, "network payload fraction", 0.01, 1);
+    number(p.fabricGBps, "fabric attributed payload budget GB/s", 0.001);
+    number(p.payloadMB, "striped payload MB", 0.001);
+    if (typeof p.crossesShared !== "boolean") throw new RangeError("Confirm whether this path crosses the shared link");
+    if (p.crossesShared) number(p.sharedGBps, "shared path budget GB/s", 0.001);
+    const gpuPCIe = pcieBandwidth(p.gpuGen, p.gpuLanes, p.pcieEfficiency);
+    const nicPCIe = pcieBandwidth(p.nicGen, p.nicLanes, p.pcieEfficiency);
+    const portPayloadGBps = p.rate / 8 * p.networkEfficiency;
+    const limits = [
+      { key: "NIC port payload", valueGBps: p.nicPorts * portPayloadGBps },
+      { key: "GPU PCIe endpoints", valueGBps: p.gpuEndpoints * gpuPCIe.payloadGBps },
+      { key: "NIC PCIe cards", valueGBps: p.nicCards * nicPCIe.payloadGBps },
+      { key: "Fabric allocation", valueGBps: p.fabricGBps }
+    ];
+    if (p.crossesShared) limits.push({ key: "Shared path link", valueGBps: p.sharedGBps });
+    const bottleneck = limits.reduce((a, value) => value.valueGBps < a.valueGBps ? value : a, limits[0]);
+    return { gpu, gpuPCIe, nicPCIe, portPayloadGBps, limits, bottleneck, nodeGBps: bottleneck.valueGBps, perGpuGBps: bottleneck.valueGBps / p.gpuEndpoints, stripedTransferMs: p.payloadMB / bottleneck.valueGBps, nvlinkOneWayGBps: gpu.nvlink === 0 ? null : gpu.nvlink / 2 };
+  }
+  function railBudget(p) {
+    integer(p.gpus, "GPU endpoints", 1, 64);
+    integer(p.railCount, "rail count", 1, 16);
+    number(p.payloadGB, "payload GB/GPU", 0.001);
+    number(p.rate, "rail port Gb/s", 0.001);
+    number(p.efficiency, "rail payload fraction", 0.01, 1);
+    number(p.fabricGBps, "fabric payload GB/s", 0.001);
+    number(p.hotMultiplier, "hot GPU payload multiplier", 1, 100);
+    integer(p.hotGpu, "hot GPU index", 0, p.gpus - 1);
+    if (!["balanced", "skewed"].includes(p.mapping)) throw new RangeError("Unknown rail mapping");
+    if (typeof p.failure !== "boolean" || typeof p.reroute !== "boolean") throw new RangeError("Confirm rail failure and toy rerouting choices");
+    if (p.failure) integer(p.failedRail, "failed rail index", 0, p.railCount - 1);
+    const rails = Array.from({ length: p.railCount }, (_, rail) => ({ rail, failed: p.failure && rail === p.failedRail, gpus: [], payloadGB: 0 }));
+    const live = rails.filter((rail) => !rail.failed);
+    const assignments = [];
+    let blockedGB = 0;
+    let totalGB = 0;
+    for (let gpu = 0; gpu < p.gpus; gpu += 1) {
+      const payload = p.payloadGB * (gpu === p.hotGpu ? p.hotMultiplier : 1);
+      totalGB += payload;
+      const candidate = p.mapping === "skewed" ? 0 : gpu % p.railCount;
+      const selected = p.failure && p.reroute ? (live.length ? live[p.mapping === "skewed" ? 0 : gpu % live.length] : null) : rails[candidate];
+      const blocked = selected === null || selected.failed;
+      if (selected !== null) {
+        selected.gpus.push(gpu);
+        selected.payloadGB += payload;
+      }
+      if (blocked) blockedGB += payload;
+      assignments.push({ gpu, rail: selected === null ? null : selected.rail, payloadGB: payload, blocked });
+    }
+    const railGBps = p.rate / 8 * p.efficiency;
+    const maxRailSeconds = Math.max(0, ...live.map((rail) => rail.payloadGB / railGBps));
+    const fabricSeconds = totalGB / p.fabricGBps;
+    const lowerBoundSeconds = blockedGB > 0 ? null : Math.max(maxRailSeconds, fabricSeconds);
+    return { rails, assignments, totalGB, blockedGB, railGBps, maxRailSeconds, fabricSeconds, lowerBoundMs: lowerBoundSeconds === null ? null : lowerBoundSeconds * 1000, effectiveGBps: lowerBoundSeconds === null ? null : totalGB / lowerBoundSeconds };
   }
   function goodput({ batch, base, slope, knee, ttftLimit, tpotLimit }) {
     integer(batch, "batch", 1, 4096);
@@ -471,6 +542,17 @@
     if (ecn >= pfc || xon >= pfc) throw new RangeError("ECN and Xon must be below PFC Xoff");
     const paused = queue >= pfc || (wasPaused && queue > xon);
     return { paused, marked: queue >= ecn, recovering: wasPaused && !paused };
+  }
+  function pfcBudget({ bufferMB, rate, reactionUs, frameBytes, guardMB, pfc }) {
+    number(bufferMB, "teaching queue buffer MB", 0.001);
+    number(rate, "link Gb/s", 0.001);
+    number(reactionUs, "pause reaction microseconds");
+    integer(frameBytes, "maximum frame bytes", 64);
+    number(guardMB, "pipeline guard MB");
+    number(pfc, "PFC Xoff percentage", 0, 100);
+    const requiredMB = (rate * 1e9 / 8 * reactionUs * 1e-6 + frameBytes) / 1e6 + guardMB;
+    const availableMB = bufferMB * (1 - pfc / 100);
+    return { requiredMB, availableMB, marginMB: availableMB - requiredMB, fits: availableMB >= requiredMB };
   }
   function pipeline({ ranks, batch }) {
     integer(ranks, "pipeline stages", 2, 128);
@@ -508,7 +590,7 @@
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, pdBudget, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, pdBudget, percentile, pdSamples, collective, pcieBandwidth, networkBudget, railBudget, goodput, cost, congestion, pfcBudget, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);

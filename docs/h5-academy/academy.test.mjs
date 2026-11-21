@@ -369,6 +369,45 @@ test("NCCL bandwidth factors match total-array scopes and decimal units", () => 
   assert.equal(M.collective({ ...p, operation: "sendrecv" }).busbw, 50);
   assert.throws(() => M.collective({ ...p, ranks: 1, operation: "allreduce" }), RangeError);
   assert.throws(() => M.collective({ ...p, operation: "unknown" }), RangeError);
+  for (const operation of ["allgather", "reducescatter", "alltoall"]) {
+    const api = M.collective({ ...p, operation, sizeMode: "api-count" });
+    assert.equal(api.effectiveSizeMB, 8000);
+    assert.equal(api.algbw, 400);
+    assert.equal(api.busbw, 350);
+  }
+  assert.equal(M.collective({ ...p, operation: "allreduce", sizeMode: "api-count" }).algbw, 50);
+});
+test("PCIe Gen3/4/5 encoding is one-way and must not be reused for PAM4/FLIT generations", () => {
+  near(M.pcieBandwidth(4, 16, 1).encodedGBps, 16 * 16 * 128 / 130 / 8);
+  near(M.pcieBandwidth(5, 16, 0.85).payloadGBps, 53.56307692307692);
+  assert.throws(() => M.pcieBandwidth(6, 16, 1), RangeError);
+});
+const network = { gpu: "h100", gpuEndpoints: 8, nicPorts: 8, nicCards: 8, rate: 400, gpuGen: 5, gpuLanes: 16, nicGen: 5, nicLanes: 16, networkEfficiency: 0.8, pcieEfficiency: 0.85, crossesShared: true, sharedGBps: 300, fabricGBps: 240, payloadMB: 1024 };
+test("node bandwidth budgets distinguish ports, PCIe cards, participating GPUs and crossed shared links", () => {
+  const r = M.networkBudget(network);
+  assert.equal(r.nodeGBps, 240);
+  near(r.stripedTransferMs, 1024 / 240);
+  assert.equal(r.nvlinkOneWayGBps, 450);
+  near(M.networkBudget({ ...network, nicCards: 4 }).nodeGBps, 4 * 53.56307692307692);
+  near(M.networkBudget({ ...network, gpuEndpoints: 1 }).nodeGBps, 53.56307692307692);
+  assert.equal(M.networkBudget({ ...network, sharedGBps: 100 }).nodeGBps, 100);
+  assert.equal(M.networkBudget({ ...network, crossesShared: false, sharedGBps: undefined }).nodeGBps, 240);
+  assert.equal(M.networkBudget({ ...network, gpu: "l40s" }).nvlinkOneWayGBps, null);
+});
+const rails = { gpus: 8, railCount: 4, payloadGB: 1, rate: 400, efficiency: 0.8, fabricGBps: 300, hotGpu: 0, hotMultiplier: 1, mapping: "balanced", failure: false, failedRail: 0, reroute: true };
+test("rail mapping exposes collisions, hotspots and incomplete failed paths rather than N times line rate", () => {
+  const r = M.railBudget(rails);
+  assert.equal(r.lowerBoundMs, 50);
+  assert.equal(r.effectiveGBps, 160);
+  assert.equal(M.railBudget({ ...rails, mapping: "skewed" }).lowerBoundMs, 200);
+  assert.equal(M.railBudget({ ...rails, hotMultiplier: 4 }).lowerBoundMs, 125);
+  const failure = M.railBudget({ ...rails, failure: true, reroute: false });
+  assert.equal(failure.blockedGB, 2);
+  assert.equal(failure.lowerBoundMs, null);
+  assert.equal(failure.effectiveGBps, null);
+  assert.equal(M.railBudget({ ...rails, failure: true }).lowerBoundMs, 75);
+  assert.equal(M.railBudget({ ...rails, fabricGBps: 100 }).lowerBoundMs, 80);
+  assert.equal(M.railBudget({ ...rails, railCount: 1, failure: true }).lowerBoundMs, null);
 });
 test("Goodput is gated independently of unbounded throughput with declared sample denominator", () => {
   const p = { batch: 32, base: 12, slope: 0.25, knee: 48, ttftLimit: 800, tpotLimit: 35 };
@@ -394,6 +433,11 @@ test("PFC hysteresis resumes at Xon, ECN marks earlier and invalid thresholds ar
   assert.equal(M.congestion({ ...p, queue: 50 }).marked, true);
   assert.throws(() => M.congestion({ ...p, ecn: 90 }), RangeError);
   assert.throws(() => M.congestion({ ...p, xon: 90 }), RangeError);
+  const budget = M.pfcBudget({ bufferMB: 16, rate: 400, reactionUs: 10, frameBytes: 9000, guardMB: 0.05, pfc: 80 });
+  near(budget.requiredMB, 0.559);
+  near(budget.availableMB, 3.2);
+  assert.equal(budget.fits, true);
+  assert.equal(M.pfcBudget({ bufferMB: 16, rate: 800, reactionUs: 100, frameBytes: 9000, guardMB: 0.05, pfc: 80 }).fits, false);
 });
 test("non-finite, negative and fractional request-count inputs fail explicitly", () => {
   assert.throws(() => M.capacity({ ...capacity, qps: NaN }), RangeError);

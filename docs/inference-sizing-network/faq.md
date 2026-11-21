@@ -271,17 +271,27 @@ H5每点生成 **200个32输出Token请求**，每请求31个确定性后续间�
 
 它让 payload 避免 host DRAM staging，NIC 直接 DMA 到注册 GPU 内存。CPU/驱动仍负责连接、注册、页固定、队列、控制与错误处理。检查 GPU/NIC PCIe 亲和、IOMMU/ACS、peer-memory/DMA-BUF 与驱动支持。零 host-copy 不等于零开销。
 
+数据仍经过实际PCIe端点/交换路径。Gen3/4/5单向编码后带宽为 `GT/s×lanes×128/130÷8`：Gen5 x16约 **63.02 GB/s**，再按85%payload假设约 **53.56 GB/s**；800G端口单向线速100 GB/s也可能被PCIe卡住。活动端口数不等于NIC卡PCIe链路数，双端口卡要共享相应端点预算。Gen6/7 PAM4/FLIT不能套这个编码公式。
+
+默认节点8 GPU端点、8张400G单端口卡，在80%网络效率下320 GB/s；共享路径300、分配fabric240，上界 **240 GB/s**。1024 MB完全条带下界4.27 ms；只有1个GPU端点时可能只剩53.56 GB/s。GPU型号不自动决定实际协商的PCIe代际/lanes，预算也不是模型吞吐保证。
+
+同节点也不保证跨Pod走NVLink。Dynamo索引文档中的UCX CUDA IPC需要PID namespace/peer GPU可见性等条件；不满足时可能转RDMA或TCP且不报NIXL错误。检查日志和实际payload，不把privileged/hostPID当默认修复，多租户隔离要经安全认可。
+
 ### Q22. PFC、ECN 和 DCQCN 分别做什么？
 
 传统 lossless RoCE 基线：交换机 ECN 提前标 CE → 接收 RNIC 发 CNP → 发送 RNIC DCQCN 降速/恢复。若继续逼近溢出，PFC 在单跳单 priority 上暂停上游，队列低于 Xon 后恢复。
 
 ECN 是早反馈；PFC 是逐跳急刹，不是端到端拥塞控制。要防 PFC 死锁/HOL，验证 watchdog、计数器与 incast。现代 fabric 也可能采用不同拥塞控制、receiver credits 或 loss-tolerant RDMA；本指南不是唯一组合的配置命令。
 
+headroom需吸收pause生效前继续进入的流量。工程下界约 `link_Bps×reaction_seconds+max_frame+guard`：400G、10µs、9KB帧、50KB额外余量约 **0.559 MB**；16MB教学buffer在80% Xoff后留3.2MB。800G、100µs时要求约 **10.059 MB**，同样80%阈值已不够。百分比不是厂商profile，真实ASIC/线卡共享buffer限制另核。
+
 ### Q23. 900/1800 GB/s NVLink 与 400/800G 网络怎么比较？
 
 先统一口径。NVLink 4/5 的 900/1800 GB/s 为每 GPU 聚合双向宣传规格，非一个端口或单流独享。400/800 Gb/s 单端口单向理论分别是 **50/100 GB/s**，还需扣协议、效率与争用。NDR 400G / XDR 800G 需核对 lane、port、cable 实际组合。
 
 Rail-Optimized 把对应 GPU/NIC 索引映射到轨，提高亲和与路径可控性；跨轨仍依赖 spine/路由，不能自动承诺“轨数×线速”。
+
+玩具映射沙盘中，8 GPU各发1GB到4条400G rail、80%效率，均衡负载2/2/2/2GB，下界 **50ms**；全部碰撞一rail则 **200ms**。丢一rail并允许重映射后，3/3/2GB需 **75ms**，不是必然3×40GB/s满载。不开重映射时完整传输不能完成，保留阻塞字节而非伪装成功吞吐。热点与fabric预算可另成瓶颈；不模拟真实routing/recovery。
 
 ### Q24. NCCL algbw 与 busbw 为什么不同？
 
@@ -293,6 +303,8 @@ Broadcast / Reduce / SendRecv: factor=1
 ```
 
 1000 MB/20 ms → algbw **50 GB/s**。8 ranks AllReduce → busbw **87.5 GB/s**。这是通信量标准化，不是单端口凭空超线速。AllGather/ReduceScatter 的 S 使用总数组，不是每 rank 单块。对比必须同操作、消息大小定义、路径、topology、dtype、warmup 与错误状态。
+
+若输入的是NCCL API `count×dtype_bytes`，AllGather(sendcount)、ReduceScatter(recvcount)、固定AllToAll(per-peer count)还需乘n才是总S；AllReduce不乘。8 ranks、每API块1000 MB、20ms的AllGather对应S8000 MB、algbw400、busbw350 GB/s，不是50/43.75。使用实际对齐后的count/报告size；AllToAllv要看最大send/recv，不按平均专家流量套固定公式。
 
 ## 决策矩阵：先找到哪一种失败，再选手段
 

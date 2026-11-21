@@ -271,17 +271,27 @@ Four stages and eight microbatches take `8+4−1=11` ideal forward-only stage sl
 
 Payload bypasses host-DRAM staging; a NIC DMAs into registered GPU memory. CPU/drivers still set up connections, registration, pinning, queues, control and errors. Check PCIe affinity, IOMMU/ACS, peer-memory/DMA-BUF and drivers. Zero host copy is not zero overhead.
 
+Payload still crosses actual PCIe endpoints/switch paths. Gen3/4/5 one-way encoded bandwidth is `GT/s×lanes×128/130÷8`: Gen5x16 is about **63.02 GB/s**, or **53.56 GB/s** at the assumed85% payload fraction. An800G port's100 GB/s line rate can still hit PCIe first. Active ports differ from NIC PCIe-card links; dual ports share their card budget. Gen6/7 PAM4/FLIT needs different accounting.
+
+Default eight GPU endpoints/eight400G single-port cards provide320 GB/s at80% network efficiency. Shared-path300 and allocated-fabric240 cap the model at **240 GB/s**, with a4.27ms fully striped1024 MB floor. One participating GPU endpoint can reduce it to53.56 GB/s. Branding does not determine negotiated generation/lanes, and these are not model-throughput promises.
+
+Same-node pods do not prove NVLink. Indexed Dynamo/UCX CUDA IPC requires PID namespace/peer-GPU visibility conditions; otherwise RDMA/TCP fallback can occur without a NIXL error. Inspect logs/payloads rather than making privileged/hostPID a default fix; tenant isolation needs approved configuration.
+
 ### Q22. What do PFC, ECN and DCQCN each do?
 
 Classic lossless-RoCE baseline: switch ECN marks CE early → receiver RNIC sends CNP → sender RNIC DCQCN reduces/recover rates. If queues keep approaching overflow, PFC pauses an upstream hop/priority and resumes below Xon.
 
 ECN is early feedback; PFC is a hop-level brake, not end-to-end congestion control. Validate deadlock/HOL mitigation, watchdogs, counters and incast. Modern fabrics may use alternative congestion control, receiver credits or loss-tolerant RDMA; this guide is not the sole configuration recipe.
 
+Headroom absorbs traffic arriving before pause takes effect. An engineering floor is `link_Bps×reaction_seconds+max_frame+guard`:400G,10µs,9KB frame and50KB guard need about **0.559 MB**. A16MB teaching buffer keeps3.2MB beyond80% Xoff. At800G/100µs, the requirement is about **10.059 MB**, so the same threshold fails. Percentages are not vendor profiles; verify ASIC/line-card/shared-buffer limits.
+
 ### Q23. How are 900/1800 GB/s NVLink and 400/800G NICs compared?
 
 Normalize scope first. NVLink 4/5 advertises 900/1800 GB/s per-GPU aggregate bidirectional bandwidth, not one port/flow. A 400/800 Gb/s one-port one-way link gives **50/100 GB/s**, before efficiency, protocol and contention. Verify lane/port/cable combinations for NDR 400G / XDR 800G.
 
 Rail optimization maps corresponding GPU/NIC indices onto rails for affinity and controllable paths. Cross-rail traffic still uses spine/routing; “rails×line rate” is not automatic.
+
+In the toy mapping, eight GPUs send1GB each over four400G rails at80% efficiency. Balanced2/2/2/2GB yields a **50ms** floor; one-rail collision yields **200ms**. Remapping after one failed rail gives3/3/2GB and **75ms**, not automatic3×40GB/s full bandwidth. Without remapping the whole transfer cannot finish; blocked bytes remain rather than becoming successful throughput. Hotspots/fabric budgets add bottlenecks; actual routing/recovery is not simulated.
 
 ### Q24. Why do NCCL algbw and busbw differ?
 
@@ -293,6 +303,8 @@ Broadcast / Reduce / SendRecv: factor=1
 ```
 
 1000 MB/20 ms gives algbw **50 GB/s**. An 8-rank AllReduce gives busbw **87.5 GB/s**. This normalizes communication volume, not one-port wire overspeed. AllGather/ReduceScatter S is the total array, not one rank's shard. Align operation, size scope, path, topology, dtype, warmup and errors.
+
+When entering API `count×dtype_bytes`, AllGather(sendcount), ReduceScatter(recvcount) and fixed AllToAll(per-peer count) multiply byn to get totalS; AllReduce does not. At eight ranks,1000 MB/API chunk and20ms, AllGather has S8000 MB, algbw400 and busbw350 GB/s, not50/43.75. Use actual aligned counts/reported sizes. Variable AllToAllv needs max send/recv bytes, not mean expert traffic in the fixed formula.
 
 ## Decision matrix: identify the failure before choosing a technique
 

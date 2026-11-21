@@ -190,6 +190,49 @@ async function probe(exercise, expectedWidth) {
         await wait();
         cases += 4;
       }
+      const network = document.querySelector('form[data-lab="network"]');
+      if (network) {
+        const operation=network.querySelector('[data-key="operation"]');
+        operation.value="allgather";
+        operation.dispatchEvent(new Event("input",{bubbles:true}));
+        const mode=network.querySelector('[data-key="sizeMode"]');
+        mode.value="api-count";
+        mode.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(document.querySelector('[data-effective-size="8000"]'), "API count did not normalize to the total gathered array");
+        network.reset();
+        await wait();
+        cases += 1;
+      }
+      const rail = document.querySelector('form[data-lab="rail"]');
+      if (rail) {
+        const failure=rail.querySelector('[data-key="failure"]');
+        const reroute=rail.querySelector('[data-key="reroute"]');
+        failure.checked=true;
+        failure.dispatchEvent(new Event("input",{bubbles:true}));
+        reroute.checked=false;
+        reroute.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(document.querySelector('[data-rail-complete="false"]'), "Failed fixed rail mapping fabricated a complete transfer");
+        reroute.checked=true;
+        reroute.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(document.querySelector('[data-rail-complete="true"]'), "Toy failover did not restore a mapped path");
+        rail.reset();
+        await wait();
+        cases += 2;
+      }
+      const congestion = document.querySelector('form[data-lab="congestion"]');
+      if (congestion) {
+        assert(congestion.closest("[data-workbench]").querySelector('[data-signal="pfc-hop"]'), "PFC causal path was incorrectly chained after sender DCQCN");
+        const rate=congestion.querySelector('[data-key="rate"]');
+        const reaction=congestion.querySelector('[data-key="reactionUs"]');
+        rate.value="800";
+        rate.dispatchEvent(new Event("input",{bubbles:true}));
+        reaction.value="100";
+        reaction.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(document.querySelector('[data-headroom-fits="false"]'), "Insufficient PFC headroom was accepted");
+        congestion.reset();
+        await wait();
+        cases += 1;
+      }
       const oldLanguage = document.documentElement.lang;
       document.querySelector("#language").click();
       assert(document.documentElement.lang !== oldLanguage, "Language did not change");

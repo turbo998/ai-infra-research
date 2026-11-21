@@ -26,7 +26,7 @@ export const chapters = [
   { id: "sizing", file: "03-gpu-sizing.html", zh: "放得下、吐得快、首字快，是三道不同水位线", en: "Memory fit, decode speed and first-token speed are three different bounds", subtitleZh: "Dense / MoE · GQA / MLA · 显存堆叠 · HBM / FLOPs", subtitleEn: "Dense / MoE · GQA / MLA · memory stacks · HBM / FLOPs", minutes: 30, sources: ["h100", "h200", "b200", "l40s", "deepseek-config", "deepseek", "llama", "qwen", "vllm", "gqa-tp", "mla-layout"] },
   { id: "pd", file: "04-pd-disaggregation.html", zh: "PD 分离消除一类干扰，却增加一次 KV 交接", en: "PD removes one interference source but adds a KV handoff", subtitleZh: "混部 / Chunked Prefill / PD · KV 传输 · 决策边界", subtitleEn: "Colocated / chunked prefill / PD · KV transfer · decision boundaries", minutes: 25, sources: ["vllm", "vllm-pd", "dynamo", "mooncake", "sglang", "gpudirect", "dynamo-pd-layout", "nixl-layout"] },
   { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell", "tensor-parallel", "speculative", "prefix"] },
-  { id: "network", file: "06-rdma-roce-nvlink.html", zh: "900 GB/s NVLink 和 400 Gb/s 网卡，先统一口径", en: "Normalize units before comparing 900 GB/s NVLink with a 400 Gb/s NIC", subtitleZh: "GPUDirect RDMA · RoCEv2 流控 · 多轨拓扑 · NCCL 带宽", subtitleEn: "GPUDirect RDMA · RoCEv2 congestion · rail topology · NCCL bandwidth", minutes: 25, sources: ["gpudirect", "nccl", "blackwell", "h100", "ib", "ecn"] }
+  { id: "network", file: "06-rdma-roce-nvlink.html", zh: "900 GB/s NVLink和400 Gb/s网卡，先统一口径", en: "Normalize units before comparing900 GB/s NVLink with a400 Gb/s NIC", subtitleZh: "GPUDirect RDMA ·RoCEv2流控 ·多轨拓扑 ·NCCL带宽", subtitleEn: "GPUDirect RDMA ·RoCEv2 congestion ·rail topology ·NCCL bandwidth", minutes: 25, sources: ["gpudirect", "nccl", "blackwell", "h100", "ib", "ecn", "pcie", "rail-ra", "nccl-count", "pfc-headroom", "dynamo-pd-layout"] }
 ];
 
 export function indexContent() {
@@ -525,8 +525,9 @@ function parallelContent() {
 
 function networkContent() {
   const controls = select("network", "operation", "NCCL 通信操作", "NCCL operation", [["allreduce", "AllReduce"], ["allgather", "AllGather"], ["reducescatter", "ReduceScatter"], ["alltoall", "AllToAll"], ["broadcast", "Broadcast"], ["reduce", "Reduce"], ["sendrecv", "Send/Recv"]], "allreduce") +
+    select("network", "sizeMode", "消息尺寸口径", "Message-size scope", [["reported", "NCCL-reported total S"], ["api-count", "API count × dtype bytes (operation-specific)"]], "reported") +
     field("network", "ranks", "ranks 数 n", "Rank count n", 8, 2, 1024) +
-    field("network", "sizeMB", "NCCL 口径消息大小 MB（十进制）", "Message size MB (decimal, NCCL scope)", 1000, 0.001, 1e7, 0.001) +
+    field("network", "sizeMB", "所选口径MB（报告S或API count字节）", "MB under selected scope (reported S or API-count bytes)", 1000, 0.001, 1e7, 0.001) +
     field("network", "timeMs", "实测平均操作时间 ms（示例）", "Measured mean operation time ms (example)", 20, 0.001, 1e6, 0.001) +
     select("network", "rate", "单端口 Gb/s", "One-port Gb/s", [["100", "100G"], ["200", "200G"], ["400", "400G"], ["800", "800G"]], "400") +
     field("network", "rails", "端口/轨数（假设同时满载）", "Ports/rails (assume parallel)", 1, 1, 16) +
@@ -534,7 +535,41 @@ function networkContent() {
   const congestion = field("congestion", "queue", "当前队列占缓冲百分比（示意）", "Queue occupancy % (illustration)", 55, 0, 100, 1, "range") +
     field("congestion", "ecn", "ECN 标记起点 %", "ECN marking start %", 40, 1, 95) +
     field("congestion", "pfc", "PFC Xoff 起点 %", "PFC Xoff threshold %", 80, 2, 99) +
-    field("congestion", "xon", "PFC 恢复 Xon %", "PFC resume Xon %", 60, 0, 98);
+    field("congestion", "xon", "PFC恢复Xon %", "PFC resume Xon %", 60, 0, 98) +
+    field("congestion", "bufferMB", "教学队列总缓冲MB（非厂商profile）", "Teaching total queue buffer MB (not vendor profile)", 16, 0.1, 1000, 0.1) +
+    field("congestion", "rate", "链路线速Gb/s", "Link line rate Gb/s", 400, 1, 3200) +
+    field("congestion", "reactionUs", "暂停生效反应预算µs（示例）", "Pause reaction budget µs (example)", 10, 0, 1000, 0.1) +
+    field("congestion", "frameBytes", "最大帧字节预算", "Maximum-frame byte budget", 9000, 64, 1000000) +
+    field("congestion", "guardMB", "额外pipeline/cable余量MB", "Extra pipeline/cable guard MB", 0.05, 0, 100, 0.01);
+  const pcieGen = [3, 4, 5].map((n) => [String(n), `PCIe Gen${n} (NRZ 128b/130b)`]);
+  const lanes = [1, 2, 4, 8, 16].map((n) => [String(n), `x${n}`]);
+  const bandwidths = select("networkBudget", "gpu", "仅用于NVLink规格对照的GPU", "GPU for NVLink specification comparison only", gpus, "h100") +
+    field("networkBudget", "gpuEndpoints", "参与条带的GPU PCIe端点数", "GPU PCIe endpoints participating in striping", 8, 1, 64) +
+    field("networkBudget", "nicPorts", "活动网络端口数", "Active network-port count", 8, 1, 64) +
+    field("networkBudget", "nicCards", "活动NIC PCIe卡数（≤端口）", "Active NIC PCIe cards (≤ports)", 8, 1, 64) +
+    select("networkBudget", "rate", "每端口Gb/s", "Gb/s per port", [["100", "100G"], ["200", "200G"], ["400", "400G"], ["800", "800G"]], "400") +
+    select("networkBudget", "gpuGen", "实测/假设GPU端协商PCIe代际", "Observed/assumed GPU negotiated PCIe generation", pcieGen, "5") +
+    select("networkBudget", "gpuLanes", "GPU端协商lanes", "GPU negotiated lanes", lanes, "16") +
+    select("networkBudget", "nicGen", "NIC卡协商PCIe代际", "NIC-card negotiated PCIe generation", pcieGen, "5") +
+    select("networkBudget", "nicLanes", "NIC卡协商lanes", "NIC-card negotiated lanes", lanes, "16") +
+    field("networkBudget", "networkEfficiency", "网络payload效率（示例）", "Network payload efficiency (example)", 0.8, 0.05, 1, 0.05) +
+    field("networkBudget", "pcieEfficiency", "编码后PCIe有效payload比例", "PCIe payload fraction after line encoding", 0.85, 0.05, 1, 0.05) +
+    check("networkBudget", "crossesShared", "这条数据路径经过所填共享链路（示例设是）", "Path crosses the entered shared link (example assumes yes)", true) +
+    field("networkBudget", "sharedGBps", "该共享路径单向payload GB/s", "Shared-path one-way payload GB/s", 300, 0.1, 10000, 0.1) +
+    field("networkBudget", "fabricGBps", "分给此节点/任务的fabric单向GB/s", "Fabric one-way GB/s allocated to this node/task", 240, 0.1, 10000, 0.1) +
+    field("networkBudget", "payloadMB", "全条带payload MB（十进制）", "Fully striped payload MB (decimal)", 1024, 0.1, 10000000, 0.1);
+  const railControls = select("rail", "mapping", "教学GPU→rail映射", "Teaching GPU→rail mapping", [["balanced", "Balanced affinity / round-robin"], ["skewed", "All flows collide on first rail"]], "balanced") +
+    field("rail", "gpus", "参与发送的GPU数", "Sending GPU count", 8, 1, 16) +
+    field("rail", "railCount", "独立rail/端口数", "Independent rails/ports", 4, 1, 16) +
+    field("rail", "payloadGB", "每GPU outgoing payload GB", "Outgoing payload GB/GPU", 1, 0.001, 100, 0.001) +
+    field("rail", "rate", "每rail单向Gb/s", "One-way Gb/s per rail", 400, 1, 3200) +
+    field("rail", "efficiency", "每rail payload效率", "Per-rail payload efficiency", 0.8, 0.05, 1, 0.05) +
+    field("rail", "fabricGBps", "共享fabric payload预算GB/s", "Shared fabric payload budget GB/s", 300, 0.1, 10000, 0.1) +
+    field("rail", "hotGpu", "热点GPU索引（<GPU数）", "Hot GPU index (<GPU count)", 0, 0, 15) +
+    field("rail", "hotMultiplier", "此GPU流量倍率", "Payload multiplier for that GPU", 1, 1, 8, 0.1) +
+    check("rail", "failure", "注入一条rail失效", "Inject one failed rail") +
+    field("rail", "failedRail", "失效rail索引（<rail数）", "Failed rail index (<rail count)", 0, 0, 15) +
+    check("rail", "reroute", "允许玩具模型重映射（非真实自动恢复）", "Allow toy remapping (not actual automatic recovery)", true);
   return section("concepts", "RDMA 是内存访问能力，RoCEv2 是承载方式，NVLink 是另一类互连", "RDMA is a memory capability, RoCEv2 a transport, NVLink another interconnect",
     table([b("层次", "Layer"), b("含义", "Meaning"), b("单位 / 比较边界", "Unit / comparison boundary")], [
       ["RDMA", b("NIC 直接读写注册内存，降低数据面 CPU 拷贝/参与", "NIC reads/writes registered memory, reducing data-plane CPU copies/work"), b("不是线缆标准，也不自动等于 GPU direct", "Not a cable standard and not automatically GPU-direct")],
@@ -563,19 +598,33 @@ function networkContent() {
         arrow(350, 125, 450, 125) + `<text x="400" y="95" text-anchor="middle">NIC / RDMA</text><text x="400" y="155" text-anchor="middle">400 / 800 Gb/s</text><text x="400" y="280" text-anchor="middle">NVLink 4/5: 900/1800 GB/s per-GPU aggregate; NIC: 50/100 GB/s one-way</text>`,
         "示意中的快域可以是单服务器或跨服务器超节点；速率为规格口径，不表示每对 GPU 或每个请求独占。",
         "A fast domain may be one server or a multi-server supernode. Rates are specification scopes, not dedicated bandwidth for every GPU pair or request.", 315)) +
+    section("networkBudget", "800G端口不等于100 GB/s GPU有效payload", "An800G port does not guarantee100 GB/s GPU payload",
+      lab("networkBudget", bandwidths) +
+      formula("PCIe Gen3/4/5 one-way encoded GB/s = GT/s_per_lane×lanes×(128/130)/8<br>Network payload = port_Gb/s/8×payload_efficiency<br>Node path bound = min(active_ports×port_payload, GPU_endpoint_PCIe, NIC_card_PCIe,<br>                      crossed_shared_links, allocated_fabric)<br>Striped transfer lower bound ms = payload_MB / path_GBps") +
+      p("PCIe Gen5 x16编码后单向约63.02 GB/s；再按本例85%payload比例为53.56。即使800G端口线速100 GB/s、网络效率80%为80，单PCIe端点仍可能先卡住。双端口NIC也可能共用一条PCIe链路，不能把“端口数”当“NIC卡数”。",
+        "PCIe Gen5 x16 gives about63.02 GB/s one-way after coding, or53.56 at the example85% payload fraction. An800G port is100 GB/s line rate and80 at80% efficiency, yet one PCIe endpoint can bottleneck first. Dual-port NICs may share a PCIe link: port count is not NIC-card count.") +
+      p("默认8个GPU端点、8张单端口400G NIC，网络payload320 GB/s；共享路径300、分配fabric240，因此上界240 GB/s。1024 MB完全条带传输下界约4.27 ms；若只有1个GPU端点参与，上界可降至53.56，不能把8张NIC带宽全给一张GPU。",
+        "Default eight GPU endpoints and eight single-port400G NICs provide320 GB/s network payload, with shared-path300 and allocated-fabric240: bound240 GB/s. A fully striped1024 MB transfer has about4.27 ms lower bound. With only one GPU endpoint, it can fall to53.56; eight NICs do not bypass one GPU endpoint.") +
+      note("这是单向路径预算，不是实际吞吐或P99；输入需要取两端实际链路与分配的较小值。GPU选择仅用于NVLink规格对照，PCIe代际/lanes独立填真实协商值，不按型号猜。只有真正经过共享链路才纳入约束；PCIe6/7的PAM4/FLIT不适用此128b/130b公式。各沙盘输入独立，比较前对齐。",
+        "This is a one-way path budget, not measured throughput/P99. Use smaller actual endpoint links/allocations. GPU selection only supplies NVLink reference; enter actual negotiated PCIe generation/lanes independently, not from branding. Include shared links only if crossed. PCIe6/7 PAM4/FLIT does not use this128b/130b formula. Align independent workbench inputs before comparing.")) +
     section("network", "8 ranks 的 AllReduce：busbw=1.75×algbw，不是压缩收益", "At 8 ranks, AllReduce busbw=1.75×algbw, not compression",
       lab("network", controls) +
-      formula("algbw [GB/s] = size_MB / time_ms  [decimal MB and ms cancel to GB/s]<br>AllReduce busbw = algbw × 2(n−1)/n<br>AllGather / ReduceScatter / AllToAll busbw = algbw × (n−1)/n<br>Broadcast / Reduce / SendRecv factor = 1") +
+      formula("algbw [GB/s] = effective_total_S_MB / time_ms<br>API-count mode: AllGather(sendcount), ReduceScatter(recvcount), fixed AllToAll(per-peer count)<br>               need total S = count×dtype_bytes×n; AllReduce/Broadcast/Reduce/SendRecv do not multiply n<br>AllReduce busbw = algbw×2(n−1)/n<br>AllGather / ReduceScatter / fixed AllToAll busbw = algbw×(n−1)/n") +
       p("默认消息 1,000 MB、20 ms：algbw=50 GB/s；8 ranks AllReduce busbw=87.5 GB/s。busbw 是标准化通信指标，不是「网络凭空超出线速」。AllGather/ReduceScatter 的 S 要用总数组大小，不是每 rank 的单块。",
         "Default 1,000 MB in 20 ms: algbw=50 GB/s; 8-rank AllReduce busbw=87.5 GB/s. Bus bandwidth is a normalized collective metric, not magical wire speed. For AllGather/ReduceScatter, S is the total array, not one rank's shard.") +
       note("单端口网络效率预算不能直接套到所有 GPU 集合通信：操作可能走 NVLink、多个 NIC、PCIe 或混合路径。若指标超过选定预算，先核对路径、方向、总消息定义和轨数，而不是自动宣告测量错误。",
-        "One-port network budgets do not apply automatically to every GPU collective; paths may use NVLink, multiple NICs, PCIe or a mix. If a metric exceeds the selected budget, check path, direction, size definition and rails before declaring an error.")) +
+        "One-port network budgets do not apply automatically to every GPU collective; paths may use NVLink, multiple NICs, PCIe or a mix. If a metric exceeds the selected budget, check path, direction, size definition and rails before declaring an error.") +
+      note("API count指本操作实际使用的count×dtype字节，不是命令行请求的名义大小；NCCL-tests可按对齐取整。AllToAllv的可变分发需看最大send/recv计数，本转换器只覆盖固定AllToAll，不能拿平均专家流量推busbw。",
+        "API count means actual operation count×dtype bytes, not nominal command-line requested size; NCCL-tests can round for alignment. Variable AllToAllv uses maximum send/recv counts; this converter covers fixed AllToAll and cannot infer busbw from mean expert traffic.")) +
     section("congestion", "ECN 是提前减速，PFC 是逐跳急刹，DCQCN 是端点反馈控制", "ECN signals early, PFC brakes a hop, DCQCN controls the sender",
       lab("congestion", congestion) +
       p("传统 lossless RoCE 基线：交换机队列到 ECN 区间先标记 CE；接收端 RNIC 产生 CNP；发送端 RNIC 的 DCQCN 降速，再逐步恢复。如果队列继续逼近溢出，PFC 按 priority 对上游链路发 pause；低于 Xon 再恢复。标记/减速不是丢包；PFC 不是端到端拥塞控制。",
         "Classic lossless-RoCE baseline: the switch marks CE as queues enter the ECN range; the receiver RNIC emits CNP; sender RNIC DCQCN reduces rate then recovers. If queues keep nearing overflow, PFC pauses an upstream priority on a hop, resuming below Xon. Marking/rate reduction is not packet loss; PFC is not end-to-end congestion control.") +
       note("阈值滑块是概念图，不是厂商配置。ECN/PFC/DCQCN 不是所有现代以太网 fabric 的唯一有效组合；替代拥塞控制、receiver credits 与可承受丢包的实现要按协议和负载验证。避免 PFC 死锁、head-of-line blocking，并启用可验证的 watchdog 与遥测。",
-        "Threshold sliders illustrate concepts, not vendor configuration. ECN/PFC/DCQCN is not the only valid modern fabric design; alternative congestion control, receiver credits and loss-tolerant implementations need protocol/workload validation. Address PFC deadlock/HOL blocking with verified watchdogs and telemetry.")) +
+        "Threshold sliders illustrate concepts, not vendor configuration. ECN/PFC/DCQCN is not the only valid modern fabric design; alternative congestion control, receiver credits and loss-tolerant implementations need protocol/workload validation. Address PFC deadlock/HOL blocking with verified watchdogs and telemetry.") +
+      formula("Engineering headroom floor ≈ link_bytes_per_second×pause_reaction_seconds<br>                             + max_frame_bytes + pipeline/cable_guard<br>Available headroom in this toy pool = buffer_MB×(1−Xoff_percent/100)") +
+      p("400G链路、10µs暂停反应预算会继续送约0.5 MB；加9KB帧与50KB余量，约需0.559 MB。16MB教学队列在80% Xoff后保留3.2MB。把反应预算增至100µs或换800G，所需headroom会急增；不能只复制“80%暂停”的百分比。厂商ASIC/line-card阈值和共享buffer规则要单独查。",
+        "A400G link can send another0.5 MB over a10µs pause-response budget; with9KB frame and50KB guard, about0.559 MB is needed. A16MB teaching queue keeps3.2MB after80% Xoff. Increase response to100µs or use800G and headroom rises sharply: copying an'80% pause' threshold is insufficient. Check vendor ASIC/line-card/shared-buffer rules separately.")) +
     section("rails", "多轨拓扑要匹配 GPU↔NIC 亲和与集合通信映射", "Rail topology must match GPU↔NIC affinity and collective mapping",
       diagram("rails-topology", "两节点双轨优化示意", "Two-node, two-rail example",
         node(20, 20, 200, "Node A / GPU0 NIC0", "rail 0") + node(20, 145, 200, "Node A / GPU1 NIC1", "rail 1") +
@@ -584,7 +633,18 @@ function networkContent() {
         arrow(225, 54, 295, 54) + arrow(505, 54, 575, 54) + arrow(225, 179, 295, 179) + arrow(505, 179, 575, 179) +
         `<path d="M 400 90 L 400 143" class="grid-line"/><text x="420" y="122">spine / cross-rail routing</text>`,
         "同索引 GPU/NIC 可形成对应轨；跨轨通信仍需 spine/路由。可用带宽受 PCIe、亲和、oversubscription、流分配和故障轨约束，不能简单 N×线速保证。",
-        "Same-index GPU/NIC pairs can form rails; cross-rail traffic still needs spine/routing. PCIe, affinity, oversubscription, flow mapping and failed rails limit usable bandwidth; N×line rate is not guaranteed.")) +
+        "Same-index GPU/NIC pairs can form rails; cross-rail traffic still needs spine/routing. PCIe, affinity, oversubscription, flow mapping and failed rails limit usable bandwidth; N×line rate is not guaranteed.") +
+      lab("rail", railControls) +
+      formula("Per-rail time floor = assigned_payload_GB / effective_rail_GBps<br>Fabric time floor = total_payload_GB / allocated_fabric_GBps<br>Completion floor = max(per-rail floors, fabric floor), only if every assigned flow has a live path") +
+      p("8个GPU各发1GB、4条400G rail、80%效率：均衡映射每rail2GB，下界50ms；全挤到一rail变成200ms。失去一rail后若玩具重映射到3条存活rail，负载3/3/2GB，下界75ms而不是自动“3×40GB/s”满载。若不重映射，完整集合通信无法完成，必须显示阻塞而不是成功吞吐。",
+        "Eight GPUs send1GB each over four400G rails at80% efficiency: balanced2GB/rail gives50ms floor; one-rail collision gives200ms. Toy remapping after one failure yields3/3/2GB and75ms, not automatic full3×40GB/s. Without remapping, the whole collective cannot complete: report blocked flows, not successful throughput.") +
+      note("这是出站payload映射教学，不模拟NCCL图搜索、ECMP/DLB、SHARP、对端拥塞或故障恢复耗时。热点GPU、PCIe亲和与接收端也可改变结果。RA的rail-aligned拓扑是物理基础，不保证每个任务自动充分利用；真实all-to-all和KV共载需测。",
+        "This outgoing-payload mapping exercise does not simulate NCCL graph search, ECMP/DLB, SHARP, receiver congestion or recovery time. Hot GPUs, PCIe affinity and receivers change outcomes. Rail-aligned RA topology is a physical foundation, not automatic full utilization; test actual all-to-all plus KV traffic.")) +
+    section("transport-runtime", "同节点有NVLink，隔离Pod的KV仍可能走TCP", "A node can have NVLink while isolated-Pod KV still falls back to TCP",
+      p("Dynamo索引文档说明，UCX CUDA IPC路径需进程/PID namespace与peer GPU可见性等条件；UCX1.23对无fabric handles的跨PID namespace IPC有约束，普通HGX H100也不能默认有IMEX。默认单GPU Pod可能不具备peer可见性，因而即使同节点也不走NVLink。",
+        "Indexed Dynamo docs describe UCX CUDA-IPC requirements including PID namespace and peer-GPU visibility. UCX1.23 constrains cross-PID IPC without fabric handles; ordinary HGX H100 must not be assumed to have IMEX. Default single-GPU pods can lack peer visibility, so being colocated does not prove NVLink transport.") +
+      p("这时请求RDMA设备可让路径转用RDMA，否则可能退到TCP；NIXL不一定因此报错，UCX_TLS也不能创造缺失的权限/可见性。要检查真实日志、device与payload测试。不要把privileged/hostPID当默认修复：多租户隔离、安全批准与合法RDMA/fabric配置必须一起权衡。",
+        "Requested RDMA devices can permit an RDMA path; otherwise TCP fallback may occur without a NIXL error. UCX_TLS cannot create missing permissions/visibility. Inspect actual logs/devices/payload tests. Do not make privileged/hostPID a default fix: weigh tenant isolation, approved access and valid RDMA/fabric configuration together.")) +
     section("faq", "看 busbw 之前先看消息口径和路径", "Inspect message scope and path before busbw",
       faq("RDMA 是否完全不使用 CPU？", "Does RDMA avoid the CPU entirely?", "数据面可以绕过 host staging，但连接建立、内存注册、页固定、队列配置、控制与错误处理仍需要 CPU/驱动。GPU-initiated 通信也不取消全部控制平面。", "Payload can bypass host staging, but connection setup, registration, pinning, queues, control and errors still involve CPU/drivers. GPU-initiated communication does not remove all control-plane work.") +
       faq("NCCL busbw 可以跨不同 rank 数直接比较吗？", "Can NCCL busbw be compared across rank counts?", "可以作为标准化参考，但必须同操作、消息大小定义、路径、拓扑、dtype、warmup、迭代窗口与错误状态；小消息看 latency，大消息看带宽，并用实际训练/推理负载复验。", "It is a normalized reference, but compare the same operation, size scope, path, topology, dtype, warmup, iterations and error state. Use latency for small messages, bandwidth for large ones, then verify real workloads.") +

@@ -429,7 +429,7 @@
     M.number(p.rate, "rate", 0.001);
     M.number(p.efficiency, "efficiency", 0.01, 1);
     const budget = p.rate / 8 * p.rails * p.efficiency;
-    return kpis([[fmt(r.algbw) + " GB/s", "algbw"], [fmt(r.busbw) + " GB/s", "busbw"], [fmt(r.factor, 4) + "×", t("标准化修正系数", "Normalization factor")], [fmt(budget) + " GB/s", t("所选单向 payload 预算", "Selected one-way payload budget")]]) +
+    return kpis([[fmt(r.algbw) + " GB/s", "algbw"], [fmt(r.busbw) + " GB/s", "busbw"], [fmt(r.factor, 4) + "×", t("标准化修正系数", "Normalization factor")], [fmt(budget) + " GB/s", t("所选单向payload预算", "Selected one-way payload budget")], [fmt(r.effectiveSizeMB) + " MB", t("实际计算的总S", "Effective total S")], [fmt(r.sizeMultiplier) + "×", t("API count到S倍率", "API-count to S multiplier")]]).replace('<div class="kpis">', `<div class="kpis" data-effective-size="${r.effectiveSizeMB}">`) +
       barChart([{ label: "algbw", value: r.algbw }, { label: "busbw", value: r.busbw }, { label: "NIC payload budget", value: budget }], t("不同层次的带宽量并列，不自动把 NIC 预算当 NVLink/混合路径上限。", "Different bandwidth scopes; NIC budget is not automatically a NVLink/mixed-path cap."), "GB/s") +
       (r.busbw > budget ? note(t("指标高于所选 NIC 预算：核对是否为 NVLink/多端口路径、size 定义与方向，不能直接认为单端口超线速。", "Metric exceeds the chosen NIC budget: verify NVLink/multiport paths, size scope and direction; do not infer one-port overspeed.")) : "") +
       dataTable(["Operation", "S definition", "Factor"], [
@@ -440,9 +440,46 @@
         ["Broadcast / Reduce", t("根对应的完整消息", "Complete root-associated message"), "1"]
       ], t("NCCL-tests 消息大小口径", "NCCL-tests message-size scope"));
   }
+  function networkBudget(p) {
+    const r = M.networkBudget(p);
+    return kpis([[fmt(r.portPayloadGBps) + " GB/s", t("单端口单向payload", "One-port one-way payload")], [fmt(r.gpuPCIe.payloadGBps) + " GB/s", t("单GPU PCIe端点payload", "One-GPU PCIe endpoint payload")], [fmt(r.nicPCIe.payloadGBps) + " GB/s", t("单NIC卡PCIe payload", "One-NIC-card PCIe payload")], [fmt(r.nodeGBps) + " GB/s", `${t("节点路径上界", "Node path bound")}: ${r.bottleneck.key}`], [fmt(r.stripedTransferMs) + " ms", t("完全条带传输下界，非实测", "Fully striped transfer floor, not measured")], [r.nvlinkOneWayGBps === null ? "N/A" : fmt(r.nvlinkOneWayGBps) + " GB/s", t("GPU NVLink单向聚合规格，非此网络路径", "GPU NVLink one-way aggregate spec, not this network path")]]) +
+      barChart(r.limits.map((limit) => ({ label: limit.key, value: limit.valueGBps })), t("只对实际参与/经过的资源取最小；端口、NIC卡与GPU端点是不同数量。", "Take the minimum only across resources used/crossed; ports, NIC cards and GPU endpoints are distinct."), "GB/s") +
+      dataTable([t("口径", "Scope"), "GB/s", t("限制", "Limit")], [
+        ["GPU PCIe encoded one-way", fmt(r.gpuPCIe.encodedGBps), t("Gen3/4/5只扣线编码，尚未扣packet开销", "Gen3/4/5 coding only, before packet overhead")],
+        ["NIC PCIe encoded one-way", fmt(r.nicPCIe.encodedGBps), t("按实际协商代际/lanes输入", "Use actual negotiated generation/lanes")],
+        ["PCIe payload fraction", fmt(p.pcieEfficiency), t("额外TLP/实现效率假设", "Extra TLP/implementation efficiency assumption")],
+        ["NVLink advertised bidirectional", r.gpu.nvlink === 0 ? "N/A" : fmt(r.gpu.nvlink), t("每GPU聚合规格，不是单流独享", "Per-GPU aggregate specification, not dedicated per flow")],
+        ["Modeled payload/GPU", fmt(r.perGpuGBps), t("全条带均衡假设下的平均，非实际分配", "Mean under fully balanced striping, not actual allocation")]
+      ], t("统一单位之后仍须统一方向与路径", "After units, align direction and path")) +
+      note(t("GPU型号不决定此处PCIe协商值；所有payload效率、共享link和fabric预算是输入假设，须用两端实测较小值替换。仅单向线量用于KV传输，不把双向规格相加后给单向流使用。", "GPU branding does not determine these negotiated PCIe values. Payload efficiencies/shared-link/fabric budgets are assumptions; replace with smaller endpoint measurements. One-way KV traffic cannot use the sum of bidirectional specifications."));
+  }
+  function rail(p) {
+    const r = M.railBudget(p);
+    const height = Math.max(p.gpus, p.railCount) * 52 + 120;
+    const span = height - 150;
+    let body = `<text x="15" y="25">GPU outgoing payload</text><text x="345" y="25">NIC / rail demand (not measured)</text>`;
+    r.rails.forEach((item, i) => {
+      const y = 48 + (p.railCount === 1 ? span / 2 : i * span / (p.railCount - 1));
+      body += `<rect x="345" y="${y}" width="230" height="42" rx="8" class="surface"/><text x="460" y="${y + 17}" text-anchor="middle" class="label">rail ${item.rail}${item.failed ? " · FAILED" : ""}</text><text x="460" y="${y + 34}" text-anchor="middle" class="label">${fmt(item.payloadGB)} GB planned</text>`;
+    });
+    r.assignments.forEach((item, i) => {
+      const y = 48 + (p.gpus === 1 ? span / 2 : i * span / (p.gpus - 1));
+      body += `<rect x="15" y="${y}" width="160" height="42" rx="8" class="${item.blocked ? "surface" : "primary"}"/><text x="95" y="${y + 18}" text-anchor="middle" class="${item.blocked ? "label" : "inverse"}">GPU ${item.gpu} · ${fmt(item.payloadGB)} GB</text><text x="95" y="${y + 34}" text-anchor="middle" class="${item.blocked ? "label" : "inverse"}">${item.blocked ? "BLOCKED" : "assigned"}</text>`;
+      if (item.rail !== null) {
+        const target = 69 + (p.railCount === 1 ? span / 2 : item.rail * span / (p.railCount - 1));
+        body += `<path d="M 175 ${y + 21} C 260 ${y + 21}, 260 ${target}, 340 ${target}" class="line ${item.blocked ? "tertiary" : "secondary"}"/>`;
+      }
+    });
+    body += `<text x="610" y="80">${r.lowerBoundMs === null ? "INCOMPLETE" : fmt(r.lowerBoundMs) + " ms floor"}</text><text x="610" y="108">max(rail, fabric)</text><text x="15" y="${height - 22}">Toy mapping only · no receiver / PCIe / route-search / recovery simulation</text>`;
+    return kpis([[fmt(r.totalGB) + " GB", t("总计划payload", "Total planned payload")], [fmt(r.railGBps) + " GB/s", t("每存活rail有效带宽假设", "Payload assumption per live rail")], [r.lowerBoundMs === null ? t("完整传输无法完成", "Whole transfer cannot complete") : fmt(r.lowerBoundMs) + " ms", t("瓶颈传输下界，非P99", "Bottleneck transfer floor, not P99")], [fmt(r.effectiveGBps) + (r.effectiveGBps === null ? "" : " GB/s"), t("模型等效总带宽", "Modeled effective aggregate bandwidth")], [fmt(r.blockedGB) + " GB", t("无有效路径的计划流量", "Planned bytes without a valid path")], [String(r.rails.filter((item) => !item.failed && item.payloadGB > 0).length), t("实际有负载的存活rails", "Live rails carrying assigned load")]]).replace('<div class="kpis">', `<div class="kpis" data-rail-complete="${r.lowerBoundMs !== null}">`) +
+      svg(body, t("均衡、碰撞与失效重映射改变每rail负载；失败payload保留在分母中，不伪装成功吞吐。", "Balanced/colliding/failure remapping changes rail demand; failed payload remains in the denominator rather than becoming successful throughput."), height) +
+      barChart(r.rails.map((item) => ({ label: `Rail ${item.rail}${item.failed ? " FAILED" : ""}`, value: item.payloadGB })), t("这是计划需求，不是故障rail已完成的流量。", "Planned demand, not completed traffic on a failed rail."), "GB") +
+      dataTable(["Rail", t("分配GPU", "Assigned GPUs"), "Planned GB", t("路径", "Path")], r.rails.map((item) => [item.rail, item.gpus.join(", ") || "—", fmt(item.payloadGB), item.failed ? t("故障，不能完成", "Failed, cannot complete") : t("存活（未实测）", "Live (not measured)")]), t("热点、上联与实际routing仍需验证", "Validate hotspots, uplinks and actual routing"));
+  }
   const pauseStates = new WeakMap();
   function congestion(p, form) {
     const r = M.congestion(p, pauseStates.get(form) || false);
+    const headroom = M.pfcBudget(p);
     pauseStates.set(form, r.paused);
     let body = `<rect x="60" y="60" width="680" height="45" rx="6" class="surface"/><rect x="60" y="60" width="${680 * p.queue / 100}" height="45" class="${r.paused ? "tertiary" : "primary"}"/>`;
     [[p.ecn, "ECN"], [p.pfc, "Xoff"], [p.xon, "Xon"]].forEach(([value, label], i) => {
@@ -450,18 +487,20 @@
       const ty = 137 + i * 24;
       body += `<path d="M ${x} 47 V 110" class="line ${i === 0 ? "secondary" : "tertiary"}"/><text x="${x}" y="${ty}" text-anchor="middle">${label} ${value}%</text>`;
     });
-    body += boxes([["Switch queue", r.marked ? "ECN: CE mark" : "below ECN"], ["Receiver RNIC", r.marked ? "send CNP" : "no CNP"], ["Sender RNIC", r.marked ? "DCQCN reduce" : "normal rate"], ["Upstream link", r.paused ? "PFC paused" : "PFC clear"]]).replaceAll('y="50"', 'y="220"').replaceAll('y="85"', 'y="255"').replaceAll('y="115"', 'y="285"').replaceAll(" 95", " 265");
-    return kpis([[p.queue + "%", t("队列占用（示意）", "Illustrative queue occupancy")], [r.marked ? "CE / CNP" : "No mark", t("ECN 反馈状态", "ECN feedback state")], [r.paused ? "PAUSE" : "CLEAR", t("PFC 逐跳状态", "PFC hop state")]]) +
-      svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
+    body += `<text x="20" y="198">ECN / CNP / DCQCN: end-to-end feedback, not PFC</text>`;
+    body += boxes([["Switch queue", r.marked ? "ECN: CE mark" : "below ECN"], ["Receiver RNIC", r.marked ? "send CNP" : "no CNP"], ["Sender RNIC", r.marked ? "DCQCN reduce" : "normal rate"]]).replaceAll('y="50"', 'y="220"').replaceAll('y="85"', 'y="255"').replaceAll('y="115"', 'y="285"').replaceAll(" 95", " 265");
+    body += `<rect x="610" y="330" width="180" height="80" rx="8" class="surface"/><text x="700" y="359" text-anchor="middle">Upstream neighbor</text><text x="700" y="385" text-anchor="middle">${r.paused ? "PFC PAUSED" : "PFC CLEAR"}</text><path data-signal="pfc-hop" d="M 107 310 V 370 H 603" class="line tertiary"/><path d="M 597 365 L 603 370 L 597 375" class="line tertiary"/><text x="205" y="352">PFC: switch → upstream hop pause/resume</text>`;
+    return kpis([[p.queue + "%", t("队列占用（示意）", "Illustrative queue occupancy")], [r.marked ? "CE / CNP" : "No mark", t("ECN反馈状态", "ECN feedback state")], [r.paused ? "PAUSE" : "CLEAR", t("PFC逐跳状态", "PFC hop state")], [fmt(headroom.requiredMB, 3) + " MB", t("反应期headroom工程下界", "Reaction-period headroom floor")], [fmt(headroom.availableMB, 3) + " MB", t("教学池Xoff后的余量", "Teaching-pool room beyond Xoff")], [headroom.fits ? t("只满足本例余量公式", "Passes this allowance formula only") : t("余量不足，pause后仍可能溢出", "Insufficient room; overflow possible after pause"), t("不是厂商配置验证", "Not vendor configuration validation")]]).replace('<div class="kpis">', `<div class="kpis" data-headroom-fits="${headroom.fits}">`) +
+      svg(body, t("ECN/CNP是端到端反馈；PFC由交换机直接作用上游hop，保留Xoff/Xon滞回；非网络仿真器。", "ECN/CNP is end-to-end feedback; PFC acts directly from the switch on its upstream hop, retaining Xoff/Xon hysteresis; not a network simulator."), 445) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, pdBudget, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, pdBudget, parallel, speculative, prefix: prefixCaching, network, networkBudget, rail, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment", "firstVisible"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment", "firstVisible", "sizeMode", "mapping"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);
@@ -506,6 +545,8 @@
       mtp.disabled = model !== "deepseek";
       if (mtp.disabled) mtp.checked = false;
     }
+    if (form.dataset.lab === "networkBudget") form.querySelector('[data-key="sharedGBps"]').disabled = !form.querySelector('[data-key="crossesShared"]').checked;
+    if (form.dataset.lab === "rail") form.querySelector('[data-key="failedRail"]').disabled = !form.querySelector('[data-key="failure"]').checked;
   }
   function render(form) {
     const workbench = form.closest("[data-workbench]");
