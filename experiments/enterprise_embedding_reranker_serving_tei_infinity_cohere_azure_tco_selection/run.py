@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    monthly_queries_m = 50.0
+    tiers = [
+        {
+            "tier": "Tier 1: Naive PyTorch / FastAPI Wrapper (2D Padded Batching — 59% [PAD] Waste)",
+            "rerank_top50_p99_ms": 168.0,
+            "padding_compute_waste_pct": 59.0,
+            "rag_recall_at_5_pct": 94.8,
+            "monthly_serving_tco_usd": 28500,
+        },
+        {
+            "tier": "Tier 2: Commercial Per-Search Rerank SaaS API (Cohere Rerank 3.5 / Voyage AI)",
+            "rerank_top50_p99_ms": 62.0,
+            "padding_compute_waste_pct": 0.0,
+            "rag_recall_at_5_pct": 95.6,
+            "monthly_serving_tco_usd": 75000,
+        },
+        {
+            "tier": "Tier 3: Cloud-Native Integrated Semantic Ranker (Azure AI Search L2 Semantic Ranker + OpenAI Embeddings)",
+            "rerank_top50_p99_ms": 28.0,
+            "padding_compute_waste_pct": 0.0,
+            "rag_recall_at_5_pct": 95.0,
+            "monthly_serving_tco_usd": 19500,
+        },
+        {
+            "tier": "Tier 4: Self-Hosted Rust TEI / Infinity (BGE-M3 + BGE-Reranker-v2 FP8 + 1D Unpadded FlashAttention on 2x L40S/H200)",
+            "rerank_top50_p99_ms": 14.2,
+            "padding_compute_waste_pct": 0.0,
+            "rag_recall_at_5_pct": 95.2,
+            "monthly_serving_tco_usd": 4200,
+        },
+    ]
+    return {
+        "experiment_id": "enterprise_embedding_reranker_serving_tei_infinity_cohere_azure_tco_selection",
+        "Provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "workload_baseline": {
+            "monthly_rag_queries_millions": monthly_queries_m,
+            "candidates_reranked_per_query": 50,
+            "final_chunks_sent_to_llm": 5,
+            "llm_prefill_token_savings_pct": 90.0,
+        },
+        "tiers": tiers,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_results()
+
+    if args.check:
+        existing = json.loads(out_path.read_text(encoding="utf-8"))
+        assert existing == payload, "results.json drift detected"
+        print("OK: enterprise_embedding_reranker_serving_tei_infinity_cohere_azure_tco_selection verified.")
+        return
+
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()

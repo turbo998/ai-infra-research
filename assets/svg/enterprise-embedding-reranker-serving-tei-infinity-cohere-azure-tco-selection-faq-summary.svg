@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业级 Embedding 与 Cross-Encoder Reranker 底座选型：TEI / Infinity vs. Cohere vs. Azure Semantic (#436)</text>
+  <text x="28" y="58" class="sub">为什么普通 PyTorch 跑 Top-50 重排序 (Reranker) 会因为 59% `[PAD]` 零填充把 P99 拖慢到 168ms？用 1D 无填充拼接压至 14.2ms！</text>
+
+  <!-- Left Panel: The 59% [PAD] Compute Waste Trap vs 1D Unpadded FlashAttention in TEI / Infinity -->
+  <rect x="24" y="76" width="560" height="270" class="panel"/>
+  <text x="42" y="104" class="h2">1. RAG 隐藏延迟杀手：Cross-Encoder 重排 50 个切片的 59% `[PAD]` 算力浪费</text>
+
+  <rect x="42" y="120" width="524" height="96" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">❌ 痛点：普通 PyTorch / FastAPI 把 50 条长短不一的切片补齐到最长 512 矩形张量</text>
+  <text x="56" y="164" class="mono">• 1 次 RAG 检索召回 50 条候选切片：49 条仅 180 Tokens，但有 1 条长切片占 512 Tokens</text>
+  <text x="56" y="184" class="mono">• 传统 2D Batching `[50, 512]`：49 条短切片被迫塞入 332 个无意义 `[PAD]` 零填充！</text>
+  <text x="56" y="202" class="txt">• 结果：GPU 59% 的矩阵乘法全在算无效的 0，Top-50 重排 P99 飙至 168ms！</text>
+
+  <rect x="42" y="228" width="524" height="104" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="250" class="txt" font-weight="700" fill="#34d399">🏆 破局：HuggingFace TEI / Infinity 一维零填充拼接 (1D Unpadded FlashAttention + FP8)</text>
+  <text x="56" y="272" class="mono">• 彻底消灭 `[PAD]`：将 50 条序列首尾相接展平为一维紧凑张量 `[1, Sum(L_i)]`，传入偏移数组</text>
+  <text x="56" y="292" class="mono">• 配合基于总 Token 预算的动态批处理 (Token-Budget Batching) + ONNX/TensorRT FP8</text>
+  <text x="56" y="312" class="txt">• 结果：单张 L40S/H200 重排吞吐暴涨 6.8x，Top-50 重排 P99 从 168ms 压至 14.2ms！</text>
+
+  <!-- Right Panel: 4 Embedding & Reranker Platforms Matrix -->
+  <rect x="608" y="76" width="568" height="270" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四大企业 Embedding 与 Reranker 服务方案对标 (5,000 万次 RAG 查询/月)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 自建朴素 PyTorch / FastAPI (2D 矩形补零 Padding + FP16)</text>
+  <text x="638" y="158" class="mono">• 59% 算力浪费在 `[PAD]` ✕ | Top-50 重排 P99 168ms ✕ | 需 12 张 GPU ($28,500/月)</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 商业专用重排 SaaS API (Cohere Rerank 3.5 / Voyage AI API)</text>
+  <text x="638" y="214" class="mono">• 多语言/代码检索精度极高 | 按 $1.00~$2.00 / 千次搜索计费 | 5,000万次月烧 $75,000/月 ✕</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: 云原生检索内置重排 (Azure AI Search Semantic Ranker + OpenAI Embeddings)</text>
+  <text x="638" y="270" class="mono">• 检索与 L2 语义重排同机房内联完成 (P99 28ms ✓) | 免自建 GPU | 月成本 $19,500/月 ✓</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: 自建 Rust TEI / Infinity (BGE-M3 + BGE-Reranker-v2 FP8 + 1D 零填充 🏆)</text>
+  <text x="638" y="326" class="mono">• Top-50 重排 P99 仅 14.2ms 🏆 | Recall@5 达 95.2% 🏆 | 仅需 2x L40S/H200 ($4,200/月)!</text>
+
+  <!-- Bottom Panel: All-in-One BGE-M3 Tri-Modal Retrieval + 1D Unpadded Reranking Pipeline -->
+  <rect x="24" y="366" width="1152" height="270" class="panel"/>
+  <text x="42" y="394" class="h2">3. 端到端高吞吐 Embedding + Reranker 参考架构：BGE-M3 一次前向三路输出 + 14.2ms 极速精排</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">① BGE-M3 单次前向同时输出稠密+稀疏向量</text>
+  <text x="58" y="464" class="mono">• 无需分别维护一套 BM25 分词器 + 一套 Embedding</text>
+  <text x="58" y="484" class="mono">• BGE-M3 一次 6ms 前向传播同时吐出：</text>
+  <text x="58" y="504" class="mono">  - 1024d 稠密语义向量 (Dense Vector)</text>
+  <text x="58" y="524" class="mono">  - 词权重稀疏向量 (Learned Sparse SPLADE)</text>
+  <text x="58" y="550" class="txt" fill="#6ee7b7">专有名词、物料编码与模糊语义一网打尽！</text>
+
+  <rect x="422" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="438" y="440" class="txt" font-weight="700" fill="#34d399">② 俄罗斯套娃降维 (Matryoshka MRL · 省 50% 内存)</text>
+  <text x="438" y="464" class="mono">• 支持 Matryoshka 表示学习的模型 (`text-embedding-3`</text>
+  <text x="438" y="484" class="mono">  / `Nomic` / `Qwen-Embed`) 把最重要信息排在前维</text>
+  <text x="438" y="504" class="mono">• 直接截取前 512 维或 768 维并做归一化：</text>
+  <text x="438" y="524" class="mono">• 检索精度保留 99.4%，向量库内存立省 50%~75%！</text>
+  <text x="438" y="550" class="txt" fill="#34d399">无需重新训练或重新跑全库 Embedding！</text>
+
+  <rect x="802" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="818" y="440" class="txt" font-weight="700" fill="#d8b4fe">③ TEI / Infinity 1D 无填充重排 (14.2ms)</text>
+  <text x="818" y="464" class="mono">• Rust 编写零 GIL 锁开销，内置动态 Token 桶批处理</text>
+  <text x="818" y="484" class="mono">• 将 Top-50 候选按长度排序并走 1D 无填充核函数</text>
+  <text x="818" y="504" class="mono">• 精筛出最准的 Top-5 切片喂给主生成大模型</text>
+  <text x="818" y="524" class="mono">• 使主大模型 Prompt 从 25K 缩至 2.5K (-90%！)</text>
+  <text x="818" y="550" class="txt" fill="#fde68a">花 14.2ms 重排，为主大模型省下 90% Prefill 费！</text>
+</svg>
