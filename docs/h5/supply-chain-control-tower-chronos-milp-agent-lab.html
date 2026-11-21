@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业级智能供应链控制塔：时序大模型 (Chronos) + MILP 运筹求解协同沙盘 (#439)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 24px; max-width: 1180px; margin: 0 auto; }
+    .nav { margin-bottom: 18px; font-size: 14px; }
+    .nav a { color: var(--accent); text-decoration: none; margin-right: 14px; font-weight: 600; }
+    h1 { font-size: 26px; margin-bottom: 8px; }
+    .sub { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; margin-bottom: 22px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 23px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    label { display: flex; justify-content: space-between; font-size: 13px; margin: 10px 0 4px; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; }
+    th { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <a href="./index.html">← 返回 AI Infra 交互式 H5 全景精学馆</a>
+    <a href="../components/enterprise-supply-chain-control-tower-chronos-milp-agent-tco-selection-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-supply-chain-control-tower-chronos-milp-agent-tco-selection-faq.en.md">🌐 English FAQ</a>
+    <a href="../reports/enterprise-supply-chain-control-tower-chronos-milp-agent-tco-selection-cards.html">🃏 7-Card 视觉评测卡</a>
+  </div>
+  <h1>📦 企业级智能供应链控制塔：LLM 断供感知 + Chronos/LightGBM + OR-Tools MILP 沙盘 (#439)</h1>
+  <p class="sub">杜绝用纯文本大模型直接排产导致的 38% 违反产能/MOQ 硬约束：让大模型提取风险与写约束方程，交由时序模型与运筹求解器算全局最优</p>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiWmape">10.6% vs 26.4%</div><div class="lbl">销量预测加权误差 (WMAPE)</div></div>
+    <div class="kpi"><div class="val" id="kpiViol">0.0% vs 38.0%</div><div class="lbl">MOQ/产能硬约束违反率</div></div>
+    <div class="kpi"><div class="val" id="kpiReplan">12 分钟 vs 72 小时</div><div class="lbl">突发断供全局重排响应速度</div></div>
+    <div class="kpi"><div class="val" id="kpiSave">年省 $1,210 万</div><div class="lbl">释放呆滞资金与减少缺货损失</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 企业供应链规模与新品冷启动占比</h2>
+      <label><span>年度供应链商品总交易额 GMV (百万美元/年)</span><strong id="gmvVal">$500 M</strong></label>
+      <input type="range" id="gmvSlider" min="100" max="2000" step="100" value="500" />
+
+      <label><span>无历史数据冷启动新品 SKU 占比 (%)</span><strong id="coldVal">20%</strong></label>
+      <input type="range" id="coldSlider" min="5" max="50" step="5" value="20" />
+
+      <label><span>外部突发交期延迟预警提前天数 (天)</span><strong id="leadVal">9 天</strong></label>
+      <input type="range" id="leadSlider" min="1" max="15" step="1" value="9" />
+    </div>
+
+    <div class="card">
+      <h2>📊 四大供应链预测与排产架构实时对标</h2>
+      <table>
+        <thead>
+          <tr><th>架构方案</th><th>预测误差 WMAPE</th><th>违反硬约束</th><th>年度损耗与平台总成本</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: 传统 ERP + 手工 Excel</td><td style="color:#f59e0b">26.4%</td><td>4.5%</td><td id="t1Cost">$18.50M / 年</td></tr>
+          <tr><td>Tier 2: 纯文本大模型直接排产</td><td style="color:#ef4444">31.5% ✕</td><td style="color:#ef4444">38.0% ✕</td><td id="t2Cost">$22.40M / 年</td></tr>
+          <tr><td>Tier 3: 传统商业 APS (SAP IBP 等)</td><td>14.8%</td><td>0.0%</td><td id="t3Cost">$11.20M / 年</td></tr>
+          <tr><td><strong>Tier 4: LLM+Chronos/GBDT+MILP (🏆)</strong></td><td style="color:#10b981;font-weight:700" id="t4Wmape">10.6% 🏆</td><td style="color:#10b981;font-weight:700">0.0% 🏆</td><td style="color:#10b981;font-weight:700" id="t4Cost">$6.40M / 年</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function update() {
+      const gmv = parseInt(document.getElementById('gmvSlider').value, 10);
+      const cold = parseInt(document.getElementById('coldSlider').value, 10);
+      const lead = parseInt(document.getElementById('leadSlider').value, 10);
+
+      document.getElementById('gmvVal').textContent = '$' + gmv + ' M';
+      document.getElementById('coldVal').textContent = cold + '%';
+      document.getElementById('leadVal').textContent = lead + ' 天';
+
+      const scale = gmv / 500.0;
+      const t1 = (18.5 * scale).toFixed(2);
+      const t2 = (22.4 * scale).toFixed(2);
+      const t3 = (11.2 * scale).toFixed(2);
+      const t4 = (6.4 * scale * (1 - (lead - 9) * 0.015)).toFixed(2);
+      const save = (parseFloat(t1) - parseFloat(t4)).toFixed(1);
+      const wmape = (10.6 + (cold - 20) * 0.04).toFixed(1);
+
+      document.getElementById('t1Cost').textContent = '$' + t1 + 'M / 年';
+      document.getElementById('t2Cost').textContent = '$' + t2 + 'M / 年';
+      document.getElementById('t3Cost').textContent = '$' + t3 + 'M / 年';
+      document.getElementById('t4Cost').textContent = '$' + t4 + 'M / 年';
+      document.getElementById('t4Wmape').textContent = wmape + '% 🏆';
+      document.getElementById('kpiWmape').textContent = wmape + '% vs 26.4%';
+      document.getElementById('kpiSave').textContent = '年省 $' + save + 'M';
+    }
+    ['gmvSlider', 'coldSlider', 'leadSlider'].forEach(id => document.getElementById(id).addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
