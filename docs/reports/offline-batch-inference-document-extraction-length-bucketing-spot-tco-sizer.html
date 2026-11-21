@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Offline Batch Document Extraction Throughput &amp; Spot GPU Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Offline Batch Document Extraction (`Prefix/Length Sorting + Spot GPUs`) Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Size GPU Count &amp; Run Cost for Nightly Million-Document ETL</div>
+    <div class="grid">
+      <div class="card">
+        <label>Documents per Nightly Batch ($D$): <strong id="dVal">2.0 Million Documents</strong></label>
+        <input type="range" id="docsM" min="0.5" max="10.0" step="0.5" value="2.0" oninput="recalc()">
+        <label>Nightly Batch Completion Window ($T_{\text{win}}$): <strong id="wVal">4.0 Hours</strong></label>
+        <input type="range" id="winH" min="2" max="12" step="1" value="4" oninput="recalc()">
+        <label>Batch Execution Architecture:</label>
+        <select id="tier" onchange="recalc()">
+          <option value="t4">Tier 4: Prefix/Length Sorted + Max-Batch (B=384) on Spot H200 GPUs</option>
+          <option value="t2">Tier 2: Cloud Managed 24h Batch API (50% Discount over PAYGO)</option>
+          <option value="t1">Tier 1: Unsorted Real-Time Online HTTP Endpoint</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="tpsVal">4,680 Out tok/s/GPU</div><div class="lbl">Sustained Output Throughput per GPU</div></div>
+          <div class="kpi"><div class="val" id="gpuVal">16x H200 GPUs</div><div class="lbl">Required GPUs to Finish Within Window</div></div>
+          <div class="kpi"><div class="val" id="hitVal">99.4% Prefix Hit</div><div class="lbl">Schema Prefix Cache Residency</div></div>
+          <div class="kpi"><div class="val" id="costVal">$2,850 / run</div><div class="lbl">Total Batch Run Cost (-84.9% vs Tier 1)</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const dM = parseFloat(document.getElementById('docsM').value);
+      const wH = parseInt(document.getElementById('winH').value, 10);
+      const t = document.getElementById('tier').value;
+      document.getElementById('dVal').textContent = dM.toFixed(1) + ' Million Documents';
+      document.getElementById('wVal').textContent = wH.toFixed(1) + ' Hours';
+      const totalOutTokens = dM * 1e6 * 450;
+      let tps = 4680, hit = '99.4% Prefix Hit', costPerM = 1425;
+      if (t === 't2') { tps = 1950; hit = '72.0% Prefix Hit'; costPerM = 4725; }
+      else if (t === 't1') { tps = 1120; hit = '38.0% Prefix Hit'; costPerM = 9450; }
+      const reqGpus = Math.max(8, Math.ceil((totalOutTokens / (wH * 3600 * tps)) / 8) * 8);
+      const cost = Math.round(dM * costPerM);
+      document.getElementById('tpsVal').textContent = tps.toLocaleString() + ' Out tok/s/GPU';
+      document.getElementById('gpuVal').textContent = t === 't2' ? 'Managed Cloud Pool' : (reqGpus + 'x H200 GPUs');
+      document.getElementById('hitVal').textContent = hit;
+      document.getElementById('costVal').textContent = '$' + cost.toLocaleString() + ' / run';
+    }
+  </script>
+</body>
+</html>
