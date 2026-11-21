@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>视频生成 DiT (Wan2.1 / HunyuanVideo) 序列并行与 TeaCache 延迟估算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #F472B6; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>视频生成扩散模型（Wan2.1 / HunyuanVideo · xDiT USP + FP8 + TeaCache）容量与延迟计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>3D 时空 Latent Token 数 <span id="v_tok" class="val">72,000</span></label>
+      <select id="tok" onchange="calc()">
+        <option value="36000">480p 5s (~36,000 Tokens)</option>
+        <option value="72000" selected>720p 5s (~72,000 Tokens)</option>
+        <option value="144000">1080p 5s (~144,000 Tokens)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>去噪采样总步数 (Steps) <span id="v_steps" class="val">50</span></label>
+      <input type="range" id="steps" min="20" max="60" step="5" value="50" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>TeaCache 缓存跳过比例 <span id="v_skip" class="val">52%</span></label>
+      <input type="range" id="skip" min="0" max="65" step="4" value="52" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>DiT 并行与量化架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 单卡 BF16 串行 CFG</option>
+        <option value="2">Tier 2: 8 卡纯张量并行 (TP=8 BF16)</option>
+        <option value="3">Tier 3: xDiT USP (CFG=2 × Ulysses=4 BF16)</option>
+        <option value="4" selected>Tier 4: xDiT USP + FP8 SageAttention + TeaCache (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>单条视频生成耗时</div><div id="k_lat" class="num">14.2 sec</div></div>
+    <div class="kpi"><div>单卡峰值显存 (HBM)</div><div id="k_mem" class="num">15.8 GB</div></div>
+    <div class="kpi"><div>8卡整机每小时产量</div><div id="k_tpt" class="num">253 条/h</div></div>
+    <div class="kpi"><div>单条视频算力成本</div><div id="k_cost" class="num">$0.089</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const tok = parseFloat(document.getElementById('tok').value);
+  const steps = parseFloat(document.getElementById('steps').value);
+  const skip = parseFloat(document.getElementById('skip').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_tok').textContent = tok.toLocaleString();
+  document.getElementById('v_steps').textContent = steps;
+  document.getElementById('v_skip').textContent = Math.round(skip * 100) + '%';
+
+  const seqScale = Math.pow(tok / 72000, 1.65) * (steps / 50);
+  let lat = 14.2, mem = 15.8, tpt = 253, cost = 0.089;
+  if (mode === '1') {
+    lat = +(342.0 * seqScale).toFixed(1);
+    mem = +(28.0 + (tok / 72000) * 48.5).toFixed(1);
+    tpt = Math.round((3600 / lat) * 8);
+    cost = +(22.4 / tpt).toFixed(3);
+  } else if (mode === '2') {
+    lat = +(68.5 * seqScale).toFixed(1);
+    mem = +(12.0 + (tok / 72000) * 42.0).toFixed(1);
+    tpt = Math.round(3600 / lat);
+    cost = +(22.4 / tpt).toFixed(3);
+  } else if (mode === '3') {
+    lat = +(38.0 * seqScale).toFixed(1);
+    mem = +(14.0 + (tok / 72000) * 10.5).toFixed(1);
+    tpt = Math.round(3600 / lat);
+    cost = +(22.4 / tpt).toFixed(3);
+  } else {
+    lat = +(38.0 * seqScale * 0.56 * (1 - skip * 0.65)).toFixed(1);
+    mem = +(9.5 + (tok / 72000) * 6.3).toFixed(1);
+    tpt = Math.round(3600 / lat);
+    cost = +(22.4 / tpt).toFixed(3);
+  }
+  document.getElementById('k_lat').textContent = lat + ' sec';
+  document.getElementById('k_mem').textContent = mem + ' GB';
+  document.getElementById('k_tpt').textContent = tpt + ' 条/h';
+  document.getElementById('k_cost').textContent = '$' + cost;
+}
+calc();
+</script>
+</body>
+</html>
