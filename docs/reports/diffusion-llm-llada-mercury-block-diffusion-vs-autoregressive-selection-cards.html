@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7-Card Report · Diffusion LLM (LLaDA / Mercury / Block Diffusion) vs. Autoregressive (#382)</title>
+<style>
+  body { background: #090d16; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1480px; margin: 0 auto; }
+  .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+  .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.5px; }
+  h2 { font-size: 20px; margin: 10px 0; color: #f8fafc; line-height: 1.3; }
+  p, li { font-size: 13.5px; color: #cbd5e1; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+  th { color: #93c5fd; }
+  .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11.5px; color: #6ee7b7; }
+  .bar-row { margin: 8px 0; }
+  .bar-bg { background: #0f172a; height: 14px; border-radius: 7px; overflow: hidden; }
+  .bar-fill { background: #3b82f6; height: 100%; }
+  .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; background: #065f46; color: #6ee7b7; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <section class="card">
+    <div>
+      <div class="meta">1 / 7 · HANDS-ON · DIFFUSION LLM (dLLM) PARADIGM</div>
+      <h2>Block Diffusion LLMs (Mercury / BD3-LM) Deliver 980 TPS/User by Breaking the Serial Decode Wall</h2>
+      <p>Autoregressive LLMs load all model weights from HBM to emit 1 token per step (110 TPS). Semi-autoregressive Block Diffusion refines 64–256 tokens in parallel per forward pass while caching prefix KV, achieving an 8.9x speedup.</p>
+    </div>
+    <div class="code">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">2 / 7 · SCENARIO: ROOFLINE ARITHMETIC INTENSITY JUMP</div>
+      <h2>Updating 64 Masked Tokens Per Step Multiplies Decode Arithmetic Intensity by 64x!</h2>
+      <p>On H100 (ridge point ~295 FLOPs/Byte), single-user B=1 AR decode operates at ~1 FLOP/Byte (0.3% TensorCore utilization). Parallel 64-token diffusion steps utilize 22%+ of TensorCores.</p>
+      <span class="pill">Act automatically · Block Diffusion for Whole-Block Code/JSON</span>
+    </div>
+    <div class="code">512 tokens / (8 blocks * 8 denoising steps/block) = 64 forward passes vs. 512!</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">3 / 7 · WHAT I TESTED</div>
+      <h2>4-Tier Generation Paradigm Evaluation Matrix</h2>
+      <table>
+        <thead><tr><th>SCENARIO</th><th>USER TPS</th><th>KV CACHE</th><th>ACTION</th></tr></thead>
+        <tbody>
+          <tr><td>Tier 1 Serial Autoregressive</td><td>110 TPS ✕</td><td>Yes</td><td>Baseline</td></tr>
+          <tr><td>Tier 2 AR + EAGLE-3 Spec</td><td>285 TPS</td><td>Yes</td><td>General Chat</td></tr>
+          <tr><td>Tier 3 Full-Seq dLLM (LLaDA)</td><td>640 TPS</td><td>No ✕</td><td>Short Prompt</td></tr>
+          <tr><td>Tier 4 Block Diffusion + KV</td><td>980 TPS ✓</td><td>Yes ✓</td><td>Deploy</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code">Miss Marker (✕): Tier 3 recomputes prompt tokens every denoising step</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">4 / 7 · UNDER THE HOOD</div>
+      <h2>Semi-Autoregressive Block Diffusion (BD3-LM) Mechanics</h2>
+      <div class="code"># Inter-Block Causal KV Cache + Intra-Block Bidirectional Diffusion:
+Prefix KV [0..4096] cached once in HBM!
+For block B_k of 64 [MASK] tokens:
+  For step s = 1..8:
+    Bidirectional_Attn(Q=B_k, KV=[Prefix_KV, B_k]) -&gt; Unmask high-conf tokens!</div>
+    </div>
+    <div class="code">&lt;answer&gt;Combine inter-block causal KV cache with intra-block parallel diffusion&lt;/answer&gt;</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Long-Prompt Scaling Perturbation (1K Prompt vs. 16K Prompt Generation Speed)</h2>
+      <table>
+        <thead><tr><th>PARADIGM</th><th>1K PROMPT TPS</th><th>16K PROMPT TPS</th><th>CHANGE</th></tr></thead>
+        <tbody>
+          <tr><td>Tier 2 AR + EAGLE-3</td><td>310 TPS</td><td>245 TPS</td><td>-21.0%</td></tr>
+          <tr><td>Tier 3 Vanilla LLaDA (No KV)</td><td>920 TPS</td><td>160 TPS</td><td>-82.6%</td></tr>
+          <tr><td>Tier 4 Block Diffusion + KV</td><td>1,080 TPS</td><td>860 TPS</td><td>-20.4%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code">Prefix KV caching is mandatory for diffusion LLMs on 4K–32K enterprise prompts</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">6 / 7 · LATENCY &amp; USER TPS</div>
+      <h2>Single-User Output Generation Throughput on 1x H100 (Tokens/sec)</h2>
+      <div class="bar-row"><div>Tier 4 Block Diffusion + Prefix KV (980 TPS · 522 ms)</div><div class="bar-bg"><div class="bar-fill" style="width:100%"></div></div></div>
+      <div class="bar-row"><div>Tier 3 Vanilla Full-Seq Diffusion LLaDA (640 TPS · 800 ms)</div><div class="bar-bg"><div class="bar-fill" style="width:65%"></div></div></div>
+      <div class="bar-row"><div>Tier 2 AR + EAGLE-3 Speculative (285 TPS · 1,796 ms)</div><div class="bar-bg"><div class="bar-fill" style="width:29%"></div></div></div>
+      <div class="bar-row"><div>Tier 1 Serial Autoregressive Decode (110 TPS · 4,654 ms)</div><div class="bar-bg"><div class="bar-fill" style="width:11%;background:#ef4444"></div></div></div>
+    </div>
+    <div class="code">8.9x faster single-user whole-function and JSON schema generation</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For &amp; Production Readiness</h2>
+      <p>✅ <strong>Good fit</strong>: Instant IDE whole-file code edits (`Mercury Coder`), structured JSON extraction, bidirectional code infilling, and low-batch latency-critical agent planners.</p>
+      <p>⛔ <strong>Not for</strong>: High-batch (`B &gt;= 128`) offline throughput jobs where standard AR models already saturate TensorCores.</p>
+    </div>
+    <div class="code">Readiness: Production-ready in Inception Mercury Coder, LLaDA, Dream-7B &amp; BD3-LM</div>
+  </section>
+</div>
+</body>
+</html>

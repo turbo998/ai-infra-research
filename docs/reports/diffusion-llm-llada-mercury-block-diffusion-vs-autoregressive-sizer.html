@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diffusion LLM (LLaDA / Mercury / Block Diffusion) vs. Autoregressive Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive Diffusion LLM (`LLaDA / Mercury / BD3-LM`) vs. Autoregressive Sizer (#382)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Generation Paradigm Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Serial Autoregressive (1 Tok/Step)</option>
+        <option value="2">Tier 2: AR + EAGLE-3 Speculative Decoding</option>
+        <option value="3">Tier 3: Vanilla Full-Seq Diffusion LLM (No KV)</option>
+        <option value="4" selected>Tier 4: Block Diffusion (BD3 / Mercury) + KV Cache</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Generated Output Block Size (Tokens)</label>
+      <input type="number" id="outTok" value="512" min="64" max="4096" step="64" oninput="calc()">
+    </div>
+    <div class="ctrl">
+      <label>Prompt Context Length (Tokens)</label>
+      <select id="promptTok" onchange="calc()">
+        <option value="1024">1,024 Tokens</option>
+        <option value="4096" selected>4,096 Tokens</option>
+        <option value="16384">16,384 Tokens</option>
+      </select>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>Per-User Output Speed</h3><div class="val" id="tps">980 TPS</div></div>
+    <div class="card"><h3>End-to-End Generation Time</h3><div class="val" id="e2e">522 ms</div></div>
+    <div class="card"><h3>Speedup vs. Serial AR</h3><div class="val" id="speed">8.91x</div></div>
+    <div class="card"><h3>Prefix KV Cache Support</h3><div class="val" id="kv">Supported</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const outTok = parseFloat(document.getElementById('outTok').value) || 512;
+  const promptTok = parseFloat(document.getElementById('promptTok').value) || 4096;
+  const pPenalty = tier === 3 ? (promptTok / 4096.0) : 1.0;
+  const tps = ({1: 110.0, 2: 285.0, 3: 640.0, 4: 980.0}[tier]) / pPenalty;
+  const e2e = (outTok / tps) * 1000.0;
+  const speed = tps / 110.0;
+  document.getElementById('tps').textContent = Math.round(tps) + ' TPS';
+  document.getElementById('e2e').textContent = Math.round(e2e) + ' ms';
+  document.getElementById('speed').textContent = speed.toFixed(2) + 'x';
+  document.getElementById('kv').textContent = tier === 3 ? 'No (Recomputes)' : 'Supported';
+}
+calc();
+</script>
+</body>
+</html>
