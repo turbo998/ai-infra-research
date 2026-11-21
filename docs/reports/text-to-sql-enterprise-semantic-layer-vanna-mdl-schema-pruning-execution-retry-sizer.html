@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>企业级 Text-to-SQL 与语义层 (MDL / Schema Linking / SQLGlot) 准确率与成本计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #FDE68A; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业级 Text-to-SQL 智能问数（Semantic MDL / 列剪枝 / SQLGlot 门禁）准确率与 TCO 计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>数仓物理表总数 <span id="v_tbl" class="val">800</span></label>
+      <input type="range" id="tbl" min="50" max="2500" step="50" value="800" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>月度 BI 问数查询量 (万次) <span id="v_q" class="val">45万</span></label>
+      <input type="range" id="q" min="5" max="200" step="5" value="45" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>复杂跨表衍生指标占比 <span id="v_kpi" class="val">40%</span></label>
+      <input type="range" id="kpi" min="10" max="80" step="5" value="40" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>Text-to-SQL 架构档位</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 全量物理 DDL 硬塞 (Full Schema Dump)</option>
+        <option value="2">Tier 2: 物理表 DDL 向量召回 Top-10 (无语义层)</option>
+        <option value="3">Tier 3: 多 Agent 串行选表 + 实库报错重试</option>
+        <option value="4" selected>Tier 4: 语义层 MDL + 列/枚举值剪枝 + SQLGlot 门禁 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>单次 Prompt Tokens</div><div id="k_tok" class="num">2,950</div></div>
+    <div class="kpi"><div>端到端 P95 延迟</div><div id="k_lat" class="num">1,120 ms</div></div>
+    <div class="kpi"><div>业务口径执行准确率</div><div id="k_acc" class="num">93.8%</div></div>
+    <div class="kpi"><div>月度 LLM+数仓总成本</div><div id="k_tco" class="num">$19,500</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const tbl = parseFloat(document.getElementById('tbl').value);
+  const q = parseFloat(document.getElementById('q').value);
+  const kpi = parseFloat(document.getElementById('kpi').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_tbl').textContent = tbl;
+  document.getElementById('v_q').textContent = q + '万';
+  document.getElementById('v_kpi').textContent = Math.round(kpi * 100) + '%';
+
+  let tok = 2950, lat = 1120, acc = 93.8, tcoBase = 19500;
+  if (mode === '1') {
+    tok = tbl * 120;
+    lat = Math.round(900 + tok * 0.051);
+    acc = Math.max(25.0, +(62.0 - tbl * 0.015 - kpi * 14.0).toFixed(1));
+    tcoBase = 168000 * (tbl / 800);
+  } else if (mode === '2') {
+    tok = 4800;
+    lat = 1650;
+    acc = +(81.2 - kpi * 40.0).toFixed(1);
+    tcoBase = 38000;
+  } else if (mode === '3') {
+    tok = 18500;
+    lat = 4920;
+    acc = +(86.6 - kpi * 20.0).toFixed(1);
+    tcoBase = 72000;
+  } else {
+    tok = 2950;
+    lat = 1120;
+    acc = +(95.4 - kpi * 4.0).toFixed(1);
+    tcoBase = 19500;
+  }
+  const tco = Math.round(tcoBase * (q / 45.0));
+  document.getElementById('k_tok').textContent = tok.toLocaleString();
+  document.getElementById('k_lat').textContent = lat.toLocaleString() + ' ms';
+  document.getElementById('k_acc').textContent = acc + '%';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
