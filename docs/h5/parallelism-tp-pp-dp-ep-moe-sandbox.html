@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+  <title>TP / PP / Attention DP / Expert EP 推理并行与七大加速技术交互精读沙盘 · AI Infra H5</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --purple: #a78bfa;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+    }
+    .topbar {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .badge {
+      background: linear-gradient(135deg, #6366f1, #10b981);
+      color: #fff;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .nav-links a, .lang-btn {
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    main { max-width: 1320px; margin: 20px auto; padding: 0 16px 48px; }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .hero h1 { margin: 0 0 10px; font-size: 24px; color: #f8fafc; }
+    .hero p { margin: 0; color: #cbd5e1; font-size: 14.5px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 680px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .formula {
+      background: #0f172a;
+      border-left: 4px solid var(--purple);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+      color: #c4b5fd;
+      margin: 10px 0;
+      overflow-x: auto;
+    }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select {
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .kpi {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .kpi .v { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .l { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; }
+    th { color: #93c5fd; background: rgba(15, 23, 42, 0.65); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 16px; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <span class="badge">H5 STUDY LAB · #397</span>
+        <strong style="margin-left:8px;" data-lang="zh">Dense (70B/405B) vs. MoE (671B) 并行切分（TP/PP/DP/EP）与七大推理加速交互沙盘</strong>
+        <strong style="margin-left:8px;" data-lang="en">Dense vs. MoE Parallelism (TP/PP/DP/EP) &amp; 7 Acceleration Techniques Lab</strong>
+      </div>
+      <div class="nav-links">
+        <a href="index.html">🎓 全景精学馆 / Hub</a>
+        <a href="ai-infra-learning-hub.html">🔥 7大模块工作台</a>
+        <a href="../h5-academy/index.html">📚 6册精学馆</a>
+        <a href="../components/dense-vs-moe-tp-pp-dp-ep-parallelism-communication-sizing-selection-faq.md">📖 双语 FAQ</a>
+        <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div data-lang="zh">
+        <h1>⚡ 3 分钟看懂核心结论：TP 降延迟、DP/PP 扩吞吐、MoE 必用 Attention DP × Expert EP (DeepEP)！</h1>
+        <p><strong>三大黄金铁律</strong>：① <strong>TP（张量并行）每层触发 2 次同步 All-Reduce</strong>（80 层即 `160 次/tok`），必须锁死在单机 <strong>NVLink (`900 GB/s`)</strong> 域内（`TP <= 8`），跨机拉 TP=16 会直接增加 `19.4 ms/tok` 通信阻塞！② <strong>Dense 405B 跨机用 `TP=8 × PP=2`</strong>，而 <strong>DeepSeek-671B MoE 必须用 `Attention DP × Expert EP (DeepEP)`</strong>，保住完整路由专家大矩阵（MFU 达 `54.6%`）并消除跨卡 KV 同步；③ <strong>投机解码 (`MTP / EAGLE-3`)</strong> 在 `Batch <= 48` 时提速 `2.1x`，但在 `Batch > 48` 算力饱和区必须自动关断！</p>
+      </div>
+      <div data-lang="en">
+        <h1>⚡ 3-Minute Executive Takeaway: Lock TP in NVLink, Scale Dense with PP, and Scale MoE with Attention DP × Expert EP!</h1>
+        <p><strong>Three Golden Rules</strong>: (1) <strong>TP triggers 2L synchronous All-Reduces per token</strong>—lock `TP <= 8` inside intra-node NVLink; spanning `TP=16` over Ethernet/IB adds `19.4 ms/tok` stall. (2) For <strong>DeepSeek-671B MoE</strong>, decouple <strong>Attention DP × Expert EP (DeepEP)</strong> with dual-microbatch overlap to reach `2,260 tok/s/GPU` (`3.9x`). (3) Auto-disable speculative decoding (`MTP / EAGLE-3`) when active batch exceeds `48`.</p>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- Interactive Parallelism & Acceleration Calculator -->
+      <div class="card">
+        <h2>🎛️ 交互式并行切分与通信手算器：对比 TP / PP / Attention DP × Expert EP 延迟拆解</h2>
+        <div class="formula">
+          T_step = T_HBM_Read(W_active / TP_eff) + T_Compute + T_Comm_Exposed(TP / PP / EP)<br>
+          TP Comm = 2*L * [ 2*(TP-1)*alpha + 2*((TP-1)/TP)*(B*d*Bytes / BW_link) ]
+        </div>
+
+        <label>1. 选择目标模型与参数结构：</label>
+        <select id="mSel" onchange="calcPar()">
+          <option value="ds671" selected>DeepSeek-V3/R1 671B MoE (总权重 671B, 每词激活 37B, 61层 MLA)</option>
+          <option value="llama405">Llama-3.1-405B Dense (总/激活 405B, 126层 GQA-8)</option>
+          <option value="llama70">Llama-3.3-70B Dense (总/激活 70B, 80层 GQA-8)</option>
+        </select>
+
+        <label>2. 选择 16-GPU (双机 2x8) 并行切分拓扑方案：</label>
+        <select id="parSel" onchange="calcPar()">
+          <option value="dp_ep_overlap" selected>🏆 Tier 4: Attention DP=16 × Expert EP=16 (DeepEP 双微批重叠)</option>
+          <option value="dp_ep">🟦 Tier 3: Attention DP=16 × Expert EP=16 (标准 All-to-All)</option>
+          <option value="tp8_pp2">🟨 Tier 2: 机内 NVLink TP=8 × 跨机 PP=2 (点对点跨机)</option>
+          <option value="tp16_cross">🟥 Tier 1: 跨机纯 TP=16 (跨 400G RoCEv2 跑 2L 次 All-Reduce)</option>
+        </select>
+
+        <label>3. 并发活跃 Batch 大小 ($B_{\text{active}}$): <strong id="bTxt">32 并发请求</strong></label>
+        <input type="range" id="bRange" min="1" max="128" step="1" value="32" oninput="calcPar()">
+
+        <label>4. 投机解码 (Speculative Decoding: 原生 MTP / EAGLE-3)：</label>
+        <select id="specSel" onchange="calcPar()">
+          <option value="auto" selected>智能自适应开启 (Batch &lt;= 48 时启用 MTP 2.2x 提速, &gt;48 自动旁路)</option>
+          <option value="off">关闭投机解码 (标准逐词自回归 Decode)</option>
+          <option value="force_on">⚠️ 强制常开 (观察大 Batch &gt; 48 时算力过载退化!)</option>
+        </select>
+
+        <label>5. 量化精度 (Quantization)：</label>
+        <select id="quantSel" onchange="calcPar()">
+          <option value="fp8" selected>Block FP8 (W8A8 + FP8 KV · 生产主力推荐)</option>
+          <option value="bf16">BF16 未量化 (2 Bytes/param · 显存与带宽压力翻倍)</option>
+        </select>
+
+        <div class="kpi-grid">
+          <div class="kpi"><div class="v" id="kpiHbmMs">8.2 ms</div><div class="l">单步 HBM 读权重/KV 耗时</div></div>
+          <div class="kpi"><div class="v" id="kpiCommMs">0.6 ms</div><div class="l">单步暴露通信耗时</div></div>
+          <div class="kpi"><div class="v" id="kpiTpot">9.8 ms</div><div class="l">等效输出 TPOT</div></div>
+          <div class="kpi"><div class="v" id="kpiMfu">54.6%</div><div class="l">Tensor Core 有效 MFU</div></div>
+          <div class="kpi"><div class="v" id="kpiGoodput">2,260 tok/s</div><div class="l">单卡达标 Goodput</div></div>
+          <div class="kpi"><div class="v" id="kpiCost">$0.22 / 1M</div><div class="l">每百万 Token 成本</div></div>
+        </div>
+      </div>
+
+      <!-- Visual Stacked Latency Breakdown & Speculative Batch Curve -->
+      <div class="card">
+        <h2>📊 实时动态图表：单步 TPOT 延迟构成堆叠条 &amp; 投机解码 Batch 拐点曲线</h2>
+        <svg viewBox="0 0 600 370">
+          <text x="18" y="24" fill="#f8fafc" font-size="13" font-weight="700" id="stkTitle">1. 单步 Decode 耗时拆解：HBM 读取 (蓝) + 算力计算 (紫) + 跨卡通信暴露 (红)</text>
+          <rect x="18" y="36" width="564" height="36" rx="6" fill="#1e293b" stroke="#334155"/>
+          <rect id="stkHbm" x="18" y="36" width="360" height="36" fill="#3b82f6"/>
+          <rect id="stkComp" x="378" y="36" width="120" height="36" fill="#a78bfa"/>
+          <rect id="stkComm" x="498" y="36" width="84" height="36" fill="#ef4444"/>
+          <text x="24" y="59" fill="#fff" font-size="11.5" font-weight="700" id="stkHbmTxt">HBM 读取: 8.2ms</text>
+          <text x="384" y="59" fill="#fff" font-size="11.5" font-weight="700" id="stkCompTxt">计算: 2.4ms</text>
+          <text x="502" y="59" fill="#fff" font-size="11.5" font-weight="700" id="stkCommTxt">通信: 0.6ms</text>
+
+          <!-- Chart 2: Speculative Decoding Speedup vs Batch Size Curve -->
+          <text x="18" y="102" fill="#f8fafc" font-size="13" font-weight="700">2. 投机解码 (MTP / EAGLE-3) 加速比随并发 Batch 变化曲线 (Batch=48 黄金关断线)</text>
+          <line x1="55" y1="245" x2="565" y2="245" stroke="#64748b" stroke-width="1.5"/>
+          <line x1="55" y1="245" x2="55" y2="118" stroke="#64748b" stroke-width="1.5"/>
+          <!-- 1.0x Baseline line -->
+          <line x1="55" y1="205" x2="565" y2="205" stroke="#94a3b8" stroke-dasharray="4 4"/>
+          <text x="62" y="200" fill="#94a3b8" font-size="10.5">1.0x 基准线 (无投机解码)</text>
+          <!-- Batch=48 cutoff vertical line -->
+          <line x1="320" y1="118" x2="320" y2="245" stroke="#fbbf24" stroke-width="2" stroke-dasharray="5 4"/>
+          <text x="235" y="132" fill="#fbbf24" font-size="11" font-weight="700">⚠️ Batch = 48 自动关断红线</text>
+          <!-- Speedup curve -->
+          <path d="M 65 135 Q 190 142, 320 198 T 550 235" fill="none" stroke="#34d399" stroke-width="3"/>
+          <circle id="specDot" cx="220" cy="162" r="7" fill="#38bdf8" stroke="#fff" stroke-width="2"/>
+          <text x="70" y="155" fill="#6ee7b7" font-size="11" font-weight="700">低并发区 (B=1~32): 提速 1.8x~2.5x 🏆</text>
+          <text x="345" y="232" fill="#fca5a5" font-size="11">高并发算力饱和区 (B&gt;48): 强开倒退 -18%!</text>
+
+          <!-- Dual-Microbatch Overlap Mini Diagram -->
+          <text x="18" y="274" fill="#f8fafc" font-size="13" font-weight="700">3. DeepEP 双微批乒乓计算-通信重叠 (Two-Microbatch Ping-Pong Overlap)</text>
+          <rect x="18" y="286" width="270" height="30" rx="5" fill="#0284c7"/>
+          <text x="30" y="305" fill="#fff" font-size="11" font-weight="700">GPU SM 流: 计算 Microbatch A Attention + MLP</text>
+          <rect x="296" y="286" width="284" height="30" rx="5" fill="#10b981"/>
+          <text x="308" y="305" fill="#fff" font-size="11" font-weight="700">GPU SM 流: 计算 Microbatch B 路由专家 GEMM</text>
+
+          <rect x="18" y="322" width="270" height="30" rx="5" fill="#7c3aed"/>
+          <text x="30" y="341" fill="#fff" font-size="11" font-weight="700">RDMA IBGDA 流: 并发后台传输 Microbatch B All2All</text>
+          <rect x="296" y="322" width="284" height="30" rx="5" fill="#0d9488"/>
+          <text x="308" y="341" fill="#fff" font-size="11" font-weight="700">RDMA IBGDA 流: 并发后台传输 Microbatch A Combine</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 7 Acceleration Methods Matrix -->
+    <div class="card">
+      <h2>📊 七大主流推理加速与并行切分方案全景选型矩阵（Dense 70B/405B vs. MoE 671B）</h2>
+      <table>
+        <thead>
+          <tr><th>加速/并行方案</th><th>改善的核心指标</th><th>通信代价与硬件前提</th><th>Dense (70B/405B) 最佳用法</th><th>MoE (DeepSeek 671B) 最佳用法</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>TP (张量并行)</strong></td><td>直接降低 <code>TTFT</code> 与单流 <code>TPOT</code></td><td>每层 2 次同步 AllReduce；<strong>必走机内 NVLink</strong></td><td>70B 用 <code>TP=4</code>；405B 用 <code>TP=8</code></td><td>仅在单机内小幅使用 (<code>TP=1~4</code>)，严禁跨机 TP=16</td></tr>
+          <tr><td><strong>PP (流水线并行)</strong></td><td>跨机拼接 HBM 容量装超大模型</td><td>仅 $P-1$ 次点对点传输，但含微批气泡</td><td>双机 16xH100 跑 405B 时用 <code>TP=8 × PP=2</code></td><td>在线低延迟服务优先用 EP 而非深层 PP</td></tr>
+          <tr><td><strong>Attention DP</strong></td><td>线性扩展系统总 <code>TPS</code>，零 KV 跨卡同步</td><td>零层间通信；需网关 KV 感知路由</td><td>单机 8 卡跑 2 个 <code>TP=4</code> 副本即 <code>DP=2</code></td><td><strong>MLA 核心绝配</strong>（每词 KV 仅 35.1KB，<code>DP=8/16</code>）</td></tr>
+          <tr><td><strong>Expert EP (DeepEP)</strong></td><td>保住完整专家大矩阵高 <code>MFU (54.6%)</code></td><td>每层 2 次 All-to-All；需 <code>NVLink + 400G RDMA</code></td><td>N/A (稠密模型无专家层)</td><td><strong>671B 核心支柱</strong>（<code>EP=16/32/64</code> + 双微批重叠）</td></tr>
+          <tr><td><strong>投机解码 (MTP / EAGLE-3)</strong></td><td>单流 <code>TPOT</code> 提速 <code>1.8x~2.6x</code></td><td>占用空闲 Tensor Core 算力</td><td>70B 挂载 <code>EAGLE-3</code> 草稿头</td><td>直接激活 DeepSeek 原生 <code>14B MTP</code> 预测头</td></tr>
+          <tr><td><strong>Prefix Caching (Radix)</strong></td><td>共享前缀首字 <code>TTFT</code> 暴降 <code>4x~8x</code></td><td>需 HBM / Host DRAM 缓存池空间</td><td>长 System Prompt / 多轮 RAG 必开</td><td>配合 MLA 大幅提升单机缓存总词数上限</td></tr>
+          <tr><td><strong>Block FP8 / NVFP4</strong></td><td>显存减半 + <code>TTFT</code> 减半 + <code>TPOT</code> 降 <code>1.8x</code></td><td>Hopper FP8 / Blackwell NVFP4 硬件支持</td><td>70B/405B 默认用 FP8 替代 BF16</td><td><code>1x128</code> 激活 + <code>128x128</code> 权重细粒度块 FP8</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained H5 Study Page · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function calcPar() {
+      const m = document.getElementById('mSel').value;
+      const par = document.getElementById('parSel').value;
+      const b = parseInt(document.getElementById('bRange').value, 10);
+      const spec = document.getElementById('specSel').value;
+      const quant = document.getElementById('quantSel').value;
+
+      document.getElementById('bTxt').textContent = b + ' 并发请求';
+      const qMult = quant === 'bf16' ? 1.85 : 1.0;
+      const baseHbmMs = (m === 'ds671' ? 8.2 : (m === 'llama405' ? 14.5 : 6.4)) * qMult;
+      const compMs = (1.6 + b * 0.045) * (quant === 'bf16' ? 1.5 : 1.0);
+
+      let commMs = 0.6;
+      let mfu = 54.6;
+      if (par === 'tp16_cross') { commMs = 19.4; mfu = 11.2; }
+      else if (par === 'tp8_pp2') { commMs = 3.2; mfu = 28.5; }
+      else if (par === 'dp_ep') { commMs = 1.8; mfu = 44.8; }
+      else { commMs = 0.6; mfu = 54.6; }
+
+      let specFactor = 1.0;
+      if (spec === 'auto') {
+        specFactor = b <= 48 ? (2.1 - (b / 48) * 0.65) : 1.0;
+      } else if (spec === 'force_on') {
+        specFactor = b <= 48 ? (2.1 - (b / 48) * 0.65) : 0.82;
+      }
+
+      const rawStepMs = baseHbmMs + compMs + commMs;
+      const effTpot = rawStepMs / specFactor;
+      const goodput = Math.round((1000.0 / effTpot) * Math.min(b, 42) * 0.68);
+      const cost = Math.max(0.18, (498.0 / Math.max(300, goodput))).toFixed(2);
+
+      document.getElementById('kpiHbmMs').textContent = baseHbmMs.toFixed(1) + ' ms';
+      document.getElementById('kpiCommMs').textContent = commMs.toFixed(1) + ' ms';
+      document.getElementById('kpiTpot').textContent = effTpot.toFixed(1) + ' ms';
+      document.getElementById('kpiMfu').textContent = mfu.toFixed(1) + '%';
+      document.getElementById('kpiGoodput').textContent = goodput.toLocaleString() + ' tok/s';
+      document.getElementById('kpiCost').textContent = '$' + cost + ' / 1M';
+
+      const wTot = 564;
+      const wH = Math.max(60, Math.round((baseHbmMs / rawStepMs) * wTot));
+      const wC = Math.max(50, Math.round((compMs / rawStepMs) * wTot));
+      const wM = Math.max(35, wTot - wH - wC);
+      document.getElementById('stkHbm').setAttribute('width', wH);
+      document.getElementById('stkComp').setAttribute('x', 18 + wH);
+      document.getElementById('stkComp').setAttribute('width', wC);
+      document.getElementById('stkComm').setAttribute('x', 18 + wH + wC);
+      document.getElementById('stkComm').setAttribute('width', wM);
+      document.getElementById('stkHbmTxt').textContent = 'HBM: ' + baseHbmMs.toFixed(1) + 'ms';
+      document.getElementById('stkCompTxt').setAttribute('x', 24 + wH);
+      document.getElementById('stkCompTxt').textContent = '算力: ' + compMs.toFixed(1) + 'ms';
+      document.getElementById('stkCommTxt').setAttribute('x', Math.min(505, 22 + wH + wC));
+      document.getElementById('stkCommTxt').textContent = '通信: ' + commMs.toFixed(1) + 'ms';
+
+      const dotX = 65 + Math.round((b / 128.0) * 485);
+      const dotY = b <= 48 ? (135 + Math.round((b / 48.0) * 63)) : (198 + Math.round(((b - 48) / 80.0) * 35));
+      document.getElementById('specDot').setAttribute('cx', dotX);
+      document.getElementById('specDot').setAttribute('cy', dotY);
+    }
+    calcPar();
+  </script>
+</body>
+</html>

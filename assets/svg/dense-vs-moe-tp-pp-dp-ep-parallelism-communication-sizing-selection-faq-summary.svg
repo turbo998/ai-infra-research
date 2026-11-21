@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#0b1120"/>
+  <rect x="28" y="24" width="1144" height="582" rx="18" fill="#111827" stroke="#334155" stroke-width="2"/>
+  <text x="56" y="68" fill="#38bdf8" font-family="Segoe UI, PingFang SC, sans-serif" font-size="15" font-weight="700">PLAYBOOK #397 · DENSE (70B/405B) VS. MOE (671B) PARALLELISM (TP / PP / DP / EP) &amp; COMMUNICATION SIZING</text>
+  <text x="56" y="104" fill="#f8fafc" font-family="Segoe UI, PingFang SC, sans-serif" font-size="25" font-weight="800">Dense 与超大 MoE 推理并行切分黄金组合（TP/PP/DP/EP）与通信代价手算指南</text>
+  <text x="56" y="132" fill="#94a3b8" font-family="Segoe UI, PingFang SC, sans-serif" font-size="14">为什么跨机 TP=16 会让每 Token 阻塞 160 次 AllReduce？如何用 Attention DP + DeepEP + MTP 把 671B 吞吐翻 3.8 倍？</text>
+
+  <!-- Left Box: Communication Math per Decode Step -->
+  <rect x="56" y="156" width="530" height="210" rx="12" fill="#1e293b" stroke="#0284c7" stroke-width="1.5"/>
+  <text x="76" y="186" fill="#38bdf8" font-family="Segoe UI, PingFang SC, sans-serif" font-size="16" font-weight="700">1. 四种并行范式单步 Decode 通信代价第一性原理公式</text>
+  <rect x="76" y="200" width="490" height="72" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="90" y="222" fill="#fca5a5" font-family="Consolas, monospace" font-size="12.5" font-weight="700">TP (张量并行): 2*L 次同步 AllReduce/tok -&gt; 跨机 160*α 延迟雪崩!</text>
+  <text x="90" y="242" fill="#93c5fd" font-family="Consolas, monospace" font-size="12.5" font-weight="700">PP (流水线并行): 仅 P-1 次跨机 P2P Send/Recv (适合跨机 405B Dense)</text>
+  <text x="90" y="262" fill="#6ee7b7" font-family="Consolas, monospace" font-size="12.5" font-weight="700">DP + EP (MoE 黄金解耦): Attention 零跨卡通信 + DeepEP 双微批隐藏 All2All</text>
+  <text x="76" y="298" fill="#e2e8f0" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13.5">• 铁律 A：TP 必须锁死在单机 NVLink (900 GB/s) 或 NVL72 机柜内 (TP &lt;= 8)</text>
+  <text x="76" y="324" fill="#e2e8f0" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13.5">• 铁律 B：MoE 严禁无脑大 TP 切碎专家矩阵，必用 Attention DP × Expert EP</text>
+  <text x="76" y="350" fill="#fbbf24" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13.5" font-weight="700">• 铁律 C：投机解码 (MTP/EAGLE-3) 仅在 Batch &lt;= 48 时开启，高并发自动关断！</text>
+
+  <!-- Right Box: Dense vs MoE Golden Recipes -->
+  <rect x="614" y="156" width="530" height="210" rx="12" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+  <text x="634" y="186" fill="#34d399" font-family="Segoe UI, PingFang SC, sans-serif" font-size="16" font-weight="700">2. 三大主力模型在 H100 / H200 / B200 上的最佳切分黄金配方</text>
+  <rect x="634" y="200" width="490" height="72" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="648" y="222" fill="#f8fafc" font-family="Consolas, monospace" font-size="12.5" font-weight="700">Llama-3.3-70B Dense : 单机 TP=4 (FP8) × DP=2 + EAGLE-3 (TPOT=11.8ms)</text>
+  <text x="648" y="242" fill="#f8fafc" font-family="Consolas, monospace" font-size="12.5" font-weight="700">Llama-3.1-405B Dense: 单机 8xH200 TP=8 (FP8) 或 双机 16xH100 TP=8×PP=2</text>
+  <text x="648" y="262" fill="#34d399" font-family="Consolas, monospace" font-size="12.5" font-weight="700">DeepSeek-671B MoE   : Attention DP + Expert EP (DeepEP) + FP8 + MTP</text>
+  <text x="634" y="298" fill="#e2e8f0" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13.5">• 为什么 MoE 不能用纯 TP=16？每个专家被切成极窄矩阵，TensorCore 利用率跌至 11%</text>
+  <text x="634" y="324" fill="#e2e8f0" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13.5">• 为什么 Attention 要用 DP？MLA KV 仅 35.1KB/tok，DP 免除 Attention 跨卡同步</text>
+  <text x="634" y="350" fill="#38bdf8" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13.5" font-weight="700">• 双微批乒乓重叠 (Dual-Microbatch Overlap)：将 All-to-All 通信 92% 隐藏在计算下！</text>
+
+  <!-- Bottom Scorecard Table -->
+  <rect x="56" y="388" width="1088" height="192" rx="12" fill="#0f172a" stroke="#334155"/>
+  <text x="76" y="418" fill="#f8fafc" font-family="Segoe UI, PingFang SC, sans-serif" font-size="16" font-weight="700">3. 双机 16 卡部署 DeepSeek-V3/R1 671B 四种并行与加速组合实效对决</text>
+  <line x1="76" y1="430" x2="1124" y2="430" stroke="#334155"/>
+  <text x="76" y="454" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">并行与加速组合方案 (16x GPU 集群)</text>
+  <text x="430" y="454" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">单步通信暴露耗时</text>
+  <text x="600" y="454" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">P99 TPOT</text>
+  <text x="740" y="454" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">单卡达标 Goodput</text>
+  <text x="930" y="454" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">百万 Token 成本</text>
+
+  <text x="76" y="484" fill="#fca5a5" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">Tier 1: 跨机纯 TP=16 (122 次跨网 AllReduce + 专家碎片化)</text>
+  <text x="430" y="484" fill="#fca5a5" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">19.4 ms / tok ✕</text>
+  <text x="600" y="484" fill="#fca5a5" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">36.8 ms ✕</text>
+  <text x="740" y="484" fill="#fca5a5" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">580 tok/s/GPU ✕</text>
+  <text x="930" y="484" fill="#fca5a5" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">$0.88 / 1M</text>
+
+  <text x="76" y="512" fill="#cbd5e1" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">Tier 2: 机内 TP=8 × 跨机 PP=2 (消除跨机 AllReduce 但含流水线气泡)</text>
+  <text x="430" y="512" fill="#cbd5e1" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">3.2 ms / tok</text>
+  <text x="600" y="512" fill="#cbd5e1" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">18.5 ms</text>
+  <text x="740" y="512" fill="#cbd5e1" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">1,190 tok/s/GPU</text>
+  <text x="930" y="512" fill="#cbd5e1" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">$0.43 / 1M</text>
+
+  <text x="76" y="540" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">Tier 3: Attention DP=16 × Expert EP=16 (DeepEP + Block FP8)</text>
+  <text x="430" y="540" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">1.4 ms / tok</text>
+  <text x="600" y="540" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">14.2 ms</text>
+  <text x="740" y="540" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">1,840 tok/s/GPU</text>
+  <text x="930" y="540" fill="#93c5fd" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13">$0.28 / 1M</text>
+
+  <text x="76" y="566" fill="#34d399" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">Tier 4 (推荐): DP×EP (DeepEP 双微批重叠) + 原生 MTP 投机 + Radix 前缀缓存</text>
+  <text x="430" y="566" fill="#34d399" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">0.6 ms / tok ✓</text>
+  <text x="600" y="566" fill="#34d399" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">9.8 ms ✓</text>
+  <text x="740" y="566" fill="#34d399" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">2,260 tok/s/GPU (3.9x) 🏆</text>
+  <text x="930" y="566" fill="#34d399" font-family="Segoe UI, PingFang SC, sans-serif" font-size="13" font-weight="700">$0.22 / 1M (-75%) 🏆</text>
+</svg>

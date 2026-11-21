@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dense vs. MoE 推理并行切分与通信代价计算器 (#397)</title>
+<style>
+  body { background: #0b1120; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; max-width: 980px; margin: 0 auto; padding: 24px; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+  h1 { font-size: 22px; color: #38bdf8; margin-top: 0; }
+  label { display: block; margin: 10px 0 4px; font-size: 13.5px; color: #cbd5e1; }
+  input[type="range"], select { width: 100%; padding: 6px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+  .kpi { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px; text-align: center; }
+  .kpi .v { font-size: 20px; font-weight: 800; color: #34d399; }
+  .kpi .l { font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🧮 Dense (70B/405B) vs. MoE (671B) 并行切分（TP/PP/DP/EP）计算器 (#397)</h1>
+    <label>并行切分档位 (16-GPU 双机集群)：</label>
+    <select id="tier" onchange="calc()">
+      <option value="4" selected>Tier 4: Attention DP × Expert EP (DeepEP 双微批重叠) + MTP + FP8</option>
+      <option value="3">Tier 3: Attention DP=16 × Expert EP=16 + FP8</option>
+      <option value="2">Tier 2: 机内 NVLink TP=8 × 跨机 PP=2</option>
+      <option value="1">Tier 1: 跨机纯 TP=16 (122 次跨网 All-Reduce)</option>
+    </select>
+    <label>并发活跃请求数 B: <strong id="bTxt">32</strong></label>
+    <input type="range" id="b" min="1" max="128" step="1" value="32" oninput="calc()">
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="comm">0.6 ms</div><div class="l">单步通信暴露延迟</div></div>
+      <div class="kpi"><div class="v" id="tpot">9.8 ms</div><div class="l">P99 TPOT</div></div>
+      <div class="kpi"><div class="v" id="gp">2,260 tok/s</div><div class="l">单卡达标 Goodput</div></div>
+      <div class="kpi"><div class="v" id="cost">$0.22 / 1M</div><div class="l">每百万 Token 成本</div></div>
+    </div>
+  </div>
+  <script>
+    function calc() {
+      const t = document.getElementById('tier').value;
+      const b = parseInt(document.getElementById('b').value, 10);
+      document.getElementById('bTxt').textContent = b;
+      const map = {
+        '1': [19.4, 36.8, 580, '$0.88 / 1M'],
+        '2': [3.2, 18.5, 1190, '$0.43 / 1M'],
+        '3': [1.4, 14.2, 1840, '$0.28 / 1M'],
+        '4': [0.6, 9.8, 2260, '$0.22 / 1M']
+      };
+      const row = map[t];
+      document.getElementById('comm').textContent = row[0] + ' ms';
+      document.getElementById('tpot').textContent = (row[1] * (1 + (b - 32) * 0.002)).toFixed(1) + ' ms';
+      document.getElementById('gp').textContent = row[2].toLocaleString() + ' tok/s';
+      document.getElementById('cost').textContent = row[3];
+    }
+    calc();
+  </script>
+</body>
+</html>
