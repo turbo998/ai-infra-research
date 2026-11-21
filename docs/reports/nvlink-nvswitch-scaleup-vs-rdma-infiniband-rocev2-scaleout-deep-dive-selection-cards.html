@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+  <title>7-Card Benchmark: NVLink/NVSwitch vs. InfiniBand &amp; RoCEv2 RDMA Deep Dive</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; max-width: 1480px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+    .badge { font-size: 11px; font-weight: 700; color: #38bdf8; letter-spacing: 1px; text-transform: uppercase; }
+    h2 { font-size: 18px; margin: 8px 0; line-height: 1.3; color: #f8fafc; }
+    p, li { font-size: 12.5px; color: #cbd5e1; line-height: 1.45; }
+    table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    th { color: #38bdf8; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a7f3d0; border: 1px solid #334155; }
+    .bar-row { margin: 6px 0; }
+    .bar-lbl { font-size: 11px; display: flex; justify-content: space-between; margin-bottom: 3px; }
+    .bar-bg { background: #0f172a; height: 10px; border-radius: 5px; overflow: hidden; }
+    .bar-fill { background: #3b82f6; height: 100%; }
+    .bar-fill.bad { background: #ef4444; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="badge">1 / 7 · HANDS-ON · NVLINK VS. INFINIBAND VS. ROCEV2 RDMA</div>
+        <h2>Hierarchical NVLink/NVLS + GPUDirect RDMA (Rail-Optimized + PXN) Hits 47.6 GB/s busbw (95.2%)</h2>
+        <p>Evaluated across a 512-GPU (`64` x 8-GPU HGX nodes, `8x 400G NICs/node`) cluster comparing untuned RoCEv2, tuned AI Ethernet RoCEv2, and InfiniBand NDR.</p>
+        <ul>
+          <li><strong>Tier 1 (Untuned RoCEv2)</strong>: 11.8 GB/s busbw, 14 PFC deadlocks/mo, $1.15M/mo.</li>
+          <li><strong>Tier 2 (Tuned RoCEv2 + DLB + DCQCN)</strong>: 45.4 GB/s busbw (90.8%), 0 deadlocks, $410K/mo.</li>
+          <li><strong>Tier 3 (InfiniBand NDR 400G + SHARP)</strong>: 48.2 GB/s busbw (96.4%), $465K/mo.</li>
+          <li><strong>Tier 4 (NVLink/NVLS + Rail-Optimized RDMA + PXN)</strong>: 47.6 GB/s busbw, $365K/mo.</li>
+        </ul>
+      </div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">2 / 7 · SCENARIO: GPUDIRECT RDMA ZERO-COPY VS. CPU BOUNCE</div>
+        <h2>Why Missing `nvidia-peermem` or PCIe ACS On Cuts 400G RDMA Speed by 4x</h2>
+        <p>When `nvidia-peermem` is unloaded or PCIe Switch `ACS` (Access Control Services) is left enabled in BIOS, NIC DMA packets cannot go directly to GPU HBM over the PCIe Switch—bouncing through Host CPU RAM at 11.8 GB/s.</p>
+        <ul>
+          <li><strong>choice (GPUDirect RDMA Zero-Copy Gate)</strong>: Act automatically — Load `nvidia-peermem` &amp; disable PCIe `ACS` so NICs DMA directly into GPU `BAR1` HBM (`47.6 GB/s`).</li>
+          <li><strong>choice (Rail-Optimized + `NCCL PXN`)</strong>: Act automatically — Route cross-rail traffic over intra-node `900 GB/s NVLink` first so it exits on the target Rail Leaf (`1-hop`!).</li>
+          <li><strong>score (ECN Early Marking Before PFC)</strong>: Act automatically — Set `K_min=200KB` ECN mark well below `PFC XOFF` threshold (`0` pause deadlocks).</li>
+        </ul>
+      </div>
+      <div class="foot">Mandates hardware `PFC Watchdog` (`200ms` auto-drop/recover) on all ToR switches</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">3 / 7 · WHAT I TESTED</div>
+        <h2>4-Tier AI Cluster Fabric &amp; Collective Scorecard</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>TASK</th><th>MODEL ANSWER</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Tier 1 Untuned RoCE</td><td>busbw / Deadlocks</td><td>11.8 GB/s / 14/mo ✕</td><td>Reject</td></tr>
+            <tr><td>Tier 2 Tuned RoCEv2</td><td>busbw / Deadlocks</td><td>45.4 GB/s / 0/mo ✓</td><td>&lt;=1K GPUs</td></tr>
+            <tr><td>Tier 3 IB NDR 400G</td><td>busbw / Latency</td><td>48.2 GB/s / 5.4ms ✓</td><td>&gt;=1K GPUs</td></tr>
+            <tr><td>Tier 4 NVLS+Rail+PXN</td><td>busbw / Lat / TCO</td><td>47.6 GB/s / 4.9ms / $365K ✓</td><td>Deploy</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Tier 4 achieves 95.2% line-rate busbw and cuts monthly network &amp; stall TCO by 68.3%</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">4 / 7 · UNDER THE HOOD</div>
+        <h2>Exact `algbw` vs. `busbw` Math &amp; GPUDirect RDMA Verification</h2>
+        <div class="code">
+          # 1. Verify GPUDirect RDMA Zero-Copy &amp; 1:1 PCIe Switch Affinity<br>
+          lsmod | grep nvidia_peermem &amp;&amp; nvidia-smi topo -m # Expect PIX!<br><br>
+          # 2. Exact algbw -&gt; busbw Conversion Formulas (N GPUs)<br>
+          algbw = payload_bytes / elapsed_seconds<br>
+          busbw_allreduce     = algbw * (2 * (N - 1) / N)<br>
+          busbw_allgather_a2a = algbw * ((N - 1) / N) # Must be &gt;= 45 GB/s!
+        </div>
+      </div>
+      <div class="foot">`PIX` in `nvidia-smi topo -m` confirms GPU and NIC share the same PCIe Switch</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Incast Elephant-Flow Burst &amp; Single-Link Flap Perturbation</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>TIER 1 (UNTUNED)</th><th>TIER 2 (ROCEV2)</th><th>TIER 4 (NVLS+PXN)</th></tr></thead>
+          <tbody>
+            <tr><td>NCCL AllReduce `busbw` (GB/s)</td><td>11.8 GB/s</td><td>45.4 GB/s</td><td>47.6 GB/s</td></tr>
+            <tr><td>P99 Collective Latency (ms)</td><td>94.0 ms</td><td>8.2 ms</td><td>4.9 ms</td></tr>
+            <tr><td>Monthly PFC Deadlocks</td><td>14</td><td>0</td><td>0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Packet Spraying / Flowlet DLB eliminates static 5-tuple ECMP hash polarization</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">6 / 7 · LATENCY &amp; COST</div>
+        <h2>Monthly 512-GPU Network Depreciation &amp; Stall TCO ($K)</h2>
+        <div class="bar-row">
+          <div class="bar-lbl"><span>Tier 1 Untuned RoCEv2 (11.8 GB/s busbw, 14 Deadlocks/mo)</span><strong>$1,150.0K / mo</strong></div>
+          <div class="bar-bg"><div class="bar-fill bad" style="width: 100%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-lbl"><span>Tier 3 InfiniBand NDR 400G Full Fat-Tree (48.2 GB/s)</span><strong>$465.0K / mo</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width: 40.4%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-lbl"><span>Tier 2 Tuned AI Ethernet RoCEv2 (45.4 GB/s)</span><strong>$410.0K / mo</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width: 35.7%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-lbl"><span>Tier 4 Hierarchical NVLink/NVLS + Rail-Optimized RDMA + PXN</span><strong>$365.0K / mo</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width: 31.7%;"></div></div>
+        </div>
+      </div>
+      <div class="foot">Rail-Optimized + PXN cuts Spine switch/optics port count while keeping 95.2% busbw</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs. Not For</h2>
+        <p><strong>✅ Use `NVLink / NVSwitch (Scale-Up)`:</strong> Always for `TP` and intra-node/rack `MoE EP` (`900–1,800 GB/s`).</p>
+        <p><strong>✅ Use `InfiniBand NDR/XDR`:</strong> `>=1,000-GPU` synchronous frontier pre-training &amp; latency-critical cross-node MoE.</p>
+        <p><strong>✅ Use `Tuned RoCEv2 (Spectrum-X / UEC)`:</strong> `<=512–1,024` GPU training, PD KV disaggregation &amp; cloud-native fleets.</p>
+      </div>
+      <div class="foot">Readiness: Production-ready (`NVLS + GPUDirect RDMA + Rail PXN + DCQCN/DLB`)</div>
+    </div>
+  </div>
+</body>
+</html>

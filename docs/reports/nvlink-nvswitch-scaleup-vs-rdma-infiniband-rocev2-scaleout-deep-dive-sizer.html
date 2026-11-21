@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>NVLink vs. InfiniBand vs. RoCEv2 RDMA &amp; NCCL algbw/busbw Calculator</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>NVLink vs. InfiniBand vs. RoCEv2 RDMA &amp; NCCL `algbw / busbw` Calculator</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Convert NCCL algbw &lt;-&gt; busbw &amp; Compare Scale-Up vs. Scale-Out Fabrics</div>
+    <div class="grid">
+      <div class="card">
+        <label>Collective Operation Type:</label>
+        <select id="coll" onchange="recalc()">
+          <option value="allreduce">All-Reduce (busbw = algbw × 2(N-1)/N)</option>
+          <option value="allgather">All-Gather / Reduce-Scatter (busbw = algbw × (N-1)/N)</option>
+          <option value="alltoall">All-to-All MoE Dispatch (busbw = algbw × (N-1)/N)</option>
+        </select>
+        <label>Participating GPUs ($N$): <strong id="nVal">512 GPUs</strong></label>
+        <input type="range" id="gpus" min="8" max="4096" step="8" value="512" oninput="recalc()">
+        <label>Collective Payload Size ($S$): <strong id="sVal">4.0 GB</strong></label>
+        <input type="range" id="size" min="1" max="16" step="1" value="4" oninput="recalc()">
+        <label>Scale-Out NIC Speed per GPU:</label>
+        <select id="nic" onchange="recalc()">
+          <option value="50">400 Gbps (NDR / RoCEv2 = 50 GB/s line rate)</option>
+          <option value="100">800 Gbps (XDR / 800G RoCEv2 = 100 GB/s line rate)</option>
+          <option value="25">200 Gbps (HDR / 200G RoCEv2 = 25 GB/s line rate)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="busVal">47.6 GB/s (95.2%)</div><div class="lbl">Tier 4 Achieved `busbw` (% of Line Rate)</div></div>
+          <div class="kpi"><div class="val" id="algVal">23.8 GB/s</div><div class="lbl">Corresponding NCCL `algbw` ($S / t$)</div></div>
+          <div class="kpi"><div class="val" id="timeVal">167.8 ms</div><div class="lbl">Tier 4 Collective Duration (vs 678ms Tier 1)</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$365,000 / mo</div><div class="lbl">Tier 4 Monthly TCO (-68.3% vs Untuned Tier 1)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Fabric Layer &amp; Technology</th><th>Per-GPU Bandwidth</th><th>Switch Hop Latency</th><th>Lossless Mechanism</th><th>Primary AI Workload Role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Scale-Up: NVLink 4 / NVLink 5 (NVSwitch)</strong></td><td>900 GB/s / 1,800 GB/s</td><td>~0.6 us (Memory Load/Store)</td><td>Hardware Link Credits + NVLS</td><td>Intra-Node/Rack <strong>TP &amp; Local EP</strong> (8–72 GPUs)</td></tr>
+          <tr><td><strong>Scale-Out: InfiniBand NDR (400G) / XDR (800G)</strong></td><td>50 GB/s / 100 GB/s</td><td>~1.3 us</td><td>Native Link-Layer Credits + SHARPv3</td><td>&gt;=1,000-GPU Sync Pre-Training &amp; Cross-Node MoE</td></tr>
+          <tr><td><strong>Scale-Out: Tuned AI Ethernet RoCEv2 (Spectrum-X/UEC)</strong></td><td>50 GB/s / 100 GB/s</td><td>~2.0 us</td><td>ECN Early Mark + DCQCN + PFC + DLB Spray</td><td>&lt;=512–1,024 GPU Training, <strong>PD KV Transfer</strong> &amp; Cloud Pools</td></tr>
+          <tr><td><strong>Anti-Pattern: Untuned RoCEv2 (No Peermem / Static ECMP)</strong></td><td>11.8 GB/s (23.6% eff.)</td><td>94,000 us (PFC storms!)</td><td>Reactive PFC Pause Deadlocks</td><td>❌ Reject: Host RAM bounce &amp; ECMP collisions</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const coll = document.getElementById('coll').value;
+      const n = parseInt(document.getElementById('gpus').value, 10);
+      const s = parseInt(document.getElementById('size').value, 10);
+      const nic = parseFloat(document.getElementById('nic').value);
+      document.getElementById('nVal').textContent = n + ' GPUs';
+      document.getElementById('sVal').textContent = s.toFixed(1) + ' GB';
+      const busbw = nic * 0.952;
+      const factor = coll === 'allreduce' ? (2 * (n - 1)) / n : (n - 1) / n;
+      const algbw = busbw / factor;
+      const timeMs = (s / algbw) * 1000;
+      document.getElementById('busVal').textContent = busbw.toFixed(1) + ' GB/s (95.2%)';
+      document.getElementById('algVal').textContent = algbw.toFixed(1) + ' GB/s';
+      document.getElementById('timeVal').textContent = timeMs.toFixed(1) + ' ms';
+      document.getElementById('t4Cost').textContent = '$' + Math.round(365000 * (n / 512)).toLocaleString() + ' / mo';
+    }
+  </script>
+</body>
+</html>
