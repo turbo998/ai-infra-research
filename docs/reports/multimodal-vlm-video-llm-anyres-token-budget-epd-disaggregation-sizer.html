@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Multimodal VLM &amp; Video-LLM Visual Token &amp; E-P-D Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Multimodal VLM (`AnyRes / NaViT`) Visual Token &amp; `E-P-D` Disaggregation Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Calculate Image/Video Visual Tokens $N_{\text{vis}} = \lceil H/28 \rceil \times \lceil W/28 \rceil$ &amp; KV Memory</div>
+    <div class="grid">
+      <div class="card">
+        <label>Image / Video Resolution Preset:</label>
+        <select id="res" onchange="recalc()">
+          <option value="1080p">1080p Screenshot / Document (1920 × 1080 px)</option>
+          <option value="4k">4K Engineering Diagram (3840 × 2160 px)</option>
+          <option value="720p">720p Standard Image / Video Frame (1280 × 720 px)</option>
+        </select>
+        <label>Number of Images or Video Frames ($F$): <strong id="fVal">4 images / frames</strong></label>
+        <input type="range" id="frames" min="1" max="64" step="1" value="4" oninput="recalc()">
+        <label>Serving Architecture:</label>
+        <select id="arch" onchange="recalc()">
+          <option value="epd">Tier 4: 3-Stage E-P-D Split (L40S ViT -> H100 Prefill -> H200 Decode)</option>
+          <option value="mono">Tier 1: Monolithic Colocated ViT + Prefill + Decode</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="tokVal">10,764 Vis Tokens</div><div class="lbl">Total Visual Tokens ($N_{\text{vis}}$ @ 28×28 Patch)</div></div>
+          <div class="kpi"><div class="val" id="kvVal">1.68 GB KV</div><div class="lbl">Visual KV Cache Footprint (72B FP8 GQA)</div></div>
+          <div class="kpi"><div class="val" id="ttftVal">480 ms</div><div class="lbl">P95 Multimodal TTFT</div></div>
+          <div class="kpi"><div class="val" id="tpotVal">15.2 ms</div><div class="lbl">P99 Decode TPOT</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const res = document.getElementById('res').value;
+      const f = parseInt(document.getElementById('frames').value, 10);
+      const arch = document.getElementById('arch').value;
+      document.getElementById('fVal').textContent = f + ' images / frames';
+      const tokPerImg = res === '4k' ? 10764 : (res === '1080p' ? 2691 : 1216);
+      const totTok = tokPerImg * f;
+      const kvGb = (totTok * 163.84) / (1024 * 1024);
+      const ttft = arch === 'epd' ? Math.round(180 + totTok * 0.028) : Math.round(650 + totTok * 0.29);
+      const tpot = arch === 'epd' ? 15.2 : 68.4;
+      document.getElementById('tokVal').textContent = totTok.toLocaleString() + ' Vis Tokens';
+      document.getElementById('kvVal').textContent = kvGb.toFixed(2) + ' GB KV';
+      document.getElementById('ttftVal').textContent = ttft.toLocaleString() + ' ms';
+      document.getElementById('tpotVal').textContent = tpot.toFixed(1) + ' ms';
+    }
+  </script>
+</body>
+</html>
