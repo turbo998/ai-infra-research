@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>GPU Power Capping, DVFS & Rack PDU Oversubscription — 7-Card Report</title>
+<style>
+  body { background: #0B1220; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; max-width: 1480px; margin: 0 auto; }
+  .card { background: #111C33; border: 1px solid #334155; border-radius: 16px; padding: 22px; aspect-ratio: 4 / 5; display: flex; flex-direction: column; justify-content: space-between; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: #FDE68A; background: #1E293B; padding: 4px 10px; border-radius: 999px; }
+  h2 { font-size: 18px; margin: 12px 0 8px; line-height: 1.35; }
+  p, li { font-size: 13px; color: #CBD5E1; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { border-bottom: 1px solid #1E293B; padding: 6px 4px; text-align: left; }
+  th { color: #94A3B8; }
+  .code { background: #0F172A; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #A7F3D0; }
+  .bar { height: 10px; background: #1E293B; border-radius: 5px; overflow: hidden; margin: 4px 0 10px; }
+  .fill { height: 100%; background: #3B82F6; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <span class="badge">1 / 7 · HANDS-ON · GPU POWER CAPPING & PDU SIZING</span>
+      <h2>Workload-Aware GPU Power Capping Packs +24.1% More H200 GPUs Into a 10 MW Hall</h2>
+      <p>Capping memory-bound Decode nodes at 500W and compute-bound Training/Prefill nodes at 580W boosts total 10 MW datacenter throughput by +23.5% with zero PDU breaker trips.</p>
+    </div>
+    <div class="code">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">2 / 7 · SCENARIO: 10 MW POWER-CONSTRAINED HALL</span>
+      <h2>12,658 Deployable H200 GPUs vs. 10,200 at Uncapped 700W TDP</h2>
+      <p>Input: 10 MW IT power budget running mixed training & PD inference (`Choice: Tier_4_Workload_Aware_DVFS_Rack_Loop` — Act automatically).</p>
+      <div>Per-GPU Throughput Retention (`97.6%` at `-21%` Power)</div>
+      <div class="bar"><div class="fill" style="width:97.6%"></div></div>
+      <div>Total 10 MW Hall Output Gain (`+23.5%`, `123.5` vs `100.0`)</div>
+      <div class="bar"><div class="fill" style="width:100%"></div></div>
+    </div>
+    <div class="code">Action: Act automatically -> Set `nvidia-smi -pl 500` on Decode pods & `-pl 580` on Train/Prefill pods</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">3 / 7 · WHAT I TESTED</span>
+      <h2>4-Tier Datacenter Power Governance Matrix (10 MW)</h2>
+      <table>
+        <tr><th>SCENARIO</th><th>GPUS</th><th>HALL TPT</th><th>ACTION</th></tr>
+        <tr><td>Tier 1 700W Static</td><td>10,200</td><td>100.0</td><td>✕ 24% Stranded</td></tr>
+        <tr><td>Tier 2 Blind 1.25x</td><td>12,750</td><td>108.0</td><td>✕ Trips Breaker</td></tr>
+        <tr><td>Tier 3 Uniform 550W</td><td>12,048</td><td>115.4</td><td>Confirm</td></tr>
+        <tr><td>Tier 4 Aware DVFS</td><td>12,658</td><td>123.5</td><td>✓ Act auto</td></tr>
+      </table>
+    </div>
+    <div class="code">Miss Marker (✕): Tier 2 oversubscribes rack PDUs without hardware `-pl` caps, tripping breakers on synchronous GEMM bursts.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">4 / 7 · UNDER THE HOOD</span>
+      <h2>Cubic V-f Power Curve & Synchronous Spike Damping</h2>
+      <div class="code">
+        P_dynamic = C * V^2 * f ≈ k * f^3<br>
+        700W -> 550W (-21.4% Power) => Only -4.2% SM Clock!<br>
+        Decode (HBM-Bound): HBM3e stays at 4.8 TB/s -> -1.8% TPOT!<br>
+        Rack Closed Loop: Smart PDU -> BMC Redfish -> NVML Cap
+      </div>
+      <p>Because HBM memory clocks remain unthrottled while SM core voltage drops along the cubic V-f curve, memory-bound Decode loses almost zero speed at `500W`!</p>
+    </div>
+    <div class="code">+26.4% higher Tokens per Joule energy efficiency</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">5 / 7 · ROBUSTNESS CHECK</span>
+      <h2>Power Cap Sensitivity Across Workload Types</h2>
+      <table>
+        <tr><th>POWER CAP</th><th>DECODE TPOT</th><th>PREFILL TTFT</th><th>TRAIN STEP</th></tr>
+        <tr><td>700W (Uncapped)</td><td>100.0%</td><td>100.0%</td><td>100.0%</td></tr>
+        <tr><td>580W (-17.1% W)</td><td>99.2%</td><td>96.4%</td><td>96.8%</td></tr>
+        <tr><td>500W (-28.6% W)</td><td>98.2%</td><td>88.5%</td><td>89.4%</td></tr>
+      </table>
+    </div>
+    <div class="code">Cap Decode nodes aggressively (500W) and Prefill/Training nodes moderately (580W)!</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">6 / 7 · LATENCY</span>
+      <h2>Deployable H200 GPUs Inside a Fixed 10 MW Datacenter</h2>
+      <div>Tier 4 Workload-Aware DVFS (500W/580W): 12,658 GPUs</div>
+      <div class="bar"><div class="fill" style="width:100%"></div></div>
+      <div>Tier 3 Static Uniform 550W Cap: 12,048 GPUs</div>
+      <div class="bar"><div class="fill" style="width:95%"></div></div>
+      <div>Tier 1 Uncapped 700W Static Provisioning: 10,200 GPUs</div>
+      <div class="bar"><div class="fill" style="width:81%"></div></div>
+    </div>
+    <div class="code">+2,458 additional H200 GPUs deployed without adding a single kilowatt of utility grid power!</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">7 / 7 · MY TAKE</span>
+      <h2>Good Fit vs. Not For</h2>
+      <p><strong>✅ Good fit:</strong> Power-constrained colocation halls, PD-disaggregated inference clusters (500W Decode pool / 580W Prefill pool), and multi-rack training clusters.</p>
+      <p><strong>⛔ Not for:</strong> Oversubscribing rack PDUs without enforcing hardware-level `nvmlDeviceSetPowerManagementLimit` and rack-level BMC emergency throttling.</p>
+    </div>
+    <div class="code">Readiness: Production-verified via NVIDIA NVML / DCGM, K8s Node Feature Discovery & Redfish</div>
+  </div>
+</div>
+</body>
+</html>

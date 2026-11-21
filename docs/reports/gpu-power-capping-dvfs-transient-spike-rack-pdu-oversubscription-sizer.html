@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>GPU 智算中心功耗封顶 (Power Capping / DVFS) 与机柜装机密度计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #FDE68A; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>GPU 智算中心功耗封顶（`nvidia-smi -pl` / DVFS）与机房装机容量倍增计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>机房可用 IT 总电力配额 (MW) <span id="v_mw" class="val">10 MW</span></label>
+      <input type="range" id="mw" min="2" max="50" step="2" value="10" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>单卡设定功耗上限 (-pl Watts) <span id="v_cap" class="val">550W</span></label>
+      <input type="range" id="cap" min="450" max="700" step="10" value="550" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>显存受限 Decode 节点占比 <span id="v_dec" class="val">50%</span></label>
+      <input type="range" id="dec" min="10" max="90" step="5" value="50" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>机房功耗治理档位</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 700W 满载静态 1:1 配电</option>
+        <option value="2">Tier 2: 无硬件限功盲目超卖 1.25x (高危跳闸)</option>
+        <option value="3">Tier 3: 全场静态统一限功 (-pl)</option>
+        <option value="4" selected>Tier 4: 负载感知动态限功 + 机柜闭环超卖 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>可装机 H200 GPU 总数</div><div id="k_gpus" class="num">12,658 GPUs</div></div>
+    <div class="kpi"><div>相比 700W 多装卡数</div><div id="k_add" class="num">+2,458 张</div></div>
+    <div class="kpi"><div>单卡平均性能保留率</div><div id="k_perf" class="num">97.6%</div></div>
+    <div class="kpi"><div>整馆总有效算力增益</div><div id="k_tot" class="num">+23.5%</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const mw = parseFloat(document.getElementById('mw').value);
+  const cap = parseFloat(document.getElementById('cap').value);
+  const dec = parseFloat(document.getElementById('dec').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_mw').textContent = mw + ' MW';
+  document.getElementById('v_cap').textContent = cap + 'W';
+  document.getElementById('v_dec').textContent = Math.round(dec * 100) + '%';
+
+  const baseGpus = Math.floor((mw * 1e6) / 980);
+  let effCap = cap, perf = 97.6;
+  if (mode === '1') {
+    effCap = 700;
+    perf = 100.0;
+  } else if (mode === '2') {
+    effCap = 504;
+    perf = 86.4;
+  } else if (mode === '3') {
+    effCap = cap;
+    perf = +(100 - Math.pow((700 - cap) / 150, 1.35) * 4.2).toFixed(1);
+  } else {
+    effCap = Math.round(dec * Math.max(480, cap - 50) + (1 - dec) * Math.min(600, cap + 30));
+    perf = +(100 - Math.pow((700 - effCap) / 150, 1.35) * 2.5).toFixed(1);
+  }
+  const gpus = Math.floor((mw * 1e6) / (effCap + 280));
+  const add = gpus - baseGpus;
+  const totGain = +(((gpus * (perf / 100)) / baseGpus - 1) * 100).toFixed(1);
+  document.getElementById('k_gpus').textContent = gpus.toLocaleString() + ' GPUs';
+  document.getElementById('k_add').textContent = (add >= 0 ? '+' : '') + add.toLocaleString() + ' 张';
+  document.getElementById('k_perf').textContent = perf + '%';
+  document.getElementById('k_tot').textContent = (totGain >= 0 ? '+' : '') + totGain + '%';
+}
+calc();
+</script>
+</body>
+</html>
