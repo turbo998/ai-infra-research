@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "experiment_id": "scaleup_nvlink_vs_scaleout_ib_rocev2_gpudirect_dcqcn_busbw_sizing_selection",
+        "title": "AI Fabric End-to-End Architecture & Sizing Guide: Scale-Up (NVLink 4/5) vs. Scale-Out (IB NDR/XDR vs. RoCEv2), GPUDirect RDMA, PFC+ECN+DCQCN Buffer Math & algbw/busbw Conversion",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_basis": {
+            "cluster_scale": "512 GPUs (64 Nodes x 8 GPUs) with 8x 400G NICs per Node (50 GB/s line rate per NIC)",
+            "acceptance_gate_busbw_gbps": 45.0,
+        },
+        "tiers": [
+            {
+                "tier": "Tier 1: Misconfigured PCIe ACS Enabled / Missing dmabuf GPUDirect RDMA (CPU Root Complex Detour)",
+                "achieved_busbw_gbps": 13.8,
+                "line_rate_efficiency_pct": 27.6,
+                "p99_alltoall_latency_ms": 42.5,
+                "cluster_effective_goodput_pct": 41.2,
+                "recommended_scenario": "Severe deployment misconfiguration; immediately disable PCIe ACS and load dmabuf/nvidia-peermem",
+            },
+            {
+                "tier": "Tier 2: GPUDirect RDMA + Legacy 5-Tuple Static ECMP + Pure PFC (Hash Polarization & Pause Storms)",
+                "achieved_busbw_gbps": 31.5,
+                "line_rate_efficiency_pct": 63.0,
+                "p99_alltoall_latency_ms": 18.4,
+                "cluster_effective_goodput_pct": 72.5,
+                "recommended_scenario": "Unacceptable for >64 GPU clusters due to elephant-flow collisions and PFC head-of-line blocking",
+            },
+            {
+                "tier": "Tier 3: Rail-Optimized RoCEv2 + GPUDirect RDMA + ECN-First DCQCN + DLB + 200ms PFC Watchdog",
+                "achieved_busbw_gbps": 46.2,
+                "line_rate_efficiency_pct": 92.4,
+                "p99_alltoall_latency_ms": 3.6,
+                "cluster_effective_goodput_pct": 94.8,
+                "recommended_scenario": "High-ROI open Ethernet standard for 64-to-1,024 GPU inference, PD disaggregation, and post-training",
+            },
+            {
+                "tier": "Tier 4 (Recommended): Intra-Node NVLink + Scale-Out IB NDR/XDR (Adaptive Routing + SHARP) or Spectrum-X/UEC Packet Spraying",
+                "achieved_busbw_gbps": 48.2,
+                "line_rate_efficiency_pct": 96.4,
+                "p99_alltoall_latency_ms": 1.9,
+                "cluster_effective_goodput_pct": 97.6,
+                "recommended_scenario": "Flagship multi-tenant AI factory standard delivering 96.4% wire efficiency and 2.37x Goodput over Tier 1",
+            },
+        ],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json missing")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json out of date")
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print("Wrote results.json")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
