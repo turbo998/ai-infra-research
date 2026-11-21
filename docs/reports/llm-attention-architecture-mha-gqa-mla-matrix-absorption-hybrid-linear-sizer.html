@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Attention KV Cache Calculator: MHA vs. GQA-8 vs. MLA vs. Hybrid Linear</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Attention KV Cache Footprint &amp; Arithmetic Intensity Calculator (`MHA / GQA / MLA / Hybrid`)</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare Per-Token KV Memory &amp; Decode TensorCore Arithmetic Intensity</div>
+    <div class="grid">
+      <div class="card">
+        <label>Attention Mechanism:</label>
+        <select id="attn" onchange="recalc()">
+          <option value="mla">MLA with Matrix Absorption (DeepSeek-V3/R1: L=61, d_c+d_r=576)</option>
+          <option value="gqa">GQA-8 (Llama-3.3-70B: L=80, n_kv=8, d_h=128)</option>
+          <option value="mha">MHA-64 (Legacy 70B: L=80, n_kv=64, d_h=128)</option>
+          <option value="hybrid">7:1 Hybrid Linear + GQA (Mamba-2 / Qwen3-Next: only 1/8 layers store KV!)</option>
+        </select>
+        <label>Sequence Context Length ($S$): <strong id="sVal">32,768 tokens (32K)</strong></label>
+        <input type="range" id="seq" min="4096" max="131072" step="4096" value="32768" oninput="recalc()">
+        <label>KV Cache Data Type:</label>
+        <select id="dtype" onchange="recalc()">
+          <option value="1">FP8 E4M3 (1 Byte / element)</option>
+          <option value="2">BF16 / FP16 (2 Bytes / element)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="kbVal">35.14 KB / tok</div><div class="lbl">KV Cache Memory per Token</div></div>
+          <div class="kpi"><div class="val" id="sessGbVal">1.10 GB / session</div><div class="lbl">Total KV Cache per Active Session</div></div>
+          <div class="kpi"><div class="val" id="aiVal">256 FLOPs / Byte</div><div class="lbl">Decode Attention Arithmetic Intensity</div></div>
+          <div class="kpi"><div class="val" id="maxSessVal">236 Sessions</div><div class="lbl">Max Concurrent Sessions on 8x H200 Node</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const attn = document.getElementById('attn').value;
+      const s = parseInt(document.getElementById('seq').value, 10);
+      const b = parseInt(document.getElementById('dtype').value, 10);
+      document.getElementById('sVal').textContent = s.toLocaleString() + ' tokens (' + Math.round(s/1024) + 'K)';
+      let kbFp8 = 35.136, ai = 256;
+      if (attn === 'gqa') { kbFp8 = 163.84; ai = 16; }
+      else if (attn === 'mha') { kbFp8 = 1310.72; ai = 2; }
+      else if (attn === 'hybrid') { kbFp8 = 20.48; ai = 64; }
+      const kb = kbFp8 * b;
+      const sessGb = (s * kb) / (1024 * 1024);
+      const maxSess = Math.floor(260.0 / sessGb);
+      document.getElementById('kbVal').textContent = kb.toFixed(2) + ' KB / tok';
+      document.getElementById('sessGbVal').textContent = sessGb.toFixed(2) + ' GB / session';
+      document.getElementById('aiVal').textContent = ai + ' FLOPs / Byte';
+      document.getElementById('maxSessVal').textContent = maxSess.toLocaleString() + ' Sessions';
+    }
+  </script>
+</body>
+</html>

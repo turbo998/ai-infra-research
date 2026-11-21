@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "llm_attention_architecture_mha_gqa_mla_matrix_absorption_hybrid_linear_selection",
+        "title": "LLM Attention Architecture Evolution: MHA vs. GQA-8 vs. MLA (Matrix Absorption & FlashMLA) vs. Hybrid Linear Attention",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "cluster_node": "8x NVIDIA H200 SXM (1,128 GB Total HBM3e)",
+            "context_length_tokens": 32768,
+            "kv_precision": "FP8 (1 Byte/element)",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_legacy_mha_64_heads_without_kv_compression",
+                "name": "Tier 1: Legacy Multi-Head Attention (MHA, n_kv=64, 1,310.7 KB/tok @ FP8 — Massive KV Footprint)",
+                "kv_cache_kb_per_token_fp8": 1310.7,
+                "max_concurrent_32k_sessions_per_node": 9,
+                "decode_attention_tflops_utilization_pct": 6.2,
+                "cost_per_1m_32k_context_tokens_usd": 3.85,
+                "verdict": "Anti-Pattern: 32K session takes 40.0 GB KV Cache! Caps 8x H200 concurrency at 9 sessions",
+            },
+            {
+                "tier_id": "tier2_standard_gqa_8_kv_heads_llama3_qwen25",
+                "name": "Tier 2: Grouped-Query Attention (GQA-8, n_kv=8, 163.8 KB/tok @ FP8 — 8x KV Reduction vs. MHA)",
+                "kv_cache_kb_per_token_fp8": 163.8,
+                "max_concurrent_32k_sessions_per_node": 72,
+                "decode_attention_tflops_utilization_pct": 14.5,
+                "cost_per_1m_32k_context_tokens_usd": 0.84,
+                "verdict": "Standard Dense LLM workhorse (5.0 GB KV per 32K session), but Decode AI=16 FLOPs/B under-utilizes TensorCores",
+            },
+            {
+                "tier_id": "tier3_mla_without_matrix_absorption_explicit_kv_decompression_in_decode",
+                "name": "Tier 3: Naive MLA Decode Without Matrix Absorption (Materializes Uncompressed 128-Head K/V in HBM)",
+                "kv_cache_kb_per_token_fp8": 35.1,
+                "max_concurrent_32k_sessions_per_node": 64,
+                "decode_attention_tflops_utilization_pct": 19.0,
+                "cost_per_1m_32k_context_tokens_usd": 1.15,
+                "verdict": "Anti-Pattern: Decompressing c_KV into 128 heads during Decode blows up intermediate HBM bandwidth",
+            },
+            {
+                "tier_id": "tier4_mla_with_weight_matrix_absorption_flashmla_and_7to1_hybrid_linear",
+                "name": "Tier 4: MLA with Weight Matrix Absorption (`FlashMLA`, 35.1 KB/tok) / 7:1 Hybrid Linear-Full Attention",
+                "kv_cache_kb_per_token_fp8": 35.1,
+                "max_concurrent_32k_sessions_per_node": 236,
+                "decode_attention_tflops_utilization_pct": 66.8,
+                "cost_per_1m_32k_context_tokens_usd": 0.28,
+                "verdict": "Recommended: 35.1 KB/tok KV (-37.3x vs. MHA, -4.67x vs. GQA), 236 32K sessions/node & $0.28/1M (-92.7%)",
+            },
+        ],
+        "headline_findings": {
+            "mla_kv_kb_per_tok_fp8": 35.1,
+            "kv_compression_vs_gqa_x": 4.67,
+            "max_32k_sessions_per_node": 236,
+            "cost_reduction_vs_mha_pct": 92.7,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
