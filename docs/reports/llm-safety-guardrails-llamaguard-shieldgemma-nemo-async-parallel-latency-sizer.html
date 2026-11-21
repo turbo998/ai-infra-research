@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>大模型安全护栏 (AI Guardrails) 串行 vs. 异步并行延迟计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #6EE7B7; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #38BDF8; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #6EE7B7; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>大模型安全护栏（Llama-Guard-3 / ShieldGemma / NeMo）流式延迟与算力开销计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>主模型 Prefill 基线 TTFT (ms) <span id="v_ttft" class="val">185</span></label>
+      <input type="range" id="ttft" min="80" max="600" step="15" value="185" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>护栏小模型单次推理耗时 (ms) <span id="v_guard" class="val">95</span></label>
+      <input type="range" id="guard" min="30" max="300" step="15" value="95" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>主模型整段生成总耗时 (ms) <span id="v_gen" class="val">2800</span></label>
+      <input type="range" id="gen" min="500" max="6000" step="100" value="2800" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>护栏编排架构档位</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 串行前置 + 整段回复缓冲后置审核</option>
+        <option value="2">Tier 2: 串行前置 + 按句缓冲流式输出</option>
+        <option value="3">Tier 3: 网关异步并行前置门控 (无输出审核)</option>
+        <option value="4" selected>Tier 4: 5ms快筛 + 并发前置门控 + 32-Token滑动窗口熔断 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>用户感知首字延迟</div><div id="k_first" class="num">191 ms</div></div>
+    <div class="kpi"><div>护栏附加 TTFT 损耗</div><div id="k_add" class="num">+6 ms</div></div>
+    <div class="kpi"><div>安全风险拦截召回率</div><div id="k_rec" class="num">99.4%</div></div>
+    <div class="kpi"><div>月度护栏基础设施成本</div><div id="k_cost" class="num">$16,500</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const ttft = parseFloat(document.getElementById('ttft').value);
+  const guard = parseFloat(document.getElementById('guard').value);
+  const gen = parseFloat(document.getElementById('gen').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_ttft').textContent = ttft;
+  document.getElementById('v_guard').textContent = guard;
+  document.getElementById('v_gen').textContent = gen;
+
+  let first = 191, add = 6, rec = 99.4, cost = 16500;
+  if (mode === '1') {
+    first = Math.round(guard * 2.5 + gen + guard * 2.7);
+    add = Math.round(first - ttft);
+    rec = 99.3;
+    cost = 54000;
+  } else if (mode === '2') {
+    first = Math.round(guard * 2.5 + ttft + 85);
+    add = Math.round(first - ttft);
+    rec = 98.8;
+    cost = 42000;
+  } else if (mode === '3') {
+    first = Math.round(Math.max(ttft, guard) + 13);
+    add = Math.round(first - ttft);
+    rec = 94.5;
+    cost = 27000;
+  } else {
+    first = Math.round(5 + Math.max(ttft, guard) + 1);
+    add = Math.round(first - ttft);
+    rec = 99.4;
+    cost = 16500;
+  }
+  document.getElementById('k_first').textContent = first.toLocaleString() + ' ms';
+  document.getElementById('k_add').textContent = '+' + add.toLocaleString() + ' ms';
+  document.getElementById('k_rec').textContent = rec.toFixed(1) + '%';
+  document.getElementById('k_cost').textContent = '$' + cost.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
