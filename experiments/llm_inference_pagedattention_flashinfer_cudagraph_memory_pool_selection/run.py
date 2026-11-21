@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "llm_inference_pagedattention_flashinfer_cudagraph_memory_pool_selection",
+        "title": "LLM Inference Memory & Graph Runtime: PagedAttention/FlashInfer, Piece-wise CUDA Graph & Persistent Cache Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "model": "Llama-3.3-70B-FP8",
+            "gpu_node": "4x NVIDIA H200 SXM (564 GB Total HBM3e)",
+            "max_model_len": 32768,
+            "avg_actual_seq_len": 4096,
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_contiguous_kv_allocation_eager_mode_without_cudagraph",
+                "name": "Tier 1: Contiguous Static KV Pre-Allocation (`max_seq_len=32K`) + Eager Python Kernel Launch",
+                "effective_kv_hbm_utilization_pct": 24.5,
+                "cpu_kernel_launch_overhead_per_step_ms": 6.4,
+                "achieved_p99_tpot_ms": 29.8,
+                "pod_cold_start_ready_sec": 45.0,
+                "cost_per_1m_tokens_usd": 1.48,
+                "verdict": "Anti-Pattern: 75.5% of KV HBM wasted on contiguous over-reservation; 6.4ms/step Python launch tax",
+            },
+            {
+                "tier_id": "tier2_pagedattention_eager_mode_without_cudagraph_or_compile",
+                "name": "Tier 2: PagedAttention (`block_size=16`) in Eager Mode (Eliminates HBM Fragmentation, Keeps CPU Launch Tax)",
+                "effective_kv_hbm_utilization_pct": 94.2,
+                "cpu_kernel_launch_overhead_per_step_ms": 5.8,
+                "achieved_p99_tpot_ms": 21.4,
+                "pod_cold_start_ready_sec": 52.0,
+                "cost_per_1m_tokens_usd": 0.68,
+                "verdict": "3.8x higher concurrent batch size, but CPU launch overhead (5.8ms) still accounts for 27% of TPOT",
+            },
+            {
+                "tier_id": "tier3_full_cudagraph_and_uncached_torch_compile_every_pod_start",
+                "name": "Tier 3: Full-Batch CUDA Graph (1..512 Unbucketed) + Uncached `torch.compile` on Every Pod Boot",
+                "effective_kv_hbm_utilization_pct": 81.0,
+                "cpu_kernel_launch_overhead_per_step_ms": 0.3,
+                "achieved_p99_tpot_ms": 14.9,
+                "pod_cold_start_ready_sec": 680.0,
+                "cost_per_1m_tokens_usd": 0.59,
+                "verdict": "Fast TPOT (14.9ms), but unbucketed CUDA graphs eat 11 GB HBM/GPU and pod cold-start takes 11.3 minutes!",
+            },
+            {
+                "tier_id": "tier4_flashinfer_cascade_paged_kv_piecewise_cudagraph_persistent_cache",
+                "name": "Tier 4: FlashInfer Cascade Paged KV + Bucketed Piece-wise CUDA Graph + Shared Read-Write Compile Cache",
+                "effective_kv_hbm_utilization_pct": 96.8,
+                "cpu_kernel_launch_overhead_per_step_ms": 0.2,
+                "achieved_p99_tpot_ms": 13.8,
+                "pod_cold_start_ready_sec": 38.0,
+                "cost_per_1m_tokens_usd": 0.39,
+                "verdict": "Recommended: 96.8% KV HBM utilization, 0.2ms launch tax, 38s pod boot & $0.39/1M tokens (-73.6%)",
+            },
+        ],
+        "headline_findings": {
+            "kv_hbm_utilization_pct": 96.8,
+            "cpu_launch_overhead_ms": 0.2,
+            "pod_cold_start_sec": 38.0,
+            "cost_reduction_vs_tier1_pct": 73.6,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
