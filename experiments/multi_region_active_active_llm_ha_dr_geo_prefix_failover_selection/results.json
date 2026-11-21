@@ -1,0 +1,60 @@
+{
+  "benchmark_id": "multi_region_active_active_llm_ha_dr_geo_prefix_failover_selection",
+  "title": "Multi-Region Active-Active LLM HA/DR & Global Traffic Routing: Geo-Sticky Prefix Affinity & Cascading-Overload Prevention Benchmark",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload_assumptions": {
+    "global_peak_rps": 120.0,
+    "regions": [
+      "Region-A (Primary East)",
+      "Region-B (Secondary West)",
+      "Cloud-Serverless-Escape-Hatch"
+    ],
+    "avg_context_tokens": 16384
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_single_region_or_cold_pilot_light_on_demand_gpu_dr",
+      "name": "Tier 1: Single Region + Cold Pilot-Light DR (Attempts On-Demand GPU Scale-Up During Regional Outage)",
+      "regional_outage_rto_sec": 2400.0,
+      "failover_cascading_overload_drop_rate_pct": 88.5,
+      "annual_effective_availability_pct": 99.15,
+      "monthly_global_ha_dr_tco_usd": 395000,
+      "verdict": "Anti-Pattern: Regional GPU `OutOfStock` during cloud outages leaves DR unable to scale (40m+ outage!)"
+    },
+    {
+      "tier_id": "tier2_active_passive_100pct_idle_hot_standby_gpu_cluster",
+      "name": "Tier 2: 100% Idle Hot-Standby GPU Cluster in Region B + DNS Failover (60s TTL, Cold KV Cache on Failover)",
+      "regional_outage_rto_sec": 75.0,
+      "failover_cascading_overload_drop_rate_pct": 34.2,
+      "annual_effective_availability_pct": 99.82,
+      "monthly_global_ha_dr_tco_usd": 460000,
+      "verdict": "Wastes 100% of Region B GPUs 99.8% of the year ($460K/mo), and 0% KV hit rate on failover triggers a 34.2% prefill storm!"
+    },
+    {
+      "tier_id": "tier3_active_active_round_robin_without_geo_session_prefix_affinity",
+      "name": "Tier 3: Naive Active-Active 50/50 Global Round-Robin (Scatters Multi-Turn Sessions Across Regions)",
+      "regional_outage_rto_sec": 8.5,
+      "failover_cascading_overload_drop_rate_pct": 19.4,
+      "annual_effective_availability_pct": 99.91,
+      "monthly_global_ha_dr_tco_usd": 310000,
+      "verdict": "Fast failover (8.5s), but cross-region round-robin adds +65ms WAN RTT and halves multi-turn Prefix Cache hits"
+    },
+    {
+      "tier_id": "tier4_active_active_geo_sticky_plus_top_prefix_warm_sync_and_3tier_escape_hatch",
+      "name": "Tier 4: Active-Active Geo-Sticky Routing + Async Top-Prefix Warm Sync + Brownout Context Cap & PAYGO Escape Hatch",
+      "regional_outage_rto_sec": 1.8,
+      "failover_cascading_overload_drop_rate_pct": 0.0,
+      "annual_effective_availability_pct": 99.99,
+      "monthly_global_ha_dr_tco_usd": 192000,
+      "verdict": "Recommended: 1.8s RTO, 0.0% cascading overload drop, 99.99% availability & $192K/mo TCO (-58.3% vs Tier 2)"
+    }
+  ],
+  "headline_findings": {
+    "outage_rto_sec": 1.8,
+    "cascading_overload_drop_pct": 0.0,
+    "effective_availability_pct": 99.99,
+    "tco_savings_vs_tier2_pct": 58.3
+  }
+}

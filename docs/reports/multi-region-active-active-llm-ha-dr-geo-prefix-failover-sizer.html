@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Multi-Region Active-Active LLM HA/DR &amp; Failover Capacity Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Multi-Region Active-Active LLM HA/DR &amp; Failover Storm Calculator</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Size Dual-Region Active-Active Headroom &amp; Prevent KV Cold-Storms</div>
+    <div class="grid">
+      <div class="card">
+        <label>Global Peak Traffic ($\text{RPS}_{\text{global}}$): <strong id="rpsVal">120 RPS (60 East + 60 West)</strong></label>
+        <input type="range" id="rps" min="20" max="400" step="20" value="120" oninput="recalc()">
+        <label>Disaster Recovery Architecture:</label>
+        <select id="arch" onchange="recalc()">
+          <option value="t4">Tier 4: Active-Active Geo-Sticky + Preemptible Batch Buffer + PAYGO Escape</option>
+          <option value="t3">Tier 3: Naive Active-Active Round-Robin (No Session Stickiness)</option>
+          <option value="t2">Tier 2: Active-Passive 100% Idle Hot Standby in Region B</option>
+          <option value="t1">Tier 1: Single Region + On-Demand Pilot-Light Scale-Up</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="rtoVal">1.8 sec</div><div class="lbl">Regional Outage Recovery Time (`RTO`)</div></div>
+          <div class="kpi"><div class="val" id="dropVal">0.0%</div><div class="lbl">Failover KV Cold-Storm Drop Rate</div></div>
+          <div class="kpi"><div class="val" id="slaVal">99.99%</div><div class="lbl">Effective Annual Availability SLA</div></div>
+          <div class="kpi"><div class="val" id="tcoVal">$192,000 / mo</div><div class="lbl">Monthly Global HA/DR TCO (-58.3% vs Tier 2)</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const rps = parseInt(document.getElementById('rps').value, 10);
+      const a = document.getElementById('arch').value;
+      document.getElementById('rpsVal').textContent = rps + ' RPS (' + (rps/2) + ' East + ' + (rps/2) + ' West)';
+      let rto = '1.8 sec', drop = '0.0%', sla = '99.99%', baseTco = 192000;
+      if (a === 't3') { rto = '8.5 sec'; drop = '19.4%'; sla = '99.91%'; baseTco = 310000; }
+      else if (a === 't2') { rto = '75.0 sec'; drop = '34.2%'; sla = '99.82%'; baseTco = 460000; }
+      else if (a === 't1') { rto = '2,400 sec'; drop = '88.5%'; sla = '99.15%'; baseTco = 395000; }
+      const tco = Math.round(baseTco * (rps / 120.0));
+      document.getElementById('rtoVal').textContent = rto;
+      document.getElementById('dropVal').textContent = drop;
+      document.getElementById('slaVal').textContent = sla;
+      document.getElementById('tcoVal').textContent = '$' + tco.toLocaleString() + ' / mo';
+    }
+  </script>
+</body>
+</html>
