@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LHU851xqX37igYr/kC/rVmLFDDiZydpUqJEVcuRMk28=' 'sha256-8NTSeRKONVxpTszjLA1fxhYVi5wGfmryyumsefkaeAk=' 'sha256-Zy1n2d7wl8hJwOkfMp/CJq4/DogZ/qR1Ybp29cvydDs='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LHU851xqX37igYr/kC/rVmLFDDiZydpUqJEVcuRMk28=' 'sha256-I4wJBCi+dEMie4qipLxd7KUGmVltIO/wsMz9ns2WgHU=' 'sha256-aoCrCL6LqqXjR+Ajm0Iz4JF/dMrgDUGPmk5cxd/LPF0='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="description" content="Offline bilingual Cloud &amp; AI Solution Architect academy: metrics, TPM/TPS, GPU sizing, PD, parallelism and RDMA fabric.">
 <title>先看用户体验，再看机器吞吐 | User experience comes before peak throughput</title>
 <script>(() => {
@@ -309,7 +309,7 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     &quot;quality_pass&quot;: false
   }
 ]</textarea></div><button type="reset"><span data-lang="zh-CN">恢复算例</span><span data-lang="en">Reset example</span></button></form><div class="results"><div class="error" role="alert" hidden></div><div data-results="trace" aria-live="polite" aria-atomic="false"></div><noscript><span data-lang="zh-CN">请启用 JavaScript 使用沙盘；下方公式、FAQ 与算例仍可离线阅读。</span><span data-lang="en">Enable JavaScript for the workbench; formulas, FAQ and worked examples remain readable offline.</span></noscript></div></div><p><span data-lang="zh-CN">默认是7条原创教学追踪记录，共18枚可见 Token，不是 GPU 或模型 benchmark。burst 记录的间隔为 0、0、60 ms，平均20 ms；切换「平均TPOT」与「最大可见ITL」，Goodput 会从9降到5 tok/s，虽然原始输出都是18 tok/s。失败、拒绝、质量失败和单 Token 都保留在记录中，不丢失失败分母。</span><span data-lang="en">Default data contains seven original teaching traces and 18 visible tokens, not a GPU/model benchmark. The burst record has gaps 0,0,60 ms but mean20 ms. Switching mean-TPOT to max-visible-ITL gates changes goodput from9 to5 tok/s while raw visible throughput stays18. Failure, rejection, quality failure and single-token records remain instead of disappearing from denominators.</span></p><div class="formula">TTFT_i = first_visible_token_i − client_arrival_i<br>TPOT_i = mean(visible_token_gaps_i), only when N_out&gt;1<br>Visible E2EL_i = last_visible_token_i − arrival_i<br>Terminal latency_i = response_terminal_i − arrival_i<br>L_observed = ∫ active_requests(t)dt / window_length</div><div class="notice"><span data-lang="zh-CN">并发图按所选系统边界直接积时间面积，不把 client在途请求当GPU驻留请求。admitted边界也可能包含服务端等待，不等于GPU busy。全记录落在同一测窗时 λ×平均W 与面积L相等只是有限追踪恒等式；截断测窗会偏离，不能因此用短窗或P99做稳态容量保证。</span><span data-lang="en">Concurrency integrates time under the chosen boundary; client in-flight requests are not GPU-resident requests. The admitted boundary may include server wait, not GPU busy. With all traces contained, λ×meanW equals areaL as a finite-trace identity. Clipping the window can break that comparison; short windows or P99 do not prove steady capacity.</span></div><div class="notice"><span data-lang="zh-CN">时间戳必须在同一相对时间基准；跨机时钟要先对齐。多个 Token 在一个 chunk 中可有相同可见时间，但0间隔不意味着GPU Decode为0；隐藏推理Token与供应商Usage另算。JSON仅在本页计算、不上传、不写本地存储；自填记录标记user_supplied而非已验证实测。</span><span data-lang="en">Timestamps need one aligned relative time base. Tokens in one chunk can share a visible timestamp, but zero gaps do not mean zero GPU decode. Hidden reasoning and provider usage need separate accounting. JSON is processed only here, without upload or local storage; entered traces are user_supplied, not verified measurements.</span></div></section><section class="lesson" id="instrumentation"><h2><span data-lang="zh-CN">数学上的 N/A、Prometheus 的 0 和 benchmark 过滤不是一回事</span><span data-lang="en">Mathematical N/A, Prometheus zero and benchmark filtering are different</span></h2><div class="table-wrap"><table><thead><tr><th scope="col"><span data-lang="zh-CN">采集来源</span><span data-lang="en">Collection source</span></th><th scope="col"><span data-lang="zh-CN">定义差别</span><span data-lang="en">Definition difference</span></th><th scope="col"><span data-lang="zh-CN">使用前动作</span><span data-lang="en">Before use</span></th></tr></thead><tbody><tr><th scope="row">vLLM request_time_per_output_token_seconds</th><td><span data-lang="zh-CN">每完成请求记录一次；N_out≤1可能以0记入histogram</span><span data-lang="en">One sample per completed request; N_out≤1 may enter histograms as zero</span></td><td><span data-lang="zh-CN">0是采集约定，不让1/0变成无限TPS；与N_out关联过滤</span><span data-lang="en">Zero is a collection convention, not infinite TPS; correlate with output length</span></td></tr><tr><th scope="row">vLLM inter_token_latency_seconds</th><td><span data-lang="zh-CN">每stream output event的间隔，不一定逐Token</span><span data-lang="en">Gap per stream-output event, not necessarily per token</span></td><td><span data-lang="zh-CN">说明chunk大小与权重；不能直接和逐请求TPOT均值比较</span><span data-lang="en">State chunk sizes/weights; do not directly compare with per-request TPOT means</span></td></tr><tr><th scope="row">vLLM bench serve</th><td><span data-lang="zh-CN">TPOT统计可排除N_out≤1，与Prometheus总体不同</span><span data-lang="en">TPOT statistics can exclude N_out≤1, unlike the Prometheus population</span></td><td><span data-lang="zh-CN">固定版本和样本总体；两个独立histogram无法精确按request join</span><span data-lang="en">Fix version and population; separate histograms cannot exactly join request cohorts</span></td></tr><tr><th scope="row">NVIDIA AIPerf</th><td><span data-lang="zh-CN">当前推荐的服务端点性能采集工具；不是本页自动运行</span><span data-lang="en">Current recommended serving-endpoint profiling tool; not run automatically here</span></td><td><span data-lang="zh-CN">记录模型/版本、tokenizer、load模式、测窗与失败状态</span><span data-lang="en">Record model/version, tokenizer, load mode, window and failures</span></td></tr></tbody></table></div><p><span data-lang="zh-CN">复核到2026-11-21，GenAI-Perf 官方页面已标明停止积极开发新功能并推荐 AIPerf。这里仅提供定义与工具选型依据，不安装、不连接任何推理端点，也不引用其不同机器的示例性能来证明本沙盘。</span><span data-lang="en">As reviewed on2026-11-21, the official GenAI-Perf page says new-feature development is phased out and recommends AIPerf. This page only teaches definitions/tool selection; it installs nothing, connects to no endpoint and does not borrow example performance from other machines.</span></p></section><section class="lesson" id="faq"><h2><span data-lang="zh-CN">平均值、尾分位数、Token 定义必须一起交付</span><span data-lang="en">Ship means, tails and token definitions together</span></h2><details><summary><span data-lang="zh-CN">为什么单用户 TPS 很高，企业平台仍然很慢？</span><span data-lang="en">Why can high single-user TPS coexist with a slow platform?</span></summary><p><span data-lang="zh-CN">测试可能没有排队或只用短输入。生产需要混合长度、持续 offered load、P95/P99 TTFT 与 ITL、拒绝率、质量门槛和 Goodput；先固定同一 tokenizer、模型版本与输出条件。</span><span data-lang="en">The test may have no queue or only short inputs. Production requires mixed lengths, sustained offered load, TTFT/ITL tails, rejection rate, quality gates and goodput under the same tokenizer, model and output conditions.</span></p></details><details><summary><span data-lang="zh-CN">为什么不能把每个请求的 P99 相加得到 E2EL P99？</span><span data-lang="en">Why not add P99 stage latencies to get P99 E2EL?</span></summary><p><span data-lang="zh-CN">分位数不线性可加。要保留同一请求 trace 的相关性，先对请求求总时延，再对总时延分布取分位数。阶段预算相加只是工程上界预算。</span><span data-lang="en">Quantiles are not additive. Keep correlated stage traces, compute each request's total, then take the total distribution percentile. Adding stage budgets is a planning bound.</span></p></details><div class="quiz" data-quiz="metrics" data-correct="1"><fieldset><legend><span data-lang="zh-CN">输出只有一个 Token，TPOT 应记为什么？</span><span data-lang="en">For a one-token output, what is TPOT?</span></legend><label><input type="radio" name="quiz-metrics" value="0"><span data-lang="zh-CN">0 ms</span><span data-lang="en">0 ms</span></label><label><input type="radio" name="quiz-metrics" value="1"><span data-lang="zh-CN">未定义 / N/A</span><span data-lang="en">Undefined / N/A</span></label><label><input type="radio" name="quiz-metrics" value="2"><span data-lang="zh-CN">TTFT</span><span data-lang="en">TTFT</span></label><button type="button" data-check-quiz><span data-lang="zh-CN">核对答案</span><span data-lang="en">Check answer</span></button><div class="quiz-result" role="status"></div><template data-explanation><span data-lang="zh-CN">分母 N_out−1=0。TTFT 仍然有意义，但没有后续 Token 间隔。</span><span data-lang="en">N_out−1 is zero. TTFT remains meaningful, but there is no subsequent token interval.</span></template></fieldset></div></section><section class="lesson" id="checklist"><h2><span data-lang="zh-CN">先写清测量合同，再选引擎和 GPU</span><span data-lang="en">Specify the measurement contract before choosing an engine or GPU</span></h2><div class="checklist"><label><input type="checkbox"><span data-lang="zh-CN">同一模型、tokenizer、提示词分布、输出长度与质量门槛</span><span data-lang="en">Same model, tokenizer, prompt distribution, output lengths and quality gate</span></label><label><input type="checkbox"><span data-lang="zh-CN">分别命名服务端 TTFT、端到端 TTFT、首音频、首可见答案</span><span data-lang="en">Name server TTFT, end-to-end TTFT, first audio and first visible answer separately</span></label><label><input type="checkbox"><span data-lang="zh-CN">同时采集平均 TPOT 与 P99 ITL；记录失败、取消和拒绝</span><span data-lang="en">Collect mean TPOT and P99 ITL; record failures, cancellations and rejections</span></label><label><input type="checkbox"><span data-lang="zh-CN">声明 Goodput 门槛、分母、时间窗口与成本范围</span><span data-lang="en">Declare goodput gates, denominator, window and cost scope</span></label></div></section>
-<section class="lesson sources" id="sources"><h2><span data-lang="zh-CN">依据、适用边界与复核日期</span><span data-lang="en">Sources, boundaries and review date</span></h2><p><span data-lang="zh-CN">2026-11-21 复核。公式图与延迟曲线是原创教学模型，不是硬件测量。链接仅供主动查阅；离线阅读不发网络请求。</span><span data-lang="en">Reviewed 2026-11-21. Formula charts and latency curves are original teaching models, not hardware measurements. Links are for intentional reference visits; offline reading sends no requests.</span></p><p><a href="https://docs.vllm.ai/en/latest/configuration/optimization/" rel="noreferrer">vLLM V1 optimization and tuning</a> · implementation<br>Chunked prefill, scheduling tradeoffs, runtime and KV memory behavior are version-dependent; 80-85% is an architect planning margin, not a claimed current default</p><p><a href="https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/provisioned-throughput" rel="noreferrer">Microsoft Foundry provisioned throughput concepts</a> · specification<br>PTU quota is not a universal TPM conversion and is not GPU count</p><p><a href="https://docs.vllm.ai/en/latest/design/metrics/" rel="noreferrer">vLLM V1 metrics definitions</a> · implementation<br>Per-output-event ITL differs from per-request TPOT; Prometheus records TPOT zero for at most one output token while serving benchmark statistics can exclude those requests</p><p><a href="https://github.com/ai-dynamo/aiperf" rel="noreferrer">NVIDIA AIPerf project</a> · implementation<br>Serving-endpoint profiling with concurrency/request-rate/trace modes and explicit tokenizer; no example benchmark coordinates copied</p><p><a href="https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/perf_analyzer/genai-perf/README.html" rel="noreferrer">NVIDIA GenAI-Perf documentation and deprecation notice</a> · implementation<br>Official documentation says new-feature development is phased out and recommends AIPerf; reviewed 2026-11-21</p></section>
+<section class="lesson sources" id="sources"><h2><span data-lang="zh-CN">依据、适用边界与复核日期</span><span data-lang="en">Sources, boundaries and review date</span></h2><p><span data-lang="zh-CN">2026-11-21 复核。公式图与延迟曲线是原创教学模型，不是硬件测量。链接仅供主动查阅；离线阅读不发网络请求。</span><span data-lang="en">Reviewed 2026-11-21. Formula charts and latency curves are original teaching models, not hardware measurements. Links are for intentional reference visits; offline reading sends no requests.</span></p><p><a href="https://docs.vllm.ai/en/latest/configuration/optimization/" rel="noreferrer">vLLM V1 optimization and tuning</a> · implementation<br>Chunked prefill, scheduling tradeoffs, runtime and KV memory behavior are version-dependent; 80-85% is an architect planning margin, not a claimed current default</p><p><a href="https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/provisioned-throughput" rel="noreferrer">Microsoft Foundry provisioned throughput concepts</a> · specification<br>PTU quota is not a universal TPM conversion and is not GPU count</p><p><a href="https://docs.vllm.ai/en/latest/design/metrics/" rel="noreferrer">vLLM V1 metrics definitions</a> · implementation<br>Per-output-event ITL differs from per-request TPOT; Prometheus records TPOT zero for at most one output token while serving benchmark statistics can exclude those requests</p><p><a href="https://github.com/ai-dynamo/aiperf" rel="noreferrer">NVIDIA AIPerf project</a> · implementation<br>Serving-endpoint profiling with concurrency/request-rate/trace modes and explicit tokenizer; no example benchmark coordinates copied</p><p><a href="https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/perf_analyzer/genai-perf/README.html" rel="noreferrer">NVIDIA GenAI-Perf documentation and deprecation notice</a> · implementation<br>Official documentation says new-feature development is phased out and recommends AIPerf; reviewed2026-11-21</p></section>
 <nav class="nav-footer" aria-label="Chapter navigation"><a class="button" data-carry href="index.html">← Academy</a><a class="button" data-carry href="02-tpm-tps-capacity.html"><span data-lang="zh-CN">下一册</span><span data-lang="en">Next</span> →</a></nav>
 <footer><div id="policy-notice" class="notice" role="status" hidden></div><p><span data-lang="zh-CN">原创双语学习材料 · 零外部依赖 · 所有可视化坐标来自页面公式或确定性教学样本。未独立复现实机性能；离线打开无外部请求，主动点击参考链接除外。</span><span data-lang="en">Original bilingual learning material · No external dependencies · All visual coordinates derive from page formulas or deterministic teaching samples. No independently reproduced hardware performance. Offline opening makes no external requests; intentional reference-link visits are separate.</span></p><a href="../inference-sizing-network/README.md"><span data-lang="zh-CN">双语 FAQ 索引</span><span data-lang="en">Bilingual FAQ index</span></a></footer>
 </main>
@@ -338,6 +338,19 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     { id: "rejection", arrival_ms: 50, admitted_ms: null, visible_token_ms: [], ended_ms: 55, prompt_tokens: 128, status: "rejected", quality_pass: null },
     { id: "quality-failure", arrival_ms: 60, admitted_ms: 80, visible_token_ms: [180, 195, 210], ended_ms: 212, prompt_tokens: 512, status: "success", quality_pass: false }
   ];
+  const workloadProfiles = [
+    { name: "IDE", prompt: 256, output: 64, ttft: 200, tpot: 15 },
+    { name: "RAG", prompt: 4096, output: 512, ttft: 800, tpot: 35 },
+    { name: "Reasoning", prompt: 8192, output: 4096, ttft: 2000, tpot: 50 }
+  ];
+  const ptuModels = {
+    gpt62sol: { name: "gpt-6.2-sol", version: "2026-11-17", capacity: 2950, shortRead: 0.05, longRead: 0.1, regionalMinimum: 25, regionalStep: 25 },
+    gpt62astra: { name: "gpt-6.2-astra", version: "2026-11-17", capacity: 750, shortRead: 0.05, longRead: 0.1, regionalMinimum: 25, regionalStep: 25 },
+    gpt61sol: { name: "gpt-6.1-sol", version: "2026-09-29", capacity: 3000, shortRead: 0.05, longRead: 0.1, regionalMinimum: 25, regionalStep: 25 },
+    gpt6sol: { name: "gpt-6-sol", version: "2026-09-22", capacity: 3000, shortRead: 0.1, longRead: 0.2, regionalMinimum: 15, regionalStep: 5 },
+    gpt6luna: { name: "gpt-6-luna", version: "2026-09-22", capacity: 59400, shortRead: 0.1, longRead: 0.2, regionalMinimum: 15, regionalStep: 5 },
+    gpt6astra: { name: "gpt-6-astra", version: "2026-09-03", capacity: 600, shortRead: 0.1, longRead: 0.2, regionalMinimum: 25, regionalStep: 25 }
+  };
   function number(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
     if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
       throw new RangeError(`${name}: expected a finite number in [${min}, ${max}]`);
@@ -462,10 +475,57 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const residence = latency.e2e / 1000;
     const active = qps * residence;
     const decodeActive = qps * latency.decode / 1000;
+    return { qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, rpm: qps * 60, residence, active, decodeActive, ...instanceBounds(inputTPS, outputTPS, active, p) };
+  }
+  function instanceBounds(inputTPS, outputTPS, active, p) {
     const inputInstances = Math.ceil(inputTPS / (p.inputCapacity * p.utilization));
     const outputInstances = Math.ceil(outputTPS / (p.outputCapacity * p.utilization));
     const batchInstances = Math.ceil(active / p.batch);
-    return { qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, rpm: qps * 60, residence, active, decodeActive, inputInstances, outputInstances, batchInstances, instances: Math.max(inputInstances, outputInstances, batchInstances) };
+    return { inputInstances, outputInstances, batchInstances, instances: Math.max(inputInstances, outputInstances, batchInstances) };
+  }
+  function mixtureCapacity(p) {
+    number(p.shortShare, "short-request share", 0, 1);
+    number(p.ragShare, "RAG-request share", 0, 1);
+    if (p.shortShare + p.ragShare > 1 + 1e-12) throw new RangeError("Request shares must sum to no more than one");
+    const shares = [p.shortShare, p.ragShare, Math.max(0, 1 - p.shortShare - p.ragShare)];
+    const classes = workloadProfiles.map((profile, i) => ({ ...profile, share: shares[i], ...capacity({ ...p, ...profile, qps: p.qps * shares[i] }) }));
+    const qps = p.qps * p.headroom;
+    const inputTPS = classes.reduce((sum, group) => sum + group.inputTPS, 0);
+    const outputTPS = classes.reduce((sum, group) => sum + group.outputTPS, 0);
+    const active = classes.reduce((sum, group) => sum + group.active, 0);
+    const meanResidence = classes.reduce((sum, group) => sum + group.share * group.residence, 0);
+    const meanPrompt = classes.reduce((sum, group) => sum + group.share * group.prompt, 0);
+    const meanOutput = classes.reduce((sum, group) => sum + group.share * group.output, 0);
+    const meanTTFT = classes.reduce((sum, group) => sum + group.share * group.ttft, 0);
+    const meanTPOT = classes.reduce((sum, group) => sum + group.share * group.tpot, 0);
+    const incorrectShortcutW = (meanTTFT + (meanOutput - 1) * meanTPOT) / 1000;
+    return { classes, qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, active, meanResidence, meanPrompt, meanOutput, meanTTFT, meanTPOT, incorrectShortcutW, ...instanceBounds(inputTPS, outputTPS, active, p) };
+  }
+  function burstQueue({ baseQPS, burstMultiplier, burstSeconds, serviceRPS, queueBudgetMs, horizonSeconds }) {
+    number(baseQPS, "base QPS");
+    number(burstMultiplier, "burst multiplier", 1, 1000);
+    number(burstSeconds, "burst seconds", 0.01, 3600);
+    number(serviceRPS, "same-workload service RPS", 0.001);
+    number(queueBudgetMs, "queue-only budget ms");
+    number(horizonSeconds, "horizon seconds", burstSeconds, 86400);
+    const burstRate = baseQPS * burstMultiplier;
+    const excessRate = Math.max(0, burstRate - serviceRPS);
+    const peakQueue = excessRate * burstSeconds;
+    const queueCap = serviceRPS * queueBudgetMs / 1000;
+    const cappedPeak = Math.min(peakQueue, queueCap);
+    const spareRate = serviceRPS - baseQPS;
+    const drainSeconds = peakQueue === 0 ? 0 : spareRate > 0 ? peakQueue / spareRate : null;
+    const cappedDrainSeconds = cappedPeak === 0 ? 0 : spareRate > 0 ? cappedPeak / spareRate : null;
+    const times = new Set(Array.from({ length: 61 }, (_, i) => horizonSeconds * i / 60));
+    [burstSeconds, excessRate > 0 ? queueCap / excessRate : null, drainSeconds === null ? null : burstSeconds + drainSeconds, cappedDrainSeconds === null ? null : burstSeconds + cappedDrainSeconds].forEach((value) => {
+      if (value !== null && value >= 0 && value <= horizonSeconds) times.add(value);
+    });
+    const points = [...times].sort((a, b) => a - b).map((time) => {
+      const queue = time <= burstSeconds ? excessRate * time : Math.max(0, peakQueue - spareRate * (time - burstSeconds));
+      const capped = time <= burstSeconds ? Math.min(queue, queueCap) : Math.min(queueCap, Math.max(0, cappedPeak - spareRate * (time - burstSeconds)));
+      return { time, queue, capped };
+    });
+    return { burstRate, peakQueue, queueCap, cappedPeak, drainSeconds, cappedDrainSeconds, peakWaitSeconds: peakQueue / serviceRPS, cappedWaitSeconds: cappedPeak / serviceRPS, rejectedDuringBurst: Math.max(0, peakQueue - cappedPeak), baseUtilization: baseQPS / serviceRPS, stableBase: baseQPS < serviceRPS, points };
   }
   function businessQPS({ dau, requests, hours, peak }) {
     number(dau, "dau");
@@ -484,9 +544,24 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     integer(minimum, "minimum", 1);
     integer(step, "step", 1);
     const normalized = inputTPM * ((1 - cache) + cache * cachedWeight) + outputTPM * outputWeight;
+    return { normalized, ...provisioning(normalized, capacity, minimum, step) };
+  }
+  function provisioning(normalized, capacity, minimum, step) {
     const raw = normalized / capacity;
     const provisioned = normalized === 0 ? 0 : minimum + Math.max(0, Math.ceil((raw - minimum) / step)) * step;
-    return { normalized, raw, provisioned };
+    return { raw, provisioned };
+  }
+  function normalizedPTU(p) {
+    const model = preset(ptuModels, p.model);
+    if (!["global-zone", "regional"].includes(p.deployment)) throw new RangeError("Unknown PTU deployment category");
+    const weights = { shortInput: 1, shortRead: model.shortRead, shortWrite30: 1.25, shortWrite12: 2.5, shortOutput: 5, longInput: 2, longRead: model.longRead, longWrite30: 2.5, longWrite12: 5, longOutput: 7.5 };
+    const categories = Object.entries(weights).map(([key, weight]) => ({ key, weight, tokens: number(p[key], "mutually exclusive category TPM"), normalized: p[key] * weight }));
+    const normalized = categories.reduce((sum, category) => sum + category.normalized, 0);
+    const rawTokens = categories.reduce((sum, category) => sum + category.tokens, 0);
+    const minimum = p.deployment === "regional" ? model.regionalMinimum : 15;
+    const step = p.deployment === "regional" ? model.regionalStep : 5;
+    const readContribution = categories.filter((category) => ["shortRead", "longRead"].includes(category.key)).reduce((sum, category) => sum + category.normalized, 0);
+    return { model, categories, normalized, rawTokens, minimum, step, ...provisioning(normalized, model.capacity, minimum, step), incorrectFreeReads: provisioning(normalized - readContribution, model.capacity, minimum, step).provisioned, readContribution };
   }
   function kvPerToken(model, bytes, architecture = "native") {
     number(bytes, "KV bytes", 0.5, 4);
@@ -692,7 +767,7 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, traceSamples, number, integer, lifecycle, traceMetrics, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);
@@ -835,11 +910,55 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
       ], t("实例数下界，非单卡数；容量示例必须替换为实测", "Instance floors, not GPU counts; replace example capacities with measurements")) +
       note(t(`假设平均停留 ${fmt(r.residence)} s；其中后续 decode 活跃 L≈${fmt(r.decodeActive)}。动态 continuous batching 的活跃数不会固定等于这个均值。`, `Assumed mean residence ${fmt(r.residence)} s; subsequent decode-active L≈${fmt(r.decodeActive)}. Continuous-batching occupancy is not fixed at this mean.`));
   }
+  function mixture(p) {
+    const r = M.mixtureCapacity(p);
+    let body = "";
+    r.classes.forEach((group, i) => {
+      const y = 35 + i * 85;
+      const activeShare = r.active > 0 ? group.active / r.active : null;
+      body += `<text x="15" y="${y + 22}">${esc(group.name)}</text><rect x="170" y="${y}" width="${480 * group.share}" height="25" rx="4" class="primary"/><text x="${180 + 480 * group.share}" y="${y + 19}">${fmt(group.share * 100)}%</text>`;
+      if (activeShare !== null) body += `<rect x="170" y="${y + 33}" width="${480 * activeShare}" height="25" rx="4" class="secondary"/>`;
+      body += `<text x="${180 + 480 * (activeShare || 0)}" y="${y + 52}">${activeShare === null ? "N/A" : fmt(activeShare * 100) + "%"}</text>`;
+    });
+    return kpis([[fmt(r.qps), t("含余量的混合 QPS", "Mixed QPS including headroom")], [fmt(r.inputTPS), "Input TPS"], [fmt(r.outputTPS), "Output TPS"], [fmt(r.meanResidence) + " s", t("按类正确求得 E[W]", "Correct class-weighted E[W]")], [fmt(r.active), t("同边界平均在途 L", "Same-boundary mean in-flight L")], [String(r.instances), t("同混合容量下实例下界", "Instance floor under same-mix capacity")]]) +
+      legend([t("请求占比", "Request fraction"), t("平均在途占比", "Mean in-flight fraction")]) +
+      svg(body, t("请求占比与在途占比是不同分母；长停留类主导并发。零总负载时在途份额为N/A。", "Request and in-flight fractions use different denominators; long residence dominates concurrency. In-flight fraction is N/A at zero total load."), 320) +
+      dataTable([t("教学类别", "Teaching class"), "Share", "Input/Output", "W s", "Input TPS", "Output TPS", "L"], r.classes.map((group) => [group.name, fmt(group.share * 100) + "%", `${group.prompt}/${group.output}`, fmt(group.residence, 3), fmt(group.inputTPS), fmt(group.outputTPS), fmt(group.active, 3)]), t("固定教学均值；不是实测模型结果", "Fixed teaching means, not measured model results")) +
+      dataTable([t("计算方式", "Calculation"), "W s", t("含义", "Meaning")], [
+        ["Σ f_i W_i", fmt(r.meanResidence, 4), t("先在每类中计算停留，再平均", "Compute residence per class before averaging")],
+        ["E[TTFT]+(E[N]−1)×E[TPOT]", fmt(r.incorrectShortcutW, 4), t("错误捷径：忽略长度/Token时间相关性", "Incorrect shortcut: ignores length/token-time correlation")],
+        ["Input/Output/Concurrency floors", `${r.inputInstances}/${r.outputInstances}/${r.batchInstances}`, t("先取最大值，再做同负载验证", "Take the maximum, then validate the same workload")]
+      ], t("容量规划必须保持同一总体", "Capacity planning must preserve the same population"));
+  }
+  function burst(p) {
+    const r = M.burstQueue(p);
+    const noDrain = t("无排空余量", "No drain headroom");
+    return kpis([[fmt(r.burstRate) + " /s", t("突发到达率", "Burst arrival rate")], [fmt(r.peakQueue), t("无限队列峰值请求等价量", "Unbounded peak request-equivalents")], [fmt(r.peakWaitSeconds) + " s", t("流体峰值排队等待", "Fluid peak queue wait")], [r.drainSeconds === null ? noDrain : fmt(r.drainSeconds) + " s", t("突发后排空时间", "Post-burst drain time")], [fmt(r.cappedPeak), t("TTFT排队预算下的队列", "Queue under TTFT wait budget")], [fmt(r.rejectedDuringBurst), t("突发阶段需拒绝/转移等价量", "Burst request-equivalents to reject/route")]]) +
+      plot([{ label: t("不限制接入", "Unbounded admission"), values: r.points.map((point) => ({ x: point.time, y: point.queue })) }, { label: t("按排队预算限制", "Queue-budget admission"), values: r.points.map((point) => ({ x: point.time, y: point.capped })) }], "Time seconds", "Fluid request-equivalents", t("流体队列时序；cap队列从较小峰值独立排空，不沿用无限积压的排空时间。", "Fluid queue timeline; capped queue drains independently from its smaller peak, not on the unbounded backlog's timeline."), r.queueCap, t("接入排队预算", "Admission queue budget")) +
+      dataTable([t("策略", "Policy"), t("峰值等待 s", "Peak wait s"), t("恢复排空 s", "Recovery drain s")], [
+        [t("无限排队", "Unbounded queue"), fmt(r.peakWaitSeconds), r.drainSeconds === null ? noDrain : fmt(r.drainSeconds)],
+        [t("预算队列", "Budget-capped queue"), fmt(r.cappedWaitSeconds), r.cappedDrainSeconds === null ? noDrain : fmt(r.cappedDrainSeconds)]
+      ], t("所有时间是固定μ下的教学近似，不是P99预测", "Times are teaching approximations at fixed μ, not P99 predictions")) +
+      (!r.stableBase ? note(t("恢复后的基线不低于服务速率，没有稳定/恢复余量；正积压不会自行排空。流体零积压也不证明随机负载SLA。", "Post-burst base load meets/exceeds service rate: no stability/recovery headroom. Positive backlog cannot drain itself; even zero fluid backlog does not prove stochastic SLOs.")) : "");
+  }
   function ptu(p) {
     const r = M.ptu(p);
     return kpis([[fmt(r.normalized, 0), "Normalized TPM"], [fmt(r.raw), t("未取整 PTU", "Raw PTU")], [String(r.provisioned), t("演示部署 PTU", "Illustrative deployed PTU")]]) +
       barChart([{ label: "Input equivalent", value: p.inputTPM * ((1 - p.cache) + p.cache * p.cachedWeight) }, { label: "Output weighted", value: p.outputTPM * p.outputWeight }], t("按手工权重归一化，不是当前云端 quota 或 GPU 数。", "Normalized using manual weights, not current cloud quota or GPU count."), "equiv TPM") +
       note(t("若缓存写入/多模态/上下文档位还有独立权重，这个两权重演示不足以报价；请使用当前模型专用公式。", "If cache writes, multimodal or context tiers have additional weights, this two-weight demo is insufficient for a quote; use current model-specific formulas."));
+  }
+  function normalized(p) {
+    const r = M.normalizedPTU(p);
+    const names = {
+      shortInput: t("短普通输入", "Short ordinary input"), shortRead: t("短缓存读", "Short cached read"),
+      shortWrite30: t("短30min写", "Short30min write"), shortWrite12: t("短12h写", "Short12h write"), shortOutput: t("短输出", "Short output"),
+      longInput: t("长普通输入", "Long ordinary input"), longRead: t("长缓存读", "Long cached read"),
+      longWrite30: t("长30min写", "Long30min write"), longWrite12: t("长12h写", "Long12h write"), longOutput: t("长输出", "Long output")
+    };
+    return kpis([[fmt(r.rawTokens, 0), t("互斥分类原始 TPM", "Raw TPM across exclusive categories")], [fmt(r.normalized, 0), "Normalized TPM"], [fmt(r.raw), t("未取整 PTU", "Raw PTU")], [String(r.provisioned), t("当前分类的规划 PTU", "Planned PTU for these categories")], [`${r.minimum} / ${r.step}`, t("最小值 / 扩容步长", "Minimum / scale increment")], [String(r.incorrectFreeReads), t("错误免费缓存对照，非正确方案", "Incorrect free-cache counterfactual, not a valid plan")]]) +
+      barChart(r.categories.map((category) => ({ label: names[category.key], value: category.normalized })), t("每个Token只属于一个分类；条形为TPM×已复核权重，零类别是明确输入，不是未知值。", "Each token belongs to one category; bars show TPM×reviewed weight. Zero categories are explicit inputs, not unknowns."), "norm TPM") +
+      dataTable([t("互斥分类", "Exclusive category"), "Raw TPM", "Weight", "Normalized TPM"], r.categories.map((category) => [names[category.key], fmt(category.tokens, 0), fmt(category.weight), fmt(category.normalized, 0)]), `${r.model.name} / ${r.model.version} · ${fmt(r.model.capacity, 0)} normalized TPM/PTU`) +
+      note(t(`这是2026-11-21官方参数快照与用户输入的预算计算，没有读取Azure订阅quota或capacity。缓存读本身贡献 ${fmt(r.readContribution, 0)} normalized TPM，不能在这个模型版本中默认免费。`, `This combines a2026-11-21 published parameter snapshot with entered demand, without reading Azure quota/capacity. Cache reads contribute ${fmt(r.readContribution, 0)} normalized TPM and are not free for this model version.`));
   }
   function cost(p) {
     const r = M.cost(p);
@@ -1077,13 +1196,13 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, trace, goodput, capacity, ptu, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);

@@ -100,6 +100,10 @@ Output TPM = 13×512×60 = 399,360
 
 Targets are **assumed planning means**, not established observations. Replace with measured E[W] for observed verification; test bursts, growing queues and rejection separately.
 
+Do not multiply separately averaged output length and TPOT for mixed traffic. The teaching IDE/RAG/reasoning mix is50%/40%/10%, with residence1.145/18.685/206.75s. MeanW is **28.7215s** and13 planned QPS gives L=373.3795. Reasoning is10% of requests but **71.98% of mean in-flight population**; the incorrect separate-mean shortcut gives17.7231s. Verify class means on the same workload; L is not automatically GPU residency.
+
+Burst end is not immediate recovery: service10 RPS, base8 QPS and a30-second3× burst yield **420 request-equivalents**. Two spare RPS need **210 seconds** to drain. A300ms queue-only budget holds about three fluid request-equivalents, so about417 need rejection/routing. This fixed-average-μ approximation neither predicts actual P99 nor creates extra service capacity.
+
 ### Q7. How are instance counts derived?
 
 Measure input/output throughput and the active-request cap on **the same mixed workload**:
@@ -124,6 +128,10 @@ Normalized TPM = Input TPM×[(1−cache)+cache×cached_weight]
 ```
 
 Microsoft Learn's GPT-5.2 Data Zone example: 200K input TPM, 20K output TPM, output weight 8 and 3400 input-equivalent TPM/PTU. With 50% cache and zero cached weight: **260K normalized TPM → 76.47 PTU → 80 PTU**. H5 minimum is a manual example field; verify the real deployment table. GPT-6+, cache writes, images and context tiers may need extra weights, not an assumed free category.
+
+The2026-11-21 GPT-6.1/6.2 snapshot assigns each token once to short/long ordinary input, cached read,30-minute write,12-hour write or output. Short/long weights are: cached read0.05/0.1, ordinary input1/2, output5/7.5,30-minute write1.25/2.5,12-hour write2.5/5. GPT-6 Sol/Luna/Astra reads use0.1/0.2. Context tiers follow the specific model/pricing definition, not a universal128K cutoff.
+
+H5default categories convert264K raw TPM into **271K normalized TPM**. `gpt-6.2-sol /2026-11-17` supplies2950 normalized TPM/PTU: raw91.86, rounded **95 PTU** for Global/Data Zone minimum15/increment5 or **100 PTU** for Regional25/25. Incorrectly treating reads as free gives90 Global PTU. Do not count cache writes again as ordinary input. This is not a subscription-quota, regional-capacity or price query; no new demand does not erase idle costs of existing deployments.
 
 Whole self-hosted cluster cost `$40/h`, compliant output `5000 tok/s`:
 

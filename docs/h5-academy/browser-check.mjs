@@ -307,6 +307,14 @@ try {
           const { data: traceChart } = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: traceBounds.value }, sessionId);
           writeFileSync(join(screenshots, `${file.replace(".html", "")}-${variant.width}-trace.png`), Buffer.from(traceChart, "base64"));
         }
+        const { result: figureBounds } = await client.send("Runtime.evaluate", {
+          expression: "(() => { const items=[]; for (const result of document.querySelectorAll('[data-results]')) { let i=0; for (const el of result.querySelectorAll('figure')) { const r=el.getBoundingClientRect(); items.push({name:result.dataset.results+'-'+i++,clip:{x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}}); } } return items; })()",
+          returnByValue: true
+        }, sessionId);
+        for (const item of figureBounds.value) {
+          const { data: figure } = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: item.clip }, sessionId);
+          writeFileSync(join(screenshots, `${file.replace(".html", "")}-${variant.width}-${item.name}.png`), Buffer.from(figure, "base64"));
+        }
         if (file === "05-parallelism-acceleration.html") {
           for (const view of ["tp", "pp", "dp", "ep", "attention-dp"]) {
             const { result: viewBounds } = await client.send("Runtime.evaluate", {

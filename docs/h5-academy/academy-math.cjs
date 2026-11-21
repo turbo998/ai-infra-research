@@ -23,6 +23,19 @@
     { id: "rejection", arrival_ms: 50, admitted_ms: null, visible_token_ms: [], ended_ms: 55, prompt_tokens: 128, status: "rejected", quality_pass: null },
     { id: "quality-failure", arrival_ms: 60, admitted_ms: 80, visible_token_ms: [180, 195, 210], ended_ms: 212, prompt_tokens: 512, status: "success", quality_pass: false }
   ];
+  const workloadProfiles = [
+    { name: "IDE", prompt: 256, output: 64, ttft: 200, tpot: 15 },
+    { name: "RAG", prompt: 4096, output: 512, ttft: 800, tpot: 35 },
+    { name: "Reasoning", prompt: 8192, output: 4096, ttft: 2000, tpot: 50 }
+  ];
+  const ptuModels = {
+    gpt62sol: { name: "gpt-6.2-sol", version: "2026-11-17", capacity: 2950, shortRead: 0.05, longRead: 0.1, regionalMinimum: 25, regionalStep: 25 },
+    gpt62astra: { name: "gpt-6.2-astra", version: "2026-11-17", capacity: 750, shortRead: 0.05, longRead: 0.1, regionalMinimum: 25, regionalStep: 25 },
+    gpt61sol: { name: "gpt-6.1-sol", version: "2026-09-29", capacity: 3000, shortRead: 0.05, longRead: 0.1, regionalMinimum: 25, regionalStep: 25 },
+    gpt6sol: { name: "gpt-6-sol", version: "2026-09-22", capacity: 3000, shortRead: 0.1, longRead: 0.2, regionalMinimum: 15, regionalStep: 5 },
+    gpt6luna: { name: "gpt-6-luna", version: "2026-09-22", capacity: 59400, shortRead: 0.1, longRead: 0.2, regionalMinimum: 15, regionalStep: 5 },
+    gpt6astra: { name: "gpt-6-astra", version: "2026-09-03", capacity: 600, shortRead: 0.1, longRead: 0.2, regionalMinimum: 25, regionalStep: 25 }
+  };
   function number(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
     if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
       throw new RangeError(`${name}: expected a finite number in [${min}, ${max}]`);
@@ -147,10 +160,57 @@
     const residence = latency.e2e / 1000;
     const active = qps * residence;
     const decodeActive = qps * latency.decode / 1000;
+    return { qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, rpm: qps * 60, residence, active, decodeActive, ...instanceBounds(inputTPS, outputTPS, active, p) };
+  }
+  function instanceBounds(inputTPS, outputTPS, active, p) {
     const inputInstances = Math.ceil(inputTPS / (p.inputCapacity * p.utilization));
     const outputInstances = Math.ceil(outputTPS / (p.outputCapacity * p.utilization));
     const batchInstances = Math.ceil(active / p.batch);
-    return { qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, rpm: qps * 60, residence, active, decodeActive, inputInstances, outputInstances, batchInstances, instances: Math.max(inputInstances, outputInstances, batchInstances) };
+    return { inputInstances, outputInstances, batchInstances, instances: Math.max(inputInstances, outputInstances, batchInstances) };
+  }
+  function mixtureCapacity(p) {
+    number(p.shortShare, "short-request share", 0, 1);
+    number(p.ragShare, "RAG-request share", 0, 1);
+    if (p.shortShare + p.ragShare > 1 + 1e-12) throw new RangeError("Request shares must sum to no more than one");
+    const shares = [p.shortShare, p.ragShare, Math.max(0, 1 - p.shortShare - p.ragShare)];
+    const classes = workloadProfiles.map((profile, i) => ({ ...profile, share: shares[i], ...capacity({ ...p, ...profile, qps: p.qps * shares[i] }) }));
+    const qps = p.qps * p.headroom;
+    const inputTPS = classes.reduce((sum, group) => sum + group.inputTPS, 0);
+    const outputTPS = classes.reduce((sum, group) => sum + group.outputTPS, 0);
+    const active = classes.reduce((sum, group) => sum + group.active, 0);
+    const meanResidence = classes.reduce((sum, group) => sum + group.share * group.residence, 0);
+    const meanPrompt = classes.reduce((sum, group) => sum + group.share * group.prompt, 0);
+    const meanOutput = classes.reduce((sum, group) => sum + group.share * group.output, 0);
+    const meanTTFT = classes.reduce((sum, group) => sum + group.share * group.ttft, 0);
+    const meanTPOT = classes.reduce((sum, group) => sum + group.share * group.tpot, 0);
+    const incorrectShortcutW = (meanTTFT + (meanOutput - 1) * meanTPOT) / 1000;
+    return { classes, qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, active, meanResidence, meanPrompt, meanOutput, meanTTFT, meanTPOT, incorrectShortcutW, ...instanceBounds(inputTPS, outputTPS, active, p) };
+  }
+  function burstQueue({ baseQPS, burstMultiplier, burstSeconds, serviceRPS, queueBudgetMs, horizonSeconds }) {
+    number(baseQPS, "base QPS");
+    number(burstMultiplier, "burst multiplier", 1, 1000);
+    number(burstSeconds, "burst seconds", 0.01, 3600);
+    number(serviceRPS, "same-workload service RPS", 0.001);
+    number(queueBudgetMs, "queue-only budget ms");
+    number(horizonSeconds, "horizon seconds", burstSeconds, 86400);
+    const burstRate = baseQPS * burstMultiplier;
+    const excessRate = Math.max(0, burstRate - serviceRPS);
+    const peakQueue = excessRate * burstSeconds;
+    const queueCap = serviceRPS * queueBudgetMs / 1000;
+    const cappedPeak = Math.min(peakQueue, queueCap);
+    const spareRate = serviceRPS - baseQPS;
+    const drainSeconds = peakQueue === 0 ? 0 : spareRate > 0 ? peakQueue / spareRate : null;
+    const cappedDrainSeconds = cappedPeak === 0 ? 0 : spareRate > 0 ? cappedPeak / spareRate : null;
+    const times = new Set(Array.from({ length: 61 }, (_, i) => horizonSeconds * i / 60));
+    [burstSeconds, excessRate > 0 ? queueCap / excessRate : null, drainSeconds === null ? null : burstSeconds + drainSeconds, cappedDrainSeconds === null ? null : burstSeconds + cappedDrainSeconds].forEach((value) => {
+      if (value !== null && value >= 0 && value <= horizonSeconds) times.add(value);
+    });
+    const points = [...times].sort((a, b) => a - b).map((time) => {
+      const queue = time <= burstSeconds ? excessRate * time : Math.max(0, peakQueue - spareRate * (time - burstSeconds));
+      const capped = time <= burstSeconds ? Math.min(queue, queueCap) : Math.min(queueCap, Math.max(0, cappedPeak - spareRate * (time - burstSeconds)));
+      return { time, queue, capped };
+    });
+    return { burstRate, peakQueue, queueCap, cappedPeak, drainSeconds, cappedDrainSeconds, peakWaitSeconds: peakQueue / serviceRPS, cappedWaitSeconds: cappedPeak / serviceRPS, rejectedDuringBurst: Math.max(0, peakQueue - cappedPeak), baseUtilization: baseQPS / serviceRPS, stableBase: baseQPS < serviceRPS, points };
   }
   function businessQPS({ dau, requests, hours, peak }) {
     number(dau, "dau");
@@ -169,9 +229,24 @@
     integer(minimum, "minimum", 1);
     integer(step, "step", 1);
     const normalized = inputTPM * ((1 - cache) + cache * cachedWeight) + outputTPM * outputWeight;
+    return { normalized, ...provisioning(normalized, capacity, minimum, step) };
+  }
+  function provisioning(normalized, capacity, minimum, step) {
     const raw = normalized / capacity;
     const provisioned = normalized === 0 ? 0 : minimum + Math.max(0, Math.ceil((raw - minimum) / step)) * step;
-    return { normalized, raw, provisioned };
+    return { raw, provisioned };
+  }
+  function normalizedPTU(p) {
+    const model = preset(ptuModels, p.model);
+    if (!["global-zone", "regional"].includes(p.deployment)) throw new RangeError("Unknown PTU deployment category");
+    const weights = { shortInput: 1, shortRead: model.shortRead, shortWrite30: 1.25, shortWrite12: 2.5, shortOutput: 5, longInput: 2, longRead: model.longRead, longWrite30: 2.5, longWrite12: 5, longOutput: 7.5 };
+    const categories = Object.entries(weights).map(([key, weight]) => ({ key, weight, tokens: number(p[key], "mutually exclusive category TPM"), normalized: p[key] * weight }));
+    const normalized = categories.reduce((sum, category) => sum + category.normalized, 0);
+    const rawTokens = categories.reduce((sum, category) => sum + category.tokens, 0);
+    const minimum = p.deployment === "regional" ? model.regionalMinimum : 15;
+    const step = p.deployment === "regional" ? model.regionalStep : 5;
+    const readContribution = categories.filter((category) => ["shortRead", "longRead"].includes(category.key)).reduce((sum, category) => sum + category.normalized, 0);
+    return { model, categories, normalized, rawTokens, minimum, step, ...provisioning(normalized, model.capacity, minimum, step), incorrectFreeReads: provisioning(normalized - readContribution, model.capacity, minimum, step).provisioned, readContribution };
   }
   function kvPerToken(model, bytes, architecture = "native") {
     number(bytes, "KV bytes", 0.5, 4);
@@ -377,7 +452,7 @@
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, traceSamples, number, integer, lifecycle, traceMetrics, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);

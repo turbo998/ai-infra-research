@@ -136,11 +136,55 @@
       ], t("实例数下界，非单卡数；容量示例必须替换为实测", "Instance floors, not GPU counts; replace example capacities with measurements")) +
       note(t(`假设平均停留 ${fmt(r.residence)} s；其中后续 decode 活跃 L≈${fmt(r.decodeActive)}。动态 continuous batching 的活跃数不会固定等于这个均值。`, `Assumed mean residence ${fmt(r.residence)} s; subsequent decode-active L≈${fmt(r.decodeActive)}. Continuous-batching occupancy is not fixed at this mean.`));
   }
+  function mixture(p) {
+    const r = M.mixtureCapacity(p);
+    let body = "";
+    r.classes.forEach((group, i) => {
+      const y = 35 + i * 85;
+      const activeShare = r.active > 0 ? group.active / r.active : null;
+      body += `<text x="15" y="${y + 22}">${esc(group.name)}</text><rect x="170" y="${y}" width="${480 * group.share}" height="25" rx="4" class="primary"/><text x="${180 + 480 * group.share}" y="${y + 19}">${fmt(group.share * 100)}%</text>`;
+      if (activeShare !== null) body += `<rect x="170" y="${y + 33}" width="${480 * activeShare}" height="25" rx="4" class="secondary"/>`;
+      body += `<text x="${180 + 480 * (activeShare || 0)}" y="${y + 52}">${activeShare === null ? "N/A" : fmt(activeShare * 100) + "%"}</text>`;
+    });
+    return kpis([[fmt(r.qps), t("含余量的混合 QPS", "Mixed QPS including headroom")], [fmt(r.inputTPS), "Input TPS"], [fmt(r.outputTPS), "Output TPS"], [fmt(r.meanResidence) + " s", t("按类正确求得 E[W]", "Correct class-weighted E[W]")], [fmt(r.active), t("同边界平均在途 L", "Same-boundary mean in-flight L")], [String(r.instances), t("同混合容量下实例下界", "Instance floor under same-mix capacity")]]) +
+      legend([t("请求占比", "Request fraction"), t("平均在途占比", "Mean in-flight fraction")]) +
+      svg(body, t("请求占比与在途占比是不同分母；长停留类主导并发。零总负载时在途份额为N/A。", "Request and in-flight fractions use different denominators; long residence dominates concurrency. In-flight fraction is N/A at zero total load."), 320) +
+      dataTable([t("教学类别", "Teaching class"), "Share", "Input/Output", "W s", "Input TPS", "Output TPS", "L"], r.classes.map((group) => [group.name, fmt(group.share * 100) + "%", `${group.prompt}/${group.output}`, fmt(group.residence, 3), fmt(group.inputTPS), fmt(group.outputTPS), fmt(group.active, 3)]), t("固定教学均值；不是实测模型结果", "Fixed teaching means, not measured model results")) +
+      dataTable([t("计算方式", "Calculation"), "W s", t("含义", "Meaning")], [
+        ["Σ f_i W_i", fmt(r.meanResidence, 4), t("先在每类中计算停留，再平均", "Compute residence per class before averaging")],
+        ["E[TTFT]+(E[N]−1)×E[TPOT]", fmt(r.incorrectShortcutW, 4), t("错误捷径：忽略长度/Token时间相关性", "Incorrect shortcut: ignores length/token-time correlation")],
+        ["Input/Output/Concurrency floors", `${r.inputInstances}/${r.outputInstances}/${r.batchInstances}`, t("先取最大值，再做同负载验证", "Take the maximum, then validate the same workload")]
+      ], t("容量规划必须保持同一总体", "Capacity planning must preserve the same population"));
+  }
+  function burst(p) {
+    const r = M.burstQueue(p);
+    const noDrain = t("无排空余量", "No drain headroom");
+    return kpis([[fmt(r.burstRate) + " /s", t("突发到达率", "Burst arrival rate")], [fmt(r.peakQueue), t("无限队列峰值请求等价量", "Unbounded peak request-equivalents")], [fmt(r.peakWaitSeconds) + " s", t("流体峰值排队等待", "Fluid peak queue wait")], [r.drainSeconds === null ? noDrain : fmt(r.drainSeconds) + " s", t("突发后排空时间", "Post-burst drain time")], [fmt(r.cappedPeak), t("TTFT排队预算下的队列", "Queue under TTFT wait budget")], [fmt(r.rejectedDuringBurst), t("突发阶段需拒绝/转移等价量", "Burst request-equivalents to reject/route")]]) +
+      plot([{ label: t("不限制接入", "Unbounded admission"), values: r.points.map((point) => ({ x: point.time, y: point.queue })) }, { label: t("按排队预算限制", "Queue-budget admission"), values: r.points.map((point) => ({ x: point.time, y: point.capped })) }], "Time seconds", "Fluid request-equivalents", t("流体队列时序；cap队列从较小峰值独立排空，不沿用无限积压的排空时间。", "Fluid queue timeline; capped queue drains independently from its smaller peak, not on the unbounded backlog's timeline."), r.queueCap, t("接入排队预算", "Admission queue budget")) +
+      dataTable([t("策略", "Policy"), t("峰值等待 s", "Peak wait s"), t("恢复排空 s", "Recovery drain s")], [
+        [t("无限排队", "Unbounded queue"), fmt(r.peakWaitSeconds), r.drainSeconds === null ? noDrain : fmt(r.drainSeconds)],
+        [t("预算队列", "Budget-capped queue"), fmt(r.cappedWaitSeconds), r.cappedDrainSeconds === null ? noDrain : fmt(r.cappedDrainSeconds)]
+      ], t("所有时间是固定μ下的教学近似，不是P99预测", "Times are teaching approximations at fixed μ, not P99 predictions")) +
+      (!r.stableBase ? note(t("恢复后的基线不低于服务速率，没有稳定/恢复余量；正积压不会自行排空。流体零积压也不证明随机负载SLA。", "Post-burst base load meets/exceeds service rate: no stability/recovery headroom. Positive backlog cannot drain itself; even zero fluid backlog does not prove stochastic SLOs.")) : "");
+  }
   function ptu(p) {
     const r = M.ptu(p);
     return kpis([[fmt(r.normalized, 0), "Normalized TPM"], [fmt(r.raw), t("未取整 PTU", "Raw PTU")], [String(r.provisioned), t("演示部署 PTU", "Illustrative deployed PTU")]]) +
       barChart([{ label: "Input equivalent", value: p.inputTPM * ((1 - p.cache) + p.cache * p.cachedWeight) }, { label: "Output weighted", value: p.outputTPM * p.outputWeight }], t("按手工权重归一化，不是当前云端 quota 或 GPU 数。", "Normalized using manual weights, not current cloud quota or GPU count."), "equiv TPM") +
       note(t("若缓存写入/多模态/上下文档位还有独立权重，这个两权重演示不足以报价；请使用当前模型专用公式。", "If cache writes, multimodal or context tiers have additional weights, this two-weight demo is insufficient for a quote; use current model-specific formulas."));
+  }
+  function normalized(p) {
+    const r = M.normalizedPTU(p);
+    const names = {
+      shortInput: t("短普通输入", "Short ordinary input"), shortRead: t("短缓存读", "Short cached read"),
+      shortWrite30: t("短30min写", "Short30min write"), shortWrite12: t("短12h写", "Short12h write"), shortOutput: t("短输出", "Short output"),
+      longInput: t("长普通输入", "Long ordinary input"), longRead: t("长缓存读", "Long cached read"),
+      longWrite30: t("长30min写", "Long30min write"), longWrite12: t("长12h写", "Long12h write"), longOutput: t("长输出", "Long output")
+    };
+    return kpis([[fmt(r.rawTokens, 0), t("互斥分类原始 TPM", "Raw TPM across exclusive categories")], [fmt(r.normalized, 0), "Normalized TPM"], [fmt(r.raw), t("未取整 PTU", "Raw PTU")], [String(r.provisioned), t("当前分类的规划 PTU", "Planned PTU for these categories")], [`${r.minimum} / ${r.step}`, t("最小值 / 扩容步长", "Minimum / scale increment")], [String(r.incorrectFreeReads), t("错误免费缓存对照，非正确方案", "Incorrect free-cache counterfactual, not a valid plan")]]) +
+      barChart(r.categories.map((category) => ({ label: names[category.key], value: category.normalized })), t("每个Token只属于一个分类；条形为TPM×已复核权重，零类别是明确输入，不是未知值。", "Each token belongs to one category; bars show TPM×reviewed weight. Zero categories are explicit inputs, not unknowns."), "norm TPM") +
+      dataTable([t("互斥分类", "Exclusive category"), "Raw TPM", "Weight", "Normalized TPM"], r.categories.map((category) => [names[category.key], fmt(category.tokens, 0), fmt(category.weight), fmt(category.normalized, 0)]), `${r.model.name} / ${r.model.version} · ${fmt(r.model.capacity, 0)} normalized TPM/PTU`) +
+      note(t(`这是2026-11-21官方参数快照与用户输入的预算计算，没有读取Azure订阅quota或capacity。缓存读本身贡献 ${fmt(r.readContribution, 0)} normalized TPM，不能在这个模型版本中默认免费。`, `This combines a2026-11-21 published parameter snapshot with entered demand, without reading Azure quota/capacity. Cache reads contribute ${fmt(r.readContribution, 0)} normalized TPM and are not free for this model version.`));
   }
   function cost(p) {
     const r = M.cost(p);
@@ -378,13 +422,13 @@
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, trace, goodput, capacity, ptu, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);

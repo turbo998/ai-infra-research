@@ -22,7 +22,7 @@ const node = (x, y, w, title, subtitle, cls = "surface") => `<rect x="${x}" y="$
 const arrow = (x1, y1, x2, y2) => `<path d="M ${x1} ${y1} L ${x2} ${y2}" class="line secondary"/><path d="M ${x2 - 8} ${y2 - 5} L ${x2} ${y2} L ${x2 - 8} ${y2 + 5}" class="line secondary"/>`;
 export const chapters = [
   { id: "metrics", file: "01-metrics.html", zh: "先看用户体验，再看机器吞吐", en: "User experience comes before peak throughput", subtitleZh: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · 成本", subtitleEn: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · cost", minutes: 20, sources: ["vllm", "ptu-concept", "vllm-metrics", "aiperf", "genai-perf"] },
-  { id: "capacity", file: "02-tpm-tps-capacity.html", zh: "50 TPS/用户，不等于 50 TPS/集群", en: "50 TPS per user is not 50 TPS per cluster", subtitleZh: "TPM/TPS 边界 · Little's Law · 峰值规划 · PTU 权重", subtitleEn: "TPM/TPS boundaries · Little's Law · peak sizing · PTU weights", minutes: 25, sources: ["ptu", "ptu-concept", "vllm"] },
+  { id: "capacity", file: "02-tpm-tps-capacity.html", zh: "50 TPS/用户，不等于 50 TPS/集群", en: "50 TPS per user is not 50 TPS per cluster", subtitleZh: "TPM/TPS 边界 · Little's Law · 峰值规划 · PTU 权重", subtitleEn: "TPM/TPS boundaries · Little's Law · peak sizing · PTU weights", minutes: 25, sources: ["ptu", "ptu-concept", "vllm", "quota"] },
   { id: "sizing", file: "03-gpu-sizing.html", zh: "放得下、吐得快、首字快，是三道不同水位线", en: "Memory fit, decode speed and first-token speed are three different bounds", subtitleZh: "Dense / MoE · GQA / MLA · 显存堆叠 · HBM / FLOPs", subtitleEn: "Dense / MoE · GQA / MLA · memory stacks · HBM / FLOPs", minutes: 30, sources: ["h100", "h200", "b200", "l40s", "deepseek-config", "deepseek", "llama", "qwen", "vllm", "gqa-tp", "mla-layout"] },
   { id: "pd", file: "04-pd-disaggregation.html", zh: "PD 分离消除一类干扰，却增加一次 KV 交接", en: "PD removes one interference source but adds a KV handoff", subtitleZh: "混部 / Chunked Prefill / PD · KV 传输 · 决策边界", subtitleEn: "Colocated / chunked prefill / PD · KV transfer · decision boundaries", minutes: 25, sources: ["vllm", "vllm-pd", "dynamo", "mooncake", "sglang", "gpudirect"] },
   { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell", "tensor-parallel", "speculative", "prefix"] },
@@ -166,6 +166,35 @@ function capacityContent() {
     field("cost", "hours", "同负载持续小时", "Hours at the same load", 8, 0, 8760, 0.1) +
     field("cost", "priceIn", "API 输入 $/1M Token（假设）", "API input $/1M tokens (assumption)", 1, 0, 1000, 0.01) +
     field("cost", "priceOut", "API 输出 $/1M Token（假设）", "API output $/1M tokens (assumption)", 5, 0, 1000, 0.01);
+  const mixed = field("mixture", "qps", "业务峰值 QPS", "Business peak QPS", 10, 0, 100000, 0.1) +
+    field("mixture", "headroom", "需求余量倍率", "Demand headroom", 1.3, 1, 10, 0.1) +
+    field("mixture", "shortShare", "IDE 请求占比", "IDE request fraction", 0.5, 0, 1, 0.05) +
+    field("mixture", "ragShare", "RAG 请求占比（剩余为推理）", "RAG fraction (remainder is reasoning)", 0.4, 0, 1, 0.05) +
+    field("mixture", "inputCapacity", "同混合负载实例输入 TPS（示例）", "Instance input TPS for this mix (example)", 20000, 1, 10000000) +
+    field("mixture", "outputCapacity", "同混合负载实例输出 TPS（示例）", "Instance output TPS for this mix (example)", 1500, 1, 10000000) +
+    field("mixture", "utilization", "实测吞吐使用比例", "Measured-capacity fraction used", 0.7, 0.1, 1, 0.05) +
+    field("mixture", "batch", "每实例同边界活动请求预算", "Same-boundary active request budget/instance", 128, 1, 4096);
+  const bursts = field("burst", "baseQPS", "恢复后基线 QPS", "Post-burst base QPS", 8, 0, 100000, 0.1) +
+    field("burst", "burstMultiplier", "突发倍率", "Burst multiplier", 3, 1, 100, 0.1) +
+    field("burst", "burstSeconds", "突发持续秒", "Burst duration seconds", 30, 1, 600) +
+    field("burst", "serviceRPS", "同负载集群可持续 RPS（示例）", "Sustainable cluster RPS for this workload (example)", 10, 0.1, 100000, 0.1) +
+    field("burst", "queueBudgetMs", "仅分给排队的 TTFT 预算 ms", "TTFT budget allocated only to queueing ms", 300, 0, 60000) +
+    field("burst", "horizonSeconds", "观察秒数（≥突发时长）", "Observation horizon seconds (≥burst)", 300, 1, 3600);
+  const tokenVolumes = [
+    ["shortInput", "短普通输入（不含缓存读/写）", "Short ordinary input (excluding cache read/write)", 100000],
+    ["shortRead", "短缓存读", "Short cached input", 100000],
+    ["shortWrite30", "短30分钟缓存写", "Short 30-minute cache write", 20000],
+    ["shortWrite12", "短12小时缓存写（示例明确为0）", "Short 12-hour cache write (example explicitly zero)", 0],
+    ["shortOutput", "短上下文输出", "Short-context output", 20000],
+    ["longInput", "长普通输入（不含缓存读/写）", "Long ordinary input (excluding cache read/write)", 10000],
+    ["longRead", "长缓存读", "Long cached input", 10000],
+    ["longWrite30", "长30分钟缓存写", "Long 30-minute cache write", 2000],
+    ["longWrite12", "长12小时缓存写（示例明确为0）", "Long 12-hour cache write (example explicitly zero)", 0],
+    ["longOutput", "长上下文输出", "Long-context output", 2000]
+  ];
+  const normalized = select("normalized", "model", "官方归一化参数快照（非实时quota）", "Published normalization snapshot (not live quota)", Object.entries(math.ptuModels).map(([key, model]) => [key, `${model.name} / ${model.version}`]), "gpt62sol") +
+    select("normalized", "deployment", "部署类别（决定最小值/步长）", "Deployment class (minimum/increment)", [["global-zone", "Global / Data Zone"], ["regional", "Regional"]], "global-zone") +
+    tokenVolumes.map(([key, z, e, value]) => field("normalized", key, z + " TPM", e + " TPM", value, 0, 1e12)).join("");
   return section("concepts", "TPM=60×TPS 只在同一 Token 口径、同一窗口下成立", "TPM=60×TPS only for the same token scope and window",
     table([b("范围", "Scope"), b("公式", "Formula"), b("不要混淆", "Do not confuse")], [
       [b("单用户流式速率", "Per-user streaming"), "TPS_user ≈ 1000 / TPOT_ms", b("不含首字等待；不是系统吞吐。", "Excludes first-token wait; not system throughput.")],
@@ -182,13 +211,36 @@ function capacityContent() {
         "Targets are treated as assumed planning means, not observed means or P99. Replace them with measured E[W] to verify Little's Law. Input/output capacities must come from the same mixed workload, not two independent peak tests.") +
       p("默认手算：10 QPS×1.3=13 QPS；输入 26,624 TPS→1,597,440 TPM；输出 6,656 TPS→399,360 TPM；W=0.8+511×0.02=11.02 s，平均在途 L=143.26。使用 70% 容量时，输入/输出/并发约束分别给出 2/7/2 个实例，先取 7，再压测。实例不是一张 GPU。",
         "Default hand check: 10×1.3=13 QPS; input 26,624 TPS→1,597,440 TPM; output 6,656 TPS→399,360 TPM; W=0.8+511×0.02=11.02 s and L=143.26. At 70% of example capacity, input/output/concurrency bounds require 2/7/2 instances: start from 7, then validate. An instance is not one GPU.")) +
+    section("mixture", "10% 长推理请求可占约72%平均在途并发", "10% long reasoning requests can occupy about72% of mean concurrency",
+      lab("mixture", mixed) +
+      formula("Input TPS = λ×Σ f_i×input_tokens_i; Output TPS = λ×Σ f_i×output_tokens_i<br>E[W] = Σ f_i×[TTFT_i+(output_i−1)×TPOT_i]<br>L = Σ λ×f_i×W_i<br>Generally E[(N_out−1)×TPOT] ≠ (E[N_out]−1)×E[TPOT]") +
+      p("三类固定教学画像：IDE为256输入/64输出/200ms TTFT/15ms TPOT；RAG为4096/512/800/35；推理为8192/4096/2000/50。50%/40%/10%请求混合时，E[W]=28.7215s，13计划QPS对应L=373.3795；推理类占10%请求，却贡献约71.98%在途并发。它们是各类规划均值，不是硬件 SLA。",
+        "Fixed teaching profiles: IDE=256 input/64 output/200ms TTFT/15ms TPOT; RAG=4096/512/800/35; reasoning=8192/4096/2000/50. At a50%/40%/10% request mix, E[W]=28.7215s and13 planned QPS gives L=373.3795. Reasoning is10% of requests but about71.98% of mean concurrency. These are assumed class means, not hardware SLAs.") +
+      note("若先平均输出长度和TPOT再相乘，默认会得到错误的17.7231s，而不是28.7215s。输出长度和每Token时间相关时，必须按同类/同请求相乘后求平均。L仍是指定系统边界的在途量，不能直接当GPU KV驻留量；实例容量需按同混合负载测量。",
+        "Multiplying separately averaged output length and TPOT gives the incorrect17.7231s rather than28.7215s. Correlated lengths/token times must be multiplied within each class/request before averaging. L is in-flight population under the specified boundary, not automatically GPU KV residency; measure instance capacity on this same mix.")) +
+    section("burst", "30秒突发造成的积压，可能要210秒才排空", "A30-second burst can need210 seconds to drain",
+      lab("burst", bursts) +
+      formula("Fluid Q_peak = max(0, λ_burst−μ)×T_burst<br>Drain time = Q_peak/(μ−λ_base), only when μ&gt;λ_base<br>Queue wait approximation = Q/μ<br>Queue-only admission budget = μ×queue_budget_seconds") +
+      p("默认：服务10 RPS、基线8 QPS、突发3倍持续30秒。积压=(24−10)×30=420个请求等价量，峰值排队等待近似42秒；恢复余量只有2 RPS，需要420/2=210秒。若排队只允许300ms，流体队列预算约3个请求，多余约417个请求等价量需拒绝/转移，而不是悄悄违反 TTFT。",
+        "Default: service10 RPS, base8 QPS, a3× burst for30s. Backlog=(24−10)×30=420 request-equivalents and approximate peak wait42s. Recovery has only2 RPS spare capacity, so drain takes420/2=210s. A300ms queue budget holds about3 fluid request-equivalents; about417 excess equivalents need rejection/routing rather than silent TTFT violations.") +
+      note("这是固定平均服务速率的流体教学模型，不是离散scheduler、随机排队或P99预测。μ必须来自同负载可持续能力；R1长短混合、重试、抢占和缓存冷热会改变它。限流不创造算力，只把无限排队转成可见拒绝/降级。排队预算也不是全部 TTFT。",
+        "This is a fixed-average-rate fluid teaching model, not a discrete scheduler, stochastic queue or P99 forecast. Measure μ on the same workload; reasoning mix, retries, preemption and cache state change it. Admission creates no compute: it replaces unbounded waiting with explicit rejection/degradation. Queue budget is not the whole TTFT.")) +
     section("ptu", "缓存与输出权重改变 PTU，却不改变原始 Token 计数", "Caching and output weights change PTU, not raw token counts",
       lab("ptu", ptus) +
       formula("Normalized TPM = Input TPM × [(1−cache_hit) + cache_hit×cached_weight]<br>                 + Output TPM × output_weight<br>Raw PTU = Normalized TPM / normalized_TPM_per_PTU<br>Deploy PTU = minimum + max(0, ceil((Raw PTU−minimum)/step))×step") +
-      p("这个两权重沙盘的默认数值对应 Microsoft Learn 中 GPT-5.2 Data Zone 的教学算例：输入 200K、输出 20K、输出权重 8、每 PTU 3,400 输入等价 TPM。50% 缓存且缓存权重 0 时得 260K 归一化 TPM→76.47 PTU→80。最小值 15 是手工演示参数，使用前核对实际部署表；不是自动读取的当前 Azure SKU 配额。",
-        "Default weights mirror the GPT-5.2 Data Zone worked example in Microsoft Learn: 200K input, 20K output, output weight 8, 3,400 input-equivalent TPM/PTU. With 50% cache and zero cached weight: 260K normalized TPM→76.47 PTU→80. Minimum 15 is a manual demonstration setting; check the actual deployment table, not a live quota feed.") +
+      p("这个两权重沙盘的默认数值对应 Microsoft Learn 中 GPT-5.2 Data Zone 的教学算例：输入200K、输出20K、输出权重8、每PTU 3,400输入等价TPM。50%缓存且缓存权重0时得260K归一化TPM→76.47 PTU→80。复核表中此类部署最小15、步长5，但字段仍可手工改，且不是实时quota或可部署容量查询。",
+        "Default weights mirror the Microsoft Learn GPT-5.2 Data Zone example:200K input,20K output, output weight8 and3,400 input-equivalent TPM/PTU. At50% cache and zero cached weight:260K normalized TPM→76.47 PTU→80. The reviewed table lists minimum15/increment5, but fields remain manual and are not live quota or deployable-capacity discovery.") +
       note("GPT-6+、多模态、长上下文档位、缓存写入等可能采用更多权重。本沙盘只适合两类输入+输出模型的讲解；额外类别必须按当前官方公式单独扩展，不能把它们默认当作免费或零。",
         "GPT-6+, multimodal inputs, context tiers and cache writes can require additional weights. This workbench only explains two input categories plus output. Extra categories must use current official formulas, not silently become free or zero.")) +
+    section("normalized", "GPT-6缓存读与写都消耗PTU，不能沿用旧式免费缓存", "GPT-6 cache reads/writes consume PTU; the older free-cache rule does not apply",
+      lab("normalized", normalized) +
+      formula("Normalized TPM = Σ mutually_exclusive_category_TPM×category_weight<br>Raw PTU = Normalized TPM / model_version_normalized_TPM_per_PTU<br>Each token is assigned once: ordinary input OR cache read OR cache write; 30min OR12h write<br>Deploy size is rounded using the selected minimum and increment") +
+      p("官方2026-11-21参数快照：GPT-6.1/6.2的短缓存读权重0.05、长缓存读0.1；短/长普通输入1/2，输出5/7.5，30分钟写1.25/2.5，12小时写2.5/5。GPT-6 Sol/Luna/Astra缓存读为0.1/0.2。短/长档位由模型版本和官方定价定义，不在此按字符数或统一128K阈值自动推断。",
+        "Published parameters reviewed2026-11-21: GPT-6.1/6.2 short/long cache-read weights0.05/0.1; ordinary input1/2, output5/7.5,30-minute write1.25/2.5 and12-hour write2.5/5. GPT-6 Sol/Luna/Astra cache reads use0.1/0.2. Context tiers follow model/version/pricing definitions, not character counts or an assumed universal128K cutoff.") +
+      p("默认互斥Token分类的原始总量264K TPM，正确归一化271K。gpt-6.2-sol 2026-11-17每PTU预算2,950，raw=91.86；Global/Data Zone取95 PTU，Regional按25最小/25步长取100。错误把缓存读当免费会算成90个Global PTU。这里没有查询订阅额度、地区可用性或给报价。",
+        "Default mutually exclusive categories total264K raw TPM and271K normalized TPM. gpt-6.2-sol2026-11-17 has2,950 normalized TPM/PTU: raw91.86, rounded95 for Global/Data Zone or100 for Regional's minimum25/increment25. Incorrectly treating reads as free gives90 Global PTU. This does not query subscription quota, regional availability or pricing.") +
+      note("不能把cache write又算ordinary input，或把12小时写重复算30分钟写。旧模型输出权重也不一定等于报价比例；按具体版本与部署核对。零需求显示0仅代表不新建容量，已部署PTU的闲置费用不会自动消失。Standard RPM/TPM限流与PTU归一化预算是不同合同。",
+        "Do not count cache writes again as ordinary input or12-hour writes again as30-minute writes. Older output weights can differ from price ratios; verify model/version/deployment. Zero demand means no new planned capacity, not free existing PTU idle time. Standard RPM/TPM limits and normalized PTU budgets are different contracts.")) +
     section("cost", "达标输出作分母，才不会奖励失败的峰值吞吐", "Use compliant output as the denominator, not failed peak throughput",
       lab("cost", costs) +
       formula("Self-hosted $/1M_output = whole_cluster_$per_hour × 10⁶ / (3600×output_goodput)<br>API period cost = hours×3600×(inputTPS×price_input + outputTPS×price_output)/10⁶") +

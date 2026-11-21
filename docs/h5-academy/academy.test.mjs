@@ -119,6 +119,35 @@ test("DAU conversion divides by active business hours rather than all-day second
   near(M.businessQPS({ dau: 20000, requests: 10, hours: 10, peak: 3 }), 600000 / 36000);
   assert.throws(() => M.businessQPS({ dau: 1, requests: 1, hours: 0, peak: 1 }), RangeError);
 });
+test("mixed capacity computes per-class residence before averaging and exposes long-request concurrency dominance", () => {
+  const p = { qps: 10, headroom: 1.3, shortShare: 0.5, ragShare: 0.4, inputCapacity: 20000, outputCapacity: 1500, batch: 128, utilization: 0.7 };
+  const r = M.mixtureCapacity(p);
+  near(r.inputTPS, 33612.8);
+  near(r.outputTPS, 8403.2);
+  near(r.meanResidence, 28.7215);
+  near(r.active, 373.3795);
+  near(r.incorrectShortcutW, 17.7231);
+  assert.ok(r.classes[2].active / r.active > 0.71);
+  assert.equal(r.instances, 9);
+  assert.equal(M.mixtureCapacity({ ...p, qps: 0 }).instances, 0);
+  assert.throws(() => M.mixtureCapacity({ ...p, shortShare: 0.8, ragShare: 0.4 }), RangeError);
+});
+test("fluid burst queues drain from their own capped backlog rather than the unbounded backlog", () => {
+  const p = { baseQPS: 8, burstMultiplier: 3, burstSeconds: 30, serviceRPS: 10, queueBudgetMs: 300, horizonSeconds: 300 };
+  const r = M.burstQueue(p);
+  assert.equal(r.peakQueue, 420);
+  assert.equal(r.peakWaitSeconds, 42);
+  assert.equal(r.drainSeconds, 210);
+  assert.equal(r.queueCap, 3);
+  assert.equal(r.cappedDrainSeconds, 1.5);
+  assert.equal(r.rejectedDuringBurst, 417);
+  const drained = r.points.find((point) => point.time === 31.5);
+  assert.equal(drained.capped, 0);
+  assert.equal(drained.queue, 417);
+  assert.equal(M.burstQueue({ ...p, baseQPS: 12 }).drainSeconds, null);
+  assert.equal(M.burstQueue({ ...p, baseQPS: 0 }).peakQueue, 0);
+  assert.throws(() => M.burstQueue({ ...p, serviceRPS: 0 }), RangeError);
+});
 test("PTU cache and output weights do not silently use a universal TPM conversion", () => {
   const p = { inputTPM: 200000, outputTPM: 20000, cache: 0.5, cachedWeight: 0, outputWeight: 8, capacity: 3400, minimum: 15, step: 5 };
   const r = M.ptu(p);
@@ -131,6 +160,22 @@ test("PTU cache and output weights do not silently use a universal TPM conversio
 });
 test("PTU scale increment is anchored to the declared minimum, including non-aligned grids", () => {
   assert.equal(M.ptu({ inputTPM: 23, outputTPM: 0, cache: 0, cachedWeight: 0, outputWeight: 1, capacity: 1, minimum: 12, step: 5 }).provisioned, 27);
+});
+test("GPT-6 normalized categories include cache reads/writes exactly once and round by deployment", () => {
+  const p = { model: "gpt62sol", deployment: "global-zone", shortInput: 100000, shortRead: 100000, shortWrite30: 20000, shortWrite12: 0, shortOutput: 20000, longInput: 10000, longRead: 10000, longWrite30: 2000, longWrite12: 0, longOutput: 2000 };
+  const r = M.normalizedPTU(p);
+  assert.equal(r.rawTokens, 264000);
+  assert.equal(r.normalized, 271000);
+  assert.equal(r.provisioned, 95);
+  assert.equal(r.incorrectFreeReads, 90);
+  assert.equal(r.readContribution, 6000);
+  assert.equal(M.normalizedPTU({ ...p, deployment: "regional" }).provisioned, 100);
+  assert.equal(M.normalizedPTU({ ...p, model: "gpt6sol" }).normalized, 277000);
+  const zero = { ...p };
+  for (const key of r.categories.map((category) => category.key)) zero[key] = 0;
+  assert.equal(M.normalizedPTU(zero).provisioned, 0);
+  assert.throws(() => M.normalizedPTU({ ...p, model: "unknown" }), RangeError);
+  assert.throws(() => M.normalizedPTU({ ...p, shortRead: null }), RangeError);
 });
 test("GQA and MLA hand calculations use distinct cache representations", () => {
   assert.equal(M.kvPerToken(M.models.llama70, 2), 327680);
