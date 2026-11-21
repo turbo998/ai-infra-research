@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>企业级 Embedding 与 Reranker 推理引擎 (TEI / Infinity / vLLM / Triton) 容量计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #6EE7B7; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #38BDF8; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #6EE7B7; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业级 Embedding 与 Cross-Encoder Reranker（TEI / Infinity / vLLM / Triton）容量计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>线上 RAG 查询并发 (QPS) <span id="v_qps" class="val">350</span></label>
+      <input type="range" id="qps" min="50" max="2000" step="50" value="350" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>单次查询送重排候选数 (Top-K) <span id="v_topk" class="val">50</span></label>
+      <input type="range" id="topk" min="10" max="100" step="10" value="50" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>候选切片平均长度 (Tokens) <span id="v_len" class="val">210</span></label>
+      <input type="range" id="len" min="80" max="512" step="10" value="210" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>Embedding/Reranker 推理底座</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 手写 FastAPI + PyTorch 矩形 Padding</option>
+        <option value="2">Tier 2: Triton + ONNX Runtime (矩形动态合批)</option>
+        <option value="3">Tier 3: vLLM (--task embed/score 7B Decoder 重排)</option>
+        <option value="4" selected>Tier 4: HuggingFace TEI / Infinity (cu_seqlens + FP8 推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>每秒重排总文档对数</div><div id="k_pairs" class="num">17,500 对/s</div></div>
+    <div class="kpi"><div>重排 P99 延迟</div><div id="k_lat" class="num">14.5 ms</div></div>
+    <div class="kpi"><div>所需 L40S GPU 卡数</div><div id="k_gpus" class="num">6 GPUs</div></div>
+    <div class="kpi"><div>月度集群总成本 (TCO)</div><div id="k_tco" class="num">$6,600</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const qps = parseFloat(document.getElementById('qps').value);
+  const topk = parseFloat(document.getElementById('topk').value);
+  const len = parseFloat(document.getElementById('len').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_qps').textContent = qps;
+  document.getElementById('v_topk').textContent = topk;
+  document.getElementById('v_len').textContent = len;
+
+  const pairs = qps * topk;
+  let lat = 14.5, perGpu = 4200;
+  if (mode === '1') {
+    lat = +(168.0 * (topk / 50)).toFixed(1);
+    perGpu = 620;
+  } else if (mode === '2') {
+    lat = +(64.0 * (topk / 50)).toFixed(1);
+    perGpu = 1480;
+  } else if (mode === '3') {
+    lat = +(28.5 * (topk / 50) * (len / 210)).toFixed(1);
+    perGpu = Math.round(2450 * (210 / len));
+  } else {
+    lat = +(14.5 * (topk / 50) * (len / 210)).toFixed(1);
+    perGpu = Math.round(4200 * (210 / len));
+  }
+  const gpus = Math.max(2, Math.ceil((pairs / perGpu) * 1.25));
+  const tco = gpus * 1100;
+  document.getElementById('k_pairs').textContent = pairs.toLocaleString() + ' 对/s';
+  document.getElementById('k_lat').textContent = lat + ' ms';
+  document.getElementById('k_gpus').textContent = gpus + ' GPUs';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
