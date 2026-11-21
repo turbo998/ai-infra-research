@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Enterprise TPM / TPS / Little's Law Concurrency &amp; PTU/GPU Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Enterprise `TPM &lt;-&gt; TPS &lt;-&gt; Little's Law Concurrency &lt;-&gt; GPU/PTU` Calculator</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Forward &amp; Reverse Capacity Planning from Peak RPS to GPUs &amp; PTUs</div>
+    <div class="grid">
+      <div class="card">
+        <label>Peak Request Rate ($\text{RPS}_{\text{peak}}$): <strong id="rpsVal">50 RPS (3,000 RPM)</strong></label>
+        <input type="range" id="rps" min="5" max="200" step="5" value="50" oninput="recalc()">
+        <label>Average Input Prompt Tokens ($\bar{N}_{\text{in}}$): <strong id="inVal">3,500 tokens</strong></label>
+        <input type="range" id="nin" min="500" max="16000" step="500" value="3500" oninput="recalc()">
+        <label>Average Output Generated Tokens ($\bar{N}_{\text{out}}$): <strong id="outVal">500 tokens</strong></label>
+        <input type="range" id="nout" min="100" max="4000" step="100" value="500" oninput="recalc()">
+        <label>Target Per-Token Latency ($\text{TPOT}$): <strong id="tpotVal">16 ms (62.5 tok/s/user)</strong></label>
+        <input type="range" id="tpot" min="8" max="40" step="2" value="16" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="tpmVal">10.5M In / 1.5M Out</div><div class="lbl">Cluster Raw TPM (`12.0M Total TPM`)</div></div>
+          <div class="kpi"><div class="val" id="wtpmVal">18.0M Weighted TPM</div><div class="lbl">PTU Weighted TPM (`TPM_in + 5 × TPM_out`)</div></div>
+          <div class="kpi"><div class="val" id="bVal">440 Active Sessions</div><div class="lbl">Little's Law In-Flight Concurrency (`RPS × E2EL`)</div></div>
+          <div class="kpi"><div class="val" id="gpuVal">24x H200 GPUs ($134K)</div><div class="lbl">Tier 4 P80 Base GPUs + P20 Spillover Monthly TCO</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Metric Name</th><th>Exact Formula</th><th>Example Value (50 RPS, 3.5K In, 500 Out)</th><th>Primary Architectural Usage</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Per-User Output TPS</strong></td><td>$\text{TPS}_{\text{user}} = 1000 / \text{TPOT}_{\text{ms}}$</td><td>`62.5 tok/s` (@ `16ms` TPOT)</td><td>Measures individual user streaming speed</td></tr>
+          <tr><td><strong>System Output / Input TPS</strong></td><td>$\text{TPS}_{\text{out}} = \text{RPS} \times \bar{N}_{\text{out}}$</td><td>`25,000 Out TPS` / `175,000 In TPS`</td><td>Sizes GPU Decode &amp; Prefill cluster throughput</td></tr>
+          <tr><td><strong>Cluster Raw TPM</strong></td><td>$\text{TPM} = (\text{TPS}_{\text{in}} + \text{TPS}_{\text{out}}) \times 60$</td><td>`10.5M In TPM + 1.5M Out TPM = 12.0M TPM`</td><td>Cloud API rate-limit quota planning</td></tr>
+          <tr><td><strong>Cloud Weighted PTU TPM</strong></td><td>$\text{TPM}_{\text{w}} = \text{TPM}_{\text{in}} + w_{\text{out}} \times \text{TPM}_{\text{out}}$</td><td>`10.5M + 5 × 1.5M = 18.0M Weighted TPM`</td><td>Sizes Azure OpenAI PTU / Vertex GSU units</td></tr>
+          <tr><td><strong>Little's Law Active Batch ($B$)</strong></td><td>$B_{\text{active}} = \text{RPS} \times [\text{TTFT} + (\bar{N}_{\text{out}}-1)\text{TPOT}]$</td><td>`50 RPS × 8.8s E2EL = 440 active slots`</td><td>Sizes total cluster KV Cache HBM memory pool</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const rps = parseInt(document.getElementById('rps').value, 10);
+      const nin = parseInt(document.getElementById('nin').value, 10);
+      const nout = parseInt(document.getElementById('nout').value, 10);
+      const tpotMs = parseInt(document.getElementById('tpot').value, 10);
+      document.getElementById('rpsVal').textContent = rps + ' RPS (' + (rps * 60).toLocaleString() + ' RPM)';
+      document.getElementById('inVal').textContent = nin.toLocaleString() + ' tokens';
+      document.getElementById('outVal').textContent = nout.toLocaleString() + ' tokens';
+      document.getElementById('tpotVal').textContent = tpotMs + ' ms (' + (1000 / tpotMs).toFixed(1) + ' tok/s/user)';
+      const tpmInM = (rps * nin * 60) / 1e6;
+      const tpmOutM = (rps * nout * 60) / 1e6;
+      const wtpmM = tpmInM + 5 * tpmOutM;
+      const e2el = 0.8 + ((nout - 1) * tpotMs) / 1000.0;
+      const bActive = Math.ceil(rps * e2el);
+      const gpus = Math.max(8, Math.ceil((bActive * 0.8) / 160) * 8);
+      const cost = Math.round(134000 * (rps / 50));
+      document.getElementById('tpmVal').textContent = tpmInM.toFixed(1) + 'M In / ' + tpmOutM.toFixed(1) + 'M Out';
+      document.getElementById('wtpmVal').textContent = wtpmM.toFixed(1) + 'M Weighted TPM';
+      document.getElementById('bVal').textContent = bActive + ' Active Sessions';
+      document.getElementById('gpuVal').textContent = gpus + 'x H200 GPUs ($' + Math.round(cost / 1000) + 'K)';
+    }
+  </script>
+</body>
+</html>
