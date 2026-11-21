@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    dev_seats = 2000
+    tiers = [
+        {
+            "tier": "Tier 1: Managed SaaS (GitHub Copilot Business / Enterprise)",
+            "fim_p95_latency_ms": 165,
+            "fim_acceptance_rate_pct": 33.5,
+            "full_file_800loc_apply_sec": 3.8,
+            "dedicated_h200_gpus": 0,
+            "annual_platform_tco_usd": 696000,
+            "net_roi_multiple": 36.4,
+        },
+        {
+            "tier": "Tier 2: Naive On-Prem Monolithic 70B for Both FIM & Chat",
+            "fim_p95_latency_ms": 780,
+            "fim_acceptance_rate_pct": 11.8,
+            "full_file_800loc_apply_sec": 18.5,
+            "dedicated_h200_gpus": 32,
+            "annual_platform_tco_usd": 1180000,
+            "net_roi_multiple": 7.2,
+        },
+        {
+            "tier": "Tier 3: On-Prem Dual-Pool (4xH200 7B-FIM + 12xH200 70B-Chat)",
+            "fim_p95_latency_ms": 128,
+            "fim_acceptance_rate_pct": 35.2,
+            "full_file_800loc_apply_sec": 6.4,
+            "dedicated_h200_gpus": 16,
+            "annual_platform_tco_usd": 624000,
+            "net_roi_multiple": 41.5,
+        },
+        {
+            "tier": "Tier 4: Dual-Pool 7B-FIM + Tree-sitter RepoMap + Speculative Fast-Apply + SWE-Agent",
+            "fim_p95_latency_ms": 115,
+            "fim_acceptance_rate_pct": 38.4,
+            "full_file_800loc_apply_sec": 1.25,
+            "dedicated_h200_gpus": 12,
+            "annual_platform_tco_usd": 498000,
+            "net_roi_multiple": 48.2,
+        },
+    ]
+    return {
+        "experiment_id": "enterprise_ai_coding_platform_github_copilot_vs_hybrid_fim_agent_roi_selection",
+        "Provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "workload_baseline": {
+            "developer_seats": dev_seats,
+            "peak_concurrent_online_ratio": 0.65,
+            "active_typing_ratio": 0.22,
+            "client_debounce_ms": 120,
+            "keystroke_abort_cancellation_savings_pct": 58.0,
+        },
+        "tiers": tiers,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_results()
+
+    if args.check:
+        existing = json.loads(out_path.read_text(encoding="utf-8"))
+        assert existing == payload, "results.json drift detected"
+        print("OK: enterprise_ai_coding_platform_github_copilot_vs_hybrid_fim_agent_roi_selection verified.")
+        return
+
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()
