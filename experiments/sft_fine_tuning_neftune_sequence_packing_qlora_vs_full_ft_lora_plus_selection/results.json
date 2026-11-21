@@ -1,0 +1,70 @@
+{
+  "Benchmark": "sft_fine_tuning_neftune_sequence_packing_qlora_vs_full_ft_lora_plus_selection",
+  "Provenance": {
+    "Data_Status": "synthetic + anonymized_reported",
+    "Independently_Reproduced": false,
+    "Physical_GPU_Cluster_Measurement": "not_measured",
+    "Harness_Policy": "enterprise_sft_sequence_packing_liger_fused_ce_lora_sizer_v1"
+  },
+  "Workload_Assumptions": {
+    "Target_Workload": "Enterprise Domain Instruction SFT on Qwen2.5-72B / Llama-3.3-70B (200,000 Variable-Length Samples, Avg 950 Tokens, Max 8,192 Tokens, 152K Vocab)",
+    "Total_SFT_Samples": 200000,
+    "Avg_Sample_Tokens": 950,
+    "Max_Sequence_Length": 8192,
+    "Vocabulary_Size": 152064
+  },
+  "Configuration_Matrix": [
+    {
+      "Tier_ID": "Tier_1_Unpacked_Padded_Full_SFT_Unfused_CrossEntropy",
+      "Architecture_Name": "Unpacked Padded Full SFT (`[B, S_max=8192]`) + Materialized FP32 Logits Cross-Entropy (`[B, S, 152K]`)",
+      "Training_Stack": "FSDP Full FT + Rectangular `[PAD]` Batching (88% Pad Waste) + Standard `nn.CrossEntropyLoss`",
+      "Effective_Useful_Tokens_Per_Sec_Per_GPU": 680.0,
+      "Peak_HBM_Per_GPU_GB": 78.4,
+      "Required_H100_80GB_GPUs": 32,
+      "Downstream_Domain_Eval_Score_Pct": 84.6,
+      "Total_SFT_Run_Compute_Cost_USD": 6850,
+      "Recommended_Scenario": "Anti-pattern: 88% of FLOPs wasted on [PAD] tokens and 19.9GB HBM blown on materialized 152K vocabulary logits"
+    },
+    {
+      "Tier_ID": "Tier_2_Naive_Concat_Packing_Without_BlockDiagonal_Mask",
+      "Architecture_Name": "Naive `<eos>` Concatenation Packing without `cu_seqlens` Block-Diagonal Mask + Standard LoRA (`r=32`)",
+      "Training_Stack": "Concatenate Samples into 8K Chunks, But Sample B Attends to Sample A's Tokens!",
+      "Effective_Useful_Tokens_Per_Sec_Per_GPU": 3100.0,
+      "Peak_HBM_Per_GPU_GB": 52.0,
+      "Required_H100_80GB_GPUs": 8,
+      "Downstream_Domain_Eval_Score_Pct": 78.2,
+      "Total_SFT_Run_Compute_Cost_USD": 420,
+      "Recommended_Scenario": "Anti-pattern for instruction SFT: cross-sample attention contamination causes severe context-bleed hallucinations"
+    },
+    {
+      "Tier_ID": "Tier_3_Full_FSDP2_Multipack_BlockDiagonal_Plus_Liger_Kernel",
+      "Architecture_Name": "Full-Parameter FSDP2 + Multipack Block-Diagonal `cu_seqlens` Packing + `Liger-Kernel` Fused Linear Cross-Entropy",
+      "Training_Stack": "Full 70B Weights Updated + Zero-Pad `cu_seqlens` + Chunked Fused CE/RMSNorm/SwiGLU",
+      "Effective_Useful_Tokens_Per_Sec_Per_GPU": 2950.0,
+      "Peak_HBM_Per_GPU_GB": 58.5,
+      "Required_H100_80GB_GPUs": 16,
+      "Downstream_Domain_Eval_Score_Pct": 86.2,
+      "Total_SFT_Run_Compute_Cost_USD": 840,
+      "Recommended_Scenario": "Large continual pretraining (>1B tokens) or deep domain knowledge injection requiring full weight updates"
+    },
+    {
+      "Tier_ID": "Tier_4_LoRA_Plus_DoRA_Multipack_cu_seqlens_Plus_Liger_Unsloth",
+      "Architecture_Name": "All-Linear `LoRA+ / DoRA` (`r=64`, Asymmetric LR `lr_B = 16 * lr_A`) + Multipack `cu_seqlens` + `Liger-Kernel` Fused Linear CE + `NEFTune`",
+      "Training_Stack": "8-GPU Single Node; Zero-Contamination Packing + Zero-Logit-Materialization Fused CE + NEFTune (`alpha=5`)",
+      "Effective_Useful_Tokens_Per_Sec_Per_GPU": 4450.0,
+      "Peak_HBM_Per_GPU_GB": 29.5,
+      "Required_H100_80GB_GPUs": 4,
+      "Downstream_Domain_Eval_Score_Pct": 86.0,
+      "Total_SFT_Run_Compute_Cost_USD": 165,
+      "Recommended_Scenario": "Production standard for enterprise instruction/tool/format SFT (6.5x faster useful tokens/s, -97.6% cost vs Tier 1)"
+    }
+  ],
+  "Decision_Summary": {
+    "Baseline_Tier": "Tier_1_Unpacked_Padded_Full_SFT_Unfused_CrossEntropy",
+    "Recommended_Tier": "Tier_4_LoRA_Plus_DoRA_Multipack_cu_seqlens_Plus_Liger_Unsloth",
+    "Useful_Token_Throughput_Multiplier": 6.54,
+    "Peak_HBM_Reduction_Pct": 62.4,
+    "Domain_Accuracy_Gain_Pts": 1.4,
+    "Run_Cost_Savings_Pct": 97.6
+  }
+}

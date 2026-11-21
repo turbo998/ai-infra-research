@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#EC4899" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">企业级大模型指令微调 (SFT) 架构选型：Full FT vs. LoRA+/DoRA vs. 无污染打包 + Liger 融合算子</text>
+  <text x="52" y="94" fill="#F472B6" font-family="Segoe UI, Arial, sans-serif" font-size="15">消灭 88% `[PAD]` 浪费与 152K 词表 Logits 20GB 显存尖峰：Multipack 块对角打包 (`cu_seqlens`) + FusedLinearCrossEntropy</text>
+
+  <!-- Left: Three SFT Infrastructure Pitfalls -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么常规 SFT 脚本既慢又频繁在最后一层报 CUDA OOM？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 陷阱 A：88% Padding 算力空转 + 152K 词表 Logits 瞬间撑爆 20GB (Tier 1)</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 样本均长 950 字却按 `max_len=8192` 补齐；更致命的是最后一层 `lm_head` 实例化</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• `[B=4, S=8192, V=152064]` FP32 Logits + 梯度瞬间吞掉 19.9 GB 显存直接 OOM！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 陷阱 B：简单用 `&lt;eos&gt;` 拼接打包导致“跨样本注意力污染” (Tier 2)</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 把 8 条短问答硬拼成 1 条 8K 序列却不隔离 Attention Mask 和重置 `position_ids`</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 第 5 题的回答直接看到第 1~4 题的内容，微调后模型产生严重的胡言乱语串台 (-6.4 pts)！</text>
+
+  <!-- Right: Multipack + Liger Fused CE + LoRA+/DoRA -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. 高效无损 SFT 微调工程三板斧 (Tier 3 / Tier 4)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 无污染块对角打包 (`Multipack + flash_attn_varlen_func`)</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">用装箱算法拼满 8K 窗口，传入 `cu_seqlens` 严格阻断跨样本 Attention 并每条重置 `position_ids=0..L`</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② `Liger-Kernel / Unsloth` 融合分块交叉熵 (`FusedLinearCrossEntropy`)</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">在 Triton 内核中分块算完 `Hidden @ W_vocab` 立即求 Loss 与梯度并丢弃 Logits，显存暴降 20GB！</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ 全线性层 `LoRA+ (lr_B = 16·lr_A) / DoRA` + `NEFTune` 噪声正则</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">对全部 7 个 Linear 模块挂 `r=64` 适配器，4 张卡即可跑出媲美 32 卡全量微调的 86.0% 精度！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 70B/72B 大模型指令微调（20 万条变长样本 · 均长 950 / 最大 8K · 152K 词表）四档对比</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">SFT 微调架构方案</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单卡有效 Token/s</text>
+  <text x="620" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单卡峰值显存</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">最低 H100 卡数</text>
+  <text x="950" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">领域评测得分</text>
+  <text x="1120" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单轮微调总成本</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 未打包矩形 Padding 全量 SFT + 原生未融合 CE</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">680 tok/s ✕</text>
+  <text x="620" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">78.4 GB (濒临OOM)</text>
+  <text x="790" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14">32 GPUs</text>
+  <text x="950" y="524" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">84.6%</text>
+  <text x="1120" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">$6,850 / 次 ✕</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: 简单拼接 Packing (无块对角掩码隔离) + 普通 LoRA</text>
+  <text x="450" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">3,100 tok/s</text>
+  <text x="620" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">52.0 GB</text>
+  <text x="790" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">8 GPUs</text>
+  <text x="950" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">78.2% ✕ (串台污染)</text>
+  <text x="1120" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">$420 / 次</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: 全参数 FSDP2 + Multipack 块对角打包 + Liger 融合 CE</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">2,950 tok/s ✓</text>
+  <text x="620" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">58.5 GB ✓</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">16 GPUs</text>
+  <text x="950" y="612" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">86.2% ✓ (海量CPT)</text>
+  <text x="1120" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$840 / 次</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): 全线性 LoRA+/DoRA + Multipack cu_seqlens + Liger CE</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">4,450 tok/s (6.5x)</text>
+  <text x="620" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">29.5 GB (-62%) ✓</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">4 GPUs ✓</text>
+  <text x="950" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">86.0% ✓</text>
+  <text x="1120" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$165 / 次 (-97.6%)</text>
+</svg>

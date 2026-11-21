@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>大模型指令微调 SFT (Sequence Packing / Liger-Kernel / LoRA+) 显存与耗时计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #F472B6; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业级大模型 SFT 微调（Multipack 打包 + Liger 融合交叉熵 + LoRA+/FSDP2）计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>SFT 样本总量 (万条) <span id="v_cnt" class="val">20万</span></label>
+      <input type="range" id="cnt" min="2" max="100" step="2" value="20" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>样本平均 Token 长度 <span id="v_avg" class="val">950</span></label>
+      <input type="range" id="avg" min="300" max="4000" step="50" value="950" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>训练截断最大长度 (Max Len) <span id="v_max" class="val">8192</span></label>
+      <select id="max_len" onchange="calc()">
+        <option value="4096">4,096 Tokens</option>
+        <option value="8192" selected>8,192 Tokens</option>
+        <option value="16384">16,384 Tokens</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>SFT 微调技术栈</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 未打包 Padding 全量 SFT + 原生未融合 CE</option>
+        <option value="2">Tier 2: 简单拼接 Packing (无块对角掩码 - 串台)</option>
+        <option value="3">Tier 3: 全参数 FSDP2 + Multipack + Liger 融合 CE</option>
+        <option value="4" selected>Tier 4: 全线性 LoRA+/DoRA + Multipack + Liger CE (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>单卡有效训练吞吐</div><div id="k_tps" class="num">4,450 tok/s</div></div>
+    <div class="kpi"><div>单卡峰值显存 (HBM)</div><div id="k_mem" class="num">29.5 GB</div></div>
+    <div class="kpi"><div>最低所需 H100 卡数</div><div id="k_gpus" class="num">4 GPUs</div></div>
+    <div class="kpi"><div>3 Epochs 微调总成本</div><div id="k_cost" class="num">$165</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const cnt = parseFloat(document.getElementById('cnt').value);
+  const avg = parseFloat(document.getElementById('avg').value);
+  const maxLen = parseFloat(document.getElementById('max_len').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_cnt').textContent = cnt + '万';
+  document.getElementById('v_avg').textContent = avg;
+  document.getElementById('v_max').textContent = maxLen;
+
+  const padRatio = Math.min(1.0, avg / maxLen);
+  let tps = 4450, mem = 29.5, gpus = 4;
+  if (mode === '1') {
+    tps = Math.round(5800 * padRatio);
+    mem = +(58.0 + (maxLen / 8192) * 20.4).toFixed(1);
+    gpus = 32;
+  } else if (mode === '2') {
+    tps = 3100;
+    mem = +(34.0 + (maxLen / 8192) * 18.0).toFixed(1);
+    gpus = 8;
+  } else if (mode === '3') {
+    tps = 2950;
+    mem = +(48.0 + (maxLen / 8192) * 10.5).toFixed(1);
+    gpus = 16;
+  } else {
+    tps = 4450;
+    mem = +(23.5 + (maxLen / 8192) * 6.0).toFixed(1);
+    gpus = 4;
+  }
+  const totalUsefulTokens = cnt * 10000 * avg * 3;
+  const gpuHours = totalUsefulTokens / (tps * 3600);
+  const cost = Math.round(gpuHours * 3.8);
+  document.getElementById('k_tps').textContent = tps.toLocaleString() + ' tok/s';
+  document.getElementById('k_mem').textContent = mem + ' GB';
+  document.getElementById('k_gpus').textContent = gpus + ' GPUs';
+  document.getElementById('k_cost').textContent = '$' + cost.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
