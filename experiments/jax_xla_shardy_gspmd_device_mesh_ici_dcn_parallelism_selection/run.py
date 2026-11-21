@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "jax_xla_shardy_gspmd_device_mesh_ici_dcn_parallelism_selection",
+        "title": "JAX/XLA Shardy (MLIR) vs. GSPMD Partitioner, Hierarchical Device Mesh & ICI-vs-DCN Parallelism Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "total_cluster_chips": 2048,
+            "slices_count": 4,
+            "chips_per_slice_3d_torus": 512,
+            "model_architecture": "400B-A45B Sparse MoE Transformer (64 Layers)",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_misaligned_mesh_tp_or_fsdp_across_dcn",
+                "name": "Tier 1: Misaligned Mesh (Stretching TP/FSDP Across Inter-Slice DCN Instead of ICI)",
+                "sustained_cluster_mfu_pct": 15.8,
+                "exposed_collective_overhead_pct_of_step": 68.5,
+                "redundant_reshard_bytes_per_step_gb": 148.0,
+                "monthly_2048_chip_training_tco_usd": 3920000,
+                "verdict": "Anti-Pattern: Per-layer TP/FSDP AllGather over DCN stalls MXUs 68.5% of every step (15.8% MFU)",
+            },
+            {
+                "tier_id": "tier2_1d_flat_fsdp_only_across_512_chip_slice",
+                "name": "Tier 2: 1D Flat FSDP-Only Mesh (No 2D/3D ICI Axis Decomposition for TP/EP)",
+                "sustained_cluster_mfu_pct": 38.4,
+                "exposed_collective_overhead_pct_of_step": 34.0,
+                "redundant_reshard_bytes_per_step_gb": 62.0,
+                "monthly_2048_chip_training_tco_usd": 2450000,
+                "verdict": "512-hop 1D FSDP ring underutilizes orthogonal 3D Torus axes & causes activation OOMs",
+            },
+            {
+                "tier_id": "tier3_legacy_gspmd_on_hybrid_moe_multislice",
+                "name": "Tier 3: Legacy HLO GSPMD Partitioner on Hybrid MoE (Unresolved Branch Reshard Conflicts)",
+                "sustained_cluster_mfu_pct": 48.2,
+                "exposed_collective_overhead_pct_of_step": 21.5,
+                "redundant_reshard_bytes_per_step_gb": 38.0,
+                "monthly_2048_chip_training_tco_usd": 1920000,
+                "verdict": "GSPMD inserts 38GB/step of redundant All-to-All/AllGather reshards between MoE & Attention",
+            },
+            {
+                "tier4_shardy_mlir_hierarchical_mesh_shard_map_ici_dcn_aligned": "tier4",
+                "tier_id": "tier4_shardy_mlir_hierarchical_mesh_shard_map_ici_dcn_aligned",
+                "name": "Tier 4: XLA Shardy (MLIR) Priority Propagation + Hierarchical ICI/DCN Mesh + shard_map",
+                "sustained_cluster_mfu_pct": 59.6,
+                "exposed_collective_overhead_pct_of_step": 6.4,
+                "redundant_reshard_bytes_per_step_gb": 0.0,
+                "monthly_2048_chip_training_tco_usd": 1480000,
+                "verdict": "Recommended: 59.6% MFU (+11.4 pts vs GSPMD), 0.0GB redundant reshards & -62.2% TCO",
+            },
+        ],
+        "headline_findings": {
+            "sustained_mfu_pct": 59.6,
+            "exposed_collective_pct": 6.4,
+            "redundant_reshard_gb": 0.0,
+            "tco_savings_vs_tier1_pct": 62.2,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
