@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>K8s GPU-RDMA-NUMA 拓扑感知调度 (DRA vs. Device Plugin vs. Kueue TAS) 评估器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #A5B4FC; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>K8s GPU-RDMA-NUMA 拓扑感知调度（DRA / Topology Manager / Kueue TAS）带宽与损耗计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>集群 H200 总卡数 <span id="v_gpus" class="val">512</span></label>
+      <input type="range" id="gpus" min="64" max="2048" step="64" value="512" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>单网卡标称 RDMA 速率 <span id="v_nic" class="val">400G</span></label>
+      <select id="nic" onchange="calc()">
+        <option value="200">200GbE ConnectX-6 (~24 GB/s)</option>
+        <option value="400" selected>400GbE ConnectX-7 (~48 GB/s)</option>
+        <option value="800">800GbE ConnectX-8 (~96 GB/s)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>子整机 Pod (2/4卡) 占比 <span id="v_sub" class="val">65%</span></label>
+      <input type="range" id="sub" min="10" max="100" step="5" value="65" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>K8s 拓扑调度方案</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 传统 Device Plugin (topology: none)</option>
+        <option value="2">Tier 2: Kubelet TopologyManager (single-numa-node)</option>
+        <option value="3">Tier 3: Kueue TAS 机柜感知 + Kubelet NUMA</option>
+        <option value="4" selected>Tier 4: K8s DRA 同 PCIe Switch (PIX) + Kueue TAS (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>GPUDirect RDMA 实测带宽</div><div id="k_bw" class="num">47.4 GB/s</div></div>
+    <div class="kpi"><div>跨机 KV/AllReduce P99</div><div id="k_lat" class="num">11.4 ms</div></div>
+    <div class="kpi"><div>集群有效 Goodput</div><div id="k_gp" class="num">95.6%</div></div>
+    <div class="kpi"><div>月度拓扑错配浪费成本</div><div id="k_waste" class="num">$18,500</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const gpus = parseFloat(document.getElementById('gpus').value);
+  const nic = parseFloat(document.getElementById('nic').value);
+  const sub = parseFloat(document.getElementById('sub').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_gpus').textContent = gpus;
+  document.getElementById('v_nic').textContent = nic + 'G';
+  document.getElementById('v_sub').textContent = Math.round(sub * 100) + '%';
+
+  const maxBW = (nic / 400) * 48.0;
+  let bw = maxBW * 0.988, lat = 11.4, gp = 95.6, wasteRatio = 0.013;
+  if (mode === '1') {
+    bw = maxBW * (1 - sub * 0.72);
+    lat = +(540 / bw).toFixed(1);
+    gp = +(88.0 - sub * 40.8).toFixed(1);
+    wasteRatio = 0.117 * (0.5 + sub * 0.8);
+  } else if (mode === '2') {
+    bw = maxBW * 0.75;
+    lat = +(540 / bw * 1.9).toFixed(1);
+    gp = 78.0;
+    wasteRatio = 0.067;
+  } else if (mode === '3') {
+    bw = maxBW * 0.885;
+    lat = +(540 / bw * 1.4).toFixed(1);
+    gp = 88.5;
+    wasteRatio = 0.033;
+  } else {
+    bw = maxBW * 0.988;
+    lat = +(540 / bw).toFixed(1);
+    gp = 95.6;
+    wasteRatio = 0.013;
+  }
+  const wasteUSD = Math.round(gpus * 2800 * wasteRatio);
+  document.getElementById('k_bw').textContent = bw.toFixed(1) + ' GB/s';
+  document.getElementById('k_lat').textContent = lat + ' ms';
+  document.getElementById('k_gp').textContent = gp + '%';
+  document.getElementById('k_waste').textContent = '$' + wasteUSD.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#6366F1" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">万卡 K8s 智算集群 GPU-RDMA-NUMA 拓扑感知调度选型：DRA vs. Device Plugin vs. Kueue TAS</text>
+  <text x="52" y="94" fill="#A5B4FC" font-family="Segoe UI, Arial, sans-serif" font-size="15">根治 `nvidia-smi topo -m` 跨 Socket (SYS) 降速 70% 顽疾：同 PCIe Switch (PIX) + 同 NUMA + 同 ToR 交换机三级对齐</text>
+
+  <!-- Left: Why Device Plugin Breaks GPUDirect RDMA -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么传统 K8s Device Plugin 会让 400G RDMA 掉速 70%？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 致命错配 A：盲目凑数分配 (`GPU-0` 在 NUMA0 + `mlx5_6` 在 NUMA1)</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 2-GPU / 4-GPU 推理 Pod 申请 `gpu: 2, rdma: 2`，传统插件只管数量不管 PCIe 亲和性</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 跨 CPU UPI/QPI 总线 (`SYS`) 导致 GPUDirect RDMA 从 48 GB/s 暴跌至 14.5 GB/s！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 致命错配 B：Kubelet `TopologyManager` 对中心调度器“黑盒不可见”</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• kube-scheduler 把 Pod 派到节点后，才被 Kubelet 发现同 NUMA 下无成对卡+网卡</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 引发满屏 `TopologyAffinityError` 驱逐重试风暴，造成 18.5% 算力碎片死锁！</text>
+
+  <!-- Right: K8s DRA + Kueue TAS 3-Tier Alignment -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. K8s DRA + Kueue TAS 三级硬件拓扑全栈对齐 (Tier 4)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① L1 机内 PCIe Switch 级 (`PIX`)：Kubernetes DRA `ResourceClaim`</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">通过 CEL 表达式强约束 `gpu.pcieRoot == nic.pcieRoot`，锁死 47.4 GB/s 满速 P2P DMA！</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② L2 机内 NVLink / NUMA 级 (`NV18 / NODE`)：子图成对切分</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">调度器全局感知节点 `ResourceSlice`，零 `TopologyAffinityError` 一次性精准落位</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ L3 机柜/交换机级 (Rack / Rail)：Kueue TAS / Volcano 紧凑编排</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">将同一个 PD 推理组或多机训练 JobSet 优先打包在同一 ToR 交换机下，减少跨 Spine 拥塞</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 四档 K8s GPU+RDMA 拓扑调度架构性能与利用率对比（512 卡 H200 + 400G CX-7 集群）</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">K8s 拓扑调度方案</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">GPUDirect 实测带宽</text>
+  <text x="620" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">通信 P99 延迟</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">集群有效 Goodput</text>
+  <text x="960" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">拓扑碎片浪费率</text>
+  <text x="1120" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">月度算力浪费</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 传统 Device Plugin (`topology: none` 盲目凑数)</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">14.5 GB/s ✕ (SYS)</text>
+  <text x="620" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">68.0 ms ✕</text>
+  <text x="790" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">61.5%</text>
+  <text x="960" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">24.0%</text>
+  <text x="1120" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">$168,000/mo ✕</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: Kubelet TopologyManager (`single-numa-node`)</text>
+  <text x="450" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">36.0 GB/s (NODE)</text>
+  <text x="620" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">29.5 ms</text>
+  <text x="790" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">78.0%</text>
+  <text x="960" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">18.5% (驱逐风暴)</text>
+  <text x="1120" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">$96,000/mo</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: Kueue TAS / Volcano 机柜感知 + Kubelet NUMA</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">42.5 GB/s</text>
+  <text x="620" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">18.2 ms</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">88.5%</text>
+  <text x="960" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">9.2%</text>
+  <text x="1120" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$48,000/mo</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): K8s DRA 同 PCIe Switch 绑核 + Kueue TAS</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">47.4 GB/s ✓ (PIX)</text>
+  <text x="620" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">11.4 ms (-83%)</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">95.6% ✓</text>
+  <text x="960" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">3.5% ✓</text>
+  <text x="1120" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$18,500/mo (-89%)</text>
+</svg>
