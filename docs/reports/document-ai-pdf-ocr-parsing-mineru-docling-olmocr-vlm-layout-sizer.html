@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>企业级复杂 PDF 文档解析 (MinerU / Docling / olmOCR / Qwen2.5-VL) 吞吐与成本估算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #6EE7B7; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #38BDF8; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #6EE7B7; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业级复杂文档解析（MinerU / Docling / olmOCR / Qwen2.5-VL）吞吐与 TCO 计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>待入库 PDF 总页数 (万页) <span id="v_pg" class="val">1,000万</span></label>
+      <input type="range" id="pg" min="50" max="5000" step="50" value="1000" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>复杂合并表/统计图/扫描页占比 <span id="v_cx" class="val">18%</span></label>
+      <input type="range" id="cx" min="5" max="60" step="1" value="18" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>部署节点规格</label>
+      <select id="hw" onchange="calc()">
+        <option value="1">1 台 8x L40S / H100 节点</option>
+        <option value="4">4 台 8x L40S / H100 节点</option>
+        <option value="8">8 台 8x L40S / H100 节点</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>PDF 文档解析架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 纯规则字符流 (PyMuPDF / pdfplumber)</option>
+        <option value="2">Tier 2: 100% 整页送 72B VLM 转 Markdown</option>
+        <option value="3">Tier 3: 纯模块化版面管线 (MinerU / Docling)</option>
+        <option value="4" selected>Tier 4: MinerU/Docling + 局部裁剪送 olmOCR/QwenVL-7B (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>集群总解析吞吐</div><div id="k_pps" class="num">74.0 页/s</div></div>
+    <div class="kpi"><div>全量入库耗时</div><div id="k_hrs" class="num">37.5 hrs</div></div>
+    <div class="kpi"><div>下游复杂 RAG 准确率</div><div id="k_acc" class="num">94.8%</div></div>
+    <div class="kpi"><div>全量解析总成本 (TCO)</div><div id="k_cost" class="num">$6,800</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const pg = parseFloat(document.getElementById('pg').value);
+  const cx = parseFloat(document.getElementById('cx').value) / 100.0;
+  const hw = parseFloat(document.getElementById('hw').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_pg').textContent = pg.toLocaleString() + '万';
+  document.getElementById('v_cx').textContent = Math.round(cx * 100) + '%';
+
+  let nodePPS = 74.0, acc = 94.8, costPer1K = 0.68;
+  if (mode === '1') {
+    nodePPS = 185.0;
+    acc = +(72.0 - cx * 100).toFixed(1);
+    costPer1K = 0.08;
+  } else if (mode === '2') {
+    nodePPS = 4.2;
+    acc = 94.2;
+    costPer1K = 18.50;
+  } else if (mode === '3') {
+    nodePPS = 92.0;
+    acc = +(92.2 - cx * 20).toFixed(1);
+    costPer1K = 0.42;
+  } else {
+    nodePPS = +(1 / ((1 - cx) / 92.0 + cx / 38.0)).toFixed(1);
+    acc = 94.8;
+    costPer1K = +(0.42 * (1 - cx) + 1.86 * cx).toFixed(2);
+  }
+  const totalPPS = +(nodePPS * hw).toFixed(1);
+  const hrs = +((pg * 10000) / (totalPPS * 3600)).toFixed(1);
+  const cost = Math.round(pg * 10 * costPer1K);
+  document.getElementById('k_pps').textContent = totalPPS + ' 页/s';
+  document.getElementById('k_hrs').textContent = hrs + ' hrs';
+  document.getElementById('k_acc').textContent = acc + '%';
+  document.getElementById('k_cost').textContent = '$' + cost.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
