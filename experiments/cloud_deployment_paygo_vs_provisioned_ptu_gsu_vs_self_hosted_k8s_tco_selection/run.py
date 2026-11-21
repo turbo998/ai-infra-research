@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "cloud_deployment_paygo_vs_provisioned_ptu_gsu_vs_self_hosted_k8s_tco_selection",
+        "title": "Enterprise Cloud LLM Deployment Selection: Serverless PAYGO vs. Provisioned PTU/GSU vs. Self-Hosted K8s (AKS/GKE) TCO Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "monthly_total_tokens_billions": 15.0,
+            "peak_to_average_ratio": 4.2,
+            "sre_platform_fixed_overhead_usd_per_mo": 22000,
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_100pct_serverless_paygo_at_15b_tokens_per_month",
+                "name": "Tier 1: 100% Serverless MaaS PAYGO at High Scale (15B Tokens/Mo — Linear Token Tax & Noisy-Neighbor Jitter)",
+                "p99_ttft_ms": 1480.0,
+                "sla_availability_pct": 98.4,
+                "effective_cost_per_1m_tokens_usd": 2.40,
+                "monthly_15b_tokens_total_tco_usd": 360000,
+                "verdict": "Great for <1B tokens/mo or spiky prototypes, but costs $360K/mo at 15B tokens/mo with 1.48s P99 TTFT",
+            },
+            {
+                "tier_id": "tier2_self_hosted_k8s_for_tiny_workload_under_500m_tokens",
+                "name": "Tier 2: Premature Self-Hosted K8s for Small Workload (<500M Tokens/Mo — SRE Overhead Dominates!)",
+                "p99_ttft_ms": 580.0,
+                "sla_availability_pct": 99.1,
+                "effective_cost_per_1m_tokens_usd": 4.85,
+                "monthly_15b_tokens_total_tco_usd": 265000,
+                "verdict": "Anti-Pattern at Low Volume: $22K/mo SRE labor + multi-AZ idle GPUs make <1B/mo self-hosting 2x more expensive than PAYGO",
+            },
+            {
+                "tier_id": "tier3_100pct_provisioned_ptu_gsu_sized_for_peak",
+                "name": "Tier 3: 100% Managed Provisioned Throughput (Azure PTU / Vertex GSU / Bedrock Provisioned Sized for Peak)",
+                "p99_ttft_ms": 490.0,
+                "sla_availability_pct": 99.9,
+                "effective_cost_per_1m_tokens_usd": 1.38,
+                "monthly_15b_tokens_total_tco_usd": 207000,
+                "verdict": "Predictable 490ms TTFT & zero GPU ops, but 100%-peak PTU sizing leaves 58% off-peak capacity unused",
+            },
+            {
+                "tier_id": "tier4_hybrid_self_hosted_k8s_or_p80_ptu_base_plus_paygo_spillover_and_70_30_model_routing",
+                "name": "Tier 4: 3-Zone FinOps Matrix (70% Self-Hosted K8s Open-Weights + 20% P80 PTU + 10% PAYGO Burst Spillover)",
+                "p99_ttft_ms": 420.0,
+                "sla_availability_pct": 99.95,
+                "effective_cost_per_1m_tokens_usd": 0.68,
+                "monthly_15b_tokens_total_tco_usd": 102000,
+                "verdict": "Recommended: $0.68/1M tokens (-71.7% vs. Tier 1), 420ms P99 TTFT, 99.95% availability & $102K/mo TCO",
+            },
+        ],
+        "headline_findings": {
+            "ptu_vs_paygo_breakeven_utilization_pct": 35.0,
+            "self_hosted_vs_managed_breakeven_tokens_per_mo_b": 2.5,
+            "tier4_cost_per_1m_usd": 0.68,
+            "tco_savings_vs_tier1_pct": 71.7,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
