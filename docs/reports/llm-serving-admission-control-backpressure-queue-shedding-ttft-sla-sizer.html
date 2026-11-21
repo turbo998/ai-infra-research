@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>大模型过载保护与自适应准入控制 (Admission Control / Shedding) 模拟器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #FCA5A5; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>大模型高并发过载保护（预测 TTFT 门控 + 僵尸清理 + 小模型降级）沙盘模拟器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>70B 主集群额定容量 (RPS) <span id="v_cap" class="val">160</span></label>
+      <input type="range" id="cap" min="40" max="400" step="20" value="160" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>早高峰突发洪峰流量 (RPS) <span id="v_in" class="val">320</span></label>
+      <input type="range" id="in_rps" min="80" max="800" step="20" value="320" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>首字延迟 SLA 上限 (ms) <span id="v_sla" class="val">800 ms</span></label>
+      <input type="range" id="sla" min="300" max="2000" step="100" value="800" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>过载保护与准入架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 无界 FIFO 队列 + 客户端超时重试风暴</option>
+        <option value="2">Tier 2: 静态固定 RPS 令牌桶限流</option>
+        <option value="3">Tier 3: 预测 TTFT + KV 85% 水位硬拒 (HTTP 429)</option>
+        <option value="4" selected>Tier 4: 预测 TTFT 门控 + 溢出自动降级 8B/32B 备池 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>达标有效吞吐 (Goodput)</div><div id="k_gp" class="num">308 RPS</div></div>
+    <div class="kpi"><div>准入请求 P99 TTFT</div><div id="k_ttft" class="num">590 ms</div></div>
+    <div class="kpi"><div>僵尸请求算力浪费率</div><div id="k_zom" class="num">0.0%</div></div>
+    <div class="kpi"><div>洪峰期用户综合成功率</div><div id="k_suc" class="num">96.3%</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const cap = parseFloat(document.getElementById('cap').value);
+  const inRps = parseFloat(document.getElementById('in_rps').value);
+  const sla = parseFloat(document.getElementById('sla').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_cap').textContent = cap;
+  document.getElementById('v_in').textContent = inRps;
+  document.getElementById('v_sla').textContent = sla + ' ms';
+
+  const overload = inRps / cap;
+  let gp = 308, ttft = 590, zom = 0.0;
+  if (overload <= 1.0) {
+    gp = Math.round(inRps * 0.98);
+    ttft = Math.round(sla * 0.65);
+    zom = 0.0;
+  } else if (mode === '1') {
+    gp = Math.max(5, Math.round(cap / Math.pow(overload, 3.1)));
+    ttft = Math.round(sla * 10.5 * overload);
+    zom = Math.min(85.0, +((overload - 1) * 57.0).toFixed(1));
+  } else if (mode === '2') {
+    gp = Math.round(cap * 0.613);
+    ttft = Math.round(sla * 3.06);
+    zom = 18.0;
+  } else if (mode === '3') {
+    gp = Math.round(cap * 0.95);
+    ttft = Math.round(sla * 0.85);
+    zom = 0.5;
+  } else {
+    gp = Math.round(inRps * 0.963);
+    ttft = Math.round(sla * 0.74);
+    zom = 0.0;
+  }
+  const suc = Math.min(100.0, +((gp / inRps) * 100).toFixed(1));
+  document.getElementById('k_gp').textContent = gp + ' RPS';
+  document.getElementById('k_ttft').textContent = ttft.toLocaleString() + ' ms';
+  document.getElementById('k_zom').textContent = zom + '%';
+  document.getElementById('k_suc').textContent = suc + '%';
+}
+calc();
+</script>
+</body>
+</html>
