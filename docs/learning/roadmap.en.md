@@ -1,6 +1,6 @@
 # Cloud Architect to AI Infrastructure Solution Architect Competency Roadmap
 
-> **Language / 语言**: [简体中文](./roadmap.md) | **English** · [🔥 Interactive H5 Learning Hub](../h5/ai-infra-learning-hub.en.html) · [10-Layer Stack Map](../stack-map.en.md) · [Full Bilingual Catalog](../full-catalog-en.md)
+> **Language / 语言**: [简体中文](./roadmap.md) | **English** · [🎓 6-Volume H5 Academy](../h5-academy/index.html) · [🔥 Interactive H5 Learning Hub](../h5/ai-infra-learning-hub.en.html) · [10-Layer Stack Map](../stack-map.en.md) · [Full Bilingual Catalog](../full-catalog-en.md)
 
 > **Executive Summary**: Built for experienced Cloud Solution Architects transitioning into **Enterprise AI Infrastructure & GenAI Platform Architecture**, this six-stage roadmap focuses on **quantitative sizing, architectural trade-offs, and production failure boundaries** across GPU memory rooflines, lossless AI fabrics, disaggregated LLM serving, distributed training/storage, Kubernetes GPU scheduling, and Token FinOps.
 

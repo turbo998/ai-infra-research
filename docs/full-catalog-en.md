@@ -14,6 +14,7 @@
 | **F-02** | **End-to-End 1,024-GPU Training & PD-Disaggregated Serving Reference Architecture** | Production blueprint spanning 8-rail lossless networking, two-phase async checkpointing, Dynamo/Mooncake PD disaggregation, Kueue TAS scheduling, and 126 kW cold-plate DLC racks | [English](./architectures/end-to-end-ai-infra-case.en.md) · [中文](./architectures/end-to-end-ai-infra-case.md) |
 | **F-03** | **Cloud & AI Infrastructure Solution Architect Interactive Workbench** | Self-contained 5-in-1 browser console for 100K-GPU 3-year TCO, NVLS/SHARP collectives, PD disaggregation sizing, 671B MoE FP8/NVFP4 parallelism, and async checkpoint/KV tiering | [Open Workbench](./reports/ai-infra-architect-workbench.html) |
 | **F-04** | **AI Infrastructure Interactive H5 Learning Center (7 Modules + Live SVG Charts + Calculators)** | Interactive H5 study app covering PD Disaggregation, TP/PP/DP/EP, NVLink vs. IB/RoCEv2, 3-Watermark GPU Sizer, TPM/TPS & Little's Law, TTFT/TPOT/Goodput, and full directory | [English H5 Hub](./h5/ai-infra-learning-hub.en.html) · [中文 H5](./h5/ai-infra-learning-hub.html) |
+| **F-05** | **6-Volume Bilingual Inference, Sizing & AI Networking H5 Academy** | 6 dedicated interactive H5 volumes (`01` Metrics, `02` TPM/TPS, `03` 3-Bound GPU Sizing, `04` PD Disaggregation, `05` Parallelism, `06` RDMA/RoCEv2/NVLink) + bilingual FAQ | [Open 6-Volume H5 Academy](./h5-academy/index.html) · [English Guide](./inference-sizing-network/README.en.md) · [中文](./inference-sizing-network/README.md) |
 
 ---
 

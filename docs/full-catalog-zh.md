@@ -14,6 +14,7 @@
 | **F-02** | **1024-GPU 训练与 PD 分离推理混合集群端到端参考架构** | 覆盖千卡级训练 + 在线推理混合智算中心的 SLA 契约、8 轨网络、两阶段异步 Checkpoint、PD 分离与 126 kW 冷板液冷完整预算 | [中文报告](./architectures/end-to-end-ai-infra-case.md) · [English](./architectures/end-to-end-ai-infra-case.en.md) |
 | **F-03** | **云与 AI 基础设施架构师交互式工作台（Architect Workbench）** | 浏览器本地即开即用的 5 合 1 测算台：100K-GPU TCO、NVLS/SHARP 集合通信、PD 分离配比、671B MoE 量化并行与异步 Checkpoint/KV 卸载 | [打开交互式工作台](./reports/ai-infra-architect-workbench.html) |
 | **F-04** | **AI Infra 全景可视化精学中心 H5（7 大核心模块 + 动态图表 + 实时手算沙盘）** | 涵盖 PD 分离边界、TP/PP/DP/EP 并行、NVLink vs IB/RoCEv2、三道水位线 GPU 估算器、TPM/TPS & Little's Law 换算、TTFT/TPOT/Goodput 与完整学习目录 | [中文 H5 精学中心](./h5/ai-infra-learning-hub.html) · [English H5](./h5/ai-infra-learning-hub.en.html) |
+| **F-05** | **6 册双语推理工程、智算网络与容量测算 H5 精学馆（H5 Academy）** | 6 册分专题交互式 H5 教程（`01` 指标体系、`02` TPM/TPS 容量、`03` 三道水位线算卡、`04` PD 分离、`05` 并行加速、`06` RDMA/RoCEv2/NVLink）及配套双语手册 | [打开 6 册 H5 精学馆](./h5-academy/index.html) · [中文手册](./inference-sizing-network/README.md) · [EN](./inference-sizing-network/README.en.md) |
 
 ---
 

@@ -1,6 +1,6 @@
 # 云与 AI 基础设施解决方案架构师（SA）实战选型知识库 (`ai-infra-research`)
 
-> **Language / 语言**: **简体中文** | [English](./README.en.md) · [全部 397 篇双语总目录](./docs/full-catalog-zh.md) · [AI Infra 全景精学中心 H5](./docs/h5/ai-infra-learning-hub.html) · [L0–L9 全栈分层地图](./docs/stack-map.md) · [SA 能力进阶路线](./docs/learning/roadmap.md) · [交互式容量与 TCO 工作台](./docs/reports/ai-infra-architect-workbench.html)
+> **Language / 语言**: **简体中文** | [English](./README.en.md) · [全部 397 篇双语总目录](./docs/full-catalog-zh.md) · [🎓 6 册推理与智算网络 H5 精学馆](./docs/h5-academy/index.html) · [🔥 AI Infra 全景精学中心 H5](./docs/h5/ai-infra-learning-hub.html) · [L0–L9 全栈分层地图](./docs/stack-map.md) · [SA 能力进阶路线](./docs/learning/roadmap.md) · [交互式容量与 TCO 工作台](./docs/reports/ai-infra-architect-workbench.html)
 
 面向 **Cloud & AI Infrastructure Solution Architect（云与 AI 基础设施解决方案架构师）** 的中英双语架构选型、容量规划与 TCO 决策知识库。仓库摒弃脱离业务的晦涩低层源码碎片与跨学科算例，聚焦架构师在企业智算中心建设、公有云/混合云选型与大模型生产落地中最常面对的 **8 大核心架构决策域**，提供 **397 篇双语深度选型指南、783 套自包含交互式容量计算器（Sizer）与 7-Card 4:5 视觉评测报告，以及 403 套可一键复核的 Python 定量模型**。
 
@@ -40,6 +40,7 @@ flowchart TB
 | **1024-GPU 训练与 PD 分离推理混合集群参考架构** | 设计千卡级预训练/后训练 + 在线高并发推理混合智算中心 | 8 轨无损网络 + 两阶段异步 Checkpoint（`9 TB` 停顿压至 `3.1 s`）+ Dynamo/Mooncake PD 分离（突发流量省卡 `26.5%–34.2%`）+ `126 kW` 冷板液冷闭环预算 | [中文报告](./docs/architectures/end-to-end-ai-infra-case.md) · [English](./docs/architectures/end-to-end-ai-infra-case.en.md) |
 | **AI 基础设施架构师交互式工作台（5 合 1 Sizer）** | 客户汇报前快速测算集群 TCO、PD 实例配比、MoE 显存与 KV 卸载 | 零外部依赖单页 HTML 工具：实时交互测算 3 年单百万 Token 成本、SHARP 集合通信加速比、PD 分离收益、671B MoE 量化与 Checkpoint 好吞吐 | [打开交互式工作台](./docs/reports/ai-infra-architect-workbench.html) |
 | **AI Infra 全景可视化精学中心 H5（7 大专题 + 动态图表 + 实时手算沙盘）** | 沉浸式交互精读 PD 分离、TP/PP/DP/EP、NVLink vs. RDMA、三道水位线算卡、TPM/TPS 换算与 TTFT/TPOT/Goodput | 内置 Colocated vs. PD 柱状图、HBM 显存堆叠瀑布图、Roofline 算力屋顶图、Throughput-Latency 帕累托曲线与实时滑块计算器 | [中文 H5 精学中心](./docs/h5/ai-infra-learning-hub.html) · [English H5](./docs/h5/ai-infra-learning-hub.en.html) |
+| **6 册双语推理工程、智算网络与容量测算 H5 精学馆（H5 Academy）** | 分册深度交互精修：核心评估指标、TPM/TPS 容量规划、三道水位线算卡、PD 分离、TP/PP/DP/EP 加速与 RDMA/RoCEv2/NVLink | 配套 6 册离线可交互 H5 分册应用（`01`–`06`）与双语深度 FAQ 手册 | [打开 6 册 H5 精学馆](./docs/h5-academy/index.html) · [双语指南](./docs/inference-sizing-network/README.md) · [EN](./docs/inference-sizing-network/README.en.md) |
 
 ---
 
