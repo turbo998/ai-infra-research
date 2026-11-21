@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#10B981" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">大模型 Agent 安全代码沙箱选型：Firecracker MicroVM vs. gVisor vs. Kata vs. Wasm</text>
+  <text x="52" y="94" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15">硬件 KVM 强隔离 + 预导入 Pandas/NumPy 内存快照恢复 (28ms Resume) + 写时复制 (CoW) 跨数百沙箱零拷贝共享内存</text>
+
+  <!-- Left: Security & Cold-Start Dilemma -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么运行大模型生成的代码是极高危基础设施挑战？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 致命红线 A：直接用普通 Docker (runc) 跑 LLM 代码 (Tier 1)</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 容器与宿主机共享同一个 Linux 内核，直接暴露 ~350 个系统调用</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 恶意 Prompt 注入生成的 C/Python 代码一旦触发内核 CVE 即可逃逸接管整台母机！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 性能陷阱 B：每次请求冷启动虚机 + import pandas (Tier 2)</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 完整冷启动 Guest OS + Python 解释器 + `import pandas, numpy` 耗时长达 2,450 ms</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 每个 VM 独占 640 MB 物理内存，单台 256GB 母机仅能塞下 38 个并发沙箱！</text>
+
+  <!-- Right: Firecracker Snapshot + CoW Architecture -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. Firecracker MicroVM 快照热恢复与 CoW 内存共享 (Tier 4)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 预热快照冻结 (Pre-Imported Golden Memory Snapshot)</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">预先启动 MicroVM 并完成 `import pandas, torch, playwright` 后冻结为只读内存快照</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② 28ms 极速按需恢复 (`MAP_PRIVATE` + `userfaultfd` Lazy Paging)</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">新请求到达时 28ms 瞬间从快照克隆恢复，跳过全部 OS 引导与 Python 包导入耗时！</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ 写时复制页共享 (CoW Page Sharing)：单沙箱净增内存仅 68 MB</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">260 个并发 MicroVM 共享同一份只读基线物理页，单机并发密度暴增 6.8 倍！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 四档 Agent 代码执行沙箱性能与密度对比（500 次执行/秒 · 64vCPU/256GB 母机）</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">沙箱隔离架构</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">启动/恢复延迟</text>
+  <text x="620" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单沙箱独占内存</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单母机最大并发</text>
+  <text x="950" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">多租户防逃逸合规</text>
+  <text x="1120" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">月度集群成本</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 普通 Docker 容器 (runc 共享宿主机内核)</text>
+  <text x="450" y="524" fill="#E2E8F0" font-family="Segoe UI, Arial, sans-serif" font-size="14">180.0 ms</text>
+  <text x="620" y="524" fill="#E2E8F0" font-family="Segoe UI, Arial, sans-serif" font-size="14">240 MB</text>
+  <text x="790" y="524" fill="#E2E8F0" font-family="Segoe UI, Arial, sans-serif" font-size="14">180 个/机</text>
+  <text x="950" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">FAIL (高危逃逸) ✕</text>
+  <text x="1120" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14">$22,000/mo</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: 每次冷启动独立 VM / 无快照 Kata 容器</text>
+  <text x="450" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">2,450.0 ms ✕</text>
+  <text x="620" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">640 MB ✕</text>
+  <text x="790" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">38 个/机 ✕</text>
+  <text x="950" y="568" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">PASS (KVM)</text>
+  <text x="1120" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">$84,000/mo ✕</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: K8s gVisor (runsc 用户态内核) 预热池</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">45.0 ms ✓</text>
+  <text x="620" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">165 MB</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">115 个/机</text>
+  <text x="950" y="612" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">PASS (Syscall 隔离)</text>
+  <text x="1120" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$32,000/mo</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): Firecracker MicroVM + 快照热恢复 + CoW</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">28.0 ms (-98.9%)</text>
+  <text x="620" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">68 MB ✓</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">260 个/机 (6.8x)</text>
+  <text x="950" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">PASS (KVM 硬件级)</text>
+  <text x="1120" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$16,800/mo (-80%)</text>
+</svg>
