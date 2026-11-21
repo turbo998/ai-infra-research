@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>Multi-LoRA Serving (Punica / S-LoRA / vLLM vs. Merged Pods) — 7-Card Report</title>
+<style>
+  body { background: #0B1220; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; max-width: 1480px; margin: 0 auto; }
+  .card { background: #111C33; border: 1px solid #334155; border-radius: 16px; padding: 22px; aspect-ratio: 4 / 5; display: flex; flex-direction: column; justify-content: space-between; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: #FDE68A; background: #1E293B; padding: 4px 10px; border-radius: 999px; }
+  h2 { font-size: 18px; margin: 12px 0 8px; line-height: 1.35; }
+  p, li { font-size: 13px; color: #CBD5E1; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { border-bottom: 1px solid #1E293B; padding: 6px 4px; text-align: left; }
+  th { color: #94A3B8; }
+  .code { background: #0F172A; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #A7F3D0; }
+  .bar { height: 10px; background: #1E293B; border-radius: 5px; overflow: hidden; margin: 4px 0 10px; }
+  .fill { height: 100%; background: #3B82F6; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <span class="badge">1 / 7 · HANDS-ON · MULTI-LORA SERVING</span>
+      <h2>S-LoRA & Punica Cut 500-Tenant Fine-Tuned Serving from 128 to 16 H200 GPUs</h2>
+      <p>Batching heterogeneous LoRA requests onto a single shared 70B base GEMM with consistent-hash gateway routing cuts GPU count and monthly TCO by 87.5%.</p>
+    </div>
+    <div class="code">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">2 / 7 · SCENARIO: 500 TENANT LORA ADAPTERS</span>
+      <h2>6.5ms Cold Swap Overhead & 98.6% GPU HBM Slot Hit Rate</h2>
+      <p>Input: 500 `r=32` adapters (`320 MB` each) on `Llama-3.3-70B-FP8` at 240 RPS (`Choice: Tier_4_S_LoRA_Consistent_Hash` — Act automatically).</p>
+      <div>GPU Count Reduction (`-87.5%`, `16` vs `128` H200s)</div>
+      <div class="bar"><div class="fill" style="width:87.5%"></div></div>
+      <div>GPU HBM Active LoRA Slot Hit Rate (`98.6%`)</div>
+      <div class="bar"><div class="fill" style="width:98.6%"></div></div>
+    </div>
+    <div class="code">Action: Act automatically -> Enable `--enable-lora --max-loras 64 --max-cpu-loras 500` + Consistent Hash</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">3 / 7 · WHAT I TESTED</span>
+      <h2>4-Tier Multi-LoRA Serving Matrix (500 Adapters)</h2>
+      <table>
+        <tr><th>SCENARIO</th><th>GPUS</th><th>SWAP TTFT</th><th>ACTION</th></tr>
+        <tr><td>Tier 1 Merged Pods</td><td>128</td><td>0.0 ms</td><td>✕ $358k/mo</td></tr>
+        <tr><td>Tier 2 Disk Swap</td><td>32</td><td>+1850 ms</td><td>✕ Stalls Batch</td></tr>
+        <tr><td>Tier 3 vLLM Random</td><td>24</td><td>+28.0 ms</td><td>Confirm</td></tr>
+        <tr><td>Tier 4 S-LoRA+Hash</td><td>16</td><td>+6.5 ms</td><td>✓ Act auto</td></tr>
+      </table>
+    </div>
+    <div class="code">Miss Marker (✕): Tier 1 duplicates the 70GB base model 64 times across underutilized tenant pods.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">4 / 7 · UNDER THE HOOD</span>
+      <h2>Punica Shrink-and-Expand BGMV Kernel</h2>
+      <div class="code">
+        Y = X @ W_base + sum_i ( (X_i @ A_i) @ B_i )<br>
+        1. Shared Base GEMM: [B, 8192] @ [8192, 8192]<br>
+        2. Shrink BGMV: [B, 8192] -> [B, r=32]<br>
+        3. Expand BGMV: [B, r=32] -> [B, 8192] (+6.2% TPOT)
+      </div>
+      <p>All requests share the heavy Base GEMM while custom Triton/CUDA BGMV gathers each token's specific adapter weights.</p>
+    </div>
+    <div class="code">Unified Paging manages KV Cache blocks and LoRA weight pages in one pool</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">5 / 7 · ROBUSTNESS CHECK</span>
+      <h2>Merged Weights vs. Dynamic Multi-LoRA Crossover</h2>
+      <table>
+        <tr><th>TENANT TRAFFIC</th><th>DYNAMIC LORA</th><th>MERGED POD</th><th>WINNER</th></tr>
+        <tr><td>Long-tail (&lt;5 RPS)</td><td>Shared 0.2 GPU</td><td>2 Dedicated GPUs</td><td>Multi-LoRA (-90%)</td></tr>
+        <tr><td>Medium (15 RPS)</td><td>Shared 1.0 GPU</td><td>2 Dedicated GPUs</td><td>Multi-LoRA (-50%)</td></tr>
+        <tr><td>Whale (&gt;45 RPS)</td><td>+6.2% BGMV Tax</td><td>Zero BGMV Tax</td><td>Merged Pod (+6%)</td></tr>
+      </table>
+    </div>
+    <div class="code">Promote any single "whale" tenant exceeding ~40 RPS to a dedicated Merged-Weight pod!</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">6 / 7 · LATENCY</span>
+      <h2>Required H200 GPUs for 500 Tenant Adapters</h2>
+      <div>Tier 4 S-LoRA + Consistent Hash Gateway: 16 GPUs</div>
+      <div class="bar"><div class="fill" style="width:12.5%"></div></div>
+      <div>Tier 3 vLLM Multi-LoRA (Random Routing): 24 GPUs</div>
+      <div class="bar"><div class="fill" style="width:19%"></div></div>
+      <div>Tier 2 On-Demand Disk Reload: 32 GPUs</div>
+      <div class="bar"><div class="fill" style="width:25%"></div></div>
+      <div>Tier 1 Dedicated Merged-Weight Pods: 128 GPUs</div>
+      <div class="bar"><div class="fill" style="width:100%"></div></div>
+    </div>
+    <div class="code">Monthly TCO: $44,800 (Tier 4) vs $358,000 (Tier 1)</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">7 / 7 · MY TAKE</span>
+      <h2>Good Fit vs. Not For</h2>
+      <p><strong>✅ Good fit:</strong> B2B SaaS platforms hosting dozens to thousands of customer/department LoRA adapters, A/B testing fine-tuned checkpoints, and multi-skill agent fleets.</p>
+      <p><strong>⛔ Not for:</strong> Full-parameter fine-tunes (`Full SFT`) or a single monolithic model serving 100% of traffic (merge the LoRA offline to save the 6.2% BGMV overhead).</p>
+    </div>
+    <div class="code">Readiness: Production-verified in vLLM (`--enable-lora`) & SGLang S-LoRA</div>
+  </div>
+</div>
+</body>
+</html>

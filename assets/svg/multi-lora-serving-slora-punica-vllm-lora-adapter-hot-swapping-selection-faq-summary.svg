@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#F59E0B" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">大模型多租户动态 LoRA 服务 (Multi-LoRA Serving) 选型：Punica / S-LoRA vs. 独立合并权重实例</text>
+  <text x="52" y="94" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="15">共享底座矩阵乘 (Y = X·W_0 + Σ(X_i·A_i)·B_i) + Shrink/Expand BGMV 算子 + 锁页内存异步预取 + 一致性哈希路由</text>
+
+  <!-- Left: Why Merged Pods Fail at Scale -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么 500 个部门/客户微调模型不能“合并权重独立部署”？</text>
+  <rect x="48" y="188" width="550" width-rx="8" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 陷阱 A：合并权重独立 Pod (W' = W_0 + B·A, Tier 1)</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 每个微调版本都要复制一份完整的 70 GB 底座显存，不同租户请求无法合批</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 支撑 500 个长尾微调租户需 128 张 H200 ($35.8 万/月)，平均算力利用率不足 9%！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">⚠️ 什么时候反而应该“合并权重 (Merge LoRA)”？</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 当某单一核心微调模型独占流量 &gt; 40 RPS（足以 24h 跑满 ≥1 个独立副本）时，</text>
+  <text x="64" y="360" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 离线 Merge 进底座权重可彻底消除 6.2% 的 BGMV 算子附加延迟！</text>
+
+  <!-- Right: S-LoRA / Punica / vLLM Architecture -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. 千级微调租户共享底座三板斧 (Punica / S-LoRA / vLLM)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 异构合批 BGMV (Batched Gather Matrix-Vector)：底座 100% 共享合批</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">64 条指向不同 LoRA 的请求合批做 1 次 `X·W_0`，再并行叠加各自的低秩 `(X_i·A_i)·B_i`</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② 三级存储池化：GPU HBM (`max_loras=64`) + 锁页内存 (`max_cpu_loras=500`)</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">全部 500 个 320MB Adapter (160GB) 常驻主机 Pinned RAM，PCIe 5.0 异步换入仅需 6.5ms！</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ 网关 Adapter 亲和性一致性哈希路由 (Consistent Hash with Bounded Load)</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">按 `lora_id` 定向路由至固定副本，将 GPU HBM 热槽位命中率从 62% 推升至 98.6%！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 四档多 LoRA 推理架构容量与成本对比（500 个 r=32 Adapter · 共享 70B-FP8 · 240 RPS）</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">多租户 LoRA 服务架构</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">所需 H200 卡数</text>
+  <text x="610" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">冷换入 TTFT 损耗</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">TPOT 附加开销</text>
+  <text x="950" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">集群有效吞吐</text>
+  <text x="1110" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">月度集群 TCO</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 离线合并权重独立 Pod 部署 (无底座共享)</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">128 GPUs ✕</text>
+  <text x="610" y="524" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">0.0 ms</text>
+  <text x="790" y="524" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">+0.0%</text>
+  <text x="950" y="524" fill="#E2E8F0" font-family="Segoe UI, Arial, sans-serif" font-size="14">240 RPS</text>
+  <text x="1110" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">$358,000/mo ✕</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: 按需从网络盘同步下载替换 Adapter</text>
+  <text x="450" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">32 GPUs</text>
+  <text x="610" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">+1,850.0 ms ✕</text>
+  <text x="790" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">+42.0% ✕</text>
+  <text x="950" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">95 RPS</text>
+  <text x="1110" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">$89,600/mo</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: vLLM Multi-LoRA + 主机内存缓存 (随机轮询路由)</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">24 GPUs</text>
+  <text x="610" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">+28.0 ms</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">+11.5%</text>
+  <text x="950" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">215 RPS</text>
+  <text x="1110" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$67,200/mo</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): S-LoRA 统一分页 + 锁页预取 + 一致性哈希网关</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">16 GPUs (-87.5%) ✓</text>
+  <text x="610" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">+6.5 ms ✓</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">+6.2% ✓</text>
+  <text x="950" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">252 RPS ✓</text>
+  <text x="1110" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$44,800/mo (-87.5%)</text>
+</svg>
