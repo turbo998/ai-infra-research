@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>128K–1M Long-Context CP (`Ulysses × Ring`) &amp; Tiered KV Offload Calculator</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>128K–1M Long-Context `Ulysses × Ring CP` &amp; Tiered KV Recall vs. Recompute Calculator</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare PCIe/RDMA KV Recall Time vs. Quadratic Prefill Recompute</div>
+    <div class="grid">
+      <div class="card">
+        <label>Sequence Context Length ($S$): <strong id="ctxVal">128K Tokens (131,072)</strong></label>
+        <input type="range" id="ctx" min="32" max="1024" step="32" value="128" oninput="recalc()">
+        <label>Attention KV Architecture:</label>
+        <select id="arch" onchange="recalc()">
+          <option value="gqa">Llama-3.3-70B GQA-8 FP8 KV (163.84 KB/tok)</option>
+          <option value="mla">DeepSeek-R1 671B MLA FP8 KV (35.14 KB/tok · 4.7x smaller!)</option>
+        </select>
+        <label>Context Parallelism (`CP = Ulysses × Ring`) Degree:</label>
+        <select id="cp" onchange="recalc()">
+          <option value="4">CP=4 (4x 8-H200 Nodes = 32 GPUs: Ulysses=8 × Ring=4)</option>
+          <option value="2">CP=2 (2x 8-H200 Nodes = 16 GPUs: Ulysses=8 × Ring=2)</option>
+          <option value="1">CP=1 (Single 8-H200 Node: TP/Ulysses=8 Only)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="kvGbVal">21.0 GB</div><div class="lbl">Single-Session KV Cache Size</div></div>
+          <div class="kpi"><div class="val" id="recallVal">41.0 ms</div><div class="lbl">L2 Host DRAM PCIe Gen5 Recall Time (`512 GB/s`)</div></div>
+          <div class="kpi"><div class="val" id="recompVal">2,300 ms</div><div class="lbl">Full Prefill Compute Time (with 2D USP CP)</div></div>
+          <div class="kpi"><div class="val" id="speedupVal">56.1x Faster</div><div class="lbl">KV Offload Recall vs. Full Recompute Speedup</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Long-Context Technique</th><th>Communication Pattern</th><th>Hardware Fabric</th><th>Scaling Limit</th><th>Best Architectural Role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>DeepSpeed-Ulysses CP</strong></td><td>`All-to-All` (Seq -&gt; Head split)</td><td>Intra-Node NVLink (`900 GB/s`)</td><td>Capped by $n_{kv}$ heads (`8` for GQA-8)</td><td>Inner CP dimension inside 8-GPU NVLink node</td></tr>
+          <tr><td><strong>Ring Attention CP</strong></td><td>`P2P Send/Recv` KV blocks</td><td>Inter-Node RDMA (`400G/800G`)</td><td>Unlimited sequence length ($1\text{M}+$)</td><td>Outer CP dimension across multiple nodes</td></tr>
+          <tr><td><strong>2D Hybrid USP (`Ulysses × Ring`)</strong></td><td>NVLink All-to-All × RDMA Ring</td><td>Hierarchical NVLink + RDMA</td><td>Scales to 32–256 GPUs cleanly</td><td><strong>Gold standard for 128K–1M training &amp; prefill</strong></td></tr>
+          <tr><td><strong>Tiered KV Pool (`LMCache / Mooncake`)</strong></td><td>Async DMA (`HBM &lt;-&gt; DRAM &lt;-&gt; GDS`)</td><td>PCIe Gen5 (`512 GB/s`) + RDMA</td><td>2–4 TB DDR5 + 30 TB NVMe/node</td><td>Eliminates multi-turn 128K KV recomputation</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const ctxK = parseInt(document.getElementById('ctx').value, 10);
+      const arch = document.getElementById('arch').value;
+      const cp = parseInt(document.getElementById('cp').value, 10);
+      document.getElementById('ctxVal').textContent = ctxK + 'K Tokens (' + (ctxK * 1024).toLocaleString() + ')';
+      const kbPerTok = arch === 'mla' ? 35.14 : 163.84;
+      const kvGb = (ctxK * 1024 * kbPerTok) / (1024 * 1024);
+      const recallMs = (kvGb / 512.0) * 1000;
+      const scale = Math.pow(ctxK / 128.0, 1.45);
+      const recompMs = (9200 * scale) / cp;
+      const speedup = recompMs / recallMs;
+      document.getElementById('kvGbVal').textContent = kvGb.toFixed(1) + ' GB';
+      document.getElementById('recallVal').textContent = recallMs.toFixed(1) + ' ms';
+      document.getElementById('recompVal').textContent = Math.round(recompMs).toLocaleString() + ' ms';
+      document.getElementById('speedupVal').textContent = speedup.toFixed(1) + 'x Faster';
+    }
+  </script>
+</body>
+</html>
