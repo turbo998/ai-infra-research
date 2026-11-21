@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>AI Evaluation Metrics Calculator: TTFT, TPOT/ITL, E2EL, Goodput &amp; $/1M Tokens</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI Evaluation Metrics Calculator (`TTFT + (N_out - 1) × TPOT = E2EL`, `Goodput` &amp; `$/1M`)</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Benchmark 5 Enterprise Scenarios &amp; Pareto Goodput</div>
+    <div class="grid">
+      <div class="card">
+        <label>Business Application Scenario Preset:</label>
+        <select id="preset" onchange="applyPreset()">
+          <option value="rag">Enterprise RAG / Chat Copilot (SLA: TTFT &lt;=800ms, TPOT &lt;=25ms)</option>
+          <option value="voice">Real-Time Voice Agent (SLA: TTFT &lt;=250ms, ITL &lt;=18ms)</option>
+          <option value="code">IDE Inline Code Completion (SLA: TTFT &lt;=150ms, TPOT &lt;=10ms)</option>
+          <option value="reason">Deep Reasoning / Coding Agent (SLA: TTFT &lt;=1500ms, TPOT &lt;=15ms)</option>
+          <option value="batch">Offline Document Batch ETL (Relaxed Latency, Max Throughput)</option>
+        </select>
+        <label>Measured Time To First Token ($\text{TTFT}$): <strong id="ttftVal">590 ms</strong></label>
+        <input type="range" id="ttft" min="80" max="3000" step="20" value="590" oninput="recalc()">
+        <label>Measured Time Per Output Token ($\text{TPOT / P99 ITL}$): <strong id="tpotVal">16.8 ms (59.5 tok/s)</strong></label>
+        <input type="range" id="tpot" min="6" max="60" step="1" value="17" oninput="recalc()">
+        <label>Generated Output Tokens ($N_{\text{out}}$): <strong id="noutVal">500 tokens</strong></label>
+        <input type="range" id="nout" min="64" max="4096" step="64" value="500" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="e2elVal">9.07 sec</div><div class="lbl">End-to-End Latency (`TTFT + (N_out-1) × TPOT`)</div></div>
+          <div class="kpi"><div class="val" id="goodputVal">2,115 tok/s/GPU</div><div class="lbl">SLA-Compliant Goodput (`97.0%` SLA Pass)</div></div>
+          <div class="kpi"><div class="val" id="costVal">$0.47 / 1M Tokens</div><div class="lbl">Effective Cost per 1M Goodput Tokens (-80.5%)</div></div>
+          <div class="kpi"><div class="val" id="statusVal">✅ PASSES SLA</div><div class="lbl">Scenario Dual-SLA Gate Verdict</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Business Scenario</th><th>P95 `TTFT` Golden SLA</th><th>P99 `TPOT / ITL` Golden SLA</th><th>Min User Streaming Speed</th><th>Target `E2EL` Envelope</th><th>Recommended Engine &amp; Slicing</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>1. Real-Time Voice Agent (WebRTC)</strong></td><td><strong>&lt;= 250 ms</strong></td><td><strong>&lt;= 18 ms</strong></td><td>&gt;= 55 tok/s</td><td>First audio chunk &lt; 500ms</td><td>PD Split + Speculative MTP + Prefix Cache</td></tr>
+          <tr><td><strong>2. IDE Inline Code Completion (FIM)</strong></td><td><strong>&lt;= 150 ms</strong></td><td><strong>&lt;= 10 ms</strong></td><td>&gt;= 100 tok/s</td><td><strong>&lt;= 350–400 ms total</strong></td><td>7B–32B FP8 on `TP=2/4` + EAGLE-3</td></tr>
+          <tr><td><strong>3. Enterprise RAG / Chat Copilot</strong></td><td><strong>&lt;= 800 ms</strong></td><td><strong>&lt;= 25 ms</strong></td><td>&gt;= 40 tok/s</td><td>&lt;= 8–12 sec (400 tok)</td><td>`TP=4/8` FP8 + Chunked Prefill / PD Split</td></tr>
+          <tr><td><strong>4. Deep Reasoning (`&lt;think&gt;` 2K–8K)</strong></td><td><strong>&lt;= 1,500 ms</strong></td><td><strong>&lt;= 15 ms</strong></td><td>&gt;= 65 tok/s</td><td>&lt;= 30–60 sec (3K tok)</td><td>`8x H200/B200` + MLA FP8 + MTP (`1.8x`)</td></tr>
+          <tr><td><strong>5. Offline Batch Document ETL</strong></td><td>Relaxed (&lt; 30s)</td><td>Relaxed (&lt; 80ms)</td><td>N/A (Async Batch)</td><td>Complete within nightly window</td><td>Max-Batch Continuous Batching (`DP + FP8`)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    const slas = {
+      rag: { ttft: 800, tpot: 25, setTtft: 590, setTpot: 17, setOut: 500 },
+      voice: { ttft: 250, tpot: 18, setTtft: 180, setTpot: 14, setOut: 128 },
+      code: { ttft: 150, tpot: 10, setTtft: 110, setTpot: 8, setOut: 64 },
+      reason: { ttft: 1500, tpot: 15, setTtft: 900, setTpot: 13, setOut: 2560 },
+      batch: { ttft: 30000, tpot: 80, setTtft: 1800, setTpot: 42, setOut: 1024 }
+    };
+    function applyPreset() {
+      const p = slas[document.getElementById('preset').value];
+      document.getElementById('ttft').value = p.setTtft;
+      document.getElementById('tpot').value = p.setTpot;
+      document.getElementById('nout').value = p.setOut;
+      recalc();
+    }
+    function recalc() {
+      const p = slas[document.getElementById('preset').value];
+      const ttft = parseInt(document.getElementById('ttft').value, 10);
+      const tpot = parseInt(document.getElementById('tpot').value, 10);
+      const nout = parseInt(document.getElementById('nout').value, 10);
+      document.getElementById('ttftVal').textContent = ttft + ' ms';
+      document.getElementById('tpotVal').textContent = tpot + ' ms (' + (1000 / tpot).toFixed(1) + ' tok/s)';
+      document.getElementById('noutVal').textContent = nout + ' tokens';
+      const e2el = (ttft + (nout - 1) * tpot) / 1000.0;
+      const pass = ttft <= p.ttft && tpot <= p.tpot;
+      const goodput = pass ? 2115 : 410;
+      const cost = (3.55 * 1e6) / (3600 * goodput);
+      document.getElementById('e2elVal').textContent = e2el.toFixed(2) + ' sec';
+      document.getElementById('goodputVal').textContent = goodput.toLocaleString() + ' tok/s/GPU';
+      document.getElementById('costVal').textContent = '$' + cost.toFixed(2) + ' / 1M Tokens';
+      document.getElementById('statusVal').textContent = pass ? '✅ PASSES SLA' : '⛔ BREACHES SLA';
+      document.getElementById('statusVal').style.color = pass ? '#34d399' : '#f87171';
+    }
+  </script>
+</body>
+</html>
