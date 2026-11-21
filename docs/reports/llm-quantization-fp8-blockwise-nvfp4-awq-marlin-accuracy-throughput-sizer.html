@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>LLM Quantization Selector: BF16 vs. Block FP8 vs. W4A16 Marlin vs. NVFP4</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LLM Quantization Format &amp; Hardware SKU Matcher (`BF16 / Block FP8 / W4A16 Marlin / NVFP4`)</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Match GPU Architecture &amp; Batch Size to Optimal Quantization Scheme</div>
+    <div class="grid">
+      <div class="card">
+        <label>Target GPU Architecture:</label>
+        <select id="sku" onchange="recalc()">
+          <option value="h200">NVIDIA Hopper H100 / H200 / Ada L40S (Native FP8 TensorCore)</option>
+          <option value="b200">NVIDIA Blackwell B200 / GB200 (Native NVFP4 + FP8 TensorCore)</option>
+          <option value="a100">NVIDIA Ampere A100 (No Native FP8 — INT8/FP16 TensorCore Only)</option>
+        </select>
+        <label>Concurrent Active Batch Size ($B$): <strong id="bVal">64 concurrent requests</strong></label>
+        <input type="range" id="batch" min="4" max="128" step="4" value="64" oninput="recalc()">
+        <label>Quantization Format:</label>
+        <select id="qfmt" onchange="recalc()">
+          <option value="block_fp8">Fine-Grained Block FP8 (1x128 Act × 128x128 Weight + FP8 KV)</option>
+          <option value="w4a16">W4A16 AWQ + Marlin Kernel (4-bit Weight, FP16 Activation)</option>
+          <option value="nvfp4">Blackwell NVFP4 (E2M1 + FP8 Micro-Block Scale per 16 elems)</option>
+          <option value="bf16">Unquantized BF16 (W16A16KV16)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="accVal">99.8%</div><div class="lbl">Benchmark Accuracy Retention (vs BF16)</div></div>
+          <div class="kpi"><div class="val" id="tpsVal">2,140 tok/s/GPU</div><div class="lbl">SLA-Compliant Goodput TPS / GPU</div></div>
+          <div class="kpi"><div class="val" id="tpotVal">12.9 ms</div><div class="lbl">Achieved Decode P99 TPOT</div></div>
+          <div class="kpi"><div class="val" id="recVal">🏆 Best for H100/H200</div><div class="lbl">Hardware Compatibility Verdict</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const sku = document.getElementById('sku').value;
+      const b = parseInt(document.getElementById('batch').value, 10);
+      const q = document.getElementById('qfmt').value;
+      document.getElementById('bVal').textContent = b + ' concurrent requests';
+      let acc = 99.8, tps = 2140, tpot = 12.9, rec = '🏆 Best for H100/H200';
+      if (q === 'bf16') { acc = 100.0; tps = 980; tpot = 24.6; rec = '⚠️ High HBM Cost (2B/param)'; }
+      else if (q === 'w4a16') {
+        acc = 98.4;
+        tps = b <= 16 ? 1750 : 1540;
+        tpot = b <= 16 ? 10.4 : 15.2;
+        rec = (sku === 'a100' || b <= 16) ? '🏆 Best for A100 / Low Batch' : '⚖️ FP8 Beats W4A16 at B>=24';
+      } else if (q === 'nvfp4') {
+        acc = 99.1;
+        tps = sku === 'b200' ? 4150 : 900;
+        tpot = sku === 'b200' ? 7.4 : 28.0;
+        rec = sku === 'b200' ? '🏆 Native Blackwell NVFP4!' : '⛔ Requires Blackwell B200/GB200';
+      } else {
+        if (sku === 'a100') { tps = 1120; tpot = 21.0; rec = '⛔ A100 Lacks Native FP8 TensorCore!'; }
+      }
+      document.getElementById('accVal').textContent = acc.toFixed(1) + '%';
+      document.getElementById('tpsVal').textContent = tps.toLocaleString() + ' tok/s/GPU';
+      document.getElementById('tpotVal').textContent = tpot.toFixed(1) + ' ms';
+      document.getElementById('recVal').textContent = rec;
+    }
+  </script>
+</body>
+</html>
