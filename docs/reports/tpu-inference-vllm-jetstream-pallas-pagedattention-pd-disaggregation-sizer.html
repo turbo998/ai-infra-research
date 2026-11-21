@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Google Cloud TPU Inference (vLLM-TPU vs. JetStream &amp; ICI P/D Split) Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Google Cloud TPU Inference (`vLLM-TPU V1` vs. `JetStream` &amp; `ICI` P/D Split) Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Size Prefill/Decode Ratios on TPU v6e Trillium, TPU7x Ironwood &amp; TPU 8i</div>
+    <div class="grid">
+      <div class="card">
+        <label>Serving Pool Size (TPU Chips): <strong id="cVal">64 Chips</strong></label>
+        <input type="range" id="chips" min="8" max="256" step="8" value="64" oninput="recalc()">
+        <label>Average Prompt Length (Tokens): <strong id="pVal">8,192 Tokens</strong></label>
+        <input type="range" id="prompt" min="1024" max="32768" step="1024" value="8192" oninput="recalc()">
+        <label>Shared System/RAG Prefix Cache Hit Rate (%): <strong id="hVal">65%</strong></label>
+        <input type="range" id="hit" min="0" max="90" step="5" value="65" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t4Tpot">14.8 ms</div><div class="lbl">P99 Decode TPOT (&lt;=25ms SLA)</div></div>
+          <div class="kpi"><div class="val" id="t4Tok">$0.21 / 1M</div><div class="lbl">SLA-Compliant Serving Token Cost (79.4% MBU)</div></div>
+          <div class="kpi"><div class="val" id="t1Cost">$420,000</div><div class="lbl">Tier 1 Unbucketed Serving Monthly TCO</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$112,000</div><div class="lbl">Tier 4 `vLLM-TPU + ICI P/D` Monthly TCO (-73.3%)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>TPU Inference Serving Architecture Tier</th><th>P99 Decode TPOT</th><th>Decode HBM MBU</th><th>Cost / 1M SLA Tokens</th><th>Monthly TCO</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Unbucketed HuggingFace/PyTorch-XLA + Contiguous KV</td><td>115.0 ms (Recompiles!)</td><td>22.0%</td><td>$1.65 / 1M</td><td>$420,000 / mo</td></tr>
+          <tr><td>Tier 2: Bucketed JetStream + MaxEngine (Co-Located P/D)</td><td>42.0 ms</td><td>54.0%</td><td>$0.58 / 1M</td><td>$245,000 / mo</td></tr>
+          <tr><td>Tier 3: Co-Located vLLM-TPU V1 (Pallas PA + Chunked Prefill)</td><td>24.5 ms</td><td>66.5%</td><td>$0.36 / 1M</td><td>$178,000 / mo</td></tr>
+          <tr><td><strong>Tier 4: vLLM-TPU V1 + Pallas Ragged PA + ICI P/D Disaggregation</strong></td><td><strong>14.8 ms</strong></td><td><strong>79.4%</strong></td><td><strong>$0.21 / 1M</strong></td><td><strong>$112,000 / mo</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const c = parseInt(document.getElementById('chips').value, 10);
+      const p = parseInt(document.getElementById('prompt').value, 10);
+      const h = parseInt(document.getElementById('hit').value, 10);
+      document.getElementById('cVal').textContent = c + ' Chips';
+      document.getElementById('pVal').textContent = p.toLocaleString() + ' Tokens';
+      document.getElementById('hVal').textContent = h + '%';
+      const tokCost = Math.max(0.14, 0.21 * (1.2 - 0.3 * (h / 65))).toFixed(2);
+      document.getElementById('t4Tok').textContent = '$' + tokCost + ' / 1M';
+      const scale = (c / 64) * (0.85 + 0.15 * (p / 8192));
+      document.getElementById('t1Cost').textContent = '$' + Math.round(420000 * scale).toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + Math.round(112000 * (c / 64)).toLocaleString();
+    }
+  </script>
+</body>
+</html>

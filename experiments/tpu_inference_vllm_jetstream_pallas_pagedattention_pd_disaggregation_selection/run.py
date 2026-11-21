@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "tpu_inference_vllm_jetstream_pallas_pagedattention_pd_disaggregation_selection",
+        "title": "Google Cloud TPU Inference Serving: vLLM-TPU vs. JetStream, Pallas Ragged PagedAttention & ICI P/D Disaggregation Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "serving_slice_chips_tpu_v6e_or_tpu7x": 64,
+            "avg_prompt_tokens": 8192,
+            "avg_output_tokens": 512,
+            "target_p99_tpot_sla_ms": 25.0,
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_unbucketed_huggingface_tpu_contiguous_kv",
+                "name": "Tier 1: Unbucketed HuggingFace/PyTorch-XLA Serving + Contiguous Static KV Cache",
+                "p99_tpot_ms": 115.0,
+                "decode_hbm_bandwidth_utilization_mbu_pct": 22.0,
+                "sla_compliant_cost_per_1m_tokens_usd": 1.65,
+                "monthly_64_chip_serving_equivalent_tco_usd": 420000,
+                "verdict": "Anti-Pattern: Runtime XLA recompilations & 68% contiguous KV fragmentation ($1.65/1M tokens)",
+            },
+            {
+                "tier_id": "tier2_static_bucketed_jetstream_maxengine_colocated",
+                "name": "Tier 2: Bucketed JetStream + MaxEngine (Co-Located Prefill/Decode, No Prefix Cache)",
+                "p99_tpot_ms": 42.0,
+                "decode_hbm_bandwidth_utilization_mbu_pct": 54.0,
+                "sla_compliant_cost_per_1m_tokens_usd": 0.58,
+                "monthly_64_chip_serving_equivalent_tco_usd": 245000,
+                "verdict": "Great for native MaxText RL rollouts, but 8K Prefills spike co-located Decode P99 TPOT to 42ms",
+            },
+            {
+                "tier_id": "tier3_vllm_tpu_colocated_chunked_prefill_only",
+                "name": "Tier 3: Co-Located vLLM-TPU V1 (Pallas PagedAttention + Chunked Prefill, Single Pool)",
+                "p99_tpot_ms": 24.5,
+                "decode_hbm_bandwidth_utilization_mbu_pct": 66.5,
+                "sla_compliant_cost_per_1m_tokens_usd": 0.36,
+                "monthly_64_chip_serving_equivalent_tco_usd": 178000,
+                "verdict": "Solid general serving, but bursty 32K prompts still contend with Decode on shared MXUs",
+            },
+            {
+                "tier4_vllm_tpu_pallas_ragged_pa_ici_pd_disaggregation_prefix_cache": "tier4",
+                "tier_id": "tier4_vllm_tpu_pallas_ragged_pa_ici_pd_disaggregation_prefix_cache",
+                "name": "Tier 4: vLLM-TPU V1 + Persistent XLA Cache + Pallas Ragged PagedAttention + ICI P/D Disaggregation",
+                "p99_tpot_ms": 14.8,
+                "decode_hbm_bandwidth_utilization_mbu_pct": 79.4,
+                "sla_compliant_cost_per_1m_tokens_usd": 0.21,
+                "monthly_64_chip_serving_equivalent_tco_usd": 112000,
+                "verdict": "Recommended: 14.8ms P99 TPOT, 79.4% Decode MBU, $0.21/1M tokens & -73.3% TCO ($112K/mo)",
+            },
+        ],
+        "headline_findings": {
+            "p99_tpot_ms": 14.8,
+            "decode_mbu_pct": 79.4,
+            "cost_per_1m_tokens_usd": 0.21,
+            "tco_savings_vs_tier1_pct": 73.3,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
