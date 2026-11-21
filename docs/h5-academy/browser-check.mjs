@@ -95,6 +95,37 @@ async function probe(exercise, expectedWidth) {
           assert(speculative.textContent.includes(expected), "Speculation plot mislabeled its economic break-even line as an SLO");
           cases += 1;
         }
+        const rank = document.querySelector('form[data-lab="rank"]');
+        if (rank) {
+          const set = (key, value) => {
+            const input=rank.querySelector(`[data-key="${key}"]`);
+            if (input.type === "checkbox") input.checked=value;
+            else input.value=String(value);
+            input.dispatchEvent(new Event("input",{bubbles:true}));
+          };
+          set("model", "deepseek");
+          set("tp", 8);
+          set("mlaCache", "measured");
+          assert(!rank.querySelector('[data-key="mlaLayerBytes"]').disabled, "Opaque MLA row-byte input did not enable");
+          set("mlaLayerBytes", 656);
+          set("kvBytes", 1);
+          validate(rank);
+          set("measuredMemory", true);
+          set("deviceGB", 180);
+          assert(!rank.querySelector('[data-key="deviceGB"]').disabled, "Measured capacity input did not enable");
+          validate(rank);
+          set("customReplicaBatch", true);
+          set("dp", 8);
+          set("replicaBatch", 32);
+          validate(rank);
+          rank.reset();
+          await wait();
+          set("model", "");
+          assert(!rank.closest("[data-workbench]").querySelector(".error").hidden, "Unknown model selection did not surface an error");
+          rank.reset();
+          await wait();
+          cases += 4;
+        }
         kind.value = "dp";
         kind.dispatchEvent(new Event("input", { bubbles: true }));
         const attention = parallel.querySelector('[data-key="attentionDP"]');

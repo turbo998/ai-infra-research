@@ -22,7 +22,7 @@ const arrow = (x1, y1, x2, y2) => `<path d="M ${x1} ${y1} L ${x2} ${y2}" class="
 export const chapters = [
   { id: "metrics", file: "01-metrics.html", zh: "先看用户体验，再看机器吞吐", en: "User experience comes before peak throughput", subtitleZh: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · 成本", subtitleEn: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · cost", minutes: 20, sources: ["vllm", "ptu-concept"] },
   { id: "capacity", file: "02-tpm-tps-capacity.html", zh: "50 TPS/用户，不等于 50 TPS/集群", en: "50 TPS per user is not 50 TPS per cluster", subtitleZh: "TPM/TPS 边界 · Little's Law · 峰值规划 · PTU 权重", subtitleEn: "TPM/TPS boundaries · Little's Law · peak sizing · PTU weights", minutes: 25, sources: ["ptu", "ptu-concept", "vllm"] },
-  { id: "sizing", file: "03-gpu-sizing.html", zh: "放得下、吐得快、首字快，是三道不同水位线", en: "Memory fit, decode speed and first-token speed are three different bounds", subtitleZh: "Dense / MoE · GQA / MLA · 显存堆叠 · HBM / FLOPs", subtitleEn: "Dense / MoE · GQA / MLA · memory stacks · HBM / FLOPs", minutes: 30, sources: ["h100", "h200", "b200", "l40s", "deepseek-config", "deepseek", "llama", "qwen", "vllm"] },
+  { id: "sizing", file: "03-gpu-sizing.html", zh: "放得下、吐得快、首字快，是三道不同水位线", en: "Memory fit, decode speed and first-token speed are three different bounds", subtitleZh: "Dense / MoE · GQA / MLA · 显存堆叠 · HBM / FLOPs", subtitleEn: "Dense / MoE · GQA / MLA · memory stacks · HBM / FLOPs", minutes: 30, sources: ["h100", "h200", "b200", "l40s", "deepseek-config", "deepseek", "llama", "qwen", "vllm", "gqa-tp", "mla-layout"] },
   { id: "pd", file: "04-pd-disaggregation.html", zh: "PD 分离消除一类干扰，却增加一次 KV 交接", en: "PD removes one interference source but adds a KV handoff", subtitleZh: "混部 / Chunked Prefill / PD · KV 传输 · 决策边界", subtitleEn: "Colocated / chunked prefill / PD · KV transfer · decision boundaries", minutes: 25, sources: ["vllm", "vllm-pd", "dynamo", "mooncake", "sglang", "gpudirect"] },
   { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell", "tensor-parallel", "speculative", "prefix"] },
   { id: "network", file: "06-rdma-roce-nvlink.html", zh: "900 GB/s NVLink 和 400 Gb/s 网卡，先统一口径", en: "Normalize units before comparing 900 GB/s NVLink with a 400 Gb/s NIC", subtitleZh: "GPUDirect RDMA · RoCEv2 流控 · 多轨拓扑 · NCCL 带宽", subtitleEn: "GPUDirect RDMA · RoCEv2 congestion · rail topology · NCCL bandwidth", minutes: 25, sources: ["gpudirect", "nccl", "blackwell", "h100", "ib", "ecn"] }
@@ -184,19 +184,40 @@ function sizingContent() {
     select("sizing", "gpu", "GPU 预设（名义 GB）", "GPU preset (nominal GB)", gpus, "h200") +
     select("sizing", "weightBytes", "权重存储精度", "Weight storage precision", [["2", "BF16 / FP16: 2 B"], ["1", "FP8: 1 B"], ["0.5", "INT4: 0.5 B"]], "1") +
     select("sizing", "kvBytes", "KV 存储精度（单独选择）", "KV precision (independent)", [["2", "BF16 / FP16: 2 B"], ["1", "FP8: 1 B (kernel-dependent)"]], "2") +
-    field("sizing", "batch", "同时驻留 / decode 请求数 B", "Resident / decode requests B", 32, 1, 512, 1, "range") +
+    field("sizing", "batch", "峰值 KV 驻留请求上限 B（含 Prefill/Decode）", "Peak KV-resident request cap B (prefill + decode)", 32, 1, 512, 1, "range") +
     field("sizing", "context", "每请求驻留上下文 Token S", "Resident context tokens/request S", 8192, 256, 131072, 256, "range") +
-    field("sizing", "prefillBatch", "同时做完整 Prefill 的请求数", "Simultaneous full-prefill requests", 1, 1, 512) +
+    field("sizing", "prefillTokens", "冷 Prefill 输入 Token S_p（不含未来输出）", "Cold prefill input tokens S_p (no future output)", 8192, 256, 131072, 256, "range") +
+    field("sizing", "prefillBatch", "同时完整 Prefill 请求数（≤驻留 B）", "Simultaneous full-prefill requests (≤resident B)", 1, 1, 512) +
     field("sizing", "safe", "规划显存安全水位", "Planning safe memory fraction", 0.85, 0.5, 0.95, 0.01) +
     field("sizing", "runtime", "每卡运行时预留 GB（假设）", "Runtime reserve GB/GPU (assumption)", 3, 0, 1000, 0.5) +
     field("sizing", "overhead", "量化 scales / padding 开销比例", "Quantization scales / padding fraction", 0.05, 0, 1, 0.01) +
     field("sizing", "replication", "聚合 KV 复制倍率（手工）", "Aggregate KV replication (manual)", 1, 1, 64, 0.1) +
-    field("sizing", "mbu", "HBM 有效带宽比例 MBU（假设）", "HBM bandwidth fraction MBU (assumption)", 0.6, 0.01, 1, 0.01) +
+    field("sizing", "mbu", "HBM/GDDR 有效带宽比例 MBU（假设）", "HBM/GDDR bandwidth fraction MBU (assumption)", 0.6, 0.01, 1, 0.01) +
     field("sizing", "mfu", "Prefill dense BF16 MFU（假设）", "Prefill dense BF16 MFU (assumption)", 0.4, 0.01, 1, 0.01) +
     field("sizing", "tpot", "目标 TPOT ms", "Target TPOT ms", 20, 0.1, 1000, 0.1) +
     field("sizing", "ttft", "目标 TTFT ms", "Target TTFT ms", 800, 1, 60000) +
     field("sizing", "reserve", "TTFT 非算力预留 ms", "Non-compute TTFT reserve ms", 100, 0, 60000) +
     check("sizing", "mtp", "DeepSeek 额外加载 14B MTP 模块", "Load DeepSeek's extra 14B MTP module");
+  const ranks = select("rank", "model", "每 rank 模型预设", "Per-rank model preset", models, "llama70") +
+    select("rank", "gpu", "每 rank GPU", "GPU per rank", gpus, "h200") +
+    select("rank", "tp", "Tensor Parallel degree", "Tensor parallel degree", [1, 2, 4, 8, 16, 32, 64].map((n) => [String(n), String(n)]), "16") +
+    select("rank", "pp", "Pipeline stages", "Pipeline stages", [1, 2, 4, 8, 16, 32].map((n) => [String(n), String(n)]), "1") +
+    select("rank", "dp", "整模型副本 DP（不是 Attention DP）", "Full-model replica DP (not attention DP)", [1, 2, 4, 8, 16].map((n) => [String(n), String(n)]), "1") +
+    field("rank", "batch", "全组同时驻留请求 B", "Resident requests across all replicas B", 32, 1, 512, 1, "range") +
+    field("rank", "context", "每请求峰值驻留 Token S", "Peak resident tokens/request S", 8192, 256, 131072, 256, "range") +
+    select("rank", "weightBytes", "权重存储字节", "Weight storage bytes", [["2", "BF16/FP16 2 B"], ["1", "FP8 1 B"], ["0.5", "INT4 0.5 B"]], "1") +
+    select("rank", "kvBytes", "KV 参考精度（MLA 实测字节优先）", "KV reference precision (measured MLA bytes override)", [["2", "BF16/FP16 2 B"], ["1", "FP8 1 B"]], "2") +
+    field("rank", "overhead", "权重 metadata 预留比例", "Weight metadata allowance", 0.05, 0, 1, 0.01) +
+    field("rank", "weightSkew", "stage/rank 权重不均衡预算倍率", "Stage/rank weight-skew budget multiplier", 1, 1, 3, 0.05) +
+    field("rank", "runtime", "每 rank runtime/CUDA/通信预留 GB", "Runtime/CUDA/communication reserve GB/rank", 3, 0, 1000, 0.5) +
+    field("rank", "safe", "安全水位", "Safe memory fraction", 0.85, 0.5, 0.95, 0.01) +
+    select("rank", "mlaCache", "MLA 每 rank 缓存布局", "MLA per-rank cache layout", [["replicated", "Replicated packed latent (reference)"], ["measured", "Measured opaque per-layer row bytes"]], "replicated") +
+    field("rank", "mlaLayerBytes", "实测 MLA 每 layer/Token/rank 字节", "Measured MLA bytes/layer/token/rank", 1152, 1, 1000000) +
+    check("rank", "measuredMemory", "使用设备实测总可见显存（不是剩余 free）", "Use measured total visible device memory (not remaining free)") +
+    field("rank", "deviceGB", "实测设备总可见 GB（十进制）", "Measured total visible device GB (decimal)", 141, 1, 2000, 0.01) +
+    check("rank", "customReplicaBatch", "使用最忙副本的实测活动请求数", "Use measured busiest-replica active batch") +
+    field("rank", "replicaBatch", "最忙副本活动请求（≤全组 B）", "Busiest replica batch (≤global B)", 32, 1, 512) +
+    check("rank", "mtp", "checkpoint 实际加载额外 MTP 14B", "Checkpoint actually loads extra 14B MTP");
   return section("concepts", "37B 激活参数能省计算，不能把 671B 权重变没", "37B active parameters save compute, not 671B weight storage",
     `<div class="grid three"><article class="card"><h3>${b("水位线 1：放得下", "Bound 1: fit")}</h3>${p("总权重 + KV Cache + 激活、CUDA Graph、通信缓冲与碎片。先做聚合下界，再核对最忙 rank。", "Total weights + KV + activations, CUDA graphs, communication buffers and fragmentation. Start with an aggregate floor, then check the busiest rank.")}</article><article class="card"><h3>${b("水位线 2：吐得快", "Bound 2: decode")}</h3>${p("低 batch Decode 常受内存带宽限制，但 batch 放大后也会转为算力或通信瓶颈。MoE 批内专家并集会增加实际权重流量。", "Low-batch decode is often bandwidth-bound; larger batches can become compute/communication-bound. MoE's batch expert union increases weight traffic.")}</article><article class="card"><h3>${b("水位线 3：首字快", "Bound 3: prefill")}</h3>${p("Prefill 要在扣除排队、网关与交接后的 TTFT 预算内完成。长上下文注意力有近似二次项。", "Prefill must finish within TTFT after queue, gateway and handoff reserves. Long-context attention contributes an approximate quadratic term.")}</article></div>` +
     formula("M_w [GB] = (total_params_B + optional_MTP_B) × weight_bytes × (1+metadata_fraction)<br>M_KV [B] = 2×layers×KV_heads×head_dim×S×B×KV_bytes   [MHA / GQA]<br>M_MLA [B] = layers×(latent_rank+RoPE_dim)×S×B×KV_bytes [compressed cache]<br>N_mem ≥ ceil((M_w + M_KV_GB) / (GPU_GB×safe_fraction − runtime_GB_per_GPU))") +
@@ -208,14 +229,25 @@ function sizingContent() {
         "The workbench gives an ideal aggregate-sharding floor. A power-of-two candidate is for testing, not automatically a valid TP configuration. KV may replicate when TP exceeds KV heads; MLA, attention DP, PP and EP sharding vary by engine. Per-rank peak memory is decisive.") +
       note("规格纠偏：L40S 是 GDDR6，不是 HBM，而且没有 NVLink；B200 192 GB 为设计/假设预设，DGX B200 官方交付表为 1,440 GB/8=180 GB 每卡。模型和精度预设不等于已验证 kernel 支持。",
         "Spec correction: L40S uses GDDR6, not HBM, and has no NVLink. B200 192 GB is a design/what-if preset; official DGX B200 lists 1,440 GB/8=180 GB per GPU. Model/precision presets do not prove kernel support.")) +
+    section("rank", "TP=16 时，8 个 KV heads 不会变成每卡半个 head", "At TP=16, eight KV heads do not become half a head per GPU",
+      lab("rank", ranks) +
+      formula("GQA KV_heads_per_rank = max(1, n_KV/TP), with valid divisibility<br>KV_rank = 2×layers_on_stage×KV_heads_per_rank×d_head×S×B_replica×KV_bytes<br>MLA_rank = layers_on_stage×packed_bytes_per_layer_token_rank×S×B_replica<br>GPU_count = TP×PP×replica_DP; peak_rank = W_rank + KV_rank + runtime_rank") +
+      p("vLLM LlamaAttention 在 TP 小于 KV heads 时切分 KV；TP 大于 KV heads 时复制 KV heads，并要求可整除。默认 70B、8 KV heads：TP=8 与 TP=16 都是每 rank 1 个 KV head，但 TP=16 的总 KV 预留翻倍。上方聚合下界与本沙盘输入独立，比较前先对齐模型、S、B 与精度。",
+        "vLLM LlamaAttention partitions KV heads when TP is smaller and replicates them when TP exceeds KV-head count, with divisibility constraints. For default 70B/8 KV heads, TP=8 and TP=16 both have one KV head/rank, but TP=16 doubles aggregate KV reservation. This workbench and the earlier aggregate floor use independent inputs; align model, S, B and dtype before comparing.") +
+      note("这是整模型 TP×PP×副本 DP 的内存近似，不替代 Attention DP+EP。权重按层数均衡分配再乘不均衡预算；embedding/head、MTP、热门专家冗余和实际 partition 仍要测量。PP 分层能省驻留，却不会把单请求的串行 Decode 自动加速。",
+        "This approximates full-model TP×PP×replica-DP memory, not attention DP+EP. Weights follow balanced layer counts plus a skew budget; measure embeddings/heads, MTP, redundant experts and actual partitions. PP saves residency but does not automatically accelerate serial single-request decode.") +
+      note("MLA 的压缩 latent 不等于天然按 TP 均分。参考复制布局保留完整 latent/RoPE；若 kernel 使用 opaque packed layout，请录入实测每 layer/Token/rank 字节，不能只按 head_size×dtype 猜。副本热点可覆盖均衡请求假设；所有“fits”只是当前预算下内存满足，不是 SLA 或运行成功承诺。",
+        "Compressed MLA latent is not automatically evenly TP-sharded. The reference replicated layout retains full latent/RoPE; enter measured bytes/layer/token/rank for opaque layouts instead of inferring head_size×dtype. Busiest-replica measurements can override balanced routing. A 'fits' result only means this memory budget passes, not an SLO or successful-runtime guarantee.")) +
     section("roofline", "单 Token 带宽下界不能预测大 batch MoE 的速度", "A single-token bandwidth bound cannot predict large-batch MoE speed",
-      formula("TPOT_weight_floor_ms ≈ active_weight_GB / (N_GPU×BW_GBps×MBU) × 1000<br>Uniform expert union = E×[1−(1−k/E)^B]<br>shared_params = (active_params−total_params×k/E)/(1−k/E)<br>batch_active_params = shared_params + routed_params×[1−(1−k/E)^B]<br>Prefill_FLOPs ≈ 2×active_params×S×B_prefill + 2×layers×hidden×S²×B_prefill<br>TTFT_compute_floor = Prefill_FLOPs / (N_GPU×dense_BF16_FLOPs×MFU)") +
+      formula("TPOT_weight_floor_ms ≈ active_weight_GB / (N_GPU×BW_GBps×MBU) × 1000<br>Uniform expert union = E×[1−(1−k/E)^B]<br>shared_params = (active_params−total_params×k/E)/(1−k/E)<br>batch_active_params = shared_params + routed_params×[1−(1−k/E)^B]<br>Prefill_FLOPs ≈ 2×active_params×S_p×B_prefill + 2×layers×hidden×S_p²×B_prefill<br>TTFT_compute_floor = Prefill_FLOPs / (N_GPU×dense_BF16_FLOPs×MFU)") +
       p("37B 激活只描述每 Token。32 个不同请求可能触发大量不同专家，不能仍假设整个 batch 只读 37B。沙盘给出「单 Token 乐观下界」和「均匀路由批内并集场景」两条读权重估算，并额外显示读全 KV 的时间；均匀路由只是解释模型，不是现实路由预测。",
         "37B active describes one token. A batch of 32 distinct requests can activate many experts; the batch need not read only 37B. The workbench shows a single-token optimistic bound and a uniform-routing batch-union scenario, plus a full-KV read estimate. Uniform routing explains the effect; it does not predict real routing.") +
       p("Prefill 使用 dense BF16 标称 FLOPs×假设 MFU，而不是把权重量化自动当成算力翻倍。MoE 通信、内核效率、量化转换、attention 具体实现与首 Token decode 均可能让实际 TTFT 更高。",
         "Prefill uses nominal dense BF16 FLOPs×assumed MFU, not an automatic compute doubling from quantized storage. MoE communication, kernels, dequantization, attention implementation and first-token decode can all increase real TTFT.") +
-      p("沙盘保守地把完整驻留上下文 S 也作为一次完整 Prefill 的输入长度。B_prefill 是同时做完整 Prefill 的请求数，与驻留/decode 请求数 B 分开。实际 Prompt 比 S 短时，应把 Prefill 输入长度与 KV 峰值上下文分别测量，而不是把本例当预测。",
-        "The workbench conservatively uses full resident context S as the input length of a full prefill. B_prefill counts simultaneous full-prefill requests separately from resident/decode B. When actual prompts are shorter, measure prefill length and peak KV context separately; this example is not a prediction.")) +
+      p("冷 Prefill 输入 S_p 与峰值驻留 S 现在分别输入。例如 8192 Prompt + 最多512 输出，应为 S_p=8192、峰值 S≈8704；增加未来输出预算会增 KV，而不应凭空增加此次冷 Prefill FLOPs。B_prefill 是同时做完整 Prefill 的请求数，与驻留/decode B 分开；前缀缓存后的增量 Prefill 还需要考虑历史键长度，本公式不预测该混合情形。",
+        "Cold input S_p and peak resident S are entered separately. An 8192-token prompt plus up to 512 output tokens gives S_p=8192 and peak S≈8704. Future output increases KV but must not invent extra cold-prefill FLOPs. B_prefill is separate from resident/decode B; incremental cached prefill also depends on past key length and is outside this cold-prefill formula.") +
+      p("B 在本沙盘表示同一实例所有会占 KV 的峰值请求预算，而不只是已有 Decode 请求；B_prefill≤B。若 32 个 decode 外又来一个 prefill，应预算至少33个驻留请求。PD 的两个独立池应分别测算，不把不同池的 B 混到一张卡上。",
+        "Here B budgets all peak KV-resident requests in one instance, not only existing decode requests, and B_prefill≤B. Thirty-two decodes plus another prefill need at least 33 resident slots. Size independent PD pools separately instead of mixing their B values on one GPU.")) +
     section("worked", "70B FP8 权重约 70.6 GB；32×8K BF16 KV 另需 85.90 GB", "70B FP8 weights are about 70.6 GB; 32×8K BF16 KV adds 85.90 GB",
       formula("Llama 70B GQA: 2×80×8×128×2 = 327,680 B/token<br>KV at S=8,192, B=32: 327,680×8,192×32 = 85,899,345,920 B = 85.90 GB = 80 GiB<br>Weights with 5% allowance: 70.6×1.05 = 74.13 GB<br>H200 safe payload/GPU: 141×0.85−3 = 116.85 GB<br>Memory floor: ceil((74.13+85.90)/116.85) = 2 GPUs") +
       p("上例只证明理想聚合内存至少 2 卡，不证明 2 卡必达 SLA。BF16 权重将权重项翻倍；FP8 KV 将 KV 项减半；长输出、KV 复制、专家冗余和额外 MTP 要独立计入。GB=10⁹ B，GiB=2³⁰ B；这里故意展示两者。",

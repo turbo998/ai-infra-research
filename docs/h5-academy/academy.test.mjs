@@ -9,7 +9,7 @@ import M from "./academy-math.cjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const near = (actual, expected, epsilon = 1e-7) => assert.ok(Math.abs(actual - expected) < epsilon, `${actual} != ${expected}`);
-const sizing = { model: "llama70", gpu: "h200", weightBytes: 1, kvBytes: 2, batch: 32, context: 8192, prefillBatch: 1, safe: 0.85, runtime: 3, overhead: 0.05, replication: 1, mbu: 0.6, mfu: 0.4, tpot: 20, ttft: 800, reserve: 100, mtp: false };
+const sizing = { model: "llama70", gpu: "h200", weightBytes: 1, kvBytes: 2, batch: 32, context: 8192, prefillTokens: 8192, prefillBatch: 1, safe: 0.85, runtime: 3, overhead: 0.05, replication: 1, mbu: 0.6, mfu: 0.4, tpot: 20, ttft: 800, reserve: 100, mtp: false };
 const capacity = { qps: 10, headroom: 1.3, prompt: 2048, output: 512, ttft: 800, tpot: 20, inputCapacity: 20000, outputCapacity: 1500, batch: 128, utilization: 0.7 };
 const transfer = { model: "llama70", context: 8192, kvBytes: 1, cache: 0, rate: 400, efficiency: 0.8, rails: 1, setup: 0.2, overlap: 10, qps: 10 };
 
@@ -76,6 +76,57 @@ test("GPU sizing distinguishes nominal GB from GiB, includes runtime per GPU and
   assert.equal(r.computeCards, 5);
   assert.equal(r.candidate, 8);
   assert.ok(r.unionTPOT + r.kvReadTPOT <= sizing.tpot);
+});
+test("future output grows resident KV without inventing extra cold-prefill FLOPs", () => {
+  const r = M.sizing(sizing);
+  const longerResident = M.sizing({ ...sizing, context: 8704 });
+  assert.ok(longerResident.kv > r.kv);
+  assert.equal(longerResident.prefillFLOPs, r.prefillFLOPs);
+  const shorterPrompt = M.sizing({ ...sizing, prefillTokens: 4096 });
+  assert.equal(shorterPrompt.kv, r.kv);
+  assert.ok(shorterPrompt.prefillFLOPs < r.prefillFLOPs);
+  assert.throws(() => M.sizing({ ...sizing, prefillTokens: 8193 }), RangeError);
+  assert.throws(() => M.sizing({ ...sizing, prefillBatch: 33 }), RangeError);
+});
+const rank = { model: "llama70", gpu: "h200", tp: 16, pp: 1, dp: 1, batch: 32, context: 8192, weightBytes: 1, kvBytes: 2, safe: 0.85, runtime: 3, overhead: 0.05, weightSkew: 1, mlaCache: "replicated", mlaLayerBytes: 1152, measuredMemory: false, customReplicaBatch: false, mtp: false };
+test("GQA KV heads stop shrinking beyond their count and total TP cache replication is exposed", () => {
+  const tp8 = M.rankMemory({ ...rank, tp: 8 });
+  const tp16 = M.rankMemory(rank);
+  assert.equal(tp8.kvHeadsPerRank, 1);
+  assert.equal(tp16.kvHeadsPerRank, 1);
+  near(tp16.stages[0].kvGB, tp8.stages[0].kvGB);
+  near(tp16.kvReserveGB, tp8.kvReserveGB * 2);
+  near(tp16.effectiveKVFactor, 2);
+  assert.equal(tp16.cards, 16);
+});
+test("MLA reference replication and opaque measured bytes are not blindly divided by TP", () => {
+  const replicated = M.rankMemory({ ...rank, model: "deepseek", tp: 8 });
+  near(replicated.effectiveKVFactor, 8);
+  const measured = M.rankMemory({ ...rank, model: "deepseek", tp: 8, mlaCache: "measured", mlaLayerBytes: 656, kvBytes: 1 });
+  assert.equal(measured.bytesPerLayer, 656);
+  near(measured.effectiveKVFactor, 8 * 656 / 576);
+  assert.throws(() => M.rankMemory({ ...rank, model: "deepseek", mlaCache: "unknown" }), RangeError);
+});
+test("uneven PP accounts for stage layers and ordinary DP preserves replicated full weights", () => {
+  const r = M.rankMemory({ ...rank, model: "deepseek", tp: 8, pp: 2, dp: 2, batch: 33 });
+  assert.deepEqual(r.stages.map((s) => s.layers), [31, 30]);
+  assert.equal(r.cards, 32);
+  assert.equal(r.replicaBatch, 17);
+  assert.equal(r.reservedRequestSlots, 34);
+  near(r.weightReserveGB, 671 * 1.05 * 2);
+  assert.ok(r.stages[0].usedGB > r.stages[1].usedGB);
+});
+test("actual device capacity and busiest replica override conditional memory fit, not runtime support", () => {
+  const design = M.rankMemory({ ...rank, gpu: "b200", tp: 1 });
+  const delivered = M.rankMemory({ ...rank, gpu: "b200dgx", tp: 1 });
+  assert.equal(design.fits, true);
+  assert.equal(delivered.fits, false);
+  assert.equal(M.rankMemory({ ...rank, tp: 1, measuredMemory: true, deviceGB: 180 }).fits, false);
+  const busy = M.rankMemory({ ...rank, dp: 8, customReplicaBatch: true, replicaBatch: 32 });
+  assert.equal(busy.replicaBatch, 32);
+  assert.equal(busy.reservedRequestSlots, 256);
+  assert.throws(() => M.rankMemory({ ...rank, customReplicaBatch: true, replicaBatch: 33 }), RangeError);
+  assert.throws(() => M.rankMemory({ ...rank, model: "llama8", tp: 64 }), RangeError);
 });
 test("MoE total weights stay resident while the batch expert union grows", () => {
   near(M.moeUnion(M.models.deepseek, 1), 37);

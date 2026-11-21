@@ -172,6 +172,12 @@ Prefill FLOPs ≈ 2×active_params×S×B_prefill
 
 The default example uses H200 4.8 TB/s, MBU 0.6 and TPOT 20 ms: weight+KV-read scenario floor **3 GPUs**. For one full 8K prefill, dense BF16 989.5 TFLOPS, MFU 0.4 and TTFT 800 ms minus 100 ms reserve give a compute floor of **5 GPUs**. Take the maximum and suggest the next power-of-two test candidate, **8 GPUs**. This is still not procurement assurance or a validated TP layout.
 
+Separate cold input `S_p` from peak resident KV `S`: 8192 input plus up to 512 output gives `S_p=8192`, `S≈8704`. Future output increases KV, not the FLOPs of that cold prefill. `B` includes all KV-resident requests in the instance and `B_prefill≤B`; 32 decodes plus a new prefill cannot still budget only 32 KV slots.
+
+Per-rank reality: vLLM LlamaAttention uses `KV_heads/rank=max(1,n_KV/TP)` with valid divisibility. For 70B's eight KV heads, TP=8/16 both retain one KV head/rank: **TP=16 doubles total KV versus TP=8**, rather than continuing to divide by 16. A reference MLA layout can retain complete latent/RoPE; opaque formats need confirmed row bytes instead of head_size×dtype guesses.
+
+The per-rank workbench verifies ordinary `TP×PP×replica-DP`, stage layers, weight-skew allowance, busiest-replica batch and visible device capacity. Ordinary DP copies the whole model; it is not attention DP+EP. Measured fields require confirmed user input and retain illustrative defaults. Do not enter post-weight-load free memory as total capacity and subtract weights twice. PP saves memory but does not grant a serial request `N×HBM` decode speed.
+
 MoE's batch expert union accesses more total weights. H5's uniform independent routing is explanatory, not a real-route predictor; a whole batch does not necessarily read only the single-token 37B.
 
 Spec corrections: L40S 48 GB uses **GDDR6**, 864 GB/s and **no NVLink**. H100/H200 presets select SXM specifications. B200 **192 GB design/what-if** is distinct from official DGX B200 **180 GB/GPU**. An 80–85% margin is architecture planning, not vLLM's current default.

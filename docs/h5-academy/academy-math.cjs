@@ -107,8 +107,9 @@
     number(p.weightBytes, "weightBytes", 0.5, 2);
     number(p.kvBytes, "kvBytes", 1, 2);
     integer(p.context, "context", 1, 1048576);
+    integer(p.prefillTokens, "cold prefill input tokens", 1, p.context);
     integer(p.batch, "batch", 1, 4096);
-    integer(p.prefillBatch, "prefillBatch", 1, 4096);
+    integer(p.prefillBatch, "prefillBatch", 1, p.batch);
     number(p.safe, "safe", 0.5, 0.95);
     number(p.runtime, "runtime");
     number(p.overhead, "overhead", 0, 1);
@@ -128,11 +129,53 @@
     const optimisticTraffic = model.active * p.weightBytes;
     const unionTraffic = moeUnion(model, p.batch) * p.weightBytes;
     const bandwidthCards = Math.ceil((unionTraffic + kv) / (gpu.bandwidth * p.mbu * p.tpot / 1000));
-    const prefillFLOPs = 2 * model.active * 1e9 * p.context * p.prefillBatch + 2 * model.layers * model.hidden * p.context ** 2 * p.prefillBatch;
+    const prefillFLOPs = 2 * model.active * 1e9 * p.prefillTokens * p.prefillBatch + 2 * model.layers * model.hidden * p.prefillTokens ** 2 * p.prefillBatch;
     const computeCards = Math.ceil(prefillFLOPs / (gpu.bf16 * 1e12 * p.mfu * (p.ttft - p.reserve) / 1000));
     const floor = Math.max(1, memoryCards, bandwidthCards, computeCards);
     const candidate = 2 ** Math.ceil(Math.log2(floor));
-    return { model, gpu, weight, kv, memoryCards, bandwidthCards, computeCards, floor, candidate, runtime: p.runtime * candidate, optimisticTPOT: optimisticTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, unionTPOT: unionTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, kvReadTPOT: kv / (candidate * gpu.bandwidth * p.mbu) * 1000, prefillMs: prefillFLOPs / (candidate * gpu.bf16 * 1e12 * p.mfu) * 1000, unionTraffic, contextSupported: p.context <= model.contextLimit };
+    return { model, gpu, weight, kv, memoryCards, bandwidthCards, computeCards, floor, candidate, runtime: p.runtime * candidate, optimisticTPOT: optimisticTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, unionTPOT: unionTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, kvReadTPOT: kv / (candidate * gpu.bandwidth * p.mbu) * 1000, prefillMs: prefillFLOPs / (candidate * gpu.bf16 * 1e12 * p.mfu) * 1000, prefillFLOPs, unionTraffic, contextSupported: p.context <= model.contextLimit };
+  }
+  function rankMemory(p) {
+    const model = preset(models, p.model);
+    const gpu = preset(gpus, p.gpu);
+    integer(p.tp, "TP", 1, model.heads);
+    integer(p.pp, "PP", 1, model.layers);
+    integer(p.dp, "replica DP", 1, 128);
+    integer(p.batch, "global resident batch", 1, 4096);
+    integer(p.context, "resident context", 1, 1048576);
+    number(p.weightBytes, "weightBytes", 0.5, 2);
+    number(p.kvBytes, "kvBytes", 1, 2);
+    number(p.safe, "safe", 0.5, 0.95);
+    number(p.runtime, "runtime");
+    number(p.overhead, "weight metadata", 0, 1);
+    number(p.weightSkew, "weight imbalance budget", 1, 10);
+    if (model.heads % p.tp !== 0) throw new RangeError("TP must divide the query-head count");
+    if (!model.latent && ((model.kvHeads >= p.tp && model.kvHeads % p.tp !== 0) || (p.tp > model.kvHeads && p.tp % model.kvHeads !== 0))) {
+      throw new RangeError("GQA TP and KV-head counts must divide one another");
+    }
+    const deviceGB = p.measuredMemory ? number(p.deviceGB, "measured total device GB", 1) : gpu.memory;
+    const replicaBatch = p.customReplicaBatch ? integer(p.replicaBatch, "busiest replica batch", 1, p.batch) : Math.ceil(p.batch / p.dp);
+    const weight = (model.total + (p.mtp ? (model.mtp || 0) : 0)) * p.weightBytes * (1 + p.overhead);
+    const kvHeadsPerRank = model.latent ? 1 : Math.max(1, model.kvHeads / p.tp);
+    let bytesPerLayer;
+    if (model.latent) {
+      if (!["replicated", "measured"].includes(p.mlaCache)) throw new RangeError("Choose a known MLA cache layout");
+      bytesPerLayer = p.mlaCache === "measured" ? integer(p.mlaLayerBytes, "measured MLA bytes/layer/token/rank", 1) : (model.latent + model.rope) * p.kvBytes;
+    } else bytesPerLayer = 2 * kvHeadsPerRank * model.headDim * p.kvBytes;
+    const baseLayers = Math.floor(model.layers / p.pp);
+    const extraLayers = model.layers % p.pp;
+    const stages = Array.from({ length: p.pp }, (_, stage) => {
+      const layers = baseLayers + (stage < extraLayers ? 1 : 0);
+      const weightGB = weight * layers / model.layers / p.tp * p.weightSkew;
+      const kvGB = bytesPerLayer * layers * p.context * replicaBatch / 1e9;
+      const usedGB = weightGB + kvGB + p.runtime;
+      return { stage, layers, weightGB, kvGB, runtimeGB: p.runtime, usedGB, marginGB: deviceGB * p.safe - usedGB };
+    });
+    const worst = stages.reduce((a, stage) => stage.usedGB > a.usedGB ? stage : a, stages[0]);
+    const cards = p.tp * p.pp * p.dp;
+    const kvReserveGB = stages.reduce((sum, stage) => sum + stage.kvGB, 0) * p.tp * p.dp;
+    const idealKVGB = kvPerToken(model, p.kvBytes) * p.context * p.batch / 1e9;
+    return { model, gpu, deviceGB, cards, replicaBatch, reservedRequestSlots: replicaBatch * p.dp, kvHeadsPerRank, bytesPerLayer, stages, worst, kvReserveGB, idealKVGB, effectiveKVFactor: kvReserveGB / idealKVGB, weightReserveGB: weight * p.dp * p.weightSkew, fits: worst.marginGB >= 0, contextSupported: p.context <= model.contextLimit };
   }
   function transfer(p) {
     const model = preset(models, p.model);
@@ -242,7 +285,7 @@
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);

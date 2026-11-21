@@ -148,6 +148,34 @@
       ], t("不是 TTFT/TPOT 达标承诺", "Not a TTFT/TPOT compliance promise")) +
       (!r.contextSupported ? note(t("上下文超过预设支持范围；显存计算不会赋予模型长上下文能力。", "Context exceeds the preset range; memory calculations do not confer long-context capability.")) : "");
   }
+  function rankMemory(p) {
+    const r = M.rankMemory(p);
+    const shown = r.stages.slice(0, 8);
+    const max = Math.max(r.deviceGB, ...r.stages.map((stage) => stage.usedGB)) * 1.1;
+    const y = (value) => 245 - value / max * 190;
+    const step = 650 / shown.length;
+    const width = Math.min(100, step - 20);
+    let body = `<text x="20" y="25">${t("每 stage 代表 rank 的预算 GB", "Representative rank budget per stage, GB")}</text>`;
+    shown.forEach((stage, i) => {
+      const x = 75 + i * step + (step - width) / 2;
+      let used = 0;
+      [[stage.weightGB, "secondary"], [stage.kvGB, "primary"], [stage.runtimeGB, "tertiary"]].forEach(([value, cls]) => {
+        body += `<rect x="${x}" y="${y(used + value)}" width="${width}" height="${value / max * 190}" class="${cls}"><title>${fmt(value)} GB</title></rect>`;
+        used += value;
+      });
+      body += `<rect x="${x - 3}" y="${y(r.deviceGB)}" width="${width + 6}" height="${r.deviceGB / max * 190}" class="line axis"/><path d="M ${x - 6} ${y(r.deviceGB * p.safe)} H ${x + width + 6}" class="grid-line"/><text x="${x + width / 2}" y="274" text-anchor="middle">stage ${stage.stage}</text><text x="${x + width / 2}" y="${Math.max(43, y(used) - 8)}" text-anchor="middle">${fmt(used, 1)}</text>`;
+    });
+    body += `<text x="20" y="310">${t("外框=总可见容量；虚线=安全水位；复制副本不等于原始参数变小", "Outline=visible total capacity; dashed=safe margin; replicas do not shrink total parameters")}</text>`;
+    return kpis([[`${p.tp}×${p.pp}×${p.dp}=${r.cards}`, "TP × PP × replica DP"], [fmt(r.worst.usedGB) + " GB", t("最忙 rank 预算", "Worst-rank budget")], [fmt(r.worst.marginGB) + " GB", t("距安全水位余量，可为负", "Safe-margin headroom, possibly negative")], [r.fits ? t("满足当前内存预算", "Passes this memory budget") : t("超过当前内存水位", "Exceeds this memory budget"), t("非运行/SLA 承诺", "Not a runtime/SLO promise")], [fmt(r.kvReserveGB) + " GB", t("全组 KV 预留", "Group KV reservation")], [fmt(r.effectiveKVFactor) + "×", t("复制/布局/副本取整综合倍率", "Replication/layout/replica-rounding factor")]]) +
+      legend([t("每 rank KV", "KV per rank"), t("每 rank 权重预算", "Weight budget per rank"), t("每 rank runtime", "Runtime per rank")]) +
+      svg(body, t(`每 stage 只画一个代表 rank，非全组总占用；显示 ${shown.length}/${r.stages.length} stages，最坏值取全部 stages。`, `One representative rank per stage, not total group usage; ${shown.length}/${r.stages.length} stages shown, worst case uses all stages.`), 345) +
+      dataTable(["Stage", t("层数", "Layers"), "W GB/rank", "KV GB/rank", "Runtime GB/rank", "Total GB/rank", t("余量 GB", "Margin GB")], r.stages.map((stage) => [stage.stage, stage.layers, fmt(stage.weightGB), fmt(stage.kvGB), fmt(stage.runtimeGB), fmt(stage.usedGB), fmt(stage.marginGB)]), `${r.model.name} · ${r.gpu.name} · ${t("仅内存近似", "memory approximation only")}`) +
+      note(t(`每副本活动请求按 ${r.replicaBatch} 预算；全组保留 ${r.reservedRequestSlots} 请求槽，不等于观测到的 ${p.batch} 个在途请求。每 rank 每层 KV ${fmt(r.bytesPerLayer, 0)} B/Token。${r.model.latent ? "MLA 是 packed latent/RoPE，不用普通双 K/V heads 公式。" : `普通 GQA 每 rank ${r.kvHeadsPerRank} KV head。`}`, `Each replica is budgeted for ${r.replicaBatch} active requests, reserving ${r.reservedRequestSlots} group slots, not an observation of ${p.batch} in-flight requests. KV is ${fmt(r.bytesPerLayer, 0)} B/token/layer/rank. ${r.model.latent ? "MLA uses packed latent/RoPE, not the ordinary two-K/V-head formula." : `Ordinary GQA has ${r.kvHeadsPerRank} KV heads/rank.`}`)) +
+      (p.measuredMemory || (r.model.latent && p.mlaCache === "measured") ? note(t("“实测”字段是用户录入模式：默认值仍是教学示例，本页面不会检测 GPU 或自动取得真实测量。MLA 自定义 row bytes 对内存计算优先于参考 dtype。", "Measured fields are user-entry modes: defaults remain teaching examples; this page neither detects GPUs nor obtains measurements. Custom MLA row bytes override reference dtype for memory.")) : "") +
+      (p.pp > 1 ? note(t("PP stage 的冷 Prefill/Decode 仍有串行路径与流水 bubble；此内存结果不能套用理想 N×HBM 带宽来承诺单请求 TPOT。", "PP stages retain serial prefill/decode paths and pipeline bubbles; this memory result cannot turn ideal N×HBM bandwidth into a single-request TPOT promise.")) : "") +
+      (r.gpu.nvlink === 0 && p.tp > 1 ? note(t("选定 GPU 无 NVLink；跨卡 TP 的 PCIe/RDMA 通信成本必须独立验证。", "The selected GPU has no NVLink; independently validate PCIe/RDMA costs for multi-GPU TP.")) : "") +
+      (!r.contextSupported ? note(t("上下文超过原始模型范围，内存通过也不代表模型支持。", "Context exceeds the stock model range; memory fit does not prove model support.")) : "");
+  }
   function pd(p) {
     const r = M.transfer(p);
     const lengths = [1024, 4096, 8192, 16384, 32768, 65536, 131072];
@@ -317,13 +345,13 @@
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, goodput, capacity, ptu, cost, sizing, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, goodput, capacity, ptu, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (["model", "gpu", "mode", "kind", "operation"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (["model", "gpu", "mode", "kind", "operation", "mlaCache"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);
@@ -346,6 +374,18 @@
       const input = form.querySelector('[data-key="attentionDP"]');
       input.disabled = form.querySelector('[data-key="kind"]').value !== "dp";
       if (input.disabled) input.checked = false;
+    }
+    if (form.dataset.lab === "rank") {
+      const key = form.querySelector('[data-key="model"]').value;
+      const mla = Object.hasOwn(M.models, key) && M.models[key].latent !== undefined;
+      const layout = form.querySelector('[data-key="mlaCache"]');
+      layout.disabled = !mla;
+      form.querySelector('[data-key="mlaLayerBytes"]').disabled = !mla || layout.value !== "measured";
+      const mtp = form.querySelector('[data-key="mtp"]');
+      mtp.disabled = !mla;
+      if (mtp.disabled) mtp.checked = false;
+      form.querySelector('[data-key="deviceGB"]').disabled = !form.querySelector('[data-key="measuredMemory"]').checked;
+      form.querySelector('[data-key="replicaBatch"]').disabled = !form.querySelector('[data-key="customReplicaBatch"]').checked;
     }
   }
   function render(form) {

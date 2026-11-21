@@ -172,6 +172,12 @@ Prefill FLOPs ≈ 2×active_params×S×B_prefill
 
 同一默认算例使用 H200 4.8 TB/s、MBU 0.6、目标 TPOT 20 ms，权重+KV 读带宽场景下界为 **3 卡**。Prefill 使用 dense BF16 989.5 TFLOPS、MFU 0.4、TTFT 800 ms 减预留 100 ms，1 个完整 8K Prefill 的算力下界为 **5 卡**。取三者最大值，再给待压测的 2 的幂候选 **8 卡**，仍不是采购保证或已验证 TP 配置。
 
+冷 Prefill 输入 `S_p` 与峰值 KV 驻留 `S` 必须分开：8192 输入加最多512输出，应设 `S_p=8192`、`S≈8704`。只增加未来输出应增加 KV，不应虚增这一次冷 Prefill FLOPs。`B` 包括同实例所有 KV 驻留请求，`B_prefill≤B`；32 个 Decode 加一个新 Prefill 不能仍只给32个 KV 请求位。
+
+进一步看每 rank：vLLM LlamaAttention 中 `KV_heads/rank=max(1,n_KV/TP)`，且切分必须可整除。70B 的8个 KV heads 在 TP=8/16 时均是每 rank 1 head，因此 **TP=16 的总 KV 为 TP=8 的2倍**，不能继续理想地除以16。MLA 参考布局可能保留完整 latent/RoPE；opaque packed 格式须录入真实 row bytes，而非照 head_size×dtype 猜。
+
+新增每 rank 沙盘用普通 `TP×PP×副本DP`、PP层数、权重偏斜预算、最忙副本活动数和设备总可见显存逐一验证。普通 DP 复制整模型，不是 Attention DP+EP。实测字段需你主动填入已确认的数据，默认仍为示例；不要把加载后剩余 free 显存当总容量再扣一次权重。PP内存能省，不表示单请求 Decode 的串行路径能获得 `N×HBM` 加速。
+
 MoE 大 batch 的专家并集会接近更多总权重。H5 的均匀独立路由模型用于解释，不能把单 Token 37B 流量直接用于整个 batch。
 
 规格需纠偏：L40S 48 GB 为 **GDDR6**，864 GB/s，**没有 NVLink**；H100/H200 为 SXM 指定规格；B200 **192 GB design/what-if** 与官方 DGX B200 **180 GB/卡**分开。80–85% 是规划余量，不是宣称 vLLM 当前默认。
