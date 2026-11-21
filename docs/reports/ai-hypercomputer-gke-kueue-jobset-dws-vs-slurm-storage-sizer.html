@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>AI Hypercomputer Control Plane (GKE Kueue TAS + DWS vs. Slurm) &amp; Storage Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI Hypercomputer Control Plane (GKE Kueue TAS + DWS vs. Slurm) &amp; 3-Tier Storage Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare Vanilla K8s Spot vs. Slurm vs. GKE Kueue TAS + JobSet + DWS + Orbax Async</div>
+    <div class="grid">
+      <div class="card">
+        <label>Cluster Accelerator Count (Chips): <strong id="cVal">1,024 Chips</strong></label>
+        <input type="range" id="chips" min="128" max="8192" step="128" value="1024" oninput="recalc()">
+        <label>Distributed Checkpoint Size (TB): <strong id="sVal">4.2 TB</strong></label>
+        <input type="range" id="ckpt" min="1.0" max="15.0" step="0.4" value="4.2" oninput="recalc()">
+        <label>Checkpoint Frequency (Minutes): <strong id="fVal">30 min</strong></label>
+        <input type="range" id="freq" min="15" max="120" step="15" value="30" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t4Good">96.8%</div><div class="lbl">End-to-End Cluster Goodput (vs 54.5% Tier 1)</div></div>
+          <div class="kpi"><div class="val" id="t4Stall">2.4 sec</div><div class="lbl">Orbax Async + Local-NVMe Stall (vs 185s Sync)</div></div>
+          <div class="kpi"><div class="val" id="t1Cost">$2,480,000</div><div class="lbl">Tier 1 Monthly Wasted Compute &amp; Storage TCO</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$980,000</div><div class="lbl">Tier 4 Monthly TCO (-60.5% Savings)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Control Plane &amp; Storage Architecture Tier</th><th>End-to-End Goodput</th><th>Checkpoint Stall</th><th>Gang Deadlock Waste</th><th>Monthly 1,024-Chip TCO</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Vanilla K8s on Spot + Uncached Sync GCS FUSE</td><td>54.5%</td><td>185.0 sec</td><td>28.0%</td><td>$2,480,000 / mo</td></tr>
+          <tr><td>Tier 2: Standalone Slurm (Cluster Toolkit) + Always-On Lustre</td><td>86.4%</td><td>28.0 sec</td><td>4.5%</td><td>$1,790,000 / mo</td></tr>
+          <tr><td>Tier 3: GKE JobSet + DWS (No Kueue TAS or Emergency Ckpt)</td><td>81.2%</td><td>42.0 sec</td><td>6.2% (10m timeout!)</td><td>$1,460,000 / mo</td></tr>
+          <tr><td><strong>Tier 4: GKE Kueue TAS + JobSet + DWS/Reservation + Hyperdisk ML + Orbax</strong></td><td><strong>96.8%</strong></td><td><strong>2.4 sec</strong></td><td><strong>0.0%</strong></td><td><strong>$980,000 / mo</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const c = parseInt(document.getElementById('chips').value, 10);
+      const s = parseFloat(document.getElementById('ckpt').value);
+      const f = parseInt(document.getElementById('freq').value, 10);
+      document.getElementById('cVal').textContent = c.toLocaleString() + ' Chips';
+      document.getElementById('sVal').textContent = s.toFixed(1) + ' TB';
+      document.getElementById('fVal').textContent = f + ' min';
+      const stall = (2.4 * (s / 4.2)).toFixed(1);
+      document.getElementById('t4Stall').textContent = stall + ' sec';
+      const scale = (c / 1024) * (0.85 + 0.15 * (s / 4.2) * (30 / f));
+      document.getElementById('t1Cost').textContent = '$' + Math.round(2480000 * scale).toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + Math.round(980000 * (c / 1024)).toLocaleString();
+    }
+  </script>
+</body>
+</html>
