@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>混合线性注意力与状态空间模型 (Hybrid SSM: Mamba-2 / Jamba / Qwen3-Next) 显存计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #C084FC; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>混合线性注意力与状态空间模型（Mamba-2 / Jamba / Qwen3-Next）超长上下文容量计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>目标上下文长度 (K Tokens) <span id="v_seq" class="val">256K</span></label>
+      <input type="range" id="seq" min="32" max="1024" step="32" value="256" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>模型总层数 (Layers) <span id="v_lay" class="val">64</span></label>
+      <input type="range" id="lay" min="32" max="96" step="8" value="64" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>节点空闲 KV/状态显存池 (GB) <span id="v_pool" class="val">168 GB</span></label>
+      <input type="range" id="pool" min="64" max="600" step="16" value="168" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>序列建模层架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 纯 Transformer (100% 全量 GQA 层)</option>
+        <option value="2">Tier 2: 纯循环 SSM (100% Mamba-2 / RWKV 层)</option>
+        <option value="3">Tier 3: 交替滑动窗口 (3:1 SWA=4K + 全量 GQA)</option>
+        <option value="4" selected>Tier 4: 7:1 混合架构 (87.5% Mamba2/DeltaNet + 12.5% GQA 推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>单请求 KV+状态显存</div><div id="k_mem" class="num">4.18 GB</div></div>
+    <div class="kpi"><div>单节点最大并发请求</div><div id="k_conc" class="num">40 路</div></div>
+    <div class="kpi"><div>长序列 Prefill TTFT</div><div id="k_ttft" class="num">4.9 sec</div></div>
+    <div class="kpi"><div>RULER 大海捞针精度</div><div id="k_acc" class="num">96.8%</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const seq = parseFloat(document.getElementById('seq').value);
+  const lay = parseFloat(document.getElementById('lay').value);
+  const pool = parseFloat(document.getElementById('pool').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_seq').textContent = seq + 'K';
+  document.getElementById('v_lay').textContent = lay;
+  document.getElementById('v_pool').textContent = pool + ' GB';
+
+  const gqaPerLayerGB = (seq / 256.0) * 0.512;
+  const ssmPerLayerGB = 0.0015;
+  let mem = 4.18, ttft = 4.9, acc = 96.8;
+  if (mode === '1') {
+    mem = +(lay * gqaPerLayerGB).toFixed(2);
+    ttft = +(18.4 * Math.pow(seq / 256.0, 1.7)).toFixed(1);
+    acc = 96.4;
+  } else if (mode === '2') {
+    mem = +(lay * ssmPerLayerGB).toFixed(3);
+    ttft = +(3.8 * (seq / 256.0)).toFixed(1);
+    acc = 64.2;
+  } else if (mode === '3') {
+    mem = +((lay * 0.25) * gqaPerLayerGB + (lay * 0.75) * 0.008).toFixed(2);
+    ttft = +(7.6 * Math.pow(seq / 256.0, 1.35)).toFixed(1);
+    acc = 91.5;
+  } else {
+    mem = +((lay * 0.125) * gqaPerLayerGB + (lay * 0.875) * ssmPerLayerGB).toFixed(2);
+    ttft = +(4.9 * Math.pow(seq / 256.0, 1.18)).toFixed(1);
+    acc = 96.8;
+  }
+  const conc = Math.max(1, Math.floor(pool / mem));
+  document.getElementById('k_mem').textContent = mem + ' GB';
+  document.getElementById('k_conc').textContent = conc + ' 路';
+  document.getElementById('k_ttft').textContent = ttft + ' sec';
+  document.getElementById('k_acc').textContent = acc + '%';
+}
+calc();
+</script>
+</body>
+</html>

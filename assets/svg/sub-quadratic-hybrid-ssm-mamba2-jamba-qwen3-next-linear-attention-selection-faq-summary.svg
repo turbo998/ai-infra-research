@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#C084FC" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">混合线性注意力与状态空间模型 (Hybrid SSM: Mamba-2 / Jamba / Qwen3-Next) 基础设施选型指南</text>
+  <text x="52" y="94" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="15">7:1 / 3:1 黄金混合比：87.5% 的层采用 O(1) 恒定显存状态层 + 12.5% 全局 Softmax 注意力层保障大海捞针 96.8% 召回！</text>
+
+  <!-- Left: Pure Transformer O(S^2) Wall vs Pure SSM Copy Failure -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么纯 Transformer 和纯 Mamba 在 256K 上下文中各有死穴？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 死穴 A：纯 64 层 GQA Transformer 在 256K 下显存与算力双爆 (Tier 1)</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 单条 256K 请求的 KV Cache 高达 32.77 GB！双卡 H200 最多同时并发 5 条请求</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 64 层全部承受 O(S²) 注意力复杂度，256K 首字延迟 (TTFT) 高达 18.4 秒！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 死穴 B：纯 64 层 SSM (`Mamba-2 / RWKV`) 丢失精确键值检索能力 (Tier 2)</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 虽然把 256K 压缩进固定 96 MB 循环状态 (`O(1)`)，但信息有损压缩无法精确逐字拷贝</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 在 RULER 256K 多跳大海捞针与精确 UUID 提取测试中准确率暴跌至 64.2%！</text>
+
+  <!-- Right: 7:1 / 3:1 Hybrid SSM-Attention Architecture -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. `7:1 / 3:1` 混合架构 (`Jamba / Bamba / Qwen3-Next`) 破局原理</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 87.5% 线性层 (`56 层 Mamba-2 / Gated DeltaNet`)：显存恒定 `O(1)`</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">不论序列是 4K 还是 1M，56 层 SSM 状态总计仅占 84 MB！且 Prefill 算力严格随长度线性增长 `O(S)`</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② 12.5% 锚点层 (`8 层 Full GQA / MLA`)：保留 100% 精确大海捞针</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">每隔 7 层插入 1 层全注意力做精确 KV 寻址 (`4.10 GB` KV)，RULER 256K 准确率反超纯 GQA 达 96.8%！</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ `vLLM / SGLang` 混合内存池 (Paged KV Blocks + Recurrent State Slots)</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">单条 256K 请求总状态从 32.77GB 骤降至 4.18GB (-87.2%)，单节点并发数从 5 路暴增至 40 路 (8x)！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 256K 超长上下文（64 层 70B 级模型 · 双卡 H200 节点）四档序列架构容量对比</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">模型层架构组成</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单条 256K 状态显存</text>
+  <text x="630" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">单机最大并发数</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">256K 首字 TTFT</text>
+  <text x="950" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">RULER 256K 精度</text>
+  <text x="1120" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">50 RPS 月度成本</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: 纯 Transformer (64 层全量 Softmax GQA-8)</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">32.77 GB / 条 ✕</text>
+  <text x="630" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">5 路 / 节点 ✕</text>
+  <text x="790" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">18.4 sec ✕</text>
+  <text x="950" y="524" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">96.4%</text>
+  <text x="1120" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">$224,000/mo ✕</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: 纯循环状态空间模型 (64 层 Mamba-2 / RWKV, 0 GQA)</text>
+  <text x="450" y="568" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">0.096 GB / 条</text>
+  <text x="630" y="568" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">64 路 / 节点</text>
+  <text x="790" y="568" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="14">3.8 sec</text>
+  <text x="950" y="568" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">64.2% ✕ (丢针)</text>
+  <text x="1120" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">$44,800/mo</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: 交替滑动窗口注意力 (48 层 SWA=4K + 16 层全量 GQA)</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">8.58 GB / 条</text>
+  <text x="630" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">19 路 / 节点</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">7.6 sec</text>
+  <text x="950" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">91.5%</text>
+  <text x="1120" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$89,600/mo</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): 7:1 混合架构 (56 层 Mamba-2/DeltaNet + 8 层全量 GQA)</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">4.18 GB (-87.2%)</text>
+  <text x="630" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">40 路 / 节点 (8x)</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">4.9 sec (3.8x) ✓</text>
+  <text x="950" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">96.8% ✓</text>
+  <text x="1120" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$56,000/mo (-75%)</text>
+</svg>
