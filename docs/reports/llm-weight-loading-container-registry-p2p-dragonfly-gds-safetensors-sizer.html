@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>大模型容器镜像与百 GB 权重极速分发 (Dragonfly P2P / Nydus / GDS) 计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #38BDF8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>千卡 K8s 容器镜像与百 GB 模型权重极速分发（Dragonfly P2P / Nydus / Run:ai GDS）计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>并发扩容节点数 (Nodes) <span id="v_nodes" class="val">64</span></label>
+      <input type="range" id="nodes" min="4" max="256" step="4" value="64" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>模型权重体积 (GB) <span id="v_wt" class="val">140 GB</span></label>
+      <input type="range" id="wt" min="16" max="680" step="16" value="140" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>每日弹性扩缩容频次 <span id="v_ev" class="val">12 次/天</span></label>
+      <input type="range" id="ev" min="2" max="40" step="2" value="12" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>镜像与权重分发架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 权重打入巨型 OCI 镜像 + 中心仓直拉</option>
+        <option value="2">Tier 2: 镜像分离 + 共享 NFS torch.load(.bin)</option>
+        <option value="3">Tier 3: Dragonfly P2P + 本地 NVMe .safetensors Mmap</option>
+        <option value="4" selected>Tier 4: Nydus 懒加载 P2P + Run:ai/GDS + RDMA 广播 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>容器启动耗时</div><div id="k_cnt" class="num">4.2 sec</div></div>
+    <div class="kpi"><div>权重入显存耗时</div><div id="k_load" class="num">6.8 sec</div></div>
+    <div class="kpi"><div>端到端 Pod 就绪总耗时</div><div id="k_tot" class="num">11.0 sec</div></div>
+    <div class="kpi"><div>月度空转等待算力浪费</div><div id="k_waste" class="num">$1,650</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const nodes = parseFloat(document.getElementById('nodes').value);
+  const wt = parseFloat(document.getElementById('wt').value);
+  const ev = parseFloat(document.getElementById('ev').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_nodes').textContent = nodes;
+  document.getElementById('v_wt').textContent = wt + ' GB';
+  document.getElementById('v_ev').textContent = ev + ' 次/天';
+
+  const wtScale = wt / 140.0;
+  const nodeScale = Math.sqrt(nodes / 64.0);
+  let cntSec = 4.2, loadSec = 6.8;
+  if (mode === '1') {
+    cntSec = +(920.0 * wtScale * nodeScale).toFixed(1);
+    loadSec = +(430.0 * wtScale).toFixed(1);
+  } else if (mode === '2') {
+    cntSec = +(110.0 * nodeScale).toFixed(1);
+    loadSec = +(185.0 * wtScale * nodeScale).toFixed(1);
+  } else if (mode === '3') {
+    cntSec = 12.5;
+    loadSec = +(18.5 * wtScale).toFixed(1);
+  } else {
+    cntSec = 4.2;
+    loadSec = +(6.8 * wtScale).toFixed(1);
+  }
+  const tot = +(cntSec + loadSec).toFixed(1);
+  const waste = Math.round((tot / 11.0) * (nodes / 64.0) * (ev / 12.0) * 1650);
+  document.getElementById('k_cnt').textContent = cntSec + ' sec';
+  document.getElementById('k_load').textContent = loadSec + ' sec';
+  document.getElementById('k_tot').textContent = tot + ' sec';
+  document.getElementById('k_waste').textContent = '$' + waste.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
