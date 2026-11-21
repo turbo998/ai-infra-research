@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>结构化输出与约束解码 (XGrammar vs. llguidance vs. Outlines) 延迟评估器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #F472B6; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>大模型结构化输出与约束解码（XGrammar / llguidance / Outlines）延迟与重试开销计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>JSON Schema 字段复杂度 <span id="v_fields" class="val">45</span></label>
+      <input type="range" id="fields" min="5" max="120" step="5" value="45" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>目标输出 Token 长度 <span id="v_out" class="val">380</span></label>
+      <input type="range" id="out" min="50" max="2000" step="50" value="380" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>确定性键名占比 (Jump-Forward %) <span id="v_jf" class="val">22%</span></label>
+      <input type="range" id="jf" min="0" max="45" step="2" value="22" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>约束解码后端引擎</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 纯 Prompt + 客户端 Pydantic 重试</option>
+        <option value="2">Tier 2: 传统逐 Token 同步全词表 Regex 扫描</option>
+        <option value="3">Tier 3: Outlines 预编译 DFA + 状态机缓存</option>
+        <option value="4" selected>Tier 4: XGrammar / llguidance + 跳跃解码 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>动态 Schema 编译开销</div><div id="k_comp" class="num">14.5 ms</div></div>
+    <div class="kpi"><div>单步 Mask CPU 开销</div><div id="k_mask" class="num">0.08 ms</div></div>
+    <div class="kpi"><div>首轮 Schema 合规率</div><div id="k_valid" class="num">100.0%</div></div>
+    <div class="kpi"><div>有效输出 P99 延迟</div><div id="k_p99" class="num">1,920 ms</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const fields = parseFloat(document.getElementById('fields').value);
+  const out = parseFloat(document.getElementById('out').value);
+  const jf = parseFloat(document.getElementById('jf').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_fields').textContent = fields;
+  document.getElementById('v_out').textContent = out;
+  document.getElementById('v_jf').textContent = Math.round(jf * 100) + '%';
+
+  let comp = 14.5, mask = 0.08, valid = 100.0, p99 = 1920;
+  const baseDecodeMs = out * 6.2;
+  if (mode === '1') {
+    comp = 0.0;
+    mask = 0.0;
+    valid = Math.max(55.0, +(96.0 - fields * 0.23).toFixed(1));
+    p99 = Math.round(baseDecodeMs * 2.85 + 320);
+  } else if (mode === '2') {
+    comp = +(fields * 32.2).toFixed(1);
+    mask = 18.50;
+    valid = 100.0;
+    p99 = Math.round(comp + out * (6.2 + mask));
+  } else if (mode === '3') {
+    comp = +(fields * 9.3).toFixed(1);
+    mask = 0.65;
+    valid = 100.0;
+    p99 = Math.round(180 + out * (6.2 + mask) * (1 - jf * 0.6));
+  } else {
+    comp = +(fields * 0.32).toFixed(1);
+    mask = 0.08;
+    valid = 100.0;
+    p99 = Math.round(140 + out * (6.2 + mask) * (1 - jf));
+  }
+  document.getElementById('k_comp').textContent = comp + ' ms';
+  document.getElementById('k_mask').textContent = mask.toFixed(2) + ' ms';
+  document.getElementById('k_valid').textContent = valid.toFixed(1) + '%';
+  document.getElementById('k_p99').textContent = p99.toLocaleString() + ' ms';
+}
+calc();
+</script>
+</body>
+</html>
