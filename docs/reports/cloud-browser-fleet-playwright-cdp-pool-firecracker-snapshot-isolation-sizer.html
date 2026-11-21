@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Browser Fleet &amp; Firecracker CDP Pool Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive Cloud Browser Fleet (`Firecracker CoW Pool` vs. `K8s Pods`) Sizer (#391)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Browser Fleet Architecture Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Cold Container (Default 64MB /dev/shm)</option>
+        <option value="2">Tier 2: Shared Chromium (25 BrowserContexts)</option>
+        <option value="3">Tier 3: Tuned K8s Pod Pool (2GB /dev/shm)</option>
+        <option value="4" selected>Tier 4: Firecracker CoW Snapshot MicroVM Pool</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Peak Concurrent Browser Sessions</label>
+      <input type="number" id="sess" value="1000" min="50" max="50000" step="50" oninput="calc()">
+    </div>
+    <div class="ctrl">
+      <label>Idle Pause During LLM Thinking</label>
+      <select id="pause" onchange="calc()">
+        <option value="1" selected>Enabled (Freeze VM CPU/Timers While Waiting on LLM)</option>
+        <option value="0">Disabled (Browser Spins 100% of Session)</option>
+      </select>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>Browser Ready Latency</h3><div class="val" id="boot">140 ms</div></div>
+    <div class="card"><h3>Total Fleet Memory</h3><div class="val" id="ram">480 GB</div></div>
+    <div class="card"><h3>Session Reliability Rate</h3><div class="val" id="rel">99.95%</div></div>
+    <div class="card"><h3>Monthly Fleet Infra Cost</h3><div class="val" id="cost">$14,800 / mo</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const sess = parseFloat(document.getElementById('sess').value) || 1000;
+  const pause = parseInt(document.getElementById('pause').value, 10);
+  const scale = sess / 1000.0;
+  const boot = {1: 3500, 2: 85, 3: 220, 4: 140}[tier];
+  const ram = Math.round(({1: 1800, 2: 340, 3: 950, 4: 480}[tier]) * scale);
+  const crash = {1: 14.50, 2: 4.80, 3: 0.45, 4: 0.05}[tier];
+  const rel = 100.0 - crash;
+  const pFactor = (tier === 4 && pause === 0) ? 1.35 : 1.0;
+  const cost = Math.round(({1: 42000, 2: 9800, 3: 24500, 4: 14800}[tier]) * scale * pFactor);
+  document.getElementById('boot').textContent = boot + ' ms';
+  document.getElementById('ram').textContent = ram.toLocaleString() + ' GB';
+  document.getElementById('rel').textContent = rel.toFixed(2) + '%';
+  document.getElementById('cost').textContent = '$' + cost.toLocaleString() + ' / mo';
+}
+calc();
+</script>
+</body>
+</html>
