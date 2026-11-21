@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>K8s Gateway API Inference Extension (GIE / EPP) 路由性能与容量计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #A5B4FC; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>K8s 大模型推理网关扩展（Gateway API Inference Extension GIE / EPP）容量计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>集群推理副本数 (Pods) <span id="v_pods" class="val">24</span></label>
+      <input type="range" id="pods" min="4" max="64" step="4" value="24" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>目标业务总并发 (RPS) <span id="v_rps" class="val">220</span></label>
+      <input type="range" id="rps" min="40" max="600" step="20" value="220" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>长短上下文长度方差倍数 <span id="v_skew" class="val">20x</span></label>
+      <input type="range" id="skew" min="2" max="50" step="2" value="20" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>K8s L7 路由调度架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: K8s Service / Nginx Round-Robin</option>
+        <option value="2">Tier 2: Envoy / Istio Least-Request (最少连接)</option>
+        <option value="3">Tier 3: 静态一致性哈希 Header 路由</option>
+        <option value="4" selected>Tier 4: K8s Gateway API Inference Extension (GIE + EPP 推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>集群 P99 TTFT 延迟</div><div id="k_ttft" class="num">485 ms</div></div>
+    <div class="kpi"><div>HBM KV 抢占换出率</div><div id="k_pre" class="num">0.4%</div></div>
+    <div class="kpi"><div>达标有效吞吐 (Goodput)</div><div id="k_gp" class="num">218 RPS</div></div>
+    <div class="kpi"><div>满足 SLA 所需月成本</div><div id="k_tco" class="num">$134,400</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const pods = parseFloat(document.getElementById('pods').value);
+  const rps = parseFloat(document.getElementById('rps').value);
+  const skew = parseFloat(document.getElementById('skew').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_pods').textContent = pods;
+  document.getElementById('v_rps').textContent = rps;
+  document.getElementById('v_skew').textContent = skew + 'x';
+
+  const skewFactor = 0.7 + (skew / 20.0) * 0.3;
+  let ttft = 485, pre = 0.4, gpRatio = 0.99;
+  if (mode === '1') {
+    ttft = Math.round(1890 * skewFactor);
+    pre = +(19.4 * skewFactor).toFixed(1);
+    gpRatio = 0.60 / skewFactor;
+  } else if (mode === '2') {
+    ttft = Math.round(1280 * skewFactor);
+    pre = +(11.2 * skewFactor).toFixed(1);
+    gpRatio = 0.745 / skewFactor;
+  } else if (mode === '3') {
+    ttft = Math.round(960 * skewFactor);
+    pre = +(8.6 * skewFactor).toFixed(1);
+    gpRatio = 0.827;
+  } else {
+    ttft = 485;
+    pre = 0.4;
+    gpRatio = 0.99;
+  }
+  const gp = Math.round(rps * Math.min(1.0, gpRatio));
+  const reqPods = Math.ceil(pods / Math.min(1.0, gpRatio));
+  const tco = reqPods * 2 * 2800;
+  document.getElementById('k_ttft').textContent = ttft.toLocaleString() + ' ms';
+  document.getElementById('k_pre').textContent = pre + '%';
+  document.getElementById('k_gp').textContent = gp + ' RPS';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>

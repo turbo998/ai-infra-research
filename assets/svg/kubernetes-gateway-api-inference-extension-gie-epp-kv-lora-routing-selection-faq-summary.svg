@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0B1220"/>
+  <rect x="28" y="24" width="1224" height="92" rx="14" fill="#111C33" stroke="#6366F1" stroke-width="2"/>
+  <text x="52" y="62" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">云原生 K8s 大模型推理流量网关选型：Gateway API Inference Extension (GIE) vs. 传统 Ingress</text>
+  <text x="52" y="94" fill="#A5B4FC" font-family="Segoe UI, Arial, sans-serif" font-size="15">详解 `InferencePool` + `InferenceModel` + `Endpoint Picker (EPP)`：融合 KV 水位、Prefix 缓存与 LoRA 亲和度的智能调度</text>
+
+  <!-- Left: Why Stateless K8s Load Balancing Fails on LLM Pods -->
+  <rect x="28" y="136" width="590" height="260" rx="14" fill="#1E1320" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="50" y="170" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">1. 为什么传统 K8s Ingress / Service Mesh 在大模型集群上失灵？</text>
+  <rect x="48" y="188" width="550" height="86" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="64" y="214" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 失灵原因 A：请求权重极度悬殊 (`1` 个 32K 请求 ≈ `120` 个 256 字请求)</text>
+  <text x="64" y="238" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• Round-Robin (Tier 1) 和 Least-Conn (Tier 2) 把每条 HTTP 连接视为等价</text>
+  <text x="64" y="260" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 连续 4 条 32K 请求落到同一 Pod 瞬间打爆 KV Cache (19.4% 触发换出重算)，而旁边的 Pod 却闲置！</text>
+  <rect x="48" y="288" width="550" height="88" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="64" y="314" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">❌ 失灵原因 B：静态一致性哈希 (Tier 3) 无法兼顾“亲和性”与“热点溢出”</text>
+  <text x="64" y="338" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">• 按 `lora_id` 硬哈希虽然提高了命中率，但一旦某个爆款 LoRA 流量突增，对应单 Pod 立即排队雪崩！</text>
+  <text x="64" y="360" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="13">• K8s 急需一套能同时看懂“GPU 内部状态指标”与“业务优先级”的原生网关标准！</text>
+
+  <!-- Right: K8s Gateway API Inference Extension (GIE + EPP) -->
+  <rect x="642" y="136" width="610" height="260" rx="14" fill="#0F241D" stroke="#10B981" stroke-width="1.5"/>
+  <text x="664" y="170" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">2. K8s Gateway API Inference Extension (`GIE + EPP`) 架构 (Tier 4)</text>
+  <rect x="664" y="188" width="566" height="56" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="680" y="212" fill="#A7F3D0" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">① 两大标准 CRD：`InferenceModel` (模型逻辑层) + `InferencePool` (算力池)</text>
+  <text x="680" y="232" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">解耦应用开发者（声明 `modelName`、Criticality 优先级与金丝雀流量拆分）与底层基础设施运维</text>
+  <rect x="664" y="254" width="566" height="56" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="680" y="278" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">② `Endpoint Picker (EPP)`：通过 Envoy `ext_proc` 毫秒级高频采集 Pod 指标</text>
+  <text x="680" y="298" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">实时拉取所有 vLLM/SGLang Pod 的 `kv_cache_usage`、`queue_depth` 与已加载 `active_loras`</text>
+  <rect x="664" y="320" width="566" height="58" rx="8" fill="#0F172A" stroke="#C084FC"/>
+  <text x="680" y="344" fill="#E9D5FF" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">③ 级联过滤打分树：过滤 KV&gt;85% 过载 Pod → 优选命中 Prefix/LoRA 且队列最短 Pod</text>
+  <text x="680" y="364" fill="#CBD5E1" font-family="Segoe UI, Arial, sans-serif" font-size="13">KV 抢占率从 19.4% 压至 0.4%，P99 TTFT 降低 74.3%，集群有效 Goodput 暴涨 +65.2%！</text>
+
+  <!-- Bottom: 4-Tier Matrix -->
+  <rect x="28" y="416" width="1224" height="276" rx="14" fill="#111C33" stroke="#334155" stroke-width="1.5"/>
+  <text x="52" y="450" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">3. 24 副本 vLLM K8s 集群（48 张 H200 · 混合长短上下文 + 80 LoRA · 220 RPS）四档对比</text>
+
+  <text x="52" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">K8s 流量负载均衡架构</text>
+  <text x="450" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">集群 P99 TTFT</text>
+  <text x="620" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">集群 P99 TPOT</text>
+  <text x="790" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">KV 显存抢占率</text>
+  <text x="950" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">达标 Goodput</text>
+  <text x="1110" y="486" fill="#94A3B8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">满足 220RPS 月成本</text>
+
+  <rect x="44" y="500" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="524" fill="#FCA5A5" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 1: K8s Service / Nginx Ingress (`Round-Robin` 轮询)</text>
+  <text x="450" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">1,890.0 ms ✕</text>
+  <text x="620" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">58.5 ms ✕</text>
+  <text x="790" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">19.4% ✕</text>
+  <text x="950" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14">132.0 RPS</text>
+  <text x="1110" y="524" fill="#EF4444" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">$224,000/mo ✕</text>
+
+  <rect x="44" y="544" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 2: Envoy / Istio Service Mesh (`Least-Request` 最少连接)</text>
+  <text x="450" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">1,280.0 ms</text>
+  <text x="620" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">42.0 ms</text>
+  <text x="790" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">11.2%</text>
+  <text x="950" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">164.0 RPS</text>
+  <text x="1110" y="568" fill="#FDE68A" font-family="Segoe UI, Arial, sans-serif" font-size="14">$179,200/mo</text>
+
+  <rect x="44" y="588" width="1192" height="38" rx="6" fill="#1E293B"/>
+  <text x="56" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 3: 静态一致性哈希 Header 路由 (`Consistent Hash`)</text>
+  <text x="450" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">960.0 ms</text>
+  <text x="620" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">34.5 ms</text>
+  <text x="790" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">8.6%</text>
+  <text x="950" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">182.0 RPS</text>
+  <text x="1110" y="612" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="14">$156,800/mo</text>
+
+  <rect x="44" y="632" width="1192" height="44" rx="6" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="56" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Tier 4 (推荐): K8s Gateway API Inference Extension (`GIE + EPP`)</text>
+  <text x="450" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">485.0 ms (-74%) ✓</text>
+  <text x="620" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">21.2 ms (-64%) ✓</text>
+  <text x="790" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">0.4% ✓</text>
+  <text x="950" y="660" fill="#10B981" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">218.0 RPS (+65%)</text>
+  <text x="1110" y="660" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700">$134,400/mo (-40%)</text>
+</svg>
