@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multimodal Visual Token Pruning (FastV / PyramidDrop) Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive Multimodal Visual Token Pruning (`FastV / PyramidDrop`) Sizer (#394)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Visual Token Pruning Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Unpruned Dynamic Tiling (100% All Layers)</option>
+        <option value="2">Tier 2: Pre-LLM 64-Token Perceiver Resampler</option>
+        <option value="3">Tier 3: 2x2 Pixel-Shuffle Merger Before LLM</option>
+        <option value="4" selected>Tier 4: 2x2 Merger + Progressive PyramidDrop/FastV</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Raw Visual Patches per Request</label>
+      <select id="patches" onchange="calc()">
+        <option value="4096">4,096 Patches (2K Image / 16 Frames)</option>
+        <option value="8192" selected>8,192 Patches (4K Doc / 32 Frames)</option>
+        <option value="16384">16,384 Patches (Multi-Page PDF / 64 Frames)</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Available KV Cache HBM Pool / Node (GB)</label>
+      <input type="number" id="pool" value="58" min="16" max="512" step="8" oninput="calc()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>VLM Prefill TTFT Latency</h3><div class="val" id="ttft">480 ms</div></div>
+    <div class="card"><h3>Visual KV Cache / Request</h3><div class="val" id="kv">0.58 GB</div></div>
+    <div class="card"><h3>Concurrent Requests / Node</h3><div class="val" id="cap">100 Reqs</div></div>
+    <div class="card"><h3>DocVQA / ChartQA Accuracy</h3><div class="val" id="acc">94.0%</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const patches = parseFloat(document.getElementById('patches').value) || 8192;
+  const pool = parseFloat(document.getElementById('pool').value) || 58;
+  const scale = patches / 8192.0;
+  const ttft = Math.round(({1: 1820, 2: 240, 3: 680, 4: 480}[tier]) * Math.pow(scale, 1.35));
+  const kv = ({1: 2.62, 2: 0.21, 3: 1.15, 4: 0.58}[tier]) * scale;
+  const cap = Math.max(1, Math.floor(pool / kv));
+  const acc = {1: 94.2, 2: 68.5, 3: 92.8, 4: 94.0}[tier];
+  document.getElementById('ttft').textContent = ttft + ' ms';
+  document.getElementById('kv').textContent = kv.toFixed(2) + ' GB';
+  document.getElementById('cap').textContent = cap + ' Reqs';
+  document.getElementById('acc').textContent = acc.toFixed(1) + '%';
+}
+calc();
+</script>
+</body>
+</html>
