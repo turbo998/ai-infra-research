@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Serving CPU Overhead &amp; Overlap Scheduler Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive LLM Serving CPU Overhead (`vLLM V1 ZMQ` / `SGLang Overlap`) Sizer (#369)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>CPU-GPU Engine Scheduler Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Monolithic Single-Process (v0)</option>
+        <option value="2">Tier 2: Multi-Step Coupled (--num-scheduler-steps 8)</option>
+        <option value="3">Tier 3: Multiprocess ZMQ IPC Decoupling</option>
+        <option value="4" selected>Tier 4: vLLM V1 ZMQ + Async Overlap Scheduler</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Pure GPU Forward Step Time (ms)</label>
+      <input type="number" id="gpuMs" value="10.0" min="2.0" max="40.0" step="0.5" oninput="calc()">
+    </div>
+    <div class="ctrl">
+      <label>Active Continuous Batch Size</label>
+      <input type="number" id="batch" value="128" min="8" max="512" step="8" oninput="calc()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>Exposed CPU Bubble / Step</h3><div class="val" id="bubble">0.08 ms</div></div>
+    <div class="card"><h3>Effective Step TPOT</h3><div class="val" id="tpot">10.08 ms</div></div>
+    <div class="card"><h3>GPU Active Duty Cycle</h3><div class="val" id="duty">99.2%</div></div>
+    <div class="card"><h3>System Output Throughput</h3><div class="val" id="tps">12,698 TPS</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const gpuMs = parseFloat(document.getElementById('gpuMs').value) || 10.0;
+  const batch = parseInt(document.getElementById('batch').value, 10) || 128;
+  const scale = batch / 128.0;
+  const bubble = {1: 7.0, 2: 2.4, 3: 1.1, 4: 0.08}[tier] * Math.sqrt(scale);
+  const tpot = gpuMs + bubble;
+  const duty = (gpuMs / tpot) * 100;
+  const tps = Math.round((batch * 1000.0) / tpot);
+  document.getElementById('bubble').textContent = bubble.toFixed(2) + ' ms';
+  document.getElementById('tpot').textContent = tpot.toFixed(2) + ' ms';
+  document.getElementById('duty').textContent = duty.toFixed(1) + '%';
+  document.getElementById('tps').textContent = tps.toLocaleString() + ' TPS';
+}
+calc();
+</script>
+</body>
+</html>
