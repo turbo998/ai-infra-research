@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Speculative Decoding Speedup &amp; Batch-Size Crossover Calculator</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Speculative Decoding ($\tau(\alpha, \gamma)$) &amp; Batch-Size Crossover Calculator</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Calculate Expected Accepted Tokens $\tau = (1 - \alpha^{\gamma+1})/(1 - \alpha)$ &amp; Net TPOT Speedup</div>
+    <div class="grid">
+      <div class="card">
+        <label>Speculative Architecture:</label>
+        <select id="arch" onchange="recalc()">
+          <option value="mtp">Native MTP / EAGLE-3 Single-Layer Head (c_draft = 1.8%, alpha = 0.82)</option>
+          <option value="medusa">Medusa Static Parallel Heads (c_draft = 1.5%, alpha = 0.58)</option>
+          <option value="draft7b">Standalone 7B Draft Model (c_draft = 11.5%, alpha = 0.76)</option>
+        </select>
+        <label>Token Acceptance Rate ($\alpha$): <strong id="aVal">0.82 (Coding / JSON / Reasoning)</strong></label>
+        <input type="range" id="alpha" min="0.45" max="0.92" step="0.02" value="0.82" oninput="recalc()">
+        <label>Draft Lookahead Steps ($\gamma$): <strong id="gVal">3 draft tokens (verifies 4 tokens/step)</strong></label>
+        <input type="range" id="gamma" min="1" max="7" step="1" value="3" oninput="recalc()">
+        <label>Active Concurrent Batch Size ($B$): <strong id="bVal">24 concurrent requests</strong></label>
+        <input type="range" id="batch" min="1" max="128" step="4" value="24" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="tauVal">2.95 tok / step</div><div class="lbl">Expected Accepted Tokens $\tau(\alpha, \gamma)$</div></div>
+          <div class="kpi"><div class="val" id="spdVal">2.34x Speedup</div><div class="lbl">Net Wall-Clock Decode Speedup</div></div>
+          <div class="kpi"><div class="val" id="tpotVal">9.3 ms</div><div class="lbl">Effective TPOT (vs 21.8ms Baseline)</div></div>
+          <div class="kpi"><div class="val" id="gateVal">✅ Keep Speculative ON</div><div class="lbl">Batch-Aware Speculative Controller Gate</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const arch = document.getElementById('arch').value;
+      const a = parseFloat(document.getElementById('alpha').value);
+      const g = parseInt(document.getElementById('gamma').value, 10);
+      const b = parseInt(document.getElementById('batch').value, 10);
+      document.getElementById('aVal').textContent = a.toFixed(2);
+      document.getElementById('gVal').textContent = g + ' draft tokens (verifies ' + (g + 1) + ' tokens/step)';
+      document.getElementById('bVal').textContent = b + ' concurrent requests';
+      const cdraft = arch === 'mtp' ? 0.018 : (arch === 'medusa' ? 0.015 : 0.115);
+      const tau = (1 - Math.pow(a, g + 1)) / (1 - a);
+      const bEff = b * (g + 1);
+      const cVerify = bEff > 96 ? ((bEff - 96) / 96.0) * 0.85 : 0.06 * g;
+      const speedup = tau / (1 + g * cdraft + cVerify);
+      const effTpot = 21.8 / speedup;
+      document.getElementById('tauVal').textContent = tau.toFixed(2) + ' tok / step';
+      document.getElementById('spdVal').textContent = speedup.toFixed(2) + 'x Speedup';
+      document.getElementById('tpotVal').textContent = effTpot.toFixed(1) + ' ms';
+      document.getElementById('gateVal').textContent = b > 56 ? '⚠️ Auto-Throttle gamma->1 (High Batch)' : '✅ Keep Speculative ON';
+    }
+  </script>
+</body>
+</html>

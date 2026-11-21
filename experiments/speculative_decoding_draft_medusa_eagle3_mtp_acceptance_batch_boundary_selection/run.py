@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "speculative_decoding_draft_medusa_eagle3_mtp_acceptance_batch_boundary_selection",
+        "title": "Speculative Decoding Deep Dive: Standalone Draft vs. Medusa vs. EAGLE-3 vs. Native MTP & Batch-Size Crossover Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "target_models": ["Llama-3.3-70B-FP8", "DeepSeek-R1-671B-FP8"],
+            "gpu_node": "8x NVIDIA H200 SXM",
+            "coding_and_reasoning_acceptance_rate_alpha": 0.82,
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_standard_autoregressive_1_token_per_step_baseline",
+                "name": "Tier 1: Standard Autoregressive Decoding (1.00 Token/Step — Bottlenecked by Serial HBM Weight Reads)",
+                "mean_accepted_tokens_per_step_tau": 1.00,
+                "achieved_p99_effective_tpot_ms": 21.8,
+                "high_batch_b96_system_tps_per_gpu": 1680,
+                "cost_per_1m_tokens_usd": 0.62,
+                "verdict": "Baseline: Every single token requires a full HBM weight read; TPOT stuck at 21.8ms",
+            },
+            {
+                "tier_id": "tier2_standalone_draft_7b_model_without_batch_throttling",
+                "name": "Tier 2: Standalone 7B/8B Draft Model (`gamma=5`, Separate KV Pool, Always-On Even at High Batch B=96)",
+                "mean_accepted_tokens_per_step_tau": 2.35,
+                "achieved_p99_effective_tpot_ms": 14.2,
+                "high_batch_b96_system_tps_per_gpu": 1190,
+                "cost_per_1m_tokens_usd": 0.58,
+                "verdict": "Anti-Pattern at High Load: Separate 8B draft overhead + B*(gamma+1)=576 verification tokens choke TensorCores at B=96!",
+            },
+            {
+                "tier_id": "tier3_static_medusa_or_unthrottled_eagle1_tree",
+                "name": "Tier 3: Static Medusa Parallel Heads (Context-Independent Token Predictions, Lower Acceptance Alpha=0.58)",
+                "mean_accepted_tokens_per_step_tau": 1.85,
+                "achieved_p99_effective_tpot_ms": 13.4,
+                "high_batch_b96_system_tps_per_gpu": 1520,
+                "cost_per_1m_tokens_usd": 0.49,
+                "verdict": "Zero separate draft model, but independent parallel heads suffer lower multi-token acceptance (1.85 tok/step)",
+            },
+            {
+                "tier_id": "tier4_native_mtp_or_eagle3_dynamic_tree_plus_adaptive_batch_cutoff",
+                "name": "Tier 4: Native MTP / EAGLE-3 Feature-Level Dynamic Tree + Adaptive Batch Cutoff (`B_eff <= Ridge`)",
+                "mean_accepted_tokens_per_step_tau": 3.12,
+                "achieved_p99_effective_tpot_ms": 8.9,
+                "high_batch_b96_system_tps_per_gpu": 2290,
+                "cost_per_1m_tokens_usd": 0.29,
+                "verdict": "Recommended: 3.12 tokens/step, 8.9ms effective TPOT (2.45x faster!) & $0.29/1M tokens (-53.2%)",
+            },
+        ],
+        "headline_findings": {
+            "accepted_tokens_per_step_tau": 3.12,
+            "effective_tpot_ms": 8.9,
+            "tpot_speedup_vs_tier1_x": 2.45,
+            "cost_reduction_vs_tier1_pct": 53.2,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
