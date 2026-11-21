@@ -38,3 +38,10 @@ flowchart LR
 | **Kubernetes 容器平台治理** | 声明式运维、RBAC/多租户配额、GitOps 发布 | Gang Scheduling（全有或全无成组调度）、NVLink/PCIe 拓扑感知分配、硬件 MIG 故障隔离 |
 | **企业高可用与灾备设计** | RTO/RPO 定义、混沌演练、健康检查探针 | 单张坏卡或慢节点（Straggler）拖垮千卡同步作业、静默数值翻转（SDC）、秒级内存态 Checkpoint 恢复 |
 | **云 FinOps 成本治理** | 预留实例（RI/SP）组合、按部门成本分摊 | 区分“GPU 表面忙”与“SLA 达标有效 Token 产出”，量化 Prefix Cache 折扣、PD 分离与低精度量化带来的单价下降 |
+
+---
+
+## 专题冲刺（Focused Architecture Sprints）
+
+- **[TPU 与 AI Hypercomputer — 7 天冲刺](./tpu-7day-sprint.md)**（[English](./tpu-7day-sprint.en.md)）：从数据中心网络到 JAX，系统补齐 TPU 芯片与 3D Torus/OCS 互连解剖、JAX/XLA/Shardy 分布式训练、vLLM-TPU 与 XProf 推理剖析、GKE Kueue/Slurm 控制面与三级存储，以及托管机房选址资格认证与上电交付（Turn-Up）。
+

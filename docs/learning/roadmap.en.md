@@ -38,3 +38,10 @@ flowchart LR
 | **Kubernetes Platform Ops** | Declarative APIs, quota trees, GitOps CI/CD | All-or-nothing Gang Scheduling, NVLink/PCIe NUMA affinity (`DRA`), and hardware `MIG` fault isolation |
 | **Resilience & DR Engineering** | RTO/RPO contracts, chaos drills, health probes | Single straggler or silent data corruption (`SDC`) stalling 1,024 GPUs simultaneously; sub-3s pinned-memory checkpointing |
 | **Cloud FinOps** | Reserved capacity (`RI/SP`) blending, chargeback tags | Measuring `$/1M SLA-compliant tokens` rather than raw GPU utilization; leveraging Prefix Cache PTU multipliers, PD split, and FP8/NVFP4 |
+
+---
+
+## Focused Architecture Sprints
+
+- **[TPU & AI Hypercomputer — 7-Day Sprint](./tpu-7day-sprint.en.md)** ([中文](./tpu-7day-sprint.md)): A structured 7-day path from data center fabrics to JAX covering TPU system anatomy (`v5p / v6e Trillium / TPU7x Ironwood / TPU 8t & 8i`), 3D Torus ICI & OCS topology, JAX/XLA/Shardy distributed training, vLLM-TPU & XProf profiling, GKE Kueue/Slurm control planes, and partner data center site qualification & turn-up.
+
