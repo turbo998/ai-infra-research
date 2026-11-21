@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>大模型数据清洗与去重 (NeMo Curator / Ray Data / Datatrove / Spark) 容量与 ROI 计算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #FDE68A; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>大模型万亿 Token 数据清洗（NeMo Curator + Ray Data vs. Datatrove vs. Spark）耗时与 ROI 计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>原始语料总规模 (TB) <span id="v_tb" class="val">20 TB</span></label>
+      <input type="range" id="tb" min="2" max="100" step="2" value="20" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>MinHash 签名排列数 <span id="v_perm" class="val">128</span></label>
+      <select id="perm" onchange="calc()">
+        <option value="64">64 Permutations (16 Bands × 4)</option>
+        <option value="128" selected>128 Permutations (16 Bands × 8)</option>
+        <option value="256">256 Permutations (32 Bands × 8)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>下游训练模型参数量 <span id="v_mod" class="val">70B</span></label>
+      <select id="mod" onchange="calc()">
+        <option value="8">8B Dense 模型</option>
+        <option value="32">32B Dense 模型</option>
+        <option value="70" selected>70B Dense / 671B MoE (37B Active)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>数据清洗引擎架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 传统 Apache Spark 纯 CPU 集群</option>
+        <option value="2">Tier 2: HuggingFace Datatrove (Spot CPU)</option>
+        <option value="3">Tier 3: 全流程独占 H100 GPU 集群</option>
+        <option value="4" selected>Tier 4: Ray Data 异构 + NeMo Curator (cuDF+SemDeDup)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>端到端清洗总耗时</div><div id="k_hrs" class="num">28.5 hrs</div></div>
+    <div class="kpi"><div>剔除重复/低质 Token</div><div id="k_rem" class="num">38.2%</div></div>
+    <div class="kpi"><div>数据清洗算力成本</div><div id="k_cost" class="num">$38,000</div></div>
+    <div class="kpi"><div>下游训练省下算力费</div><div id="k_save" class="num">$345,000</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const tb = parseFloat(document.getElementById('tb').value);
+  const perm = parseFloat(document.getElementById('perm').value);
+  const mod = parseFloat(document.getElementById('mod').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_tb').textContent = tb + ' TB';
+  document.getElementById('v_perm').textContent = perm;
+  document.getElementById('v_mod').textContent = mod + 'B';
+
+  const scale = (tb / 20.0) * (perm / 128.0);
+  let hrs = 28.5, rem = 38.2, cost = 38000;
+  if (mode === '1') {
+    hrs = +(348.0 * scale).toFixed(1);
+    rem = 24.0;
+    cost = Math.round(142000 * scale);
+  } else if (mode === '2') {
+    hrs = +(112.0 * scale).toFixed(1);
+    rem = 26.5;
+    cost = Math.round(54000 * scale);
+  } else if (mode === '3') {
+    hrs = +(34.0 * scale).toFixed(1);
+    rem = 37.5;
+    cost = Math.round(68000 * scale);
+  } else {
+    hrs = +(28.5 * scale).toFixed(1);
+    rem = 38.2;
+    cost = Math.round(38000 * scale);
+  }
+  const save = Math.round((tb / 20.0) * (mod / 70.0) * (rem / 38.2) * 345000);
+  document.getElementById('k_hrs').textContent = hrs + ' hrs';
+  document.getElementById('k_rem').textContent = rem + '%';
+  document.getElementById('k_cost').textContent = '$' + cost.toLocaleString();
+  document.getElementById('k_save').textContent = '$' + save.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
