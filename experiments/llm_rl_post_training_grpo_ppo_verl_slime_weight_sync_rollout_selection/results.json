@@ -1,0 +1,58 @@
+{
+  "benchmark_id": "llm_rl_post_training_grpo_ppo_verl_slime_weight_sync_rollout_selection",
+  "title": "LLM RL Post-Training Architecture (PPO vs. GRPO, Colocated veRL HybridEngine vs. Disaggregated Async Rollout) Benchmark",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload_assumptions": {
+    "model": "70B / 671B Reasoning LLM",
+    "cluster_gpus": 128,
+    "gpu_sku": "NVIDIA H200 SXM 141GB",
+    "group_size_g": 16,
+    "max_rollout_tokens": 32768
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_4model_ppo_hf_generate_disk_weight_sync",
+      "name": "Tier 1: 4-Model PPO (`36Ψ` Memory) + Naive HuggingFace `generate()` + Disk Weight Sync (`95s` Stall)",
+      "rl_step_duration_sec": 495.0,
+      "weight_reshard_and_sync_sec": 95.0,
+      "long_tail_rollout_bubble_pct": 64.2,
+      "cost_per_1000_rl_steps_usd": 62000,
+      "verdict": "Anti-Pattern: Critic model doubles memory (`36Ψ`); disk weight sync & long-tail 32K rollouts waste 64.2% of GPUs"
+    },
+    {
+      "tier_id": "tier2_grpo_colocated_verl_synchronous_barrier_on_32k_rollouts",
+      "name": "Tier 2: Critic-Free GRPO (`20Ψ`) + Colocated veRL 3D-HybridEngine (Fast `1.8s` Reshard, Sync 32K Barrier)",
+      "rl_step_duration_sec": 198.0,
+      "weight_reshard_and_sync_sec": 1.8,
+      "long_tail_rollout_bubble_pct": 38.5,
+      "cost_per_1000_rl_steps_usd": 24800,
+      "verdict": "Great for <=8K uniform rollouts (`1.8s` in-memory reshard), but 127 GPUs wait on the single longest 32K chain!"
+    },
+    {
+      "tier_id": "tier3_static_disaggregated_actor_and_vllm_rollout_pools",
+      "name": "Tier 3: Static 50/50 Disaggregated Trainer & Rollout Pools (Over-RDMA Weight Broadcast, Idle Pool Alternating)",
+      "rl_step_duration_sec": 162.0,
+      "weight_reshard_and_sync_sec": 4.2,
+      "long_tail_rollout_bubble_pct": 26.4,
+      "cost_per_1000_rl_steps_usd": 20300,
+      "verdict": "Decouples TP/PP layouts, but static 1-step synchronous barrier still idles Trainer while Rollout finishes"
+    },
+    {
+      "tier_id": "tier4_grpo_hybrid_engine_plus_partial_rollout_continuation_and_fp8_rollout",
+      "name": "Tier 4: GRPO + FP8 SGLang/vLLM Rollout + Partial Rollout Continuation (Bounded Staleness k=1) + Sequence Packing",
+      "rl_step_duration_sec": 74.0,
+      "weight_reshard_and_sync_sec": 1.6,
+      "long_tail_rollout_bubble_pct": 5.8,
+      "cost_per_1000_rl_steps_usd": 9300,
+      "verdict": "Recommended: 74s RL step (6.69x faster vs. Tier 1), 1.6s weight sync, 5.8% bubble & -85.0% cost per 1K steps"
+    }
+  ],
+  "headline_findings": {
+    "rl_step_speedup_vs_tier1_x": 6.69,
+    "weight_sync_sec": 1.6,
+    "rollout_bubble_pct": 5.8,
+    "cost_reduction_vs_tier1_pct": 85.0
+  }
+}

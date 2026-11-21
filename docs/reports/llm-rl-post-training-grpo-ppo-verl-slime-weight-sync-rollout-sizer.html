@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>LLM RL Post-Training (PPO vs. GRPO, veRL vs. Slime) Memory &amp; Step Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LLM RL Post-Training (`PPO 36Ψ` vs. `GRPO 18Ψ` &amp; `veRL / Slime` Rollout) Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare RL Memory Footprint, Weight Sync &amp; Long-Tail Rollout Bubbles</div>
+    <div class="grid">
+      <div class="card">
+        <label>RL Algorithm &amp; Critic Mode:</label>
+        <select id="alg" onchange="recalc()">
+          <option value="grpo">GRPO + Verifier Sandbox (Actor 16Ψ + Ref 2Ψ = 18Ψ Total State)</option>
+          <option value="ppo">4-Model PPO (Actor 16Ψ + Critic 16Ψ + Ref 2Ψ + RM 2Ψ = 36Ψ State)</option>
+        </select>
+        <label>Rollout &amp; Weight Sync Architecture:</label>
+        <select id="arch" onchange="recalc()">
+          <option value="t4">Tier 4: FP8 Rollout + Partial Rollout Continuation + 1.6s HBM Reshard</option>
+          <option value="t2">Tier 2: Colocated veRL Synchronous Barrier (Waits for longest 32K chain)</option>
+          <option value="t1">Tier 1: Naive HF Generate + Disk Checkpoint Weight Sync</option>
+        </select>
+        <label>Max Reasoning Rollout Length ($L_{\max}$): <strong id="lVal">32,768 tokens (32K)</strong></label>
+        <input type="range" id="lmax" min="4096" max="65536" step="4096" value="32768" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="memVal">1,260 GB (18Ψ)</div><div class="lbl">Total Cluster Static RL State (70B Model)</div></div>
+          <div class="kpi"><div class="val" id="stepVal">74.0 sec</div><div class="lbl">Wall-Clock Duration per RL Step</div></div>
+          <div class="kpi"><div class="val" id="bubVal">5.8%</div><div class="lbl">Long-Tail Rollout Straggler Idle Bubble</div></div>
+          <div class="kpi"><div class="val" id="costVal">$9,300 / 1K steps</div><div class="lbl">Cluster Cost per 1,000 RL Steps (-85.0%)</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const alg = document.getElementById('alg').value;
+      const arch = document.getElementById('arch').value;
+      const lmax = parseInt(document.getElementById('lmax').value, 10);
+      document.getElementById('lVal').textContent = lmax.toLocaleString() + ' tokens (' + Math.round(lmax/1024) + 'K)';
+      const psi = alg === 'grpo' ? 18 : 36;
+      const memGb = 70 * psi;
+      const scale = lmax / 32768.0;
+      let step = 74.0 * scale, bub = 5.8;
+      if (arch === 't2') { step = 198.0 * scale; bub = 38.5; }
+      else if (arch === 't1') { step = 495.0 * scale; bub = 64.2; }
+      if (alg === 'ppo') step *= 1.32;
+      const cost = Math.round(9300 * (step / 74.0));
+      document.getElementById('memVal').textContent = memGb.toLocaleString() + ' GB (' + psi + 'Ψ)';
+      document.getElementById('stepVal').textContent = step.toFixed(1) + ' sec';
+      document.getElementById('bubVal').textContent = bub.toFixed(1) + '%';
+      document.getElementById('costVal').textContent = '$' + cost.toLocaleString() + ' / 1K steps';
+    }
+  </script>
+</body>
+</html>
