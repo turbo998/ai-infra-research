@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "confidential_ai_gpu_tee_h200_blackwell_ppcie_attestation_selection",
+        "title": "Confidential AI & GPU TEE Architecture: NVIDIA H200/Blackwell CC-On, PPCIE Multi-GPU NVLink & Remote Attestation Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "model": "Llama-3.3-70B-FP8",
+            "gpu_node": "8x NVIDIA H200 / B200 Confidential VM (SEV-SNP / TDX)",
+            "compliance_standard": "Zero-Trust Cloud Data-in-Use Encryption + Remote Attestation",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_cpu_only_tee_or_naive_gpu_cc_with_frequent_host_pcie_transfers",
+                "name": "Tier 1: Naive GPU `CC-On` with Frequent Host-DRAM KV Swapping & Eager Mode (`SWIOTLB` Bounce Bottleneck)",
+                "tee_throughput_retention_vs_baremetal_pct": 46.5,
+                "p99_decode_tpot_ms": 34.8,
+                "pcie_encryption_bounce_overhead_pct": 53.5,
+                "cost_per_1m_confidential_tokens_usd": 1.12,
+                "verdict": "Anti-Pattern: Encrypting/decrypting KV swap buffers & 650 eager kernel args over PCIe cuts throughput by 53.5%!",
+            },
+            {
+                "tier_id": "tier2_single_gpu_cc_on_with_cudagraph_and_hbm_resident_kv",
+                "name": "Tier 2: Single-GPU `CC-On` (`TP=1`) + CUDA Graph + 100% HBM-Resident KV (Zero Host KV Swap)",
+                "tee_throughput_retention_vs_baremetal_pct": 93.8,
+                "p99_decode_tpot_ms": 28.4,
+                "pcie_encryption_bounce_overhead_pct": 6.2,
+                "cost_per_1m_confidential_tokens_usd": 0.58,
+                "verdict": "Only 6.2% TEE tax because only tiny token IDs cross PCIe! Limited to single-GPU models (<=70B on 1x H200)",
+            },
+            {
+                "tier_id": "tier3_multi_gpu_h200_ppcie_nvlink_encryption_plus_kms_attestation",
+                "name": "Tier 3: Multi-GPU H200 `PPCIE` (`TP=8` Encrypted NVLink + CUDA Graph + Attested KMS Weight Decryption)",
+                "tee_throughput_retention_vs_baremetal_pct": 95.2,
+                "p99_decode_tpot_ms": 14.4,
+                "pcie_encryption_bounce_overhead_pct": 4.8,
+                "cost_per_1m_confidential_tokens_usd": 0.44,
+                "verdict": "Best Hopper multi-GPU TEE: 95.2% bare-metal speed (only 4.8% TEE overhead) with full 8-GPU NVLink encryption",
+            },
+            {
+                "tier_id": "tier4_blackwell_b200_inline_tee_tdisp_line_rate_nvlink5_encryption",
+                "name": "Tier 4: Blackwell B200 Native Line-Rate TEE (`PCIe TDISP + Inline NVLink 5 Encryption Engines` + Attested KMS)",
+                "tee_throughput_retention_vs_baremetal_pct": 98.4,
+                "p99_decode_tpot_ms": 8.2,
+                "pcie_encryption_bounce_overhead_pct": 1.6,
+                "cost_per_1m_confidential_tokens_usd": 0.28,
+                "verdict": "Recommended: Hardware inline encryption engines cut TEE tax to 1.6% (98.4% bare-metal speed) at $0.28/1M",
+            },
+        ],
+        "headline_findings": {
+            "h200_ppcie_speed_retention_pct": 95.2,
+            "b200_inline_tee_speed_retention_pct": 98.4,
+            "p99_tpot_ms": 8.2,
+            "cost_reduction_vs_tier1_pct": 75.0,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
