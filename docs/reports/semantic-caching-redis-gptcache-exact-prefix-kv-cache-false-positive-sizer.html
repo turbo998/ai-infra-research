@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>网关语义缓存 (Semantic Cache) vs. 引擎前缀 KV 缓存 (Prefix KV Cache) 评估器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #FDE68A; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业级网关语义缓存（Semantic Cache）vs. 推理层前缀 KV 缓存（Prefix KV）收益与风险计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>无状态公共 FAQ 流量占比 <span id="v_faq" class="val">40%</span></label>
+      <input type="range" id="faq" min="10" max="80" step="5" value="40" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>语义缓存余弦阈值 <span id="v_th" class="val">0.96</span></label>
+      <input type="range" id="th" min="0.86" max="0.98" step="0.01" value="0.96" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>集群总请求率 (RPS) <span id="v_rps" class="val">300</span></label>
+      <input type="range" id="rps" min="50" max="1000" step="50" value="300" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>大模型缓存分层架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 全局无差别网关语义缓存 (无实体校验)</option>
+        <option value="2">Tier 2: 仅开启网关 SHA-256 精确字符串缓存</option>
+        <option value="3">Tier 3: 仅开启推理引擎精确 Prefix KV 缓存</option>
+        <option value="4" selected>Tier 4: L1 精确 + L2 实体校验 FAQ 语义 + L3 引擎 Prefix KV (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>张冠李戴误命中率</div><div id="k_fp" class="num">0.02%</div></div>
+    <div class="kpi"><div>总算力 FLOPs 节省比例</div><div id="k_save" class="num">58.5%</div></div>
+    <div class="kpi"><div>平均端到端响应延迟</div><div id="k_lat" class="num">345 ms</div></div>
+    <div class="kpi"><div>月度集群总成本 (TCO)</div><div id="k_tco" class="num">$61,600</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const faq = parseFloat(document.getElementById('faq').value) / 100.0;
+  const th = parseFloat(document.getElementById('th').value);
+  const rps = parseFloat(document.getElementById('rps').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_faq').textContent = Math.round(faq * 100) + '%';
+  document.getElementById('v_th').textContent = th.toFixed(2);
+  document.getElementById('v_rps').textContent = rps;
+
+  let fp = 0.02, save = 58.5, lat = 345;
+  if (mode === '1') {
+    fp = +(Math.max(1.2, (0.99 - th) * 93.3)).toFixed(2);
+    save = +(20.0 + faq * 40.0).toFixed(1);
+    lat = Math.round(1180 * (1 - save / 100.0 * 0.78));
+  } else if (mode === '2') {
+    fp = 0.0;
+    save = 6.5;
+    lat = 1180;
+  } else if (mode === '3') {
+    fp = 0.0;
+    save = 41.0;
+    lat = 540;
+  } else {
+    fp = 0.02;
+    save = +(41.0 * (1 - faq * 0.45) + faq * 65.0).toFixed(1);
+    lat = Math.round(540 * (1 - faq * 0.55) + 12 * faq);
+  }
+  const tco = Math.round((rps / 300.0) * 143000 * (1 - save / 100.0 * 0.98));
+  document.getElementById('k_fp').textContent = fp + '%';
+  document.getElementById('k_save').textContent = save + '%';
+  document.getElementById('k_lat').textContent = lat + ' ms';
+  document.getElementById('k_tco').textContent = '$' + tco.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>

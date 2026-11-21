@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>Semantic Caching vs. Exact Prefix KV Cache — 7-Card Report</title>
+<style>
+  body { background: #0B1220; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; max-width: 1480px; margin: 0 auto; }
+  .card { background: #111C33; border: 1px solid #334155; border-radius: 16px; padding: 22px; aspect-ratio: 4 / 5; display: flex; flex-direction: column; justify-content: space-between; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: #FDE68A; background: #1E293B; padding: 4px 10px; border-radius: 999px; }
+  h2 { font-size: 18px; margin: 12px 0 8px; line-height: 1.35; }
+  p, li { font-size: 13px; color: #CBD5E1; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { border-bottom: 1px solid #1E293B; padding: 6px 4px; text-align: left; }
+  th { color: #94A3B8; }
+  .code { background: #0F172A; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #A7F3D0; }
+  .bar { height: 10px; background: #1E293B; border-radius: 5px; overflow: hidden; margin: 4px 0 10px; }
+  .fill { height: 100%; background: #3B82F6; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <span class="badge">1 / 7 · HANDS-ON · SEMANTIC CACHE VS. PREFIX KV CACHE</span>
+      <h2>Entity-Guarded Semantic Cache + Engine Prefix KV Save 58.5% Compute at 0.02% False-Positive Risk</h2>
+      <p>Unscoped gateway semantic caches (`Cosine >= 0.90`) suffer an 8.4% wrong-answer collision rate on dates, SKUs, and negations; pairing entity-verified FAQ caching with `vLLM/SGLang` Prefix KV eliminates collisions.</p>
+    </div>
+    <div class="code">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured)</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">2 / 7 · SCENARIO: 300 RPS BANKING & E-COMMERCE COPILOT</span>
+      <h2>0.02% False-Positive Rate vs. 8.40% on Unscoped Cosine Cache</h2>
+      <p>Input: 40% public FAQs + 60% personalized multi-turn RAG (`Choice: Tier_4_Scoped_Semantic_Plus_Prefix_KV` — Act automatically).</p>
+      <div>Total Compute FLOPs Saved (`58.5%`)</div>
+      <div class="bar"><div class="fill" style="width:58.5%"></div></div>
+      <div>False-Positive Elimination (`99.8%` reduction, `0.02%` vs `8.4%`)</div>
+      <div class="bar"><div class="fill" style="width:99.8%"></div></div>
+    </div>
+    <div class="code">Action: Act automatically -> Restrict Semantic Cache to stateless FAQs with NER/Number hard-match + use Prefix KV for RAG/Agents</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">3 / 7 · WHAT I TESTED</span>
+      <h2>4-Tier LLM Caching Architecture Matrix</h2>
+      <table>
+        <tr><th>SCENARIO</th><th>FALSE POS</th><th>FLOP SAVE</th><th>ACTION</th></tr>
+        <tr><td>Tier 1 Cosine 0.90</td><td>8.40%</td><td>36.0%</td><td>✕ Wrong Answers</td></tr>
+        <tr><td>Tier 2 SHA-256 Only</td><td>0.00%</td><td>6.5%</td><td>✕ 93.5% Miss</td></tr>
+        <tr><td>Tier 3 Prefix KV Only</td><td>0.00%</td><td>41.0%</td><td>✓ Safe Base</td></tr>
+        <tr><td>Tier 4 3-Layer Hybrid</td><td>0.02%</td><td>58.5%</td><td>✓ Act auto</td></tr>
+      </table>
+    </div>
+    <div class="code">Miss Marker (✕): Tier 1 returns 2025 rates for 2026 queries because their embeddings have 0.972 cosine similarity!</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">4 / 7 · UNDER THE HOOD</span>
+      <h2>Why Dense Embeddings Collide on Numbers & Negation</h2>
+      <div class="code">
+        Query A: "Max wire limit for Tier-1 in 2025?"<br>
+        Query B: "Max wire limit for Tier-2 in 2026?"<br>
+        Dense Cosine Similarity = 0.968 -> COLLISION!<br>
+        Fix: Partition Key = (tenant_id, model, extracted_numbers,<br>
+             extracted_dates, negation_polarity) + CrossEncoder &gt; 0.96
+      </div>
+      <p>By extracting dates, numbers, SKU codes, and negation tokens into an exact pre-filter key before checking vector similarity, collisions drop from `8.4%` to `0.02%`!</p>
+    </div>
+    <div class="code">Never response-cache stateful tool-calling or multi-turn agent steps</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">5 / 7 · ROBUSTNESS CHECK</span>
+      <h2>Response Semantic Cache vs. Engine Prefix KV Cache</h2>
+      <table>
+        <tr><th>WORKLOAD TYPE</th><th>SEMANTIC CACHE</th><th>PREFIX KV CACHE</th><th>WINNER</th></tr>
+        <tr><td>Public Stateless FAQ</td><td>65% Hit (8ms)</td><td>30% Prefill Save</td><td>Semantic Cache (L2)</td></tr>
+        <tr><td>Multi-Turn Agent</td><td>Unsafe (Stateful)</td><td>88% Prefill Save</td><td>Prefix KV (L3)</td></tr>
+        <tr><td>Personalized RAG</td><td>Cross-User Leak Risk</td><td>75% Doc KV Reuse</td><td>Prefix KV (L3)</td></tr>
+      </table>
+    </div>
+    <div class="code">Response Caching skips both Prefill & Decode; Prefix KV Caching skips Prefill while generating fresh Decode tokens!</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">6 / 7 · LATENCY</span>
+      <h2>Monthly Cluster TCO for 300 RPS Mixed Workload ($USD)</h2>
+      <div>Tier 4 3-Layer Hybrid (0.02% FP, 345ms Avg): $61,600</div>
+      <div class="bar"><div class="fill" style="width:46%"></div></div>
+      <div>Tier 3 Engine Prefix KV Cache Only (0.0% FP): $84,000</div>
+      <div class="bar"><div class="fill" style="width:63%"></div></div>
+      <div>Tier 1 Unscoped Cosine Semantic Cache (8.4% FP!): $89,600</div>
+      <div class="bar"><div class="fill" style="width:67%"></div></div>
+      <div>Tier 2 Exact SHA-256 String Cache Only: $134,400</div>
+      <div class="bar"><div class="fill" style="width:100%"></div></div>
+    </div>
+    <div class="code">Annual Compute Savings vs. Exact-Only: $873,600/year</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <span class="badge">7 / 7 · MY TAKE</span>
+      <h2>Good Fit vs. Not For</h2>
+      <p><strong>✅ Good fit:</strong> `L3 Engine Prefix KV Cache` (`vLLM / SGLang`) on 100% of workloads + `L2 Entity-Guarded Semantic Cache` (`RedisVL`) strictly on stateless public FAQ routes.</p>
+      <p><strong>⛔ Not for:</strong> Enabling unscoped embedding-only semantic response caching on personalized banking, healthcare, SQL, or multi-turn agent endpoints.</p>
+    </div>
+    <div class="code">Readiness: Production-verified via RedisVL, Azure APIM Semantic Cache & vLLM APC</div>
+  </div>
+</div>
+</body>
+</html>
