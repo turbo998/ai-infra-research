@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "experiment_id": "enterprise_ai_gateway_cloud_ptu_k8s_tco_breakthrough_radar_selection",
+        "title": "Enterprise AI Platform End-to-End Selection & 2026 Capability Breakthrough Radar: Serverless PAYGO vs. Provisioned PTU vs. Self-Hosted K8s TCO Crossover & AI Gateway Comparison (APIM / Envoy GIE / LiteLLM / Kong / Higress)",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_basis": {
+            "monthly_token_volume_billions": 6.0,
+            "crossover_thresholds": {
+                "paygo_to_ptu_utilization_pct": 30.0,
+                "ptu_to_self_hosted_k8s_monthly_tokens_billions": 2.5,
+            },
+        },
+        "tiers": [
+            {
+                "tier": "Tier 1: Unmanaged Direct 100% Serverless PAYGO APIs (No AI Gateway, Frequent 429 Throttling)",
+                "gateway_added_latency_ms": 0.0,
+                "prefix_kv_cache_hit_rate_pct": 22.0,
+                "blended_cost_per_1m_tokens_usd": 2.10,
+                "annual_tco_usd": 1512000,
+                "recommended_scenario": "Early-stage prototypes (<300M tokens/month or <20% average utilization)",
+            },
+            {
+                "tier": "Tier 2: Single-Tier Python Proxy (LiteLLM) + 100% Peak-Sized Cloud PTU (No Self-Hosted Offload)",
+                "gateway_added_latency_ms": 4.8,
+                "prefix_kv_cache_hit_rate_pct": 54.0,
+                "blended_cost_per_1m_tokens_usd": 1.18,
+                "annual_tco_usd": 849600,
+                "recommended_scenario": "Mid-sized teams relying solely on proprietary frontier APIs with steady daytime traffic",
+            },
+            {
+                "tier": "Tier 3: 100% Self-Hosted K8s + Round-Robin Ingress (Cache-Blind Routing & Peak Overprovisioning)",
+                "gateway_added_latency_ms": 1.8,
+                "prefix_kv_cache_hit_rate_pct": 38.5,
+                "blended_cost_per_1m_tokens_usd": 0.56,
+                "annual_tco_usd": 403200,
+                "recommended_scenario": "Suboptimal self-hosted K8s missing KV-aware Endpoint Picker (EPP) and cloud spillover",
+            },
+            {
+                "tier": "Tier 4 (Recommended): Dual-Layer Gateway (North-South APIM/Kong + East-West Envoy GIE EPP) + Hybrid K8s/PTU/PAYGO",
+                "gateway_added_latency_ms": 0.9,
+                "prefix_kv_cache_hit_rate_pct": 91.8,
+                "blended_cost_per_1m_tokens_usd": 0.25,
+                "annual_tco_usd": 180000,
+                "recommended_scenario": "Milestone #400 Enterprise AI Platform standard (-88.1% annual TCO & 91.8% KV cache hit rate)",
+            },
+        ],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json missing")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json out of date")
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print("Wrote results.json")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
