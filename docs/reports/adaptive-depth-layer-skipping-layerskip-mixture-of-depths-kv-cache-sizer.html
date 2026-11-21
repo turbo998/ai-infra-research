@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adaptive Depth &amp; LayerSkip Self-Speculative Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive Adaptive Depth (`LayerSkip Self-Speculative` vs. `MoD`) Sizer (#379)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Adaptive Depth Architecture Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Naive Early-Exit (Missing KV)</option>
+        <option value="2">Tier 2: KV-Propagation Approx Early-Exit</option>
+        <option value="3">Tier 3: Mixture-of-Depths (MoD 50% Router)</option>
+        <option value="4" selected>Tier 4: LayerSkip Self-Speculative Decoding</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Early-Exit Layer E (of 80 Layers)</label>
+      <input type="number" id="exitL" value="28" min="12" max="64" step="4" oninput="calc()">
+    </div>
+    <div class="ctrl">
+      <label>Baseline Full-80-Layer TPOT (ms)</label>
+      <input type="number" id="baseTpot" value="18.0" min="5.0" max="50.0" step="1.0" oninput="calc()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>Wall-Clock Decode Speedup</h3><div class="val" id="speed">1.86x</div></div>
+    <div class="card"><h3>Effective TPOT Latency</h3><div class="val" id="tpot">9.68 ms</div></div>
+    <div class="card"><h3>Benchmark Accuracy (vs 82.6%)</h3><div class="val" id="acc">82.6% (Lossless)</div></div>
+    <div class="card"><h3>Extra Draft Model HBM</h3><div class="val" id="hbm">0.0 GB</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const exitL = parseInt(document.getElementById('exitL').value, 10) || 28;
+  const baseTpot = parseFloat(document.getElementById('baseTpot').value) || 18.0;
+  const ratio = 28.0 / exitL;
+  const speed = ({1: 1.45, 2: 1.38, 3: 1.62, 4: 1.86}[tier]) * Math.pow(ratio, 0.25);
+  const tpot = baseTpot / speed;
+  const acc = {1: 64.2, 2: 76.8, 3: 81.9, 4: 82.6}[tier];
+  document.getElementById('speed').textContent = speed.toFixed(2) + 'x';
+  document.getElementById('tpot').textContent = tpot.toFixed(2) + ' ms';
+  document.getElementById('acc').textContent = acc.toFixed(1) + '%' + (tier === 4 ? ' (Lossless)' : '');
+  document.getElementById('hbm').textContent = '0.0 GB';
+}
+calc();
+</script>
+</body>
+</html>
