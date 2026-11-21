@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>K8s LLM Cold-Start &amp; KEDA Autoscaling Calculator</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>K8s LLM Weight Cold-Start &amp; `KEDA` Autoscaling Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Calculate Pod Startup Time Across Weight Loading Pipelines</div>
+    <div class="grid">
+      <div class="card">
+        <label>Model Weight Footprint ($M_{\text{weights}}$): <strong id="wVal">70 GB (Llama-3.3-70B FP8)</strong></label>
+        <input type="range" id="wgb" min="16" max="671" step="16" value="70" oninput="recalc()">
+        <label>Weight Loading &amp; Container Pipeline:</label>
+        <select id="pipe" onchange="recalc()">
+          <option value="sleep">Tier 4a: vLLM Sleep-Mode `level=1` (Pinned Host DDR5 -> HBM @ 512 GB/s)</option>
+          <option value="gds">Tier 4b: Local NVMe GPUDirect Storage + Cached Compile (`28 GB/s`)</option>
+          <option value="streamer">Tier 3: Run:ai Model Streamer from S3/GCS/Blob (`12 GB/s`)</option>
+          <option value="nfs">Tier 2: Sequential `.safetensors` Read over Shared NFS (`0.8 GB/s`)</option>
+          <option value="oci">Tier 1: Monolithic OCI Container Image Pull + Unpack (`0.22 GB/s`)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="loadVal">0.14 sec</div><div class="lbl">Pure Weight Transfer into HBM</div></div>
+          <div class="kpi"><div class="val" id="readyVal">4.2 sec</div><div class="lbl">Total Replica Ready Time (inc. Graph Replay)</div></div>
+          <div class="kpi"><div class="val" id="ttftVal">540 ms</div><div class="lbl">Burst Traffic P99 TTFT</div></div>
+          <div class="kpi"><div class="val" id="verdictVal">🏆 Instant Elastic Wake</div><div class="lbl">Autoscaling SLA Verdict</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const w = parseInt(document.getElementById('wgb').value, 10);
+      const p = document.getElementById('pipe').value;
+      document.getElementById('wVal').textContent = w + ' GB';
+      let bw = 512.0, baseSec = 4.0, ttft = 540, verd = '🏆 Instant Elastic Wake';
+      if (p === 'gds') { bw = 28.0; baseSec = 10.0; ttft = 620; verd = '✅ Fast Cold Pod Start'; }
+      else if (p === 'streamer') { bw = 12.0; baseSec = 18.0; ttft = 920; verd = '✅ Cloud-Native Streaming'; }
+      else if (p === 'nfs') { bw = 0.8; baseSec = 35.0; ttft = 4200; verd = '⚠️ Slow NFS Bottleneck'; }
+      else if (p === 'oci') { bw = 0.22; baseSec = 85.0; ttft = 18500; verd = '⛔ Misses Traffic Spike!'; }
+      const loadSec = w / bw;
+      const totSec = baseSec + loadSec;
+      document.getElementById('loadVal').textContent = loadSec.toFixed(1) + ' sec';
+      document.getElementById('readyVal').textContent = totSec.toFixed(1) + ' sec';
+      document.getElementById('ttftVal').textContent = ttft.toLocaleString() + ' ms';
+      document.getElementById('verdictVal').textContent = verd;
+    }
+  </script>
+</body>
+</html>
