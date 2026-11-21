@@ -60,7 +60,7 @@ TPOT 是单请求后续间隔的平均值；P99 ITL 能揭示短时卡顿。输�
 
 ### Q4. Throughput 和 Goodput 为什么会背离？
 
-Throughput 计所有完成的请求/Token；Goodput 只计同时满足约定 SLA 和质量门槛的部分。高 batch 可能增加 TPS，却使 TTFT 或 ITL 超标；此时 Goodput 下降甚至为零。
+Throughput 必须先声明计数群体：完成请求率、生成 Token 速率、客户端收到的 Token 速率并不是同一口径；失败前已发出的 Token 可以计入原始流量，但不能伪装成成功完成的请求。Goodput 只计同时满足约定 SLA 和质量门槛的部分。高 batch 可能增加 TPS，却使 TTFT 或 ITL 超标；此时 Goodput 下降甚至为零。
 
 H5 的 tradeoff 曲线来自可调确定性教学模型，不是硬件帕累托前沿。等输出长度下可用请求达标比例乘 Token TPS；不等输出长度要按实际 Token 加权。
 
@@ -140,6 +140,8 @@ $/1M 达标输出 = 40×10⁶/(3600×5000) = $2.22
 ```
 
 API 输入/输出价格分别算，不与自建单输出分母混用。Goodput=0 时单位成本未定义，不显示 `$0`。
+
+**云额度与吞吐还差一道“限流计量器”**：2026-11-21直读 Microsoft Learn 的新/经典 quota 页面，两者均说明使用实际输入与生成 Token，而非把配置的最大输出值预留进 TPM。旧检索摘要仍描述 `max_tokens` / `best_of` 估算，应以当前原文为准；这里不宣称服务变更日期或具体部署已实测。RPM 可按1或10秒短窗口判断：官方600 RPM示例若用1秒窗，超过10请求/秒就可能429，哪怕整分钟少于600。核对部署的 remaining/reset、`retry-after-ms` 与实际 usage；PTU 另用利用率评估。两份现行文档一致，文档依据高置信；上线前仍须复核当前文档和部署行为。见[新文档](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/quota#understanding-rate-limits)及[经典文档](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/quota#understanding-rate-limits)。
 
 ## 专题 3：GPU 三道水位线
 

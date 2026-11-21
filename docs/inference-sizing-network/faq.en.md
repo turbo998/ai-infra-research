@@ -60,7 +60,7 @@ Voice-budget exercise: VAD 20 + ASR 40 + LLM 120 + TTS 60 + network/gateway 30 =
 
 ### Q4. Why can throughput and goodput diverge?
 
-Throughput counts all completed requests/tokens; goodput counts those meeting agreed SLO and quality gates. Larger batches can raise TPS while violating TTFT or ITL, reducing goodput to zero.
+Define the throughput population first: completed requests, model-generated tokens and client-visible tokens are different scopes. Tokens emitted before a failure can count as raw traffic, but not as a successfully completed request. Goodput counts the work meeting agreed SLO and quality gates. Larger batches can raise TPS while violating TTFT or ITL, reducing goodput to zero.
 
 H5 tradeoff curves derive from adjustable deterministic teaching models, not hardware Pareto frontiers. With equal output lengths, request pass fraction can multiply token TPS. Unequal lengths require actual token weighting.
 
@@ -140,6 +140,8 @@ $/1M compliant output = 40×10⁶/(3600×5000) = $2.22
 ```
 
 Calculate API input/output prices separately; do not confuse them with a self-hosted output-only denominator. At zero goodput, unit cost is undefined, not `$0`.
+
+**Cloud quota has its own admission meter**. Direct reads of the current/classic Microsoft Learn quota pages on 2026-11-21 both describe actual input/generated tokens, not reserving the configured maximum output value against TPM. Older search snippets still describe `max_tokens` / `best_of` estimates; prefer the live text, without claiming a service-transition date or tested deployment behavior. RPM can use 1- or 10-second windows: the official 600-RPM example can reject more than 10 requests/s under a 1-second check, despite fewer than 600 in the minute. Check deployment remaining/reset headers, `retry-after-ms` and usage; PTU uses separate utilization-based evaluation. Confidence is high for the matching live documentation, not untested runtime behavior; recheck both before commitments. See the [current page](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/quota#understanding-rate-limits) and [classic page](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/quota#understanding-rate-limits).
 
 ## Chapter 3: three GPU bounds
 
