@@ -25,7 +25,7 @@ For enterprise **Cloud & AI Solution Architects**, connect “why users see slow
 - [English FAQ, hand calculations, decision matrix and checklist](faq.en.md)
 - [Source catalog and calculation boundaries](../h5-academy/sources.json), reviewed 2026-11-21.
 
-**Not a measured benchmark report**: SLO targets, workload distributions, prices, tradeoff curves and 200-sample P99 curves are original teaching assumptions, labeled `synthetic`. Hardware specifications and software capabilities are labeled `specification` / `implementation`, not converted into performance promises. No independently reproduced hardware throughput or latency.
+**Not a measured benchmark report**: SLO targets, workload distributions, prices, tradeoff and P99curves are original teaching assumptions labeled `synthetic`. PD request-P99 TPOT uses200 request means; pooled-P99 ITL uses the same6200 gaps. Hardware specifications and software capabilities are `specification` / `implementation`, not performance promises. No independently reproduced hardware throughput or latency.
 
 Key corrections: L40S uses GDDR6 and has no NVLink; B200 192 GB design/what-if capacity is distinct from DGX B200's delivered 180 GB/GPU specification; loading DeepSeek MTP adds 14B beyond 671B main weights; an 80–85% margin is architecture planning, not vLLM's current default.
 

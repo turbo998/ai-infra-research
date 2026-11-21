@@ -158,6 +158,38 @@ async function probe(exercise, expectedWidth) {
         validate(trace);
         cases += 3;
       }
+      const pd = document.querySelector('form[data-lab="pd"]');
+      const pdPlan = document.querySelector('form[data-lab="pdBudget"]');
+      if (pd && pdPlan) {
+        const wire=pd.querySelector('[data-key="wireCopies"]');
+        wire.value="4";
+        wire.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(document.querySelector('[data-pd-readiness="blocked-capacity"]'), "PD plan did not update from the shared wire multiplier");
+        pd.reset();
+        await wait();
+        const origin=pdPlan.querySelector('[data-key="firstVisible"]');
+        origin.value="prefill";
+        origin.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(document.querySelector('[data-pd-readiness="blocked-latency"]'), "Early P token incorrectly hid the first streaming gap");
+        pdPlan.reset();
+        await wait();
+        const layout=pd.querySelector('[data-key="customKVBytes"]');
+        layout.checked=true;
+        layout.dispatchEvent(new Event("input",{bubbles:true}));
+        assert(!pd.querySelector('[data-key="bytesPerToken"]').disabled, "Custom KV geometry input did not enable");
+        validate(pd);
+        validate(pdPlan);
+        pd.reset();
+        await wait();
+        const zoom=pd.querySelector('[data-key="hideColocated"]');
+        zoom.checked=true;
+        zoom.dispatchEvent(new Event("input",{bubbles:true}));
+        const lines=[...pd.closest("[data-workbench]").querySelectorAll('figure:nth-of-type(2) polyline')];
+        assert(lines.length===2 && lines.some((line)=>line.classList.contains("secondary")) && lines.some((line)=>line.classList.contains("tertiary")), "Optimized-path zoom changed series colors or retained the omitted curve");
+        pd.reset();
+        await wait();
+        cases += 4;
+      }
       const oldLanguage = document.documentElement.lang;
       document.querySelector("#language").click();
       assert(document.documentElement.lang !== oldLanguage, "Language did not change");

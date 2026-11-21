@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LHU851xqX37igYr/kC/rVmLFDDiZydpUqJEVcuRMk28=' 'sha256-I4wJBCi+dEMie4qipLxd7KUGmVltIO/wsMz9ns2WgHU=' 'sha256-aoCrCL6LqqXjR+Ajm0Iz4JF/dMrgDUGPmk5cxd/LPF0='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LHU851xqX37igYr/kC/rVmLFDDiZydpUqJEVcuRMk28=' 'sha256-mzjVRl3jH+CTAlWO9Z7UpYhl2xVkLANtEwFcvyEss00=' 'sha256-OWViFq+odTmfBtr0kNrvwYUzQAv5FxSlxIq32UEyAaI='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="description" content="Offline bilingual Cloud &amp; AI Solution Architect academy: metrics, TPM/TPS, GPU sizing, PD, parallelism and RDMA fabric.">
 <title>TP 分张量，PP 分层，DP 分请求，EP 分专家 | TP splits tensors, PP layers, DP requests, EP experts</title>
 <script>(() => {
@@ -575,10 +575,59 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     number(p.setup, "setup");
     number(p.overlap, "overlap");
     number(p.qps, "qps");
-    const bytes = kvPerToken(model, p.kvBytes) * p.context * (1 - p.cache);
+    number(p.wireCopies, "actual wire multiplier", 1, 64);
+    const bytesPerToken = p.customKVBytes ? integer(p.bytesPerToken, "unique logical KV bytes/token", 1) : kvPerToken(model, p.kvBytes);
+    const fullLogicalBytes = bytesPerToken * p.context;
+    const logicalBytes = fullLogicalBytes * (1 - p.cache);
+    const bytes = logicalBytes * p.wireCopies;
     const bandwidth = p.rate * 1e9 / 8 * p.efficiency * p.rails;
     const rawMs = bytes / bandwidth * 1000;
-    return { bytes, bandwidth, rawMs, exposedMs: Math.max(0, rawMs - p.overlap) + p.setup, utilization: bytes * p.qps / bandwidth, requiredGbps: bytes * p.qps * 8 / 1e9 / p.efficiency };
+    return { bytes, logicalBytes, fullLogicalBytes, bytesPerToken, bandwidth, rawMs, exposedMs: Math.max(0, rawMs - p.overlap) + p.setup, utilization: bytes * p.qps / bandwidth, requiredGbps: bytes * p.qps * 8 / 1e9 / p.efficiency };
+  }
+  function pdBudget(p) {
+    const model = preset(models, p.model);
+    const tx = transfer(p);
+    integer(p.outputTokens, "all generated output tokens", 1, 32768);
+    number(p.destinationCopies, "destination referenced-state multiplier", 1, 64);
+    number(p.prefillPoolTPS, "prefill pool input capacity", 0.001);
+    number(p.decodePoolTPS, "decode pool output capacity", 0.001);
+    integer(p.decodeSlots, "decode KV-resident slots", 1, 32768);
+    number(p.meanTPOT, "mean decode interval ms", 0.001);
+    number(p.capacityLimit, "capacity-use planning limit", 0.01, 0.99);
+    [p.queueP, p.prefillBudget, p.queueD, p.firstBudget, p.delivery].forEach((v) => number(v, "latency budget ms"));
+    number(p.ttftTarget, "TTFT budget target", 0.001);
+    number(p.itlTarget, "first-to-second gap target", 0.001);
+    if (p.overlap > p.prefillBudget) throw new RangeError("Verified overlap cannot exceed the assumed prefill computation window");
+    if (!["decode", "prefill"].includes(p.firstVisible)) throw new RangeError("Choose where the first visible token is emitted");
+    if (p.firstVisible === "prefill" && p.outputTokens === 1) throw new RangeError("A one-token request ending visibly at P does not need the full PD pipeline");
+    for (const flag of ["compatible", "memoryChecked", "colocatedPasses"]) if (typeof p[flag] !== "boolean") throw new RangeError("Confirm PD planning assumptions explicitly");
+    integer(p.prefillReplicas, "complete-model P replicas", 1, 4096);
+    integer(p.decodeReplicas, "complete-model D replicas", 1, 4096);
+    number(p.weightBytes, "stored weight bytes", 0.5, 2);
+    number(p.weightOverhead, "weight metadata allowance", 0, 1);
+    const dOutputs = p.outputTokens - (p.firstVisible === "prefill" ? 1 : 0);
+    const dComputeMs = p.firstVisible === "decode" ? p.firstBudget + (p.outputTokens - 1) * p.meanTPOT : dOutputs * p.meanTPOT;
+    const dResidenceMs = tx.exposedMs + p.queueD + dComputeMs;
+    number(dResidenceMs, "D resident duration budget", 0.001);
+    const limits = [
+      { key: "P input", rps: p.prefillPoolTPS / p.context },
+      { key: "D output", rps: p.decodePoolTPS / dOutputs },
+      { key: "D slots", rps: p.decodeSlots / (dResidenceMs / 1000) }
+    ];
+    if (tx.bytes > 0) limits.push({ key: "KV network", rps: tx.bandwidth / tx.bytes });
+    const bottleneck = limits.reduce((a, value) => value.rps < a.rps ? value : a, limits[0]);
+    const ttftBudget = p.queueP + p.prefillBudget + p.firstBudget + p.delivery + (p.firstVisible === "decode" ? tx.exposedMs + p.queueD : 0);
+    const firstGapBudget = p.outputTokens <= 1 ? null : p.meanTPOT + (p.firstVisible === "prefill" ? tx.exposedMs + p.queueD : 0);
+    const flags = {
+      compatibility: p.compatible && p.memoryChecked && p.context + p.outputTokens <= model.contextLimit,
+      capacityStable: limits.every((limit) => p.qps < limit.rps),
+      headroom: limits.every((limit) => p.qps / limit.rps <= p.capacityLimit),
+      latency: ttftBudget <= p.ttftTarget && (firstGapBudget === null || firstGapBudget <= p.itlTarget)
+    };
+    const readiness = p.colocatedPasses ? "keep-baseline" : !flags.compatibility ? "blocked-layout" : !flags.capacityStable ? "blocked-capacity" : !flags.latency ? "blocked-latency" : !flags.headroom ? "validate-headroom" : "trial-candidate";
+    const fullStateBytes = tx.bytesPerToken * (p.context + p.outputTokens) * p.destinationCopies;
+    const weightsGB = (model.total + (p.mtp ? (model.mtp || 0) : 0)) * p.weightBytes * (1 + p.weightOverhead) * (p.prefillReplicas + p.decodeReplicas);
+    return { model, tx, limits, bottleneck, flags, readiness, ttftBudget, firstGapBudget, dResidenceMs, fullStateBytes, weightsGB, candidateOutputTPS: bottleneck.rps * p.outputTokens };
   }
   function percentile(values, fraction) {
     if (!Array.isArray(values) || !values.length) throw new RangeError("Percentile requires samples");
@@ -595,14 +644,21 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const block = context / prefillRate * 1000;
     const burst = Math.min(context, chunk) / prefillRate * 1000;
     const samples = { colocated: [], chunked: [], pd: [] };
-    for (let i = 0; i < 200; i += 1) {
-      const interference = i % 20 === 0;
-      const jitter = (i * 17 % 7) * 0.15;
-      samples.colocated.push(base + jitter + (interference ? block : 0));
-      samples.chunked.push(base + jitter + (interference ? burst : 0));
-      samples.pd.push(base + jitter + (interference ? residual : 0));
+    const requestTPOT = { colocated: [], chunked: [], pd: [] };
+    for (let request = 0; request < 200; request += 1) {
+      const sum = { colocated: 0, chunked: 0, pd: 0 };
+      for (let gap = 0; gap < 31; gap += 1) {
+        const interference = request % 50 === 0 ? gap % 7 === 0 : (request + gap) % 20 === 0;
+        const jitter = ((request * 17 + gap * 13) % 7) * 0.15;
+        const values = { colocated: base + jitter + (interference ? block : 0), chunked: base + jitter + (interference ? burst : 0), pd: base + jitter + (interference ? residual : 0) };
+        for (const key of Object.keys(samples)) {
+          samples[key].push(values[key]);
+          sum[key] += values[key];
+        }
+      }
+      for (const key of Object.keys(requestTPOT)) requestTPOT[key].push(sum[key] / 31);
     }
-    return { samples, p99: Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, percentile(values, 0.99)])) };
+    return { samples, requestTPOT, requestCount: 200, outputTokens: 32, gapCount: 6200, p99: Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, percentile(values, 0.99)])), p99TPOT: Object.fromEntries(Object.entries(requestTPOT).map(([key, values]) => [key, percentile(values, 0.99)])) };
   }
   function collective({ operation, ranks, sizeMB, timeMs }) {
     integer(ranks, "ranks", 2, 65536);
@@ -672,7 +728,7 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, pdBudget, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);
@@ -687,7 +743,7 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
   const kpi = (value, label) => `<div class="kpi"><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`;
   const kpis = (items) => `<div class="kpis">${items.map(([v, l]) => kpi(v, l)).join("")}</div>`;
   const note = (text) => `<div class="notice">${esc(text)}</div>`;
-  const legend = (labels) => `<div class="legend">${labels.map((l, i) => `<span><i class="${["primary", "secondary", "tertiary"][i % 3]}"></i>${esc(l)}</span>`).join("")}</div>`;
+  const legend = (labels, classes = []) => `<div class="legend">${labels.map((l, i) => `<span><i class="${esc(classes[i] || ["primary", "secondary", "tertiary"][i % 3])}"></i>${esc(l)}</span>`).join("")}</div>`;
   const dataTable = (headers, rows, caption) => `<div class="table-wrap"><table><caption>${esc(caption)}</caption><thead><tr>${headers.map((v) => `<th scope="col">${esc(v)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((v, i) => i === 0 ? `<th scope="row">${esc(v)}</th>` : `<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   let chartId = 0;
   function svg(body, caption, height = 310) {
@@ -714,12 +770,12 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     body += `<path d="M ${x0} ${y0} V ${y0 + height} H ${x0 + width}" class="axis"/>`;
     if (gate !== null) body += `<path d="M ${x0} ${y(gate)} H ${x0 + width}" class="line tertiary" stroke-dasharray="6 5"/><text x="${x0 + width}" y="${y(gate) - 8}" text-anchor="end">${esc(gateLabel)} ${fmt(gate)}</text>`;
     series.forEach((s, index) => {
-      const cls = ["primary", "secondary", "tertiary"][index % 3];
+      const cls = s.colorClass || ["primary", "secondary", "tertiary"][index % 3];
       body += `<polyline class="line ${cls}" points="${s.values.map((v) => `${x(v.x)},${y(v.y)}`).join(" ")}"/>`;
       body += s.values.map((v) => `<circle class="${cls}" cx="${x(v.x)}" cy="${y(v.y)}" r="3"><title>${esc(s.label)}: ${fmt(v.x)}, ${fmt(v.y)}</title></circle>`).join("");
     });
     body += `<text x="${x0}" y="18">${esc(yLabel)}</text><text x="${x0 + width}" y="285" text-anchor="end">${esc(xLabel)}</text>`;
-    return legend(series.map((s) => s.label)) + svg(body, caption);
+    return legend(series.map((s) => s.label), series.map((s, i) => s.colorClass || ["primary", "secondary", "tertiary"][i % 3])) + svg(body, caption);
   }
   function barChart(rows, caption, unit = "") {
     const max = Math.max(...rows.map((r) => r.value), 1);
@@ -937,7 +993,8 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     const lengths = [1024, 4096, 8192, 16384, 32768, 65536, 131072];
     const points = lengths.map((context) => ({ context, ...M.pdSamples({ ...p, context }) }));
     const labels = { colocated: t("共池", "Colocated"), chunked: "Chunked Prefill", pd: t("PD（残留干扰假设）", "PD (residual assumption)") };
-    const series = Object.entries(labels).map(([key, label]) => ({ label, values: points.map((v) => ({ x: v.context, y: v.p99[key] })) }));
+    const series = Object.entries(labels).map(([key, label], index) => ({ label, colorClass: ["primary", "secondary", "tertiary"][index], values: points.map((v) => ({ x: v.context, y: v.p99[key] })) }));
+    const tpotSeries = Object.entries(labels).map(([key, label], index) => ({ label, colorClass: ["primary", "secondary", "tertiary"][index], values: points.map((v) => ({ x: v.context, y: v.p99TPOT[key] })) }));
     const prefill = p.context / p.prefillRate * 1000;
     const max = Math.max(prefill + 5 * p.base, 1);
     const scale = (v) => v / max * 630;
@@ -948,11 +1005,43 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
     }
     timeline += `<text x="10" y="150">${t("独立 D 池：去除 Prefill 阻塞，但仍有残留调度/通信", "Separate D pool: no prefill stall, residual scheduling/communication remains")}</text><text x="100" y="245">${t("PD 行是定性流水线示意，不与上一行共享时间比例", "PD row is a qualitative pipeline, not the same time scale")}</text>`;
     const current = M.pdSamples(p);
-    return kpis([[fmt(r.bytes / 1e9) + " GB", t("新传输 KV Payload", "New KV payload")], [fmt(r.rawMs) + " ms", t("原始传输时间", "Raw transfer time")], [fmt(r.exposedMs) + " ms", t("暴露交接时间", "Exposed handoff")], [fmt(r.utilization * 100) + "%", t("单方向 fabric 负载", "One-way fabric load")], [fmt(r.requiredGbps) + " Gb/s", t("含效率的总线速需求", "Aggregate line-rate need incl. efficiency")], ["200 ITL", t("每上下文点模拟样本数", "Synthetic samples/context point")]]) +
+    return kpis([[fmt(r.logicalBytes / 1e9) + " GB", t("新的唯一逻辑 KV", "New unique logical KV")], [fmt(r.bytes / 1e9) + " GB", t("实际线量预算，含传输倍率", "Wire budget including multiplier")], [fmt(r.rawMs) + " ms", t("原始传输时间", "Raw transfer time")], [fmt(r.exposedMs) + " ms", t("暴露交接时间", "Exposed handoff")], [fmt(r.utilization * 100) + "%", t("单方向 fabric 负载", "One-way fabric load")], [fmt(r.requiredGbps) + " Gb/s", t("含效率的总线速需求", "Aggregate line-rate need incl. efficiency")], ["200 / 6200", t("每点模拟请求 / 间隔样本", "Synthetic requests / gaps per point")]]) +
       (r.utilization >= 1 ? note(t("警告：KV 到达量不低于有效带宽，持续队列不稳定。下面曲线不预测此时的真实 P99；增加带宽、减少交接量或限制接入。", "Warning: KV arrival meets/exceeds effective bandwidth; sustained queues are unstable. Curves do not predict real P99 under this overload. Add bandwidth, reduce handoff or control admission.")) : "") +
       svg(timeline, t("混部阻塞与分池流水线示意。", "Colocated stalls versus separate-pool pipeline illustration."), 280) +
-      plot(series, "Prompt tokens", "Synthetic P99 ITL ms", t("P99 来自每点 200 个确定性模拟 ITL；nearest-rank，5% Prefill 干扰；不是硬件测量，也不保证 PD 无抖动。", "P99 from 200 deterministic synthetic ITLs/point; nearest-rank, 5% interference; no hardware measurement or zero-jitter promise.")) +
-      dataTable([t("当前上下文", "Current context"), "Synthetic P99 ITL ms", t("样本分母", "Sample count")], Object.entries(labels).map(([key, label]) => [label, fmt(current.p99[key]), 200]), `${p.context} tokens · synthetic`);
+      plot(p.hideColocated ? tpotSeries.slice(1) : tpotSeries, "Prompt tokens", "Synthetic request P99 TPOT ms", t("每点200个32输出Token请求，先求每请求31间隔平均TPOT，再取请求P99；不是P99 ITL。", "Each point has200 requests with32 outputs: average31 gaps per request, then take request-P99 TPOT; not P99 ITL.") + (p.hideColocated ? t(" 此视图省略混部，数值仍在表格。", " Colocated is omitted from this view, with values retained in the table.") : "")) +
+      plot(p.hideColocated ? series.slice(1) : series, "Prompt tokens", "Synthetic pooled P99 ITL ms", t("同一批模拟请求的6200个后续间隔P99；2%请求有额外突发干扰。假设首字已从D可见，不含启动交接，非实测。", "P99 over6200 gaps from the same simulated requests;2% have extra bursts. Assumes first D-visible output, excludes startup handoff and is not measured.") + (p.hideColocated ? t(" 放大两条优化路径。", " Zoomed to the two optimized paths.") : "")) +
+      dataTable([t("当前上下文", "Current context"), "P99 request TPOT ms", "P99 pooled ITL ms", t("分母", "Denominators")], Object.entries(labels).map(([key, label]) => [label, fmt(current.p99TPOT[key]), fmt(current.p99[key]), "200 requests / 6200 gaps"]), `${p.context} tokens · synthetic`);
+  }
+  function pdBudget(p) {
+    const source = document.querySelector('form[data-lab="pd"]');
+    if (!source.checkValidity()) throw new RangeError(t("请先修正上方传输沙盘输入", "Fix the transfer-workbench inputs above first"));
+    const combined = { ...inputValues(source), ...p };
+    const r = M.pdBudget(combined);
+    const readiness = {
+      "keep-baseline": t("保留混部基线，非必须分离", "Keep colocated baseline; PD is not mandatory"),
+      "blocked-layout": t("先修兼容/内存/上下文条件", "Resolve compatibility/memory/context first"),
+      "blocked-capacity": t("容量不稳定，不能接入该负载", "Capacity unstable at this demand"),
+      "blocked-latency": t("首字或首次间隔预算不满足", "First-token/first-gap budget fails"),
+      "validate-headroom": t("余量不足，先验证峰值与容灾", "Insufficient headroom; validate peak/failover"),
+      "trial-candidate": t("可进入真实A/B，非生产批准", "Candidate for real A/B, not production approval")
+    };
+    const limits = r.limits.map((limit) => [limit.key, fmt(limit.rps), fmt(combined.qps / limit.rps * 100) + "%"]);
+    if (!r.tx.bytes) limits.push(["KV network", t("无新线量，不构成限制", "No new wire bytes; not limiting"), "N/A"]);
+    const latency = p.firstVisible === "decode" ? [
+      ["P queue", p.queueP], ["P compute", p.prefillBudget], ["KV handoff", r.tx.exposedMs], ["D queue", p.queueD], ["First sample", p.firstBudget], ["Delivery", p.delivery]
+    ] : [["P queue", p.queueP], ["P compute", p.prefillBudget], ["P first sample", p.firstBudget], ["Delivery", p.delivery]];
+    return kpis([[readiness[r.readiness], t("仅规划检查，不是实测验证", "Planning check, not a measurement")], [fmt(r.bottleneck.rps) + " req/s", `${t("最小容量约束", "Minimum capacity constraint")}: ${r.bottleneck.key}`], [fmt(r.candidateOutputTPS) + " tok/s", t("候选系统输出上界，非Goodput", "Candidate system-output bound, not goodput")], [fmt(r.ttftBudget) + " ms", t("首可见Token工程预算", "First-visible-token engineering budget")], [r.firstGapBudget === null ? "N/A" : fmt(r.firstGapBudget) + " ms", t("首字后首次间隔预算", "First-to-second gap budget")], [fmt(r.fullStateBytes / 1e9) + " GB", t("每请求D引用峰值KV状态，非新增分配", "D peak referenced KV/request, not new allocation")]]).replace('<div class="kpis">', `<div class="kpis" data-pd-readiness="${r.readiness}">`) +
+      barChart(r.limits.map((limit) => ({ label: limit.key, value: limit.rps })), t("P输入、D输出、D驻留槽与网络上界取最小，未用aggregate TPS推首字时间。", "Take the minimum P-input/D-output/D-slot/network bound; aggregate TPS does not determine first-token latency."), "req/s") +
+      dataTable([t("容量约束", "Capacity constraint"), "Upper req/s", t("目标负载占比", "Target load fraction")], limits, t("同一个传输案例与目标QPS，余量不是通用SLA", "Same transfer case/QPS; headroom is not a universal SLA")) +
+      dataTable([t("首字阶段预算", "First-token stage budget"), "ms"], latency.map(([label, value]) => [label, fmt(value)]), t("工程预算之和，不是阶段P99相加", "Engineering budget sum, not summed stage P99s")) +
+      dataTable([t("检查", "Check"), t("本例条件", "Case condition")], [
+        [t("模型/布局/每rank内存/上下文", "Model/layout/rank-memory/context"), r.flags.compatibility ? t("按输入假设满足", "Passes entered assumptions") : t("不满足", "Fails")],
+        [t("目标QPS低于每个容量上界", "Demand below every capacity bound"), r.flags.capacityStable ? t("满足模型条件", "Passes model condition") : t("不稳定", "Unstable")],
+        [t("规划容量余量", "Planning capacity headroom"), r.flags.headroom ? t("满足自选余量", "Passes chosen margin") : t("需额外验证", "Needs further validation")],
+        [t("TTFT与首次间隔", "TTFT and first gap"), r.flags.latency ? t("工程预算满足", "Engineering budget passes") : t("工程预算失败", "Engineering budget fails")],
+        [t("P+D主权重预算", "P+D main-weight budget"), fmt(r.weightsGB) + " GB"]
+      ], t("确认框也是教学假设，不会自动检查部署", "Confirmation checkboxes are teaching assumptions, not deployment checks")) +
+      note(t("D缓存命中只在这里减少新线量，不自动减少P计算预算或完整引用状态。每rankKV复制可通过D侧本地广播实现，不能直接拿状态倍率乘跨网流量。完整实例数只改变权重预算；池TPS是用户提供的全池约束，不能未经测量自动线性扩容。真正Goodput/质量/成本要用同负载端到端A/B取得。", "D cache hits reduce new wire bytes here, not automatically P compute or full referenced state. Rank KV copies may use D-local broadcast; do not blindly multiply network traffic by state-copy count. Replica counts change weight budget; whole-pool TPS bounds must not be automatically scaled without measurements. Obtain actual goodput/quality/cost from same-workload end-to-end A/B."));
   }
   function parallel(p) {
     M.integer(p.ranks, "ranks", 2, 8);
@@ -1101,13 +1190,13 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, pdBudget, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment", "firstVisible"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);
@@ -1143,6 +1232,15 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
       form.querySelector('[data-key="deviceGB"]').disabled = !form.querySelector('[data-key="measuredMemory"]').checked;
       form.querySelector('[data-key="replicaBatch"]').disabled = !form.querySelector('[data-key="customReplicaBatch"]').checked;
     }
+    if (form.dataset.lab === "pd") {
+      form.querySelector('[data-key="bytesPerToken"]').disabled = !form.querySelector('[data-key="customKVBytes"]').checked;
+    }
+    if (form.dataset.lab === "pdBudget") {
+      const model = document.querySelector('form[data-lab="pd"] [data-key="model"]').value;
+      const mtp = form.querySelector('[data-key="mtp"]');
+      mtp.disabled = model !== "deepseek";
+      if (mtp.disabled) mtp.checked = false;
+    }
   }
   function render(form) {
     const workbench = form.closest("[data-workbench]");
@@ -1165,6 +1263,10 @@ footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(-
         console.error(error);
         throw error;
       }
+    }
+    if (form.dataset.lab === "pd") {
+      const linked = document.querySelector('form[data-lab="pdBudget"]');
+      if (linked) render(linked);
     }
   }
   function staticCharts() {

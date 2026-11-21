@@ -10,7 +10,7 @@ const faq = (zh, en, answerZh, answerEn) => `<details><summary>${b(zh, en)}</sum
 const table = (headers, rows, caption) => `<div class="table-wrap"><table>${caption ? `<caption>${caption}</caption>` : ""}<thead><tr>${headers.map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v, i) => i === 0 ? `<th scope="row">${v}</th>` : `<td>${v}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 const field = (lab, key, zh, en, value, min, max, step = 1, type = "number") => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><input id="${lab}-${key}" data-key="${key}" name="${key}" type="${type}" value="${value}" min="${min}" max="${max}" step="${step}" required>${type === "range" ? `<output for="${lab}-${key}" data-for="${key}">${value}</output>` : ""}</div>`;
 const select = (lab, key, zh, en, choices, selected) => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><select id="${lab}-${key}" data-key="${key}" name="${key}">${choices.map(([value, label]) => `<option value="${esc(value)}"${value === selected ? " selected" : ""}>${esc(label)}</option>`).join("")}</select></div>`;
-const check = (lab, key, zh, en) => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><input type="checkbox" id="${lab}-${key}" name="${key}" data-key="${key}"></div>`;
+const check = (lab, key, zh, en, checked = false) => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><input type="checkbox" id="${lab}-${key}" name="${key}" data-key="${key}"${checked ? " checked" : ""}></div>`;
 const textarea = (lab, key, zh, en, value) => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><textarea id="${lab}-${key}" name="${key}" data-key="${key}" rows="18" maxlength="250000" required spellcheck="false">${esc(value)}</textarea></div>`;
 const models = Object.entries(math.models).map(([id, m]) => [id, m.name]);
 const gpus = Object.entries(math.gpus).map(([id, g]) => [id, g.name]);
@@ -24,7 +24,7 @@ export const chapters = [
   { id: "metrics", file: "01-metrics.html", zh: "先看用户体验，再看机器吞吐", en: "User experience comes before peak throughput", subtitleZh: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · 成本", subtitleEn: "TTFT · TPOT / ITL · E2EL · RPS · Goodput · cost", minutes: 20, sources: ["vllm", "ptu-concept", "vllm-metrics", "aiperf", "genai-perf"] },
   { id: "capacity", file: "02-tpm-tps-capacity.html", zh: "50 TPS/用户，不等于 50 TPS/集群", en: "50 TPS per user is not 50 TPS per cluster", subtitleZh: "TPM/TPS 边界 · Little's Law · 峰值规划 · PTU 权重", subtitleEn: "TPM/TPS boundaries · Little's Law · peak sizing · PTU weights", minutes: 25, sources: ["ptu", "ptu-concept", "vllm", "quota"] },
   { id: "sizing", file: "03-gpu-sizing.html", zh: "放得下、吐得快、首字快，是三道不同水位线", en: "Memory fit, decode speed and first-token speed are three different bounds", subtitleZh: "Dense / MoE · GQA / MLA · 显存堆叠 · HBM / FLOPs", subtitleEn: "Dense / MoE · GQA / MLA · memory stacks · HBM / FLOPs", minutes: 30, sources: ["h100", "h200", "b200", "l40s", "deepseek-config", "deepseek", "llama", "qwen", "vllm", "gqa-tp", "mla-layout"] },
-  { id: "pd", file: "04-pd-disaggregation.html", zh: "PD 分离消除一类干扰，却增加一次 KV 交接", en: "PD removes one interference source but adds a KV handoff", subtitleZh: "混部 / Chunked Prefill / PD · KV 传输 · 决策边界", subtitleEn: "Colocated / chunked prefill / PD · KV transfer · decision boundaries", minutes: 25, sources: ["vllm", "vllm-pd", "dynamo", "mooncake", "sglang", "gpudirect"] },
+  { id: "pd", file: "04-pd-disaggregation.html", zh: "PD 分离消除一类干扰，却增加一次 KV 交接", en: "PD removes one interference source but adds a KV handoff", subtitleZh: "混部 / Chunked Prefill / PD · KV 传输 · 决策边界", subtitleEn: "Colocated / chunked prefill / PD · KV transfer · decision boundaries", minutes: 25, sources: ["vllm", "vllm-pd", "dynamo", "mooncake", "sglang", "gpudirect", "dynamo-pd-layout", "nixl-layout"] },
   { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell", "tensor-parallel", "speculative", "prefix"] },
   { id: "network", file: "06-rdma-roce-nvlink.html", zh: "900 GB/s NVLink 和 400 Gb/s 网卡，先统一口径", en: "Normalize units before comparing 900 GB/s NVLink with a 400 Gb/s NIC", subtitleZh: "GPUDirect RDMA · RoCEv2 流控 · 多轨拓扑 · NCCL 带宽", subtitleEn: "GPUDirect RDMA · RoCEv2 congestion · rail topology · NCCL bandwidth", minutes: 25, sources: ["gpudirect", "nccl", "blackwell", "h100", "ib", "ecn"] }
 ];
@@ -350,13 +350,40 @@ function pdContent() {
     select("pd", "rate", "单端口单向线速 Gb/s", "One-port one-way line rate Gb/s", [["25", "25G"], ["100", "100G"], ["200", "200G"], ["400", "400G"], ["800", "800G"]], "400") +
     field("pd", "efficiency", "有效网络效率（假设）", "Effective network fraction (assumption)", 0.8, 0.05, 1, 0.05) +
     field("pd", "rails", "真正可并行的端口/轨数", "Actually parallel ports/rails", 1, 1, 16) +
+    field("pd", "wireCopies", "实际跨网传输倍率（不自动等于D侧复制）", "Actual wire multiplier (not automatically D replication)", 1, 1, 16, 0.1) +
+    check("pd", "customKVBytes", "使用已确认的唯一逻辑 KV 字节/Token（默认仍为示例）", "Use confirmed unique logical KV bytes/token (default remains an example)") +
+    field("pd", "bytesPerToken", "唯一逻辑 KV B/Token（含真实packing，未乘复制）", "Unique logical KV B/token (packing included, before copies)", 163840, 1, 10000000) +
     field("pd", "setup", "握手/调度固定耗时 ms", "Fixed handshake/scheduling ms", 0.2, 0, 10000, 0.1) +
-    field("pd", "overlap", "已证实可重叠传输时间 ms", "Verified overlap window ms", 10, 0, 10000, 0.1) +
+    field("pd", "overlap", "可证实的重叠时间 ms（默认为教学假设）", "Confirmable overlap ms (default is a teaching assumption)", 10, 0, 10000, 0.1) +
     field("pd", "qps", "KV 新请求 QPS", "New-KV request QPS", 10, 0, 100000, 0.1) +
     field("pd", "base", "基础 ITL ms（模拟）", "Base ITL ms (synthetic)", 20, 0.1, 1000, 0.1) +
     field("pd", "prefillRate", "共池 Prefill TPS（模拟）", "Colocated prefill TPS (synthetic)", 80000, 1, 10000000) +
     field("pd", "chunk", "Chunked Prefill Token 数", "Chunked prefill tokens", 1024, 1, 131072) +
-    field("pd", "residual", "PD 池残留尾部干扰 ms（模拟）", "Residual PD-tail interference ms (synthetic)", 2, 0, 1000, 0.1);
+    field("pd", "residual", "PD池残留尾部干扰ms（模拟）", "Residual PD-tail interference ms (synthetic)", 2, 0, 1000, 0.1) +
+    check("pd", "hideColocated", "放大只比较Chunked与PD（不把省略值设0）", "Zoom to chunked versus PD (omitted values are not zero)");
+  const budgets = field("pdBudget", "outputTokens", "全部生成输出Token（含首字/隐藏推理）", "All generated output tokens (first + hidden reasoning)", 512, 1, 32768) +
+    field("pdBudget", "destinationCopies", "D侧引用完整KV状态倍率（手工）", "D referenced complete-state multiplier (manual)", 1, 1, 64, 0.1) +
+    field("pdBudget", "prefillPoolTPS", "P池总输入TPS上界（教学值）", "Total P-pool input TPS bound (teaching value)", 200000, 1, 10000000) +
+    field("pdBudget", "decodePoolTPS", "D池总输出TPS上界（教学值）", "Total D-pool output TPS bound (teaching value)", 12000, 1, 10000000) +
+    field("pdBudget", "decodeSlots", "D池KV驻留请求槽（含交接等待）", "D KV-resident slots (including handoff wait)", 256, 1, 32768) +
+    field("pdBudget", "meanTPOT", "D阶段平均间隔 ms（非P99）", "Mean D interval ms (not P99)", 20, 0.1, 1000, 0.1) +
+    field("pdBudget", "capacityLimit", "单约束使用比例规划上限", "Planning utilization limit per constraint", 0.7, 0.1, 0.95, 0.05) +
+    select("pdBudget", "firstVisible", "首个用户可见Token路径", "First user-visible token path", [["decode", "Visible after D handoff"], ["prefill", "Visible from P before handoff"]], "decode") +
+    field("pdBudget", "queueP", "P排队预算 ms", "P queue budget ms", 100, 0, 10000) +
+    field("pdBudget", "prefillBudget", "P计算预算/均值假设 ms", "P compute budget/mean assumption ms", 350, 0, 60000) +
+    field("pdBudget", "queueD", "D排队预算 ms", "D queue budget ms", 50, 0, 10000) +
+    field("pdBudget", "firstBudget", "首输出采样剩余开销 ms", "Remaining first-output sampling budget ms", 20, 0, 10000) +
+    field("pdBudget", "delivery", "网关/交付预算 ms", "Gateway/delivery budget ms", 30, 0, 10000) +
+    field("pdBudget", "ttftTarget", "工程 TTFT 总预算 ms", "Engineering total TTFT budget ms", 800, 1, 60000) +
+    field("pdBudget", "itlTarget", "首字后首次间隔预算 ms", "First-to-second visible gap budget ms", 35, 1, 1000) +
+    field("pdBudget", "prefillReplicas", "P池完整模型实例数", "Complete-model replicas in P pool", 1, 1, 256) +
+    field("pdBudget", "decodeReplicas", "D池完整模型实例数", "Complete-model replicas in D pool", 1, 1, 256) +
+    select("pdBudget", "weightBytes", "主权重存储字节", "Main weight storage bytes", [["2", "BF16 2 B"], ["1", "FP8 1 B"], ["0.5", "INT4 0.5 B"]], "1") +
+    field("pdBudget", "weightOverhead", "权重metadata余量比例", "Weight metadata allowance", 0.05, 0, 1, 0.01) +
+    check("pdBudget", "mtp", "checkpoint实际额外加载14B MTP", "Checkpoint actually adds14B MTP") +
+    check("pdBudget", "compatible", "模型/Tokenizer/KV布局兼容（本例假设确认）", "Model/tokenizer/KV layout compatible (assumed in example)", true) +
+    check("pdBudget", "memoryChecked", "每rank与transfer-buffer内存已检查（本例假设）", "Per-rank/transfer-buffer memory checked (example assumption)", true) +
+    check("pdBudget", "colocatedPasses", "Chunked混部基线已满足业务SLO", "Chunked colocated baseline already meets business SLO");
   return section("concepts", "Prefill 和 Decode 混部会争资源，不只是争 FLOPs", "Colocated prefill and decode compete for more than FLOPs",
     p("Prefill 一次处理大量输入 Token，矩阵计算往往更密集；低 batch Decode 每步生成一枚 Token，反复读权重和 KV，通常更吃带宽。二者还竞争 kernel 调度、SM、缓存、显存容量与通信。边界并不绝对：短 Prefill 也可能受带宽/启动开销限制，大 batch Decode 也可能算力受限。",
       "Prefill processes many input tokens with denser matrix work; low-batch decode generates one token per step and repeatedly reads weights and KV, often stressing bandwidth. They also compete for kernel scheduling, SMs, caches, capacity and communication. Short prefill can be launch/bandwidth-bound; large-batch decode can be compute-bound.") +
@@ -364,9 +391,20 @@ function pdContent() {
       "Chunking splits long inputs and prioritizes decode, reducing individual stalls while keeping shared resources. PD isolates this interference with separate pools but adds duplicate model residency, KV handoff, routing and pool-ratio management. Isolation does not mean a jitter-free system.")) +
     section("pd", "1.34 GB KV 在 400G、80% 效率下也要约 33.55 ms", "1.34 GB of KV still needs about 33.55 ms at 400G and 80% efficiency",
       lab("pd", controls) +
-      formula("KV_payload = KV_bytes_per_token × prompt_tokens × (1−prefix_already_on_D)<br>Effective_BW_Bps = port_Gbps×10⁹/8 × efficiency × usable_parallel_rails<br>Raw_transfer_ms = KV_payload / Effective_BW_Bps × 1000<br>Exposed_handoff_ms = max(0, Raw_transfer_ms−verified_overlap_ms) + fixed_ms<br>Fabric_load = new_request_QPS × KV_payload / Effective_BW_Bps") +
+      formula("Unique_KV_suffix = KV_bytes_per_token × prompt_tokens × (1−prefix_already_on_D)<br>Wire_payload = Unique_KV_suffix × confirmed_wire_multiplier<br>Effective_BW_Bps = port_Gbps×10⁹/8 × efficiency × usable_parallel_rails<br>Raw_transfer_ms = Wire_payload / Effective_BW_Bps ×1000<br>Exposed_handoff_ms = max(0, Raw_transfer_ms−verified_overlap_ms) + fixed_ms<br>Fabric_load = new_request_QPS × Wire_payload / Effective_BW_Bps") +
       p("默认 Llama 70B FP8 KV：2×80×8×128×1×8192=1,342,177,280 B。400G 单向理论 50 GB/s，80% 效率为 40 GB/s；原始传输 33.554 ms。即便重叠 10 ms，仍暴露 23.754 ms（含 0.2 ms 固定开销）。只有计算与传输确实流水重叠，才允许扣除重叠时间。",
         "Default Llama 70B FP8 KV: 2×80×8×128×8192=1,342,177,280 B. A 400G link is theoretically 50 GB/s one-way, 40 GB/s at 80% efficiency. Raw transfer is 33.554 ms. With 10 ms verified overlap and 0.2 ms fixed overhead, exposed handoff is still 23.754 ms.")) +
+    section("pdBudget", "KV线量、D侧复制和首字路径必须分别预算", "Budget KV wire bytes, D replication and first-visible-token path separately",
+      p("本沙盘沿用上方的模型、Prompt、KV布局、网络、线量倍率与QPS；修改上方会自动更新这里。P/D吞吐与延迟是独立的教学预算，不能由aggregate TPS直接推出单请求TTFT。",
+        "This workbench inherits model, prompt, KV layout, fabric, wire multiplier and QPS from above; changes there update it. Pool throughput and latency are separate teaching budgets; aggregate TPS does not directly determine single-request TTFT.") +
+      lab("pdBudget", budgets) +
+      formula("μ_P = P_pool_input_TPS / input_tokens<br>μ_D = D_pool_output_TPS / D_generated_tokens<br>μ_slots = D_KV_resident_slots / mean_assumed_D_residence_seconds<br>μ_network = effective_BW / actual_wire_payload; omitted only for zero new wire bytes<br>Pipeline throughput bound = min(μ_P, μ_D, μ_slots, μ_network)") +
+      p("D侧KV复制不一定等于跨网复制：例如独立网络只传一份，D侧再经NVLink广播，线量倍率仍可为1而D状态倍率为2。完整D状态还引用已缓存前缀；命中只减少新传输，不让已有KV消失。当前峰值引用状态按Prompt+输出上限预算，共享block/增量分配要另测。",
+        "D KV replication need not equal wire replication: one network copy followed by a D-side NVLink broadcast can keep wire multiplier1 while referenced D state has multiplier2. Full state still references cached prefixes; a hit reduces new transfer, not existing KV. Peak referenced state budgets prompt+output, with shared blocks/incremental allocations measured separately.") +
+      p("默认P上界200K输入TPS、D上界12K输出TPS、256驻留槽、10 QPS。D输出限制为12000/512=23.4375请求/s，低于P与网络约束；这是候选吞吐上界，不是实测Goodput。若首字等D路径，工程TTFT预算约573.75 ms；若P先发首字，TTFT可约500 ms，但首次后续间隔约93.75 ms，仍可能不满足35 ms流式预算。",
+        "Default P bound200K input TPS, D bound12K output TPS,256 resident slots and10 QPS: D output limits12000/512=23.4375 requests/s, below P/network constraints. This is a candidate throughput bound, not measured goodput. First visible output after D gives an engineering TTFT budget about573.75 ms. Early P output can yield about500 ms TTFT yet a93.75 ms first subsequent gap, missing a35 ms streaming budget.") +
+      note("这些是工程阶段预算之和，不是把各阶段P99相加。首字来自P还是D必须按真实frontend/connector确认；有的pull路径是在P完成后才传，不支持你假设的layer-wise overlap。模型、tokenizer、dtype、block size、KV layout、TP/CP/PP与内存缓冲都要验证。确认框的默认值也是教学前提，不是本机已检查。",
+        "These sum engineering budgets, not stage P99s. Verify where the frontend/connector exposes the first token; some pull paths transfer only after P finishes and cannot support assumed layer-wise overlap. Validate model, tokenizer, dtype, block size, KV layout, TP/CP/PP and memory buffers. Default confirmation checkboxes are teaching premises, not local checks.")) +
     section("boundary", "没有固定的「16 卡以上必须 PD」阈值", "There is no universal 'PD is mandatory above 16 GPUs' threshold",
       table([b("判断维度", "Decision dimension"), b("优先混部+Chunked", "Prefer colocated + chunking"), b("进入 PD 验证", "Evaluate PD")], [
         [b("SLA 干扰证据", "SLO interference"), b("Chunked 已达 TTFT/ITL 双门槛", "Chunking meets both TTFT/ITL gates"), b("trace 证实 Prefill 导致 Decode 尾延迟，调 chunk 仍不达标", "Traces show prefill-driven decode tails despite chunk tuning")],
@@ -385,9 +423,17 @@ function pdContent() {
         ["SGLang", b("推理运行时、前缀复用和 PD 生态", "Serving runtime, prefix reuse and PD ecosystem"), b("选定模型的 MLA/MoE/FP8、缓存路由与 connector 支持", "Model-specific MLA/MoE/FP8, cache routing and connector support")]
       ]) +
       p("比较的是层次与职责，不是无条件速度排行榜。固定模型、输入/输出分布、网络、引擎 commit 和 SLA 后再做 A/B；禁止拼接作者不同机器的吞吐来得出生产排序。",
-        "This compares roles, not unconditional speed rankings. Run A/B with a fixed model, token distributions, network, engine commit and SLO. Do not combine author results from different hardware into a production ranking.")) +
+        "This compares roles, not unconditional speed rankings. Run A/B with a fixed model, token distributions, network, engine commit and SLO. Do not combine author results from different hardware into a production ranking.") +
+      table([b("项目", "Project"), b("2026-11-21观测的release（日期UTC）", "Release observed2026-11-21 (dates UTC)"), b("不能由版本号直接保证", "Not guaranteed by version number")], [
+        ["Dynamo", '<a href="https://github.com/ai-dynamo/dynamo/releases/tag/v1.6.2">v1.6.2</a> ·2026-11-05', b("后端、模型和KV transfer协议组合", "Backend/model/KV-transfer combination")],
+        ["vLLM", '<a href="https://github.com/vllm-project/vllm/releases/tag/v0.34.0">v0.34.0</a> ·2026-11-16', b("主线文档功能全部已在此release支持", "All main-branch docs features shipped in this release")],
+        ["SGLang", '<a href="https://github.com/sgl-project/sglang/releases/tag/v0.5.23">v0.5.23</a> ·2026-11-02', b("所有MLA/MoE/FP8/PD组合均兼容", "Every MLA/MoE/FP8/PD combination is compatible")],
+        ["Mooncake", '<a href="https://github.com/kvcache-ai/Mooncake/releases/tag/v0.3.14">v0.3.14</a> ·2026-11-03', b("每个引擎connector均无需额外适配", "Every engine connector needs no adaptation")]
+      ]) +
+      note("Release表仅为GitHub元数据快照，不是已验证联合栈。索引源码表明某些混合attention recipe要求P/D同TP，某些MTP+PD组合不兼容；NIXL pull/push对PCP/DCP也有不同限制。机内NVLink可用也不等于跨Pod实际使用CUDA IPC，PID namespace等约束仍要查。",
+        "Release metadata is not a validated combined stack. Indexed recipes show some hybrid-attention models need matching P/D TP and some MTP+PD combinations conflict; NIXL pull/push also differ in PCP/DCP restrictions. Available NVLink does not prove cross-Pod CUDA IPC is used; inspect PID namespaces and other constraints.")) +
     section("faq", "KV 交接影响 TTFT；隔离效果主要看 Decode 尾延迟", "KV handoff affects TTFT; isolation primarily targets decode tails",
-      faq("图中的 P99 从哪里来？", "Where do the plotted P99 values come from?", "每个上下文点生成 200 个确定性 ITL 样本：5% 注入 Prefill 干扰，共池注入整段、chunk 注入 min(S,chunk)，PD 注入可调残留干扰。用 nearest-rank 取 P99。它是可复算教学模拟，不是硬件 P99，也不预测网络过载。", "Each context point generates 200 deterministic ITLs: 5% inject full-prefill, min(S,chunk) or adjustable residual PD interference. Nearest-rank computes P99. This is reproducible teaching simulation, not hardware P99 or an overload predictor.") +
+      faq("图中的P99从哪里来？", "Where do the plotted P99 values come from?", "每点生成200个32输出Token请求，每请求31个确定性后续间隔。普通请求近似每20间隔注入一次Prefill干扰，2%请求注入更多突发；共池/Chunked/PD分别注入整段、min(S,chunk)和残留干扰。对200个每请求均值取P99 TPOT，对同批6200个间隔取P99 ITL。首字假设已经在D侧可见，不含启动交接；这是模拟，不预测网络过载。", "Each point generates200 requests with32 outputs and31 deterministic subsequent gaps. Ordinary requests inject about one prefill interference per20 gaps;2% have additional bursts. Colocated/chunked/PD inject full, min(S,chunk) or residual interference. P99 TPOT uses200 request means; P99 ITL uses the same6200 gaps. First output is assumed already D-visible, excluding startup handoff; this is simulation, not overload prediction.") +
       faq("PD 交接时间能直接加到每个 decode Token 的 ITL 吗？", "Should handoff time be added to every decode token's ITL?", "通常不能。交接主要是请求开始/首字路径的一次成本；Decode 中后续抖动由 D 池排队、网络争用和运行时决定。图把交接时间与尾部模拟分开，避免重复计费。", "Usually no. Handoff is primarily a one-time request-start/first-token cost. Later decode jitter depends on D-pool scheduling, contention and runtime. Handoff and ITL simulation are shown separately.") +
       quiz("pd", "400 Gb/s 单端口的单向理论字节带宽是？", "What is the theoretical one-way byte bandwidth of a 400 Gb/s port?", [["400 GB/s", "400 GB/s"], ["50 GB/s", "50 GB/s"], ["100 GB/s（直接加双向）", "100 GB/s (sum both directions)"]], 1, "400÷8=50 GB/s。单次 KV 单向发送不能直接把双向带宽相加。", "400÷8=50 GB/s. A one-way KV transfer cannot sum both directions.")) +
     section("checklist", "先验证混部基线，再验证 PD 的净收益", "Validate the colocated baseline before PD's net benefit",

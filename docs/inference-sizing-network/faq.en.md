@@ -221,11 +221,19 @@ Exposed handoff = max(0, raw−verified_overlap)+setup
 
 With 10 ms verified overlap and 0.2 ms fixed overhead: **23.754432 ms** exposed. At 10 QPS, sustained payload consumes **33.55%** of this direction's budget. Arrival exceeding effective bandwidth makes sustained queues unstable; a fixed serialization estimate cannot promise compliant TTFT.
 
+Logical KV, actual wire bytes and D referenced state are different quantities. Multiply wire traffic only when the real transport sends extra copies; D-local NVLink broadcast need not double network bytes. A D-cached prefix reduces new transfer but still consumes referenced state, including future output. Opaque packing/scales can override theoretical bytes/token only with the unique, nonduplicated logical size.
+
+The PD workbench inherits one transfer case and takes the minimum P-input, D-output, D-slot and network capacity. Default teaching bounds P200K input TPS, D12K output TPS,256 D slots and10 QPS yield a D-output constraint of **23.4375 requests/s** and12K candidate system-output TPS, not measured goodput. Verify per-rank memory, model/tokenizer/dtype/block/layout and same-workload latency separately.
+
+First-visible-token origin changes the contract: after D handoff, TTFT budget is about **573.75 ms**; early P output can be about **500 ms** yet produce a **93.75 ms** first subsequent gap, missing a35 ms streaming budget. These sum engineering budgets, not stage P99s. Deduct overlap only when the backend supports it and traces confirm it; some pull paths begin transfer after P finishes.
+
 ### Q16. Are Mooncake, Dynamo, vLLM and SGLang mutually exclusive?
 
 No. Dynamo provides orchestration/routing/scaling; Mooncake a KV-centric transfer/store ecosystem; vLLM/SGLang serving engines and connectors/runtimes. A deployment can combine them. Verify backend release, KV layout/dtype, TP reshaping, cache correctness, recovery and both pools.
 
-H5 P99 curves derive from **200 deterministic ITLs/point**, 5% interference and nearest-rank percentiles. PD retains adjustable residual jitter instead of promising none. One-time handoff primarily affects first-token paths, not every subsequent ITL.
+Each H5point generates **200 requests with32 output tokens**,31 subsequent gaps/request and **6200 ITL samples**. Request-P99 TPOT uses the200 per-request means; pooled-P99 ITL uses the same6200 gaps, not the same statistic. Ordinary requests interfere about once per20 gaps, with extra bursts in2% of requests. First output is assumed already D-visible, excluding startup handoff and overload prediction. PD retains residual jitter rather than promising none.
+
+GitHub release metadata observed2026-11-21 lists Dynamo **v1.6.2**, vLLM **v0.34.0**, SGLang **v0.5.23** and Mooncake **v0.3.14**. This is not a validated combined stack; main/indexed docs can be newer. Some hybrid-attention recipes require matching P/D TP or restrict MTP+PD, and NIXL pull/push differ in PCP/DCP support. Available NVLink does not prove cross-Pod CUDA IPC; verify PID namespaces and actual transfer logs.
 
 ## Chapter 5: parallelism and acceleration
 

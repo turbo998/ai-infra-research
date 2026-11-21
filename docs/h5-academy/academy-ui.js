@@ -8,7 +8,7 @@
   const kpi = (value, label) => `<div class="kpi"><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`;
   const kpis = (items) => `<div class="kpis">${items.map(([v, l]) => kpi(v, l)).join("")}</div>`;
   const note = (text) => `<div class="notice">${esc(text)}</div>`;
-  const legend = (labels) => `<div class="legend">${labels.map((l, i) => `<span><i class="${["primary", "secondary", "tertiary"][i % 3]}"></i>${esc(l)}</span>`).join("")}</div>`;
+  const legend = (labels, classes = []) => `<div class="legend">${labels.map((l, i) => `<span><i class="${esc(classes[i] || ["primary", "secondary", "tertiary"][i % 3])}"></i>${esc(l)}</span>`).join("")}</div>`;
   const dataTable = (headers, rows, caption) => `<div class="table-wrap"><table><caption>${esc(caption)}</caption><thead><tr>${headers.map((v) => `<th scope="col">${esc(v)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((v, i) => i === 0 ? `<th scope="row">${esc(v)}</th>` : `<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   let chartId = 0;
   function svg(body, caption, height = 310) {
@@ -35,12 +35,12 @@
     body += `<path d="M ${x0} ${y0} V ${y0 + height} H ${x0 + width}" class="axis"/>`;
     if (gate !== null) body += `<path d="M ${x0} ${y(gate)} H ${x0 + width}" class="line tertiary" stroke-dasharray="6 5"/><text x="${x0 + width}" y="${y(gate) - 8}" text-anchor="end">${esc(gateLabel)} ${fmt(gate)}</text>`;
     series.forEach((s, index) => {
-      const cls = ["primary", "secondary", "tertiary"][index % 3];
+      const cls = s.colorClass || ["primary", "secondary", "tertiary"][index % 3];
       body += `<polyline class="line ${cls}" points="${s.values.map((v) => `${x(v.x)},${y(v.y)}`).join(" ")}"/>`;
       body += s.values.map((v) => `<circle class="${cls}" cx="${x(v.x)}" cy="${y(v.y)}" r="3"><title>${esc(s.label)}: ${fmt(v.x)}, ${fmt(v.y)}</title></circle>`).join("");
     });
     body += `<text x="${x0}" y="18">${esc(yLabel)}</text><text x="${x0 + width}" y="285" text-anchor="end">${esc(xLabel)}</text>`;
-    return legend(series.map((s) => s.label)) + svg(body, caption);
+    return legend(series.map((s) => s.label), series.map((s, i) => s.colorClass || ["primary", "secondary", "tertiary"][i % 3])) + svg(body, caption);
   }
   function barChart(rows, caption, unit = "") {
     const max = Math.max(...rows.map((r) => r.value), 1);
@@ -258,7 +258,8 @@
     const lengths = [1024, 4096, 8192, 16384, 32768, 65536, 131072];
     const points = lengths.map((context) => ({ context, ...M.pdSamples({ ...p, context }) }));
     const labels = { colocated: t("共池", "Colocated"), chunked: "Chunked Prefill", pd: t("PD（残留干扰假设）", "PD (residual assumption)") };
-    const series = Object.entries(labels).map(([key, label]) => ({ label, values: points.map((v) => ({ x: v.context, y: v.p99[key] })) }));
+    const series = Object.entries(labels).map(([key, label], index) => ({ label, colorClass: ["primary", "secondary", "tertiary"][index], values: points.map((v) => ({ x: v.context, y: v.p99[key] })) }));
+    const tpotSeries = Object.entries(labels).map(([key, label], index) => ({ label, colorClass: ["primary", "secondary", "tertiary"][index], values: points.map((v) => ({ x: v.context, y: v.p99TPOT[key] })) }));
     const prefill = p.context / p.prefillRate * 1000;
     const max = Math.max(prefill + 5 * p.base, 1);
     const scale = (v) => v / max * 630;
@@ -269,11 +270,43 @@
     }
     timeline += `<text x="10" y="150">${t("独立 D 池：去除 Prefill 阻塞，但仍有残留调度/通信", "Separate D pool: no prefill stall, residual scheduling/communication remains")}</text><text x="100" y="245">${t("PD 行是定性流水线示意，不与上一行共享时间比例", "PD row is a qualitative pipeline, not the same time scale")}</text>`;
     const current = M.pdSamples(p);
-    return kpis([[fmt(r.bytes / 1e9) + " GB", t("新传输 KV Payload", "New KV payload")], [fmt(r.rawMs) + " ms", t("原始传输时间", "Raw transfer time")], [fmt(r.exposedMs) + " ms", t("暴露交接时间", "Exposed handoff")], [fmt(r.utilization * 100) + "%", t("单方向 fabric 负载", "One-way fabric load")], [fmt(r.requiredGbps) + " Gb/s", t("含效率的总线速需求", "Aggregate line-rate need incl. efficiency")], ["200 ITL", t("每上下文点模拟样本数", "Synthetic samples/context point")]]) +
+    return kpis([[fmt(r.logicalBytes / 1e9) + " GB", t("新的唯一逻辑 KV", "New unique logical KV")], [fmt(r.bytes / 1e9) + " GB", t("实际线量预算，含传输倍率", "Wire budget including multiplier")], [fmt(r.rawMs) + " ms", t("原始传输时间", "Raw transfer time")], [fmt(r.exposedMs) + " ms", t("暴露交接时间", "Exposed handoff")], [fmt(r.utilization * 100) + "%", t("单方向 fabric 负载", "One-way fabric load")], [fmt(r.requiredGbps) + " Gb/s", t("含效率的总线速需求", "Aggregate line-rate need incl. efficiency")], ["200 / 6200", t("每点模拟请求 / 间隔样本", "Synthetic requests / gaps per point")]]) +
       (r.utilization >= 1 ? note(t("警告：KV 到达量不低于有效带宽，持续队列不稳定。下面曲线不预测此时的真实 P99；增加带宽、减少交接量或限制接入。", "Warning: KV arrival meets/exceeds effective bandwidth; sustained queues are unstable. Curves do not predict real P99 under this overload. Add bandwidth, reduce handoff or control admission.")) : "") +
       svg(timeline, t("混部阻塞与分池流水线示意。", "Colocated stalls versus separate-pool pipeline illustration."), 280) +
-      plot(series, "Prompt tokens", "Synthetic P99 ITL ms", t("P99 来自每点 200 个确定性模拟 ITL；nearest-rank，5% Prefill 干扰；不是硬件测量，也不保证 PD 无抖动。", "P99 from 200 deterministic synthetic ITLs/point; nearest-rank, 5% interference; no hardware measurement or zero-jitter promise.")) +
-      dataTable([t("当前上下文", "Current context"), "Synthetic P99 ITL ms", t("样本分母", "Sample count")], Object.entries(labels).map(([key, label]) => [label, fmt(current.p99[key]), 200]), `${p.context} tokens · synthetic`);
+      plot(p.hideColocated ? tpotSeries.slice(1) : tpotSeries, "Prompt tokens", "Synthetic request P99 TPOT ms", t("每点200个32输出Token请求，先求每请求31间隔平均TPOT，再取请求P99；不是P99 ITL。", "Each point has200 requests with32 outputs: average31 gaps per request, then take request-P99 TPOT; not P99 ITL.") + (p.hideColocated ? t(" 此视图省略混部，数值仍在表格。", " Colocated is omitted from this view, with values retained in the table.") : "")) +
+      plot(p.hideColocated ? series.slice(1) : series, "Prompt tokens", "Synthetic pooled P99 ITL ms", t("同一批模拟请求的6200个后续间隔P99；2%请求有额外突发干扰。假设首字已从D可见，不含启动交接，非实测。", "P99 over6200 gaps from the same simulated requests;2% have extra bursts. Assumes first D-visible output, excludes startup handoff and is not measured.") + (p.hideColocated ? t(" 放大两条优化路径。", " Zoomed to the two optimized paths.") : "")) +
+      dataTable([t("当前上下文", "Current context"), "P99 request TPOT ms", "P99 pooled ITL ms", t("分母", "Denominators")], Object.entries(labels).map(([key, label]) => [label, fmt(current.p99TPOT[key]), fmt(current.p99[key]), "200 requests / 6200 gaps"]), `${p.context} tokens · synthetic`);
+  }
+  function pdBudget(p) {
+    const source = document.querySelector('form[data-lab="pd"]');
+    if (!source.checkValidity()) throw new RangeError(t("请先修正上方传输沙盘输入", "Fix the transfer-workbench inputs above first"));
+    const combined = { ...inputValues(source), ...p };
+    const r = M.pdBudget(combined);
+    const readiness = {
+      "keep-baseline": t("保留混部基线，非必须分离", "Keep colocated baseline; PD is not mandatory"),
+      "blocked-layout": t("先修兼容/内存/上下文条件", "Resolve compatibility/memory/context first"),
+      "blocked-capacity": t("容量不稳定，不能接入该负载", "Capacity unstable at this demand"),
+      "blocked-latency": t("首字或首次间隔预算不满足", "First-token/first-gap budget fails"),
+      "validate-headroom": t("余量不足，先验证峰值与容灾", "Insufficient headroom; validate peak/failover"),
+      "trial-candidate": t("可进入真实A/B，非生产批准", "Candidate for real A/B, not production approval")
+    };
+    const limits = r.limits.map((limit) => [limit.key, fmt(limit.rps), fmt(combined.qps / limit.rps * 100) + "%"]);
+    if (!r.tx.bytes) limits.push(["KV network", t("无新线量，不构成限制", "No new wire bytes; not limiting"), "N/A"]);
+    const latency = p.firstVisible === "decode" ? [
+      ["P queue", p.queueP], ["P compute", p.prefillBudget], ["KV handoff", r.tx.exposedMs], ["D queue", p.queueD], ["First sample", p.firstBudget], ["Delivery", p.delivery]
+    ] : [["P queue", p.queueP], ["P compute", p.prefillBudget], ["P first sample", p.firstBudget], ["Delivery", p.delivery]];
+    return kpis([[readiness[r.readiness], t("仅规划检查，不是实测验证", "Planning check, not a measurement")], [fmt(r.bottleneck.rps) + " req/s", `${t("最小容量约束", "Minimum capacity constraint")}: ${r.bottleneck.key}`], [fmt(r.candidateOutputTPS) + " tok/s", t("候选系统输出上界，非Goodput", "Candidate system-output bound, not goodput")], [fmt(r.ttftBudget) + " ms", t("首可见Token工程预算", "First-visible-token engineering budget")], [r.firstGapBudget === null ? "N/A" : fmt(r.firstGapBudget) + " ms", t("首字后首次间隔预算", "First-to-second gap budget")], [fmt(r.fullStateBytes / 1e9) + " GB", t("每请求D引用峰值KV状态，非新增分配", "D peak referenced KV/request, not new allocation")]]).replace('<div class="kpis">', `<div class="kpis" data-pd-readiness="${r.readiness}">`) +
+      barChart(r.limits.map((limit) => ({ label: limit.key, value: limit.rps })), t("P输入、D输出、D驻留槽与网络上界取最小，未用aggregate TPS推首字时间。", "Take the minimum P-input/D-output/D-slot/network bound; aggregate TPS does not determine first-token latency."), "req/s") +
+      dataTable([t("容量约束", "Capacity constraint"), "Upper req/s", t("目标负载占比", "Target load fraction")], limits, t("同一个传输案例与目标QPS，余量不是通用SLA", "Same transfer case/QPS; headroom is not a universal SLA")) +
+      dataTable([t("首字阶段预算", "First-token stage budget"), "ms"], latency.map(([label, value]) => [label, fmt(value)]), t("工程预算之和，不是阶段P99相加", "Engineering budget sum, not summed stage P99s")) +
+      dataTable([t("检查", "Check"), t("本例条件", "Case condition")], [
+        [t("模型/布局/每rank内存/上下文", "Model/layout/rank-memory/context"), r.flags.compatibility ? t("按输入假设满足", "Passes entered assumptions") : t("不满足", "Fails")],
+        [t("目标QPS低于每个容量上界", "Demand below every capacity bound"), r.flags.capacityStable ? t("满足模型条件", "Passes model condition") : t("不稳定", "Unstable")],
+        [t("规划容量余量", "Planning capacity headroom"), r.flags.headroom ? t("满足自选余量", "Passes chosen margin") : t("需额外验证", "Needs further validation")],
+        [t("TTFT与首次间隔", "TTFT and first gap"), r.flags.latency ? t("工程预算满足", "Engineering budget passes") : t("工程预算失败", "Engineering budget fails")],
+        [t("P+D主权重预算", "P+D main-weight budget"), fmt(r.weightsGB) + " GB"]
+      ], t("确认框也是教学假设，不会自动检查部署", "Confirmation checkboxes are teaching assumptions, not deployment checks")) +
+      note(t("D缓存命中只在这里减少新线量，不自动减少P计算预算或完整引用状态。每rankKV复制可通过D侧本地广播实现，不能直接拿状态倍率乘跨网流量。完整实例数只改变权重预算；池TPS是用户提供的全池约束，不能未经测量自动线性扩容。真正Goodput/质量/成本要用同负载端到端A/B取得。", "D cache hits reduce new wire bytes here, not automatically P compute or full referenced state. Rank KV copies may use D-local broadcast; do not blindly multiply network traffic by state-copy count. Replica counts change weight budget; whole-pool TPS bounds must not be automatically scaled without measurements. Obtain actual goodput/quality/cost from same-workload end-to-end A/B."));
   }
   function parallel(p) {
     M.integer(p.ranks, "ranks", 2, 8);
@@ -422,13 +455,13 @@
       svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
       note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
   }
-  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, parallel, speculative, prefix: prefixCaching, network, congestion };
+  const renderers = { lifecycle, trace, goodput, capacity, mixture, burst, ptu, normalized, cost, sizing, rank: rankMemory, pd, pdBudget, parallel, speculative, prefix: prefixCaching, network, congestion };
   function inputValues(form) {
     const values = {};
     for (const input of form.querySelectorAll("[data-key]")) {
       if (input.disabled) continue;
       if (input.type === "checkbox") values[input.dataset.key] = input.checked;
-      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else if (input.tagName === "TEXTAREA" || ["model", "gpu", "mode", "kind", "operation", "mlaCache", "gateMode", "boundary", "deployment", "firstVisible"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
       else {
         if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
         values[input.dataset.key] = Number(input.value);
@@ -464,6 +497,15 @@
       form.querySelector('[data-key="deviceGB"]').disabled = !form.querySelector('[data-key="measuredMemory"]').checked;
       form.querySelector('[data-key="replicaBatch"]').disabled = !form.querySelector('[data-key="customReplicaBatch"]').checked;
     }
+    if (form.dataset.lab === "pd") {
+      form.querySelector('[data-key="bytesPerToken"]').disabled = !form.querySelector('[data-key="customKVBytes"]').checked;
+    }
+    if (form.dataset.lab === "pdBudget") {
+      const model = document.querySelector('form[data-lab="pd"] [data-key="model"]').value;
+      const mtp = form.querySelector('[data-key="mtp"]');
+      mtp.disabled = model !== "deepseek";
+      if (mtp.disabled) mtp.checked = false;
+    }
   }
   function render(form) {
     const workbench = form.closest("[data-workbench]");
@@ -486,6 +528,10 @@
         console.error(error);
         throw error;
       }
+    }
+    if (form.dataset.lab === "pd") {
+      const linked = document.querySelector('form[data-lab="pdBudget"]');
+      if (linked) render(linked);
     }
   }
   function staticCharts() {

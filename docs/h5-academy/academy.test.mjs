@@ -11,7 +11,7 @@ const directory = dirname(fileURLToPath(import.meta.url));
 const near = (actual, expected, epsilon = 1e-7) => assert.ok(Math.abs(actual - expected) < epsilon, `${actual} != ${expected}`);
 const sizing = { model: "llama70", gpu: "h200", weightBytes: 1, kvBytes: 2, batch: 32, context: 8192, prefillTokens: 8192, prefillBatch: 1, safe: 0.85, runtime: 3, overhead: 0.05, replication: 1, mbu: 0.6, mfu: 0.4, tpot: 20, ttft: 800, reserve: 100, mtp: false };
 const capacity = { qps: 10, headroom: 1.3, prompt: 2048, output: 512, ttft: 800, tpot: 20, inputCapacity: 20000, outputCapacity: 1500, batch: 128, utilization: 0.7 };
-const transfer = { model: "llama70", context: 8192, kvBytes: 1, cache: 0, rate: 400, efficiency: 0.8, rails: 1, setup: 0.2, overlap: 10, qps: 10 };
+const transfer = { model: "llama70", context: 8192, kvBytes: 1, cache: 0, rate: 400, efficiency: 0.8, rails: 1, wireCopies: 1, customKVBytes: false, setup: 0.2, overlap: 10, qps: 10 };
 
 test("TTFT and E2EL count the first output token exactly once", () => {
   const r = M.lifecycle({ queue: 120, prefill: 300, delivery: 30, output: 128, tpot: 20 });
@@ -298,12 +298,58 @@ test("PD exposed handoff never becomes negative and overload stays explicitly me
   assert.ok(M.transfer({ ...transfer, qps: 100 }).utilization > 1);
   assert.throws(() => M.transfer({ ...transfer, rate: 0 }), RangeError);
 });
+test("PD wire bytes stay distinct from unique logical state and accept confirmed opaque token geometry", () => {
+  const one = M.transfer(transfer);
+  const two = M.transfer({ ...transfer, wireCopies: 2 });
+  assert.equal(two.logicalBytes, one.logicalBytes);
+  assert.equal(two.bytes, one.bytes * 2);
+  near(two.rawMs, one.rawMs * 2);
+  const custom = M.transfer({ ...transfer, model: "deepseek", customKVBytes: true, bytesPerToken: 40016 });
+  assert.equal(custom.bytesPerToken, 40016);
+  assert.equal(custom.bytes, 40016 * 8192);
+});
+const pd = { ...transfer, outputTokens: 512, destinationCopies: 1, prefillPoolTPS: 200000, decodePoolTPS: 12000, decodeSlots: 256, meanTPOT: 20, capacityLimit: 0.7, firstVisible: "decode", queueP: 100, prefillBudget: 350, queueD: 50, firstBudget: 20, delivery: 30, ttftTarget: 800, itlTarget: 35, prefillReplicas: 1, decodeReplicas: 1, weightBytes: 1, weightOverhead: 0.05, compatible: true, memoryChecked: true, colocatedPasses: false, mtp: false };
+test("PD pipeline takes the minimum pool/network/slot bound and evaluates engineering latency separately", () => {
+  const r = M.pdBudget(pd);
+  assert.equal(r.readiness, "trial-candidate");
+  assert.equal(r.bottleneck.key, "D output");
+  near(r.bottleneck.rps, 23.4375);
+  assert.equal(r.candidateOutputTPS, 12000);
+  near(r.ttftBudget, 573.754432);
+  assert.equal(r.firstGapBudget, 20);
+  near(r.weightsGB, 148.26);
+  assert.equal(M.pdBudget({ ...pd, wireCopies: 4 }).readiness, "blocked-capacity");
+  assert.equal(M.pdBudget({ ...pd, decodeSlots: 1 }).bottleneck.key, "D slots");
+  assert.equal(M.pdBudget({ ...pd, compatible: false }).readiness, "blocked-layout");
+  assert.equal(M.pdBudget({ ...pd, colocatedPasses: true }).readiness, "keep-baseline");
+});
+test("early P output can improve TTFT while violating the first streaming gap", () => {
+  const r = M.pdBudget({ ...pd, firstVisible: "prefill" });
+  assert.equal(r.ttftBudget, 500);
+  near(r.firstGapBudget, 93.754432);
+  assert.equal(r.readiness, "blocked-latency");
+  assert.throws(() => M.pdBudget({ ...pd, firstVisible: "prefill", outputTokens: 1 }), RangeError);
+  assert.throws(() => M.pdBudget({ ...pd, overlap: 351 }), RangeError);
+});
+test("D state replication and cached prefixes do not automatically multiply or erase wire traffic", () => {
+  const one = M.pdBudget(pd);
+  const replicated = M.pdBudget({ ...pd, destinationCopies: 2 });
+  assert.equal(replicated.tx.bytes, one.tx.bytes);
+  assert.equal(replicated.fullStateBytes, one.fullStateBytes * 2);
+  const cached = M.pdBudget({ ...pd, cache: 1 });
+  assert.equal(cached.tx.bytes, 0);
+  assert.equal(cached.fullStateBytes, one.fullStateBytes);
+  assert.ok(!cached.limits.some((limit) => limit.key === "KV network"));
+});
 test("P99 is computed from declared deterministic samples, not assigned chart coordinates", () => {
   const p = { context: 8192, base: 20, prefillRate: 80000, chunk: 1024, residual: 2 };
   const r = M.pdSamples(p);
   for (const [key, values] of Object.entries(r.samples)) {
-    assert.equal(values.length, 200);
-    assert.equal(r.p99[key], [...values].sort((a, b) => a - b)[197]);
+    assert.equal(values.length, 6200);
+    assert.equal(r.p99[key], [...values].sort((a, b) => a - b)[6137]);
+    assert.equal(r.requestTPOT[key].length, 200);
+    assert.equal(r.p99TPOT[key], [...r.requestTPOT[key]].sort((a, b) => a - b)[197]);
+    assert.ok(r.p99TPOT[key] <= r.p99[key]);
   }
   assert.ok(r.p99.colocated > r.p99.chunked);
   assert.ok(r.p99.chunked > r.p99.pd);

@@ -355,10 +355,59 @@
     number(p.setup, "setup");
     number(p.overlap, "overlap");
     number(p.qps, "qps");
-    const bytes = kvPerToken(model, p.kvBytes) * p.context * (1 - p.cache);
+    number(p.wireCopies, "actual wire multiplier", 1, 64);
+    const bytesPerToken = p.customKVBytes ? integer(p.bytesPerToken, "unique logical KV bytes/token", 1) : kvPerToken(model, p.kvBytes);
+    const fullLogicalBytes = bytesPerToken * p.context;
+    const logicalBytes = fullLogicalBytes * (1 - p.cache);
+    const bytes = logicalBytes * p.wireCopies;
     const bandwidth = p.rate * 1e9 / 8 * p.efficiency * p.rails;
     const rawMs = bytes / bandwidth * 1000;
-    return { bytes, bandwidth, rawMs, exposedMs: Math.max(0, rawMs - p.overlap) + p.setup, utilization: bytes * p.qps / bandwidth, requiredGbps: bytes * p.qps * 8 / 1e9 / p.efficiency };
+    return { bytes, logicalBytes, fullLogicalBytes, bytesPerToken, bandwidth, rawMs, exposedMs: Math.max(0, rawMs - p.overlap) + p.setup, utilization: bytes * p.qps / bandwidth, requiredGbps: bytes * p.qps * 8 / 1e9 / p.efficiency };
+  }
+  function pdBudget(p) {
+    const model = preset(models, p.model);
+    const tx = transfer(p);
+    integer(p.outputTokens, "all generated output tokens", 1, 32768);
+    number(p.destinationCopies, "destination referenced-state multiplier", 1, 64);
+    number(p.prefillPoolTPS, "prefill pool input capacity", 0.001);
+    number(p.decodePoolTPS, "decode pool output capacity", 0.001);
+    integer(p.decodeSlots, "decode KV-resident slots", 1, 32768);
+    number(p.meanTPOT, "mean decode interval ms", 0.001);
+    number(p.capacityLimit, "capacity-use planning limit", 0.01, 0.99);
+    [p.queueP, p.prefillBudget, p.queueD, p.firstBudget, p.delivery].forEach((v) => number(v, "latency budget ms"));
+    number(p.ttftTarget, "TTFT budget target", 0.001);
+    number(p.itlTarget, "first-to-second gap target", 0.001);
+    if (p.overlap > p.prefillBudget) throw new RangeError("Verified overlap cannot exceed the assumed prefill computation window");
+    if (!["decode", "prefill"].includes(p.firstVisible)) throw new RangeError("Choose where the first visible token is emitted");
+    if (p.firstVisible === "prefill" && p.outputTokens === 1) throw new RangeError("A one-token request ending visibly at P does not need the full PD pipeline");
+    for (const flag of ["compatible", "memoryChecked", "colocatedPasses"]) if (typeof p[flag] !== "boolean") throw new RangeError("Confirm PD planning assumptions explicitly");
+    integer(p.prefillReplicas, "complete-model P replicas", 1, 4096);
+    integer(p.decodeReplicas, "complete-model D replicas", 1, 4096);
+    number(p.weightBytes, "stored weight bytes", 0.5, 2);
+    number(p.weightOverhead, "weight metadata allowance", 0, 1);
+    const dOutputs = p.outputTokens - (p.firstVisible === "prefill" ? 1 : 0);
+    const dComputeMs = p.firstVisible === "decode" ? p.firstBudget + (p.outputTokens - 1) * p.meanTPOT : dOutputs * p.meanTPOT;
+    const dResidenceMs = tx.exposedMs + p.queueD + dComputeMs;
+    number(dResidenceMs, "D resident duration budget", 0.001);
+    const limits = [
+      { key: "P input", rps: p.prefillPoolTPS / p.context },
+      { key: "D output", rps: p.decodePoolTPS / dOutputs },
+      { key: "D slots", rps: p.decodeSlots / (dResidenceMs / 1000) }
+    ];
+    if (tx.bytes > 0) limits.push({ key: "KV network", rps: tx.bandwidth / tx.bytes });
+    const bottleneck = limits.reduce((a, value) => value.rps < a.rps ? value : a, limits[0]);
+    const ttftBudget = p.queueP + p.prefillBudget + p.firstBudget + p.delivery + (p.firstVisible === "decode" ? tx.exposedMs + p.queueD : 0);
+    const firstGapBudget = p.outputTokens <= 1 ? null : p.meanTPOT + (p.firstVisible === "prefill" ? tx.exposedMs + p.queueD : 0);
+    const flags = {
+      compatibility: p.compatible && p.memoryChecked && p.context + p.outputTokens <= model.contextLimit,
+      capacityStable: limits.every((limit) => p.qps < limit.rps),
+      headroom: limits.every((limit) => p.qps / limit.rps <= p.capacityLimit),
+      latency: ttftBudget <= p.ttftTarget && (firstGapBudget === null || firstGapBudget <= p.itlTarget)
+    };
+    const readiness = p.colocatedPasses ? "keep-baseline" : !flags.compatibility ? "blocked-layout" : !flags.capacityStable ? "blocked-capacity" : !flags.latency ? "blocked-latency" : !flags.headroom ? "validate-headroom" : "trial-candidate";
+    const fullStateBytes = tx.bytesPerToken * (p.context + p.outputTokens) * p.destinationCopies;
+    const weightsGB = (model.total + (p.mtp ? (model.mtp || 0) : 0)) * p.weightBytes * (1 + p.weightOverhead) * (p.prefillReplicas + p.decodeReplicas);
+    return { model, tx, limits, bottleneck, flags, readiness, ttftBudget, firstGapBudget, dResidenceMs, fullStateBytes, weightsGB, candidateOutputTPS: bottleneck.rps * p.outputTokens };
   }
   function percentile(values, fraction) {
     if (!Array.isArray(values) || !values.length) throw new RangeError("Percentile requires samples");
@@ -375,14 +424,21 @@
     const block = context / prefillRate * 1000;
     const burst = Math.min(context, chunk) / prefillRate * 1000;
     const samples = { colocated: [], chunked: [], pd: [] };
-    for (let i = 0; i < 200; i += 1) {
-      const interference = i % 20 === 0;
-      const jitter = (i * 17 % 7) * 0.15;
-      samples.colocated.push(base + jitter + (interference ? block : 0));
-      samples.chunked.push(base + jitter + (interference ? burst : 0));
-      samples.pd.push(base + jitter + (interference ? residual : 0));
+    const requestTPOT = { colocated: [], chunked: [], pd: [] };
+    for (let request = 0; request < 200; request += 1) {
+      const sum = { colocated: 0, chunked: 0, pd: 0 };
+      for (let gap = 0; gap < 31; gap += 1) {
+        const interference = request % 50 === 0 ? gap % 7 === 0 : (request + gap) % 20 === 0;
+        const jitter = ((request * 17 + gap * 13) % 7) * 0.15;
+        const values = { colocated: base + jitter + (interference ? block : 0), chunked: base + jitter + (interference ? burst : 0), pd: base + jitter + (interference ? residual : 0) };
+        for (const key of Object.keys(samples)) {
+          samples[key].push(values[key]);
+          sum[key] += values[key];
+        }
+      }
+      for (const key of Object.keys(requestTPOT)) requestTPOT[key].push(sum[key] / 31);
     }
-    return { samples, p99: Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, percentile(values, 0.99)])) };
+    return { samples, requestTPOT, requestCount: 200, outputTokens: 32, gapCount: 6200, p99: Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, percentile(values, 0.99)])), p99TPOT: Object.fromEntries(Object.entries(requestTPOT).map(([key, values]) => [key, percentile(values, 0.99)])) };
   }
   function collective({ operation, ranks, sizeMB, timeMs }) {
     integer(ranks, "ranks", 2, 65536);
@@ -452,7 +508,7 @@
     const cacheGB = kvPerToken(model, kvBytes) * prefix * entries / 1e9;
     return { baselineMs, hitMs, missMs, expectedMs, avoidedTokens, inputComputeTokens: prompt - avoidedTokens, savedMs: baselineMs - expectedMs, cacheGB, contextSupported: prompt <= model.contextLimit };
   }
-  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
+  const api = { models, gpus, traceSamples, workloadProfiles, ptuModels, number, integer, lifecycle, traceMetrics, capacity, mixtureCapacity, burstQueue, businessQPS, ptu, normalizedPTU, kvPerToken, moeUnion, sizing, rankMemory, transfer, pdBudget, percentile, pdSamples, collective, goodput, cost, congestion, pipeline, speculative, prefixCaching };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AcademyMath = Object.freeze(api);
 })(globalThis);

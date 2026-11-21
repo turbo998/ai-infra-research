@@ -221,11 +221,19 @@ Exposed handoff = max(0, raw−verified_overlap) + setup
 
 已证实重叠 10 ms、固定 0.2 ms → **23.754432 ms**。10 QPS 的持续 payload 占该方向预算 **33.55%**。若到达量超过有效带宽，持续队列不稳定；不能继续套一个固定传输时间宣称 TTFT 达标。
 
+逻辑KV、实际跨网字节和D侧引用状态是不同量。只有实际网络方案要求多份发送时才乘wire倍率；D侧通过NVLink本地广播复制，不必把跨网量同步翻倍。D已有前缀减少新传输，却仍占引用KV；峰值状态还应计未来输出。opaque KV packing/scales可覆盖理论每Token字节，但必须录入唯一未重复的逻辑尺寸。
+
+PD预算沙盘沿用同一传输参数，取P输入、D输出、D驻留槽和网络容量的最小值。默认教学上界P200K输入TPS、D12K输出TPS、256 D槽、10QPS时，D输出约束 **23.4375请求/s**，候选系统输出上界12K tok/s；不是实测Goodput。每rank内存、模型/Tokenizer/dtype/block/layout与同负载时延还须独立确认。
+
+首个可见Token来自哪里也影响合同：D交接后首字预算约 **573.75 ms**；P先发首字可约 **500 ms**，但首次后续间隔约 **93.75 ms**，仍不满足35 ms流式预算。这里相加的是工程预算，不是各阶段P99。只有后台真实支持并被trace证实的layer overlap才可扣除；部分pull路径在P完成后才开始传。
+
 ### Q16. Mooncake、Dynamo、vLLM、SGLang 是互斥替代品吗？
 
 不是。Dynamo 是编排/路由/弹性层；Mooncake 提供 KV-centric 架构与 transfer/store 生态；vLLM/SGLang 是推理引擎与相应 connector/runtime。部署可能组合这些层。真正核对后端 release、KV layout/dtype、TP reshaping、缓存正确性、故障恢复和两池容量。
 
-H5 P99 曲线来自每点 **200 个确定性 ITL 样本**、5% 干扰和 nearest-rank 分位数。PD 保留可调残留抖动，不承诺“无抖动”；一次交接主要影响首字路径，不加到每个后续 Token 的 ITL。
+H5每点生成 **200个32输出Token请求**，每请求31个确定性后续间隔，共 **6200个ITL样本**。先求每请求平均TPOT，再对200个请求取P99；同批6200间隔另外取P99 ITL，两者不能混名。普通请求约每20间隔一次干扰，2%请求额外突发。假设首字已从D可见，不含启动交接，也不预测网络过载；PD仍保留残留抖动，不承诺“无抖动”。
+
+2026-11-21的GitHub release元数据快照为Dynamo **v1.6.2**、vLLM **v0.34.0**、SGLang **v0.5.23**、Mooncake **v0.3.14**。这不是已验证联合栈；主线/索引文档可能晚于release。部分混合attention recipe要求P/D同TP或限制MTP+PD，NIXL pull/push对PCP/DCP支持也不同。机内有NVLink不保证跨Pod走CUDA IPC，仍须核对PID namespace和真实传输日志。
 
 ## 专题 5：并行和推理加速
 

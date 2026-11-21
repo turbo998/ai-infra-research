@@ -25,7 +25,7 @@
 - [English FAQ, calculations, decision matrix and checklist](faq.en.md)
 - [原始来源目录与复核边界](../h5-academy/sources.json)，复核日期：2026-11-21。
 
-**不是实测 benchmark 报告**：SLA 目标、负载、价格、tradeoff 曲线与 200 样本 P99 曲线均为原创教学假设，页面中明确标记 `synthetic`。硬件规格与软件能力分别标记 `specification` / `implementation`，不能推导出性能保证。未独立复现实机吞吐或延迟。
+**不是实测 benchmark 报告**：SLA目标、负载、价格、tradeoff曲线与P99曲线均为原创教学假设，页面中明确标记 `synthetic`。PD分别对200个请求均值取P99 TPOT、对同批6200个间隔取P99 ITL。硬件规格与软件能力分别标记 `specification` / `implementation`，不能推导出性能保证。未独立复现实机吞吐或延迟。
 
 重要纠偏：L40S 使用 GDDR6 且没有 NVLink；B200 192 GB 设计/假设值与 DGX B200 180 GB/卡交付表分开；DeepSeek 671B 主模型之外，额外加载 MTP 需要预算 14B；80–85% 是架构规划余量，不是 vLLM 当前默认值。
 
