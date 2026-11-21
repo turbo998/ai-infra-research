@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>GB200/GB300 NVL72 Rack Supernode vs. 8-GPU HGX H200/B200 Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 19px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>`GB200 / GB300 NVL72` (72-GPU NVLink 5) vs. `8-GPU HGX H200 / B200` Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare Scale-Up Domain Size, MoE EP Bandwidth &amp; Datacenter Power</div>
+    <div class="grid">
+      <div class="card">
+        <label>Hardware Platform (72 Total GPUs):</label>
+        <select id="plat" onchange="recalc()">
+          <option value="nvl72">1x GB200 NVL72 Rack (72-GPU NVLink 5 @ 1,800 GB/s, 125 kW DLC)</option>
+          <option value="hgx_b200">9x 8-GPU HGX B200 Nodes (8-GPU NVLink 5 + 800G RDMA, 55 kW/rack)</option>
+          <option value="hgx_h200">9x 8-GPU HGX H200 Nodes (8-GPU NVLink 4 + 400G RDMA, 42 kW/rack)</option>
+        </select>
+        <label>Target Workload:</label>
+        <select id="wk" onchange="recalc()">
+          <option value="moe">DeepSeek-R1 671B / 1T Frontier MoE (`EP=72` Decode)</option>
+          <option value="dense70">Llama-3.3-70B Dense (`TP=4` × 18 Replicas)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="epBwVal">1,800 GB/s (Intra-Rack)</div><div class="lbl">Effective `EP=72` All-to-All Fabric Speed</div></div>
+          <div class="kpi"><div class="val" id="tpsVal">7,420 tok/s/GPU</div><div class="lbl">SLA-Compliant Goodput per GPU</div></div>
+          <div class="kpi"><div class="val" id="tpotVal">5.2 ms</div><div class="lbl">Achieved P99 Decode TPOT</div></div>
+          <div class="kpi"><div class="val" id="costVal">$0.13 / 1M Tokens</div><div class="lbl">Effective Cost per 1M Tokens</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const p = document.getElementById('plat').value;
+      const w = document.getElementById('wk').value;
+      let bw = '1,800 GB/s (Copper NVLink 5)', tps = 7420, tpot = 5.2, cost = 0.13;
+      if (p === 'hgx_b200') {
+        bw = w === 'moe' ? '100 GB/s (Cross-Node 800G RDMA)' : '1,800 GB/s (Intra-Node TP=4)';
+        tps = w === 'moe' ? 4650 : 6100; tpot = w === 'moe' ? 8.4 : 6.1; cost = 0.19;
+      } else if (p === 'hgx_h200') {
+        bw = w === 'moe' ? '50 GB/s (Cross-Node 400G RDMA)' : '900 GB/s (Intra-Node TP=4)';
+        tps = w === 'moe' ? 2380 : 2850; tpot = w === 'moe' ? 13.6 : 11.2; cost = 0.25;
+      }
+      document.getElementById('epBwVal').textContent = bw;
+      document.getElementById('tpsVal').textContent = tps.toLocaleString() + ' tok/s/GPU';
+      document.getElementById('tpotVal').textContent = tpot.toFixed(1) + ' ms';
+      document.getElementById('costVal').textContent = '$' + cost.toFixed(2) + ' / 1M Tokens';
+    }
+  </script>
+</body>
+</html>

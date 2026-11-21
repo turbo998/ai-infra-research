@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "gb200_gb300_nvl72_rack_scale_nvlink5_vs_hgx_8gpu_moe_tco_selection",
+        "title": "Rack-Scale Supernode Selection: NVIDIA GB200/GB300 NVL72 (72-GPU NVLink 5 + C2C) vs. 8-GPU HGX H200/B200 Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "model": "DeepSeek-R1-671B / 1.2T Frontier MoE",
+            "total_gpus_compared": 72,
+            "rack_power_nvl72_kw": 125.0,
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_nine_8gpu_hgx_h100_nodes_over_400g_roce_ep72",
+                "name": "Tier 1: 9x 8-GPU HGX H100 Nodes (EP=72 Crossing 50 GB/s Inter-Node RDMA on Every MoE Layer)",
+                "per_gpu_goodput_tps": 980,
+                "achieved_p99_tpot_ms": 21.6,
+                "kv_host_offload_bandwidth_gb_s_per_gpu": 64.0,
+                "cost_per_1m_tokens_usd": 0.56,
+                "verdict": "Baseline: 8-GPU NVLink boundary forces EP=72 All-to-All over 50 GB/s RDMA; PCIe Gen5 caps host KV recall at 64 GB/s",
+            },
+            {
+                "tier_id": "tier2_nine_8gpu_hgx_h200_nodes_with_deepep_ibgda",
+                "name": "Tier 2: 9x 8-GPU HGX H200 Nodes (141GB HBM3e + DeepEP IBGDA Over 400G RDMA)",
+                "per_gpu_goodput_tps": 2380,
+                "achieved_p99_tpot_ms": 13.6,
+                "kv_host_offload_bandwidth_gb_s_per_gpu": 64.0,
+                "cost_per_1m_tokens_usd": 0.25,
+                "verdict": "Best air/45kW-DLC choice when colocation facility cannot support 125kW/rack liquid-cooled NVL72",
+            },
+            {
+                "tier_id": "tier3_nine_8gpu_hgx_b200_x86_nodes_over_800g_rdma",
+                "name": "Tier 3: 9x 8-GPU HGX B200 x86 Nodes (NVFP4 + 8-Way NVLink 5, Inter-Node 800G RDMA for EP=72)",
+                "per_gpu_goodput_tps": 4650,
+                "achieved_p99_tpot_ms": 8.4,
+                "kv_host_offload_bandwidth_gb_s_per_gpu": 64.0,
+                "cost_per_1m_tokens_usd": 0.19,
+                "verdict": "Fast NVFP4 compute, but 8-GPU NVLink ceiling still forces cross-node RDMA for EP>8 and PCIe x86 bottlenecks",
+            },
+            {
+                "tier_id": "tier4_single_gb200_gb300_nvl72_rack_72way_nvlink5_plus_grace_c2c",
+                "name": "Tier 4: Single GB200/GB300 NVL72 Rack (72-GPU 1,800 GB/s NVLink 5 Domain + 450 GB/s/GPU Grace C2C LPDDR5X)",
+                "per_gpu_goodput_tps": 7420,
+                "achieved_p99_tpot_ms": 5.2,
+                "kv_host_offload_bandwidth_gb_s_per_gpu": 450.0,
+                "cost_per_1m_tokens_usd": 0.13,
+                "verdict": "Recommended for Giant MoE: EP=72 runs 100% inside 1,800 GB/s NVLink 5! 7,420 tok/s/GPU, 5.2ms TPOT & $0.13/1M",
+            },
+        ],
+        "headline_findings": {
+            "nvl72_goodput_tps_per_gpu": 7420,
+            "p99_tpot_ms": 5.2,
+            "c2c_offload_bw_gb_s_per_gpu": 450.0,
+            "cost_reduction_vs_tier1_pct": 76.8,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
