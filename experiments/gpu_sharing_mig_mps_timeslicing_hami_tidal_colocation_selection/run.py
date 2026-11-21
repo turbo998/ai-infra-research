@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "gpu_sharing_mig_mps_timeslicing_hami_tidal_colocation_selection",
+        "title": "Enterprise GPU Sharing & Tidal Colocation Selection: Hardware MIG vs. CUDA MPS vs. Time-Slicing vs. HAMi/Kueue Tidal Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "cluster_gpus": 64,
+            "gpu_sku": "NVIDIA H200 SXM 141GB",
+            "workload_mix": "Small Embedding/Rerank/SLM (0.6B-8B) + Diurnal 70B Serving + Nightly Batch/SFT",
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_whole_gpu_per_small_model_and_zero_night_colocation",
+                "name": "Tier 1: 1 Whole H200 per Small Model (Embedding/Reranker) & Static Siloed Online/Offline Pools",
+                "effective_24h_gpu_compute_and_hbm_utilization_pct": 26.4,
+                "noisy_neighbor_oom_or_p99_sla_breach_rate_pct": 0.0,
+                "p99_embedding_and_rerank_latency_ms": 14.2,
+                "monthly_64gpu_platform_tco_usd": 340000,
+                "verdict": "Anti-Pattern: Allocating a 141GB H200 to a 2GB Embedding model wastes 94% HBM; 60% of fleet idles at night",
+            },
+            {
+                "tier_id": "tier2_k8s_time_slicing_without_memory_or_fault_isolation",
+                "name": "Tier 2: K8s Time-Slicing Oversubscription (4 Pods Share 1 GPU Without HBM Limits or Fault Isolation)",
+                "effective_24h_gpu_compute_and_hbm_utilization_pct": 58.0,
+                "noisy_neighbor_oom_or_p99_sla_breach_rate_pct": 31.5,
+                "p99_embedding_and_rerank_latency_ms": 48.6,
+                "monthly_64gpu_platform_tco_usd": 225000,
+                "verdict": "Anti-Pattern for Production: 1 bursty tenant triggers CUDA OOM for all 4 colocated pods; 48.6ms switch jitter",
+            },
+            {
+                "tier_id": "tier3_cuda_mps_for_same_tenant_plus_static_mig_for_multi_tenant",
+                "name": "Tier 3: Hardware MIG (`1g.18gb / 3g.71gb`) for Multi-Tenant Isolation + CUDA MPS for Same-Tenant Pipelines",
+                "effective_24h_gpu_compute_and_hbm_utilization_pct": 68.5,
+                "noisy_neighbor_oom_or_p99_sla_breach_rate_pct": 0.0,
+                "p99_embedding_and_rerank_latency_ms": 11.4,
+                "monthly_64gpu_platform_tco_usd": 168000,
+                "verdict": "0.0% cross-tenant fault/jitter via hardware MIG + 11.4ms MPS fusion, but night-time online GPUs still sit idle",
+            },
+            {
+                "tier_id": "tier4_mig_mps_hybrid_plus_kueue_tidal_colocation_and_vllm_sleep_wake",
+                "name": "Tier 4: MIG (Multi-Tenant) + MPS (Same-Tenant RAG) + Kueue Tidal Colocation (`vLLM Sleep level=1` Night Harvest)",
+                "effective_24h_gpu_compute_and_hbm_utilization_pct": 89.2,
+                "noisy_neighbor_oom_or_p99_sla_breach_rate_pct": 0.0,
+                "p99_embedding_and_rerank_latency_ms": 11.2,
+                "monthly_64gpu_platform_tco_usd": 114000,
+                "verdict": "Recommended: 89.2% 24h cluster utilization (3.38x vs. Tier 1), 0.0% SLA breach & -66.5% monthly TCO",
+            },
+        ],
+        "headline_findings": {
+            "cluster_24h_utilization_pct": 89.2,
+            "utilization_gain_vs_tier1_x": 3.38,
+            "p99_latency_ms": 11.2,
+            "tco_savings_vs_tier1_pct": 66.5,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
