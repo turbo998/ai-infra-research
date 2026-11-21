@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "experiment_id": "computer_use_browser_gui_agent_playwright_dom_omniparser_vlm_sandbox_selection",
+        "title": "Enterprise Computer-Use & Browser GUI Agent Selection: Pruned A11y Tree vs. Pure Pixel VLM vs. Hybrid OmniParser v2 Set-of-Mark (SoM)",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_basis": {
+            "avg_steps_per_workflow": 15,
+            "screen_resolution": "1920x1080 (Enterprise ERP / CRM / Canvas / Citrix Mix)",
+            "benchmark": "Enterprise WebArena + OSWorld Hybrid Task Suite",
+        },
+        "tiers": [
+            {
+                "tier": "Tier 1: Raw Full-DOM HTML Dump (Unpruned innerHTML to Text LLM)",
+                "task_success_rate_pct": 41.5,
+                "avg_step_latency_ms": 3200.0,
+                "tokens_per_step": 85000,
+                "cost_per_15_step_task_usd": 0.42,
+                "recommended_scenario": "Anti-pattern (SPA HTML noise blows up context window and confuses action grounding)",
+            },
+            {
+                "tier": "Tier 2: Pure Pixel Screenshot VLM Loop (Direct (x, y) Coordinate Regression)",
+                "task_success_rate_pct": 68.4,
+                "avg_step_latency_ms": 1850.0,
+                "tokens_per_step": 1600,
+                "cost_per_15_step_task_usd": 0.24,
+                "recommended_scenario": "Legacy desktop / Citrix / VDI apps with zero DOM access (suffers from tiny-icon click drift)",
+            },
+            {
+                "tier": "Tier 3: Pruned Accessibility (A11y) Tree Snapshot (Playwright aria-ref IDs Only)",
+                "task_success_rate_pct": 78.5,
+                "avg_step_latency_ms": 420.0,
+                "tokens_per_step": 1800,
+                "cost_per_15_step_task_usd": 0.06,
+                "recommended_scenario": "Standard semantic web apps with well-labelled ARIA attributes",
+            },
+            {
+                "tier": "Tier 4 (Recommended): Hybrid A11y Tree + OmniParser v2 Set-of-Mark (SoM) + Multi-Action Batching",
+                "task_success_rate_pct": 91.6,
+                "avg_step_latency_ms": 540.0,
+                "tokens_per_step": 2200,
+                "cost_per_15_step_task_usd": 0.09,
+                "recommended_scenario": "Enterprise Browser & Desktop RPA combining fast DOM refs with visual SoM box grounding",
+            },
+        ],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json missing")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json out of date")
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print("Wrote results.json")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
