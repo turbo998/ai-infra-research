@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>LLM Inference Parallelism (TP/PP/DP/EP) &amp; Acceleration Interactive H5 Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 19px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LLM Inference Parallelism (`TP / PP / DP / EP`) &amp; Acceleration Selector</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Interactive Parallelism Recipe &amp; Throughput Calculator for Dense 70B/405B &amp; MoE 671B</div>
+    <div class="grid">
+      <div class="card">
+        <label>Target Model Family:</label>
+        <select id="model" onchange="recalc()">
+          <option value="moe671b">DeepSeek-V3/R1 671B Sparse MoE (37B Active, 256 Experts)</option>
+          <option value="dense405b">Llama-3.1-405B Dense Transformer</option>
+          <option value="dense70b">Llama-3.3-70B / Qwen-2.5-72B Dense</option>
+        </select>
+        <label>GPU Hardware SKU:</label>
+        <select id="gpu" onchange="recalc()">
+          <option value="h200">NVIDIA H200 SXM (141GB HBM3e @ 4.8 TB/s)</option>
+          <option value="h100">NVIDIA H100 SXM (80GB HBM3 @ 3.35 TB/s)</option>
+          <option value="b200">NVIDIA B200 SXM / NVL72 (192GB HBM3e @ 8.0 TB/s)</option>
+        </select>
+        <label>Cluster GPU Count: <strong id="gVal">64 GPUs</strong></label>
+        <input type="range" id="gpus" min="8" max="256" step="8" value="64" oninput="recalc()">
+        <label>Enable MTP / EAGLE-3 Speculative Decoding &amp; FP8: <strong id="sVal">Enabled (2.1x TPOT Speedup)</strong></label>
+        <input type="range" id="spec" min="0" max="1" step="1" value="1" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="recipeVal">DP=64 × EP=64 (DeepEP)</div><div class="lbl">Optimal Parallelism Slicing Recipe</div></div>
+          <div class="kpi"><div class="val" id="tpotVal">11.6 ms</div><div class="lbl">P99 Decode TPOT (&lt;=20ms SLA)</div></div>
+          <div class="kpi"><div class="val" id="tpsVal">128,400 tok/s</div><div class="lbl">Cluster System Output TPS (5.18x Tier 1)</div></div>
+          <div class="kpi"><div class="val" id="costVal">$0.25 / 1M</div><div class="lbl">Cost per 1M Output Tokens (-80.5%)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Acceleration Technique</th><th>Primary Metric Improved</th><th>Communication Primitive</th><th>Hardware Domain Boundary</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>TP (Tensor Parallel)</strong></td><td>Cuts <strong>TTFT &amp; TPOT</strong> (pools HBM BW &amp; FLOPs)</td><td>2x <code>All-Reduce</code> per layer</td><td>Strictly Intra-Node NVLink (<code>TP &lt;= 8</code>) or NVL72</td></tr>
+          <tr><td><strong>PP (Pipeline Parallel)</strong></td><td>Fits 405B Dense across nodes; lifts <strong>System TPS</strong></td><td>Point-to-point <code>Send/Recv</code> at stage edge</td><td>Inter-Node RDMA (only 1 message per micro-batch stage)</td></tr>
+          <tr><td><strong>Attention DP (Data Parallel)</strong></td><td>Scales <strong>System TPS</strong> linearly (0 KV duplication)</td><td>Zero communication inside Attention</td><td>Across any node / slice boundary</td></tr>
+          <tr><td><strong>MoE EP (DeepEP + EPLB)</strong></td><td>Cuts MoE <strong>TPOT</strong> &amp; lifts <strong>System TPS</strong> 2.65x+</td><td>2x <code>All-to-All</code> (Dispatch + Combine) / layer</td><td>2-Stage NVLink -&gt; GPUDirect RDMA IBGDA (<code>EP=32..64</code>)</td></tr>
+          <tr><td><strong>MTP / EAGLE-3 Speculative</strong></td><td>Cuts <strong>Decode TPOT</strong> 1.8x–2.5x at B &lt;= 32</td><td>Draft verify in 1 target forward pass</td><td>On-chip TensorCore surplus compute</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const m = document.getElementById('model').value;
+      const g = document.getElementById('gpu').value;
+      const n = parseInt(document.getElementById('gpus').value, 10);
+      const sp = parseInt(document.getElementById('spec').value, 10);
+      document.getElementById('gVal').textContent = n + ' GPUs';
+      document.getElementById('sVal').textContent = sp ? 'Enabled (2.1x TPOT Speedup)' : 'Disabled (1 Token/Step)';
+      let recipe = '';
+      let baseTpot = 11.6;
+      let baseTpsPerGpu = 2006;
+      if (m === 'moe671b') {
+        recipe = 'Attn DP=' + n + ' × EP=' + n + ' (DeepEP)';
+        baseTpot = g === 'b200' ? 7.8 : (g === 'h200' ? 11.6 : 16.5);
+        baseTpsPerGpu = g === 'b200' ? 3400 : (g === 'h200' ? 2006 : 1250);
+      } else if (m === 'dense405b') {
+        recipe = g === 'h100' ? 'TP=8 (NVLink) × PP=2 (RDMA) × DP=' + Math.max(1, n/16) : 'Intra-Node TP=8 × DP=' + Math.max(1, n/8);
+        baseTpot = g === 'b200' ? 10.2 : (g === 'h200' ? 15.4 : 22.8);
+        baseTpsPerGpu = g === 'b200' ? 1850 : (g === 'h200' ? 1120 : 680);
+      } else {
+        recipe = 'Intra-Node TP=4 × DP=' + Math.max(1, n/4);
+        baseTpot = g === 'b200' ? 6.2 : (g === 'h200' ? 9.4 : 13.2);
+        baseTpsPerGpu = g === 'b200' ? 4200 : (g === 'h200' ? 2650 : 1780);
+      }
+      if (!sp) {
+        baseTpot *= 1.85;
+        baseTpsPerGpu *= 0.72;
+      }
+      document.getElementById('recipeVal').textContent = recipe;
+      document.getElementById('tpotVal').textContent = baseTpot.toFixed(1) + ' ms';
+      const totalTps = Math.round(baseTpsPerGpu * n);
+      document.getElementById('tpsVal').textContent = totalTps.toLocaleString() + ' tok/s';
+      const cost = Math.max(0.12, (0.25 * (2006 / baseTpsPerGpu))).toFixed(2);
+      document.getElementById('costVal').textContent = '$' + cost + ' / 1M';
+    }
+  </script>
+</body>
+</html>
