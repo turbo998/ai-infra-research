@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Streaming Protocol &amp; Disconnect Abort Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive LLM Streaming Transport (`SSE / gRPC / HTTP3`) &amp; Abort Sizer (#366)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Streaming Transport &amp; Abort Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Buffered HTTP/1.1 SSE (No Cancel)</option>
+        <option value="2">Tier 2: Tuned HTTP/2 SSE + FIN Cancel</option>
+        <option value="3">Tier 3: East-West gRPC + Context Cancel</option>
+        <option value="4" selected>Tier 4: Edge HTTP/3 QUIC + gRPC + Abort</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>User Early Stop / Tab-Close Rate (%)</label>
+      <input type="number" id="stopRate" value="25" min="0" max="80" step="5" oninput="calc()">
+    </div>
+    <div class="ctrl">
+      <label>Cluster Size (H100 GPUs)</label>
+      <input type="number" id="gpus" value="64" min="4" max="2048" step="4" oninput="calc()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>Client-Perceived P99 TTFT</h3><div class="val" id="ttft">345 ms</div></div>
+    <div class="card"><h3>Mobile 2%-Loss P99 ITL Jitter</h3><div class="val" id="itl">42 ms</div></div>
+    <div class="card"><h3>Zombie GPU Decode Waste</h3><div class="val" id="waste">0.12%</div></div>
+    <div class="card"><h3>Monthly Wasted GPU Spend</h3><div class="val" id="cost">$240 / mo</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const stopRate = parseFloat(document.getElementById('stopRate').value) || 0;
+  const gpus = parseInt(document.getElementById('gpus').value, 10) || 64;
+  const ttft = {1: 780, 2: 368, 3: 352, 4: 345}[tier];
+  const itl = {1: 340, 2: 285, 3: 260, 4: 42}[tier];
+  const baseWaste = {1: 0.85, 2: 0.014, 3: 0.006, 4: 0.0048}[tier] * stopRate;
+  const cost = Math.round((baseWaste / 100) * gpus * 3176);
+  document.getElementById('ttft').textContent = ttft + ' ms';
+  document.getElementById('itl').textContent = itl + ' ms';
+  document.getElementById('waste').textContent = baseWaste.toFixed(2) + '%';
+  document.getElementById('cost').textContent = '$' + cost.toLocaleString() + ' / mo';
+}
+calc();
+</script>
+</body>
+</html>
