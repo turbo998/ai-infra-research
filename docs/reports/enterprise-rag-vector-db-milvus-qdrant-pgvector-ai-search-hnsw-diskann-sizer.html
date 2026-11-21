@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>企业级向量数据库 (HNSW vs. SQ8/BQ vs. DiskANN) 内存与成本估算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #38BDF8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>企业级 RAG 向量数据库（Milvus / Qdrant / pgvector / AI Search）内存与 NVMe 容量计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>向量总规模 (百万条 M) <span id="v_cnt" class="val">100M</span></label>
+      <input type="range" id="cnt" min="10" max="1000" step="10" value="100" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>Embedding 维度 <span id="v_dim" class="val">1536</span></label>
+      <select id="dim" onchange="calc()">
+        <option value="768">768 维 (BGE-base)</option>
+        <option value="1024">1024 维 (BGE-M3 / Cohere v3)</option>
+        <option value="1536" selected>1536 维 (text-embedding-3-small)</option>
+        <option value="3072">3072 维 (text-embedding-3-large)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>峰值检索并发 (QPS) <span id="v_qps" class="val">500</span></label>
+      <input type="range" id="qps" min="50" max="3000" step="50" value="500" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>索引与量化分层方案</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 纯内存 HNSW FP32 无压缩</option>
+        <option value="2">Tier 2: PostgreSQL pgvector + pgvectorscale (DiskANN)</option>
+        <option value="3">Tier 3: Qdrant / Milvus HNSW + BQ/SQ8 + Mmap 重排</option>
+        <option value="4" selected>Tier 4: Milvus / AI Search 分层 DiskANN + RRF (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>所需集群内存 (DRAM)</div><div id="k_ram" class="num">96 GB</div></div>
+    <div class="kpi"><div>所需本地 NVMe 容量</div><div id="k_ssd" class="num">820 GB</div></div>
+    <div class="kpi"><div>检索 P99 延迟</div><div id="k_p99" class="num">16.5 ms</div></div>
+    <div class="kpi"><div>月度基础设施成本</div><div id="k_cost" class="num">$3,100</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const cnt = parseFloat(document.getElementById('cnt').value);
+  const dim = parseFloat(document.getElementById('dim').value);
+  const qps = parseFloat(document.getElementById('qps').value);
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_cnt').textContent = cnt + 'M';
+  document.getElementById('v_dim').textContent = dim;
+  document.getElementById('v_qps').textContent = qps;
+
+  const rawGB = (cnt * 1e6 * dim * 4) / 1e9;
+  let ram = 96, ssd = 820, p99 = 16.5, cost = 3100;
+  if (mode === '1') {
+    ram = Math.round(rawGB * 1.75);
+    ssd = Math.round(rawGB * 1.95);
+    p99 = +(7.5 + qps * 0.002).toFixed(1);
+  } else if (mode === '2') {
+    ram = Math.round(rawGB * 0.31);
+    ssd = Math.round(rawGB * 1.55);
+    p99 = +(19.0 + qps * 0.01).toFixed(1);
+  } else if (mode === '3') {
+    ram = Math.round(rawGB * 0.27);
+    ssd = Math.round(rawGB * 1.43);
+    p99 = +(9.5 + qps * 0.0034).toFixed(1);
+  } else {
+    ram = Math.round(rawGB * 0.156);
+    ssd = Math.round(rawGB * 1.33);
+    p99 = +(14.0 + qps * 0.005).toFixed(1);
+  }
+  cost = Math.round(ram * 14.2 + ssd * 0.38 + qps * 2.8);
+  document.getElementById('k_ram').textContent = ram.toLocaleString() + ' GB';
+  document.getElementById('k_ssd').textContent = ssd.toLocaleString() + ' GB';
+  document.getElementById('k_p99').textContent = p99 + ' ms';
+  document.getElementById('k_cost').textContent = '$' + cost.toLocaleString();
+}
+calc();
+</script>
+</body>
+</html>
