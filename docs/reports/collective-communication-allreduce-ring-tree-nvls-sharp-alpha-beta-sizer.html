@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Collective Communication Alpha-Beta Latency &amp; Bandwidth Calculator</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Hockney $\alpha\text{-}\beta$ Collective Latency Calculator (`Ring` vs. `Tree` vs. `NVLS + SHARPv3`)</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare `2(N-1)α` Ring Hops vs. `2 log2(N)α` Tree Hops &amp; In-Switch SHARP</div>
+    <div class="grid">
+      <div class="card">
+        <label>Cluster GPU Count ($N$): <strong id="nVal">1,024 GPUs</strong></label>
+        <input type="range" id="gpus" min="8" max="4096" step="8" value="1024" oninput="recalc()">
+        <label>Collective Message Size ($S$): <strong id="sVal">64 MB</strong></label>
+        <input type="range" id="sizeMb" min="1" max="4096" step="16" value="64" oninput="recalc()">
+        <label>Collective Algorithm (`NCCL_ALGO`):</label>
+        <select id="algo" onchange="recalc()">
+          <option value="sharp">Tier 4: Hierarchical NVLS + SHARPv3 CollNet (In-Network Reduce)</option>
+          <option value="tree">Tier 2/3: Double Binary Tree (`2*log2(N)` hops + NVLS)</option>
+          <option value="ring">Tier 1: Flat Ring (`2*(N-1)` sequential hops)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="hopsVal">6 Switch Hops</div><div class="lbl">Sequential Latency Hops</div></div>
+          <div class="kpi"><div class="val" id="timeVal">1.72 ms</div><div class="lbl">Total All-Reduce Duration ($T_{\alpha} + T_{\beta}$)</div></div>
+          <div class="kpi"><div class="val" id="algVal">37.2 GB/s</div><div class="lbl">Effective Algorithm Bandwidth (`algbw`)</div></div>
+          <div class="kpi"><div class="val" id="recVal">🏆 Optimal Choice</div><div class="lbl">Algorithm Selection Verdict</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const n = parseInt(document.getElementById('gpus').value, 10);
+      const sMb = parseInt(document.getElementById('sizeMb').value, 10);
+      const algo = document.getElementById('algo').value;
+      document.getElementById('nVal').textContent = n.toLocaleString() + ' GPUs';
+      document.getElementById('sVal').textContent = sMb.toLocaleString() + ' MB';
+      const sGb = sMb / 1024.0;
+      let hops = 6, tMs = 1.0;
+      if (algo === 'ring') {
+        hops = 2 * (n - 1);
+        tMs = (hops * 0.002) + ((2 * sGb) / 45.0) * 1000;
+      } else if (algo === 'tree') {
+        hops = Math.round(2 * Math.log2(n));
+        tMs = (hops * 0.0025) + ((2 * sGb) / 46.0) * 1000;
+      } else {
+        hops = 6;
+        tMs = 0.035 + (sGb / 39.0) * 1000;
+      }
+      const algbw = sGb / (tMs / 1000.0);
+      document.getElementById('hopsVal').textContent = hops.toLocaleString() + ' Hops';
+      document.getElementById('timeVal').textContent = tMs.toFixed(2) + ' ms';
+      document.getElementById('algVal').textContent = algbw.toFixed(1) + ' GB/s';
+      document.getElementById('recVal').textContent = algo === 'ring' && n > 64 ? '⛔ Too Many Ring Hops!' : '🏆 Optimal Choice';
+    }
+  </script>
+</body>
+</html>
