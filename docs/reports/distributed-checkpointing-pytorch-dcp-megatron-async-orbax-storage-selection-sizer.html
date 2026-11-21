@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distributed Checkpointing (PyTorch DCP / Megatron / Orbax) Sizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 24px; border: 1px solid #334155; }
+  h1 { margin-top: 0; font-size: 22px; color: #38bdf8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 18px 0; }
+  .ctrl { background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid #334155; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  select, input { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: #0f172a; padding: 16px; border-radius: 10px; border-left: 4px solid #3b82f6; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; color: #94a3b8; }
+  .card .val { font-size: 24px; font-weight: 800; color: #34d399; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interactive Distributed Checkpointing (`PyTorch Async DCP` vs. `Orbax`) Sizer (#365)</h1>
+  <p style="color:#94a3b8;font-size:14px;">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</p>
+  <div class="grid">
+    <div class="ctrl">
+      <label>Checkpointing Architecture Tier</label>
+      <select id="tier" onchange="calc()">
+        <option value="1">Tier 1: Rank-0 Blocking torch.save</option>
+        <option value="2">Tier 2: Sync Sharded DCP / Orbax</option>
+        <option value="3">Tier 3: Two-Stage Pinned-RAM Async DCP</option>
+        <option value="4" selected>Tier 4: Zero-Overhead Stream + NVMe + Async DCP</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>Total Checkpoint State Size (TB)</label>
+      <input type="number" id="size" value="6.4" min="0.5" max="50.0" step="0.5" oninput="calc()">
+    </div>
+    <div class="ctrl">
+      <label>Checkpoint Interval (Minutes)</label>
+      <input type="number" id="interval" value="30" min="5" max="180" step="5" oninput="calc()">
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h3>GPU Blocking Stall Time</h3><div class="val" id="stall">0.25 sec</div></div>
+    <div class="card"><h3>Checkpoint Goodput</h3><div class="val" id="goodput">99.98%</div></div>
+    <div class="card"><h3>Elastic N-to-M Resharding</h3><div class="val" id="reshard">Supported</div></div>
+    <div class="card"><h3>Monthly Wasted GPU Cost</h3><div class="val" id="cost">$290 / mo</div></div>
+  </div>
+</div>
+<script>
+function calc() {
+  const tier = parseInt(document.getElementById('tier').value, 10);
+  const size = parseFloat(document.getElementById('size').value) || 6.4;
+  const intervalSec = (parseFloat(document.getElementById('interval').value) || 30) * 60;
+  const scale = size / 6.4;
+  const baseStall = {1: 480.0, 2: 38.0, 3: 1.8, 4: 0.25}[tier] * scale;
+  const goodput = Math.max(0, (intervalSec / (intervalSec + baseStall)) * 100);
+  const wastedUsd = Math.round(((100 - goodput) / 100) * 1445000);
+  document.getElementById('stall').textContent = baseStall.toFixed(2) + ' sec';
+  document.getElementById('goodput').textContent = goodput.toFixed(2) + '%';
+  document.getElementById('reshard').textContent = tier === 1 ? 'Not Supported' : 'Supported';
+  document.getElementById('cost').textContent = '$' + wastedUsd.toLocaleString() + ' / mo';
+}
+calc();
+</script>
+</body>
+</html>
