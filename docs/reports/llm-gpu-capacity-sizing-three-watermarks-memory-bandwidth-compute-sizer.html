@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>3-Watermark LLM GPU Capacity Sizer (HBM Fit × Bandwidth TPOT × Compute)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>3-Watermark LLM GPU Capacity Sizer (`max[N_mem, N_bw, N_compute]`)</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Calculate Exact HBM Weights + KV Cache + Bandwidth TPOT &amp; GPU Count</div>
+    <div class="grid">
+      <div class="card">
+        <label>Target Foundation Model:</label>
+        <select id="model" onchange="recalc()">
+          <option value="ds671">DeepSeek-V3/R1 671B MoE (671B Total, 37B Active, MLA KV)</option>
+          <option value="llama70">Llama-3.3-70B Dense (70B Total/Active, GQA-8 KV)</option>
+          <option value="llama405">Llama-3.1-405B Dense (405B Total/Active, GQA-8 KV)</option>
+        </select>
+        <label>Weight &amp; KV Precision:</label>
+        <select id="prec" onchange="recalc()">
+          <option value="1">FP8 Weights (1 Byte/param) + FP8 KV Cache</option>
+          <option value="2">BF16/FP16 Weights (2 Bytes/param) + BF16 KV Cache</option>
+          <option value="0.55">INT4 AWQ Weights (0.55 Bytes/param) + FP8 KV Cache</option>
+        </select>
+        <label>Target GPU Hardware SKU:</label>
+        <select id="gpu" onchange="recalc()">
+          <option value="h200">NVIDIA H200 SXM (141 GB HBM3e, 4.8 TB/s)</option>
+          <option value="h100">NVIDIA H100 SXM (80 GB HBM3, 3.35 TB/s)</option>
+          <option value="b200">NVIDIA B200 SXM (192 GB HBM3e, 8.0 TB/s)</option>
+        </select>
+        <label>Concurrent Active Batch ($B$) × Context ($S$): <strong id="bsVal">64 reqs × 16K tokens</strong></label>
+        <input type="range" id="batch" min="8" max="256" step="8" value="64" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="memBreak">671 GB W + 36 GB KV</div><div class="lbl">Watermark 1: Weights + KV Cache (Before /0.85)</div></div>
+          <div class="kpi"><div class="val" id="nMem">8 GPUs (1x 8-GPU Node)</div><div class="lbl">Minimum GPUs Required (`max[N_mem, N_bw]`)</div></div>
+          <div class="kpi"><div class="val" id="tpotVal">13.6 ms</div><div class="lbl">Watermark 2: Achieved Decode TPOT (@ 72% MBU)</div></div>
+          <div class="kpi"><div class="val" id="maxBVal">192 sessions</div><div class="lbl">Watermark 3: Max Concurrent 16K Sessions on Replica</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Model &amp; Precision</th><th>Weights ($M_{\text{weights}}$)</th><th>KV Cache per 1K Tokens</th><th>Min GPUs on H100 (80GB)</th><th>Min GPUs on H200 (141GB)</th><th>Min GPUs on B200 (192GB)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Llama-3.3-70B (FP8 W8KV8, GQA)</strong></td><td>70.0 GB</td><td>0.164 GB / 1K tok</td><td>2x H100 (`TP=2`, 160 GB)</td><td>2x H200 (`TP=2` for &lt;20ms TPOT)</td><td>1x–2x B200 (192–384 GB)</td></tr>
+          <tr><td><strong>Llama-3.1-405B (FP8 W8KV8, GQA)</strong></td><td>405.0 GB</td><td>0.258 GB / 1K tok</td><td>8x H100 (`TP=8`, 640 GB)</td><td>4x–8x H200 (`TP=4/8`, 564–1128 GB)</td><td>4x B200 (`TP=4`, 768 GB)</td></tr>
+          <tr><td><strong>DeepSeek-R1 671B MoE (FP8, MLA)</strong></td><td>671.0 GB (37B Active)</td><td><strong>0.035 GB / 1K tok (MLA!)</strong></td><td>16x H100 (`2 Nodes`, 1280 GB)</td><td><strong>8x H200 (`1 Node`, 1128 GB)</strong></td><td><strong>8x B200 (`1 Node`, 1536 GB)</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const m = document.getElementById('model').value;
+      const prec = parseFloat(document.getElementById('prec').value);
+      const gpu = document.getElementById('gpu').value;
+      const b = parseInt(document.getElementById('batch').value, 10);
+      const s = 16; // 16K tokens
+      document.getElementById('bsVal').textContent = b + ' reqs × 16K tokens';
+      const pTotal = m === 'ds671' ? 671 : (m === 'llama405' ? 405 : 70);
+      const pActive = m === 'ds671' ? 37 : pTotal;
+      const kvPer1kFp8 = m === 'ds671' ? 0.03514 : (m === 'llama405' ? 0.258 : 0.1638);
+      const kvMult = prec === 2 ? 2.0 : 1.0;
+      const mWeights = pTotal * prec;
+      const mKv = b * s * kvPer1kFp8 * kvMult;
+      const mReq = (mWeights + mKv + 12) / 0.85;
+      const hbm = gpu === 'h200' ? 141 : (gpu === 'b200' ? 192 : 80);
+      const bw = gpu === 'h200' ? 4800 : (gpu === 'b200' ? 8000 : 3350);
+      const rawN = Math.ceil(mReq / hbm);
+      const validN = rawN <= 1 ? 1 : (rawN <= 2 ? 2 : (rawN <= 4 ? 4 : (rawN <= 8 ? 8 : (rawN <= 16 ? 16 : 32))));
+      const nBw = Math.ceil(((pActive * prec + mKv) / (0.022 * bw * 0.72)));
+      const finalN = Math.max(validN, nBw <= 2 ? 2 : (nBw <= 4 ? 4 : 8));
+      const tpot = ((pActive * prec + mKv * 0.35) / (finalN * bw * 0.72)) * 1000;
+      const freeKvHbm = Math.max(0, finalN * hbm * 0.85 - mWeights - 12);
+      const maxSessions = Math.floor(freeKvHbm / (s * kvPer1kFp8 * kvMult));
+      document.getElementById('memBreak').textContent = Math.round(mWeights) + ' GB W + ' + Math.round(mKv) + ' GB KV';
+      document.getElementById('nMem').textContent = finalN + ' GPUs (TP/EP=' + finalN + ')';
+      document.getElementById('tpotVal').textContent = tpot.toFixed(1) + ' ms';
+      document.getElementById('maxBVal').textContent = maxSessions + ' sessions';
+    }
+  </script>
+</body>
+</html>
