@@ -1,0 +1,60 @@
+{
+  "benchmark_id": "prefill_decode_disaggregation_vs_colocated_chunked_prefill_boundary_selection",
+  "title": "Prefill-Decode (PD) Disaggregation vs. Colocated Chunked Prefill: Boundary Thresholds, KV Transfer Math & Engine Benchmark",
+  "provenance": "synthetic + anonymized_reported",
+  "independently_reproduced": false,
+  "physical_gpu_cluster_measurement": "not_measured",
+  "workload_assumptions": {
+    "model": "Llama-3-70B-FP8 (80 layers, GQA n_kv=8, d_h=128) & DeepSeek-671B-MLA",
+    "avg_prompt_length_tokens": 16384,
+    "avg_output_length_tokens": 512,
+    "io_token_ratio": 32.0,
+    "target_p99_tpot_sla_ms": 25.0,
+    "target_p99_ttft_sla_ms": 800.0
+  },
+  "tiers": [
+    {
+      "tier_id": "tier1_colocated_prefill_prioritized_continuous_batching",
+      "name": "Tier 1: Naive Colocated Continuous Batching (Prefill-Prioritized, No Chunking)",
+      "p99_ttft_ms": 620.0,
+      "p99_tpot_ms": 148.0,
+      "sla_compliant_goodput_tok_per_s_gpu": 520.0,
+      "cost_per_1m_sla_tokens_usd": 0.92,
+      "verdict": "Anti-Pattern: 16K Prefill bursts stall Decode for 140ms+, blowing the 25ms TPOT SLA by 5.9x"
+    },
+    {
+      "tier_id": "tier2_colocated_chunked_prefill_sarathi_vllm",
+      "name": "Tier 2: Colocated + Chunked Prefill (chunk_size=1024/2048 Piggybacked on Decode)",
+      "p99_ttft_ms": 940.0,
+      "p99_tpot_ms": 58.5,
+      "sla_compliant_goodput_tok_per_s_gpu": 890.0,
+      "cost_per_1m_sla_tokens_usd": 0.64,
+      "verdict": "Best for <=8 GPUs, short prompts (<2K), or non-RDMA nodes; fails 25ms TPOT on >=8K RAG/Agent"
+    },
+    {
+      "tier_id": "tier3_pd_disaggregation_over_standard_tcp_or_uncompressed_mha",
+      "name": "Tier 3: PD Disaggregation Over TCP/IP (No GPUDirect RDMA / NIXL / Mooncake Zero-Copy)",
+      "p99_ttft_ms": 1120.0,
+      "p99_tpot_ms": 21.0,
+      "sla_compliant_goodput_tok_per_s_gpu": 1050.0,
+      "cost_per_1m_sla_tokens_usd": 0.55,
+      "verdict": "Isolates Decode TPOT (21ms), but TCP copy of 2.68GB KV adds +480ms network stall to TTFT"
+    },
+    {
+      "tier4_pd_disaggregation_rdma_nixl_mooncake_layerwise_kv_push": "tier4",
+      "tier_id": "tier4_pd_disaggregation_rdma_nixl_mooncake_layerwise_kv_push",
+      "name": "Tier 4: PD Disaggregation (Dynamo/Mooncake/SGLang) + 400G GPUDirect RDMA Layer-Wise KV Push",
+      "p99_ttft_ms": 485.0,
+      "p99_tpot_ms": 16.4,
+      "sla_compliant_goodput_tok_per_s_gpu": 1940.0,
+      "cost_per_1m_sla_tokens_usd": 0.34,
+      "verdict": "Recommended (>=16 GPUs, Input >=4K, I:O >=8:1): 16.4ms P99 TPOT, 2.18x Goodput & -46.9% $/1M vs Tier 2"
+    }
+  ],
+  "headline_findings": {
+    "disaggregated_p99_tpot_ms": 16.4,
+    "tpot_reduction_vs_chunked_colocated_x": 3.57,
+    "sla_goodput_gain_vs_chunked_colocated_x": 2.18,
+    "cost_savings_vs_chunked_colocated_pct": 46.9
+  }
+}

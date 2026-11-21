@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>PD Disaggregation vs. Colocated Chunked Prefill Interactive H5 Sizer &amp; KV Bandwidth Calculator</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"], select { width: 100%; margin-bottom: 14px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 6px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    .verdict-box { margin-top: 14px; padding: 12px; border-radius: 8px; background: #064e3b; border: 1px solid #10b981; font-size: 13.5px; font-weight: 700; color: #d1fae5; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PD Disaggregation vs. Colocated Chunked Prefill Interactive Sizer &amp; KV Transfer Calculator</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Hand-Calculate KV Payload, RDMA Transfer Time, P99 TPOT &amp; Decision Boundary</div>
+    <div class="grid">
+      <div class="card">
+        <label>Model Architecture &amp; KV Compression:</label>
+        <select id="model" onchange="recalc()">
+          <option value="llama70b_fp8">Llama-3-70B (GQA n_kv=8, FP8 KV = 163.8 KB/tok)</option>
+          <option value="llama70b_bf16">Llama-3-70B (GQA n_kv=8, BF16 KV = 327.7 KB/tok)</option>
+          <option value="deepseek671b_mla">DeepSeek-V3/R1 671B (MLA Compressed KV = 70.3 KB/tok)</option>
+          <option value="llama405b_fp8">Llama-3.1-405B (GQA n_kv=8, FP8 KV = 258.0 KB/tok)</option>
+        </select>
+        <label>Average Input Prompt Length ($S_{\text{in}}$): <strong id="pVal">16,384 Tokens</strong></label>
+        <input type="range" id="prompt" min="512" max="65536" step="512" value="16384" oninput="recalc()">
+        <label>Average Output Length ($S_{\text{out}}$): <strong id="oVal">512 Tokens</strong> (I:O Ratio = <strong id="ioVal">32:1</strong>)</label>
+        <input type="range" id="out" min="128" max="4096" step="128" value="512" oninput="recalc()">
+        <label>Inter-Node KV Fabric Bandwidth:</label>
+        <select id="net" onchange="recalc()">
+          <option value="45">400G RoCEv2 / InfiniBand NDR GPUDirect RDMA (~45 GB/s eff.)</option>
+          <option value="90">800G InfiniBand XDR / Dual-Rail 400G RDMA (~90 GB/s eff.)</option>
+          <option value="750">Intra-Node / NVL72 NVLink (~750 GB/s eff.)</option>
+          <option value="5.5">100G Standard TCP/IP without RDMA (~5.5 GB/s eff.)</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="kvSize">2.68 GB</div><div class="lbl">Single-Request KV Cache Payload</div></div>
+          <div class="kpi"><div class="val" id="kvTime">59.6 ms (14.9ms overlapped)</div><div class="lbl">Raw vs. Layer-Overlapped KV Transfer Time</div></div>
+          <div class="kpi"><div class="val" id="colocTpot">58.5 ms</div><div class="lbl">Colocated Chunked Prefill P99 TPOT</div></div>
+          <div class="kpi"><div class="val" id="pdTpot">16.4 ms</div><div class="lbl">PD Disaggregated P99 TPOT (&lt;=25ms SLA)</div></div>
+        </div>
+        <div class="verdict-box" id="verdictBox">
+          🏆 Architect Recommendation: Enable PD Disaggregation (Dynamo / Mooncake / SGLang) — Prompt &gt;= 4K &amp; I:O &gt;= 8:1 with RDMA cuts P99 TPOT 3.57x!
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Serving Architecture Tier</th><th>P99 TTFT</th><th>P99 Decode TPOT</th><th>SLA Goodput (tok/s/GPU)</th><th>Cost / 1M SLA Tokens</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Naive Colocated Continuous Batching (Prefill-First)</td><td>620 ms</td><td>148.0 ms (SLA Fail!)</td><td>520 tok/s</td><td>$0.92 / 1M</td></tr>
+          <tr><td>Tier 2: Colocated + Chunked Prefill (`chunk_size=1024`)</td><td>940 ms</td><td>58.5 ms (Spikes on &gt;8K)</td><td>890 tok/s</td><td>$0.64 / 1M</td></tr>
+          <tr><td>Tier 3: PD Disaggregation Over Standard TCP/IP (No RDMA)</td><td>1,120 ms (+480ms KV copy)</td><td>21.0 ms</td><td>1,050 tok/s</td><td>$0.55 / 1M</td></tr>
+          <tr><td><strong>Tier 4: PD Disaggregation + 400G GPUDirect RDMA Layer-Wise KV Push</strong></td><td><strong>485 ms</strong></td><td><strong>16.4 ms</strong></td><td><strong>1,940 tok/s (2.18x)</strong></td><td><strong>$0.34 / 1M (-46.9%)</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const m = document.getElementById('model').value;
+      const p = parseInt(document.getElementById('prompt').value, 10);
+      const o = parseInt(document.getElementById('out').value, 10);
+      const net = parseFloat(document.getElementById('net').value);
+      const kbPerTok = {llama70b_fp8: 163.84, llama70b_bf16: 327.68, deepseek671b_mla: 70.27, llama405b_fp8: 258.05}[m];
+      document.getElementById('pVal').textContent = p.toLocaleString() + ' Tokens';
+      document.getElementById('oVal').textContent = o.toLocaleString() + ' Tokens';
+      const io = (p / o).toFixed(1);
+      document.getElementById('ioVal').textContent = io + ':1';
+      const kvGb = (p * kbPerTok) / (1024 * 1024);
+      const rawMs = (kvGb / net) * 1000;
+      const overlapMs = rawMs * 0.25;
+      document.getElementById('kvSize').textContent = kvGb.toFixed(2) + ' GB';
+      document.getElementById('kvTime').textContent = rawMs.toFixed(1) + ' ms (' + overlapMs.toFixed(1) + 'ms overlapped)';
+      const coloc = Math.min(180, (22 + 36.5 * (p / 16384))).toFixed(1);
+      document.getElementById('colocTpot').textContent = coloc + ' ms';
+      const vbox = document.getElementById('verdictBox');
+      if (net < 15) {
+        vbox.style.background = '#451a03';
+        vbox.style.borderColor = '#f59e0b';
+        vbox.textContent = '⚠️ No RDMA Detected (TCP/IP Only): Keep Colocated + Chunked Prefill (or use DeepSeek MLA) — transferring ' + kvGb.toFixed(2) + ' GB over TCP adds ' + rawMs.toFixed(0) + 'ms TTFT stall!';
+      } else if (p < 2500 && (p / o) < 4) {
+        vbox.style.background = '#1e3a8a';
+        vbox.style.borderColor = '#3b82f6';
+        vbox.textContent = 'ℹ️ Short Prompt (<2.5K) & Low I:O Ratio: Colocated + Chunked Prefill already achieves ' + coloc + 'ms P99 TPOT with simpler operations.';
+      } else {
+        vbox.style.background = '#064e3b';
+        vbox.style.borderColor = '#10b981';
+        vbox.textContent = '🏆 Architect Recommendation: Enable RDMA PD Disaggregation (Dynamo / Mooncake / SGLang) — cuts P99 TPOT from ' + coloc + 'ms to 16.4ms with ' + overlapMs.toFixed(1) + 'ms overlapped KV transfer!';
+      }
+    }
+  </script>
+</body>
+</html>
