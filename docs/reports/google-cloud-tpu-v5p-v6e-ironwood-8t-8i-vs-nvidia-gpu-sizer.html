@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Google Cloud TPU (v5p / v6e / TPU7x Ironwood / 8t &amp; 8i) vs. NVIDIA GPU Sizer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; color: #38bdf8; }
+    .sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; margin-bottom: 14px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .kpi { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: #34d399; }
+    .kpi .lbl { font-size: 12px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 10px; text-align: left; }
+    th { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Google Cloud TPU (v5p / v6e / TPU7x Ironwood / 8t &amp; 8i) vs. NVIDIA GPU (H200 / B200 / GB200) Sizer</h1>
+    <div class="sub">Provenance: synthetic + anonymized_reported (independently_reproduced=false) | Compare 3D Torus ICI + OCS + SparseCore vs. NVLink/MNNVL + IB/RoCEv2</div>
+    <div class="grid">
+      <div class="card">
+        <label>Target Cluster Scale (Accelerator Chips): <strong id="cVal">2,048 Chips</strong></label>
+        <input type="range" id="chips" min="256" max="9216" step="256" value="2048" oninput="recalc()">
+        <label>Share of Standard Transformer / MoE / JAX-Friendly Workloads (%): <strong id="jVal">80%</strong></label>
+        <input type="range" id="jax" min="20" max="100" step="5" value="80" oninput="recalc()">
+        <label>Commitment Discount Horizon (1=Spot/DWS, 2=1Yr CUD, 3=3Yr CUD): <strong id="dVal">3-Yr CUD</strong></label>
+        <input type="range" id="disc" min="1" max="3" step="1" value="3" oninput="recalc()">
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="val" id="t4Mfu">58.4%</div><div class="lbl">Sustained Cluster MFU (4x4x4 Twisted Torus)</div></div>
+          <div class="kpi"><div class="val" id="t4Good">99.2%</div><div class="lbl">OCS Dynamic Reconfig Goodput (up to 9,216 Chips)</div></div>
+          <div class="kpi"><div class="val" id="t2Cost">$3,620,000</div><div class="lbl">Tier 2 Homogeneous H200 Clos Monthly TCO</div></div>
+          <div class="kpi"><div class="val" id="t4Cost">$2,120,000</div><div class="lbl">Tier 4 TPU7x/v6e/8t/8i Monthly TCO (-41.4%)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <table>
+        <thead>
+          <tr><th>Accelerator &amp; Fabric Architecture Tier</th><th>Sustained MFU</th><th>Cluster Goodput</th><th>Serving $/1M Tokens</th><th>Monthly 2,048-Chip TCO</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tier 1: Unmodified Dynamic-Shape PyTorch/CUDA on Non-Wrap TPU</td><td>14.2% (XLA thrash!)</td><td>64.0%</td><td>$1.48 / 1M</td><td>$4,850,000 / mo</td></tr>
+          <tr><td>Tier 2: Homogeneous NVIDIA H200 (8-GPU NVLink + 400G RoCEv2 Clos)</td><td>44.5%</td><td>89.5%</td><td>$0.62 / 1M</td><td>$3,620,000 / mo</td></tr>
+          <tr><td>Tier 3: NVIDIA GB200 NVL72 (72-GPU Copper NVLink + InfiniBand XDR)</td><td>54.8%</td><td>93.4%</td><td>$0.34 / 1M</td><td>$2,980,000 / mo</td></tr>
+          <tr><td><strong>Tier 4: TPU7x Ironwood / 8t (4x4x4 Torus + OCS + Shardy) &amp; v6e / 8i</strong></td><td><strong>58.4%</strong></td><td><strong>99.2%</strong></td><td><strong>$0.24 / 1M</strong></td><td><strong>$2,120,000 / mo</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      const c = parseInt(document.getElementById('chips').value, 10);
+      const j = parseInt(document.getElementById('jax').value, 10);
+      const d = parseInt(document.getElementById('disc').value, 10);
+      const dNames = {1: 'DWS Flex/Spot', 2: '1-Yr CUD', 3: '3-Yr CUD'};
+      const dMult = {1: 0.72, 2: 1.18, 3: 1.0};
+      document.getElementById('cVal').textContent = c.toLocaleString() + ' Chips';
+      document.getElementById('jVal').textContent = j + '%';
+      document.getElementById('dVal').textContent = dNames[d];
+      const scale = (c / 2048) * dMult[d];
+      const t2Cost = Math.round(3620000 * scale);
+      const t4Cost = Math.round(2120000 * scale * (1.15 - 0.15 * (j / 80)));
+      document.getElementById('t2Cost').textContent = '$' + t2Cost.toLocaleString();
+      document.getElementById('t4Cost').textContent = '$' + t4Cost.toLocaleString();
+    }
+  </script>
+</body>
+</html>
