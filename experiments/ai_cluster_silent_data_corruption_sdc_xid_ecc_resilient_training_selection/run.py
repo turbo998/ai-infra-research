@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "benchmark_id": "ai_cluster_silent_data_corruption_sdc_xid_ecc_resilient_training_selection",
+        "title": "AI Cluster Silent Data Corruption (SDC), Xid/ECC Fault Triage & Sub-60s Warm-Spare Resilient Training Benchmark",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_assumptions": {
+            "cluster_gpus": 2048,
+            "nodes_8gpu": 256,
+            "single_gpu_mtbf_hours": 18000,
+            "expected_cluster_mtbf_hours": 8.79,
+        },
+        "tiers": [
+            {
+                "tier_id": "tier1_reactive_manual_restart_without_sdc_or_xid_auto_cordon",
+                "name": "Tier 1: Reactive Manual Job Restart (No SDC Detection, Poisoned Checkpoints & 38-Min Cold Restart Loop)",
+                "effective_cluster_goodput_pct": 68.4,
+                "mean_fault_recovery_time_sec": 2280.0,
+                "un_caught_sdc_checkpoint_poison_incidents_per_mo": 3,
+                "monthly_2048gpu_wasted_compute_tco_usd": 1420000,
+                "verdict": "Anti-Pattern: Fault every 8.8h + 38m restart + 3 SDC checkpoint poisonings waste 31.6% of cluster ($1.42M/mo)",
+            },
+            {
+                "tier_id": "tier2_k8s_npd_dcgm_xid_auto_cordon_cold_pod_reschedule",
+                "name": "Tier 2: DCGM + Node Problem Detector (Auto-Cordons Loud Xid 48/74/79/95, Cold Pod Reschedule in 480s)",
+                "effective_cluster_goodput_pct": 85.2,
+                "mean_fault_recovery_time_sec": 480.0,
+                "un_caught_sdc_checkpoint_poison_incidents_per_mo": 2,
+                "monthly_2048gpu_wasted_compute_tco_usd": 665000,
+                "verdict": "Catches loud Xid/ECC hardware errors, but misses Silent Data Corruption (SDC) and still takes 8m to restart",
+            },
+            {
+                "tier_id": "tier3_in_memory_fast_restart_with_periodic_offline_dcgm_diag",
+                "name": "Tier 3: Warm-Spare Node Swap + Async Checkpoint (Fast 95s Failover, Offline-Only SDC Screening)",
+                "effective_cluster_goodput_pct": 93.4,
+                "mean_fault_recovery_time_sec": 95.0,
+                "un_caught_sdc_checkpoint_poison_incidents_per_mo": 1,
+                "monthly_2048gpu_wasted_compute_tco_usd": 295000,
+                "verdict": "Fast 95s failover via warm spares, but mid-run thermal SDC can still corrupt 1 checkpoint before offline test",
+            },
+            {
+                "tier_id": "tier4_inline_sdc_golden_hash_pre_allreduce_norm_gate_and_42s_p2p_failover",
+                "name": "Tier 4: Pre-AllReduce Grad-Norm Gate + Inline Golden-Hash SDC Probe + 42s P2P Memory Checkpoint Failover",
+                "effective_cluster_goodput_pct": 98.1,
+                "mean_fault_recovery_time_sec": 42.0,
+                "un_caught_sdc_checkpoint_poison_incidents_per_mo": 0,
+                "monthly_2048gpu_wasted_compute_tco_usd": 115000,
+                "verdict": "Recommended: 98.1% Goodput (+29.7 pts), 42s failover, 0 SDC poisonings & -91.9% wasted compute TCO",
+            },
+        ],
+        "headline_findings": {
+            "effective_goodput_pct": 98.1,
+            "mean_recovery_time_sec": 42.0,
+            "sdc_poison_incidents": 0,
+            "tco_savings_vs_tier1_pct": 91.9,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json does not exist")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json is out of date; re-run run.py")
+        return 0
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print(f"Wrote {out_path.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
