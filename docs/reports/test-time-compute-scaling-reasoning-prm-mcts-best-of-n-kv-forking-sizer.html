@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>测试时计算 (Test-Time Compute / Reasoning Scaling) 算力与 KV 显存估算器</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1220; color: #F8FAFC; margin: 0; padding: 24px; }
+  .container { max-width: 1080px; margin: 0 auto; background: #111C33; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 22px; color: #C084FC; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .control { background: #0F172A; padding: 14px; border-radius: 10px; border: 1px solid #1E293B; }
+  label { display: block; font-size: 13px; color: #94A3B8; margin-bottom: 6px; }
+  input[type=range], select { width: 100%; }
+  .val { font-weight: 700; color: #6EE7B7; float: right; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi { background: #1E293B; padding: 14px; border-radius: 10px; text-align: center; }
+  .kpi .num { font-size: 22px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
+  .note { margin-top: 16px; font-size: 12px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>大模型测试时计算（Test-Time Compute / PRM 剪枝 / KV Forking）容量与成本计算器</h1>
+  <div class="grid">
+    <div class="control">
+      <label>并行搜索分支数 (N) <span id="v_n" class="val">16</span></label>
+      <input type="range" id="n" min="2" max="64" step="2" value="16" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>单分支最大 Thinking 长度 <span id="v_think" class="val">8192</span></label>
+      <input type="range" id="think" min="2048" max="24576" step="2048" value="8192" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>高难度问题占比 (%) <span id="v_hard" class="val">40%</span></label>
+      <input type="range" id="hard" min="10" max="100" step="5" value="40" oninput="calc()">
+    </div>
+    <div class="control">
+      <label>测试时计算 (TTC) 架构</label>
+      <select id="mode" onchange="calc()">
+        <option value="1">Tier 1: 单链无界长 CoT (无早退)</option>
+        <option value="2">Tier 2: 独立并发 Best-of-N (无 KV 共享)</option>
+        <option value="3">Tier 3: Radix 共享前缀 Best-of-N + ORM</option>
+        <option value="4" selected>Tier 4: 难度路由 + CoW KV Forking + PRM 早剪 (推荐)</option>
+      </select>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div>单题均耗生成 Tokens</div><div id="k_tok" class="num">22,400</div></div>
+    <div class="kpi"><div>单题峰值 KV 显存</div><div id="k_kv" class="num">9.4 GB</div></div>
+    <div class="kpi"><div>端到端 P95 延迟</div><div id="k_lat" class="num">14.8 sec</div></div>
+    <div class="kpi"><div>千题求解算力成本</div><div id="k_cost" class="num">$31.5</div></div>
+  </div>
+  <div class="note">Provenance: synthetic + anonymized_reported (independently_reproduced=false, physical_gpu_cluster_measurement=not_measured).</div>
+</div>
+<script>
+function calc() {
+  const n = parseFloat(document.getElementById('n').value);
+  const think = parseFloat(document.getElementById('think').value);
+  const hard = parseFloat(document.getElementById('hard').value) / 100.0;
+  const mode = document.getElementById('mode').value;
+  document.getElementById('v_n').textContent = n;
+  document.getElementById('v_think').textContent = think;
+  document.getElementById('v_hard').textContent = Math.round(hard * 100) + '%';
+
+  let tok = 22400, kv = 9.4, lat = 14.8, cost = 31.5;
+  if (mode === '1') {
+    tok = Math.round(think * 2.25);
+    kv = +(tok * 0.00039).toFixed(1);
+    lat = +(tok * 0.005).toFixed(1);
+    cost = +(tok * 0.0026).toFixed(1);
+  } else if (mode === '2') {
+    tok = Math.round(n * (4096 + think * 0.52));
+    kv = +(n * 2.4).toFixed(1);
+    lat = +(think * 0.00415).toFixed(1);
+    cost = +(tok * 0.00208).toFixed(1);
+  } else if (mode === '3') {
+    tok = Math.round(4096 + n * think * 0.38);
+    kv = +(1.6 + n * 1.325).toFixed(1);
+    lat = +(think * 0.00323).toFixed(1);
+    cost = +(tok * 0.00159).toFixed(1);
+  } else {
+    tok = Math.round((1 - hard) * 1800 + hard * (4096 + n * think * 0.35));
+    kv = +(1.6 + n * 0.4875).toFixed(1);
+    lat = +((1 - hard) * 5.2 + hard * think * 0.00356).toFixed(1);
+    cost = +(tok * 0.0014).toFixed(1);
+  }
+  document.getElementById('k_tok').textContent = tok.toLocaleString();
+  document.getElementById('k_kv').textContent = kv + ' GB';
+  document.getElementById('k_lat').textContent = lat + ' sec';
+  document.getElementById('k_cost').textContent = '$' + cost;
+}
+calc();
+</script>
+</body>
+</html>
