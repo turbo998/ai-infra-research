@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LHU851xqX37igYr/kC/rVmLFDDiZydpUqJEVcuRMk28=' 'sha256-8jtsnAJS47u1Xy14HlLIh0pPX5aSrurkIAeSYG5UOho=' 'sha256-RmAw6EzuhdBOcwJtHSiuTduLki//F9o3RpKkfJNwyEY='; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Offline bilingual Cloud &amp; AI Solution Architect academy: metrics, TPM/TPS, GPU sizing, PD, parallelism and RDMA fabric.">
+<title>50 TPS/用户，不等于 50 TPS/集群 | 50 TPS per user is not 50 TPS per cluster</title>
+<script>(() => {
+  const param = new URLSearchParams(window.location.search).get("scoutTheme");
+  const theme = ["light", "dark"].includes(param) ? param : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", theme);
+  document.documentElement.lang = new URLSearchParams(window.location.search).get("lang") === "en" ? "en" : "zh-CN";
+  window.AcademyDiagnostics = [];
+  window.AcademyPolicyDiagnostics = [];
+  const record = (message) => {
+    window.AcademyDiagnostics.push(String(message));
+    const el = document.getElementById("runtime-error");
+    if (el) { el.hidden = false; el.textContent = "Runtime error / 运行错误: " + message; }
+  };
+  window.addEventListener("error", (event) => record(event.message));
+  window.addEventListener("unhandledrejection", (event) => record(event.reason && event.reason.message || event.reason));
+  window.addEventListener("securitypolicyviolation", (event) => {
+    window.AcademyPolicyDiagnostics.push({ directive: event.violatedDirective, blockedURI: event.blockedURI });
+    if (event.violatedDirective === "connect-src") {
+      const el = document.getElementById("policy-notice");
+      if (el) {
+        el.hidden = false;
+        el.textContent = "Offline CSP blocked a connection (for example, preview-host instrumentation). Course calculations do not require it. / 离线策略已阻止连接（如预览器注入请求），课程计算不依赖该连接。";
+      }
+    } else record("CSP: " + event.violatedDirective);
+  });
+})();</script>
+<style>:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 100px; }
+body { margin: 0; color: var(--cp-text); background: var(--cp-bg); font: 16px/1.75 "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif; }
+html[lang="zh-CN"] [data-lang="en"], html[lang="en"] [data-lang="zh-CN"] { display: none !important; }
+a { color: var(--cp-link); text-underline-offset: 4px; }
+button, input, select { font: inherit; }
+button, .button { min-height: 44px; cursor: pointer; padding: 8px 14px; border: 1px solid var(--cp-border-strong); border-radius: 10px; color: var(--cp-text); background: var(--cp-surface); text-decoration: none; }
+button:hover, .button:hover { border-color: var(--cp-accent); }
+:focus-visible { outline: 3px solid var(--cp-accent); outline-offset: 4px; }
+.skip { position: fixed; top: -80px; left: 16px; z-index: 10; background: var(--cp-surface); padding: 12px; }
+.skip:focus { top: 8px; }
+.topbar { position: sticky; top: 0; z-index: 5; background: var(--cp-bg-elevated); border-bottom: 1px solid var(--cp-border); }
+.topbar-inner { max-width: 1400px; margin: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; padding: 12px 24px; }
+.brand { font-weight: 800; color: var(--cp-text); text-decoration: none; }
+.top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+main { max-width: 1400px; margin: auto; padding: 32px 24px 80px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 32px; align-items: center; padding: 32px 0 40px; }
+.eyebrow { color: var(--cp-accent); font: 700 13px/1.4 Consolas, "Courier New", Courier, monospace; letter-spacing: 2px; }
+h1 { font-size: clamp(30px, 4vw, 55px); line-height: 1.2; margin: 16px 0 24px; letter-spacing: -1px; }
+h2 { font-size: clamp(24px, 2.4vw, 32px); line-height: 1.35; margin: 0 0 20px; }
+h3 { line-height: 1.4; margin: 0 0 12px; }
+p { margin: 0 0 16px; }
+.lead { font-size: 18px; color: var(--cp-text-muted); }
+.card, .lesson { border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-surface); padding: 28px; }
+.lesson { margin: 24px 0; scroll-margin-top: 100px; }
+.card small, .muted { color: var(--cp-text-muted); }
+.hero-aside { background: var(--cp-surface); border: 1px solid var(--cp-border); border-left: 4px solid var(--cp-accent); border-radius: 16px; padding: 28px; }
+.tag { display: inline-block; color: var(--cp-accent); background: var(--cp-accent-soft); padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; margin: 0 6px 8px 0; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.module-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; border-top: 3px solid var(--cp-accent); }
+.module-card .button { margin-top: auto; align-self: flex-start; }
+.chapter-number { color: var(--cp-accent); font: 800 42px/1 Consolas, "Courier New", Courier, monospace; }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 32px; }
+.toc a { text-decoration: none; padding: 8px 12px; border: 1px solid var(--cp-border); border-radius: 10px; background: var(--cp-surface); }
+.lab { display: grid; grid-template-columns: minmax(240px, 330px) minmax(0, 1fr); gap: 28px; }
+.controls { display: grid; gap: 16px; align-content: start; padding: 20px; border-radius: 10px; background: var(--cp-surface-soft); }
+.control { display: grid; gap: 4px; min-width: 0; }
+.control label { font-size: 14px; font-weight: 650; }
+.control input:not([type="checkbox"]), .control select { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; border: 1px solid var(--cp-border-strong); border-radius: 8px; color: var(--cp-text); background: var(--cp-surface); }
+.control input[type="range"] { padding: 0; accent-color: var(--cp-accent); }
+.control input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--cp-accent); }
+.control output { color: var(--cp-accent); font: 700 14px Consolas, "Courier New", Courier, monospace; }
+.results { min-width: 0; }
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi { min-width: 0; border: 1px solid var(--cp-border); border-radius: 10px; padding: 16px; background: var(--cp-bg-elevated); }
+.kpi strong { display: block; font: 800 clamp(19px, 2vw, 27px)/1.35 Consolas, "Courier New", Courier, monospace; overflow-wrap: anywhere; margin-bottom: 4px; }
+.kpi span { display: block; font-size: 13px; color: var(--cp-text-muted); }
+.formula { padding: 16px 20px; background: var(--cp-surface-soft); border-left: 3px solid var(--cp-accent); font: 15px/1.8 Consolas, "Courier New", Courier, monospace; overflow-wrap: anywhere; margin: 16px 0; }
+.notice { border-left: 3px solid var(--cp-warning); padding: 12px 16px; background: var(--cp-bg-elevated); margin: 16px 0; }
+.error { border-left: 3px solid var(--cp-danger); color: var(--cp-danger); padding: 12px; background: var(--cp-surface-soft); }
+.error[hidden] { display: none; }
+.notice[hidden] { display: none; }
+.chart { margin: 20px 0; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--cp-text); font-family: "Segoe UI", Aptos, Calibri, sans-serif; font-size: 14px; }
+svg .axis { stroke: var(--cp-border-strong); stroke-width: 1; }
+svg .grid-line { stroke: var(--cp-border); stroke-dasharray: 3 5; }
+svg .primary { fill: var(--cp-accent); stroke: var(--cp-accent); }
+svg .secondary { fill: var(--cp-link); stroke: var(--cp-link); }
+svg .tertiary { fill: var(--cp-warning); stroke: var(--cp-warning); }
+svg .surface { fill: var(--cp-surface-soft); stroke: var(--cp-border-strong); }
+svg .line { fill: none; stroke-width: 3; }
+svg .label { fill: var(--cp-text); font-size: 13px; }
+svg .inverse { fill: var(--cp-accent-fg); font-weight: 700; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px 24px; color: var(--cp-text-muted); font-size: 13px; margin: 8px 0; }
+.legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; background: var(--cp-accent); }
+.legend .secondary { background: var(--cp-link); }
+.legend .tertiary { background: var(--cp-warning); }
+figcaption { font-size: 13px; color: var(--cp-text-muted); margin-top: 10px; }
+.table-wrap { max-width: 100%; overflow: auto; margin: 20px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--cp-border); padding: 12px; }
+th { background: var(--cp-surface-soft); font-weight: 700; }
+caption { text-align: left; font-weight: 700; padding-bottom: 10px; }
+details { border-top: 1px solid var(--cp-border); padding: 16px 0; }
+summary { cursor: pointer; font-weight: 700; min-height: 44px; }
+details p { padding-top: 8px; }
+.quiz fieldset { border: 1px solid var(--cp-border); border-radius: 10px; padding: 20px; }
+.quiz legend { font-weight: 700; padding: 0 8px; }
+.quiz label { display: flex; align-items: start; gap: 10px; margin: 12px 0; }
+.quiz input { margin-top: 8px; }
+.quiz-result { min-height: 32px; margin-top: 12px; font-weight: 650; }
+.checklist label { display: flex; align-items: start; gap: 12px; margin: 12px 0; }
+.checklist input { margin-top: 7px; width: 20px; height: 20px; }
+.nav-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin: 32px 0; }
+.sources { color: var(--cp-text-muted); font-size: 14px; }
+.sources a { overflow-wrap: anywhere; }
+.heat-good { background: var(--cp-accent-soft); }
+.heat-trade { background: var(--cp-bg-elevated); }
+.reading-progress { height: 3px; background: var(--cp-accent); width: 0; }
+footer { border-top: 1px solid var(--cp-border); padding-top: 24px; color: var(--cp-text-muted); font-size: 13px; }
+@media (min-width: 1200px) { .controls { position: sticky; top: 100px; max-height: calc(100vh - 140px); overflow-y: auto; } }
+@media (max-width: 900px) { .hero, .lab { grid-template-columns: 1fr; } .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); } .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  main { padding: 20px 16px 60px; }
+  .topbar-inner { padding: 8px 16px; }
+  .hero { gap: 16px; padding: 20px 0; }
+  .hero-aside, .card, .lesson { padding: 20px; }
+  .grid, .grid.three, .controls { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chapter-rail { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 16px; padding: 4px 0 16px; }
+  .chapter-rail > .module-card { flex: 0 0 88%; scroll-snap-align: start; }
+  .brand { font-size: 14px; }
+  .top-actions button { padding: 8px; font-size: 13px; }
+  .toc { gap: 6px; font-size: 13px; }
+  .chart { overflow-x: auto; }
+  .chart svg { min-width: 560px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+@media print {
+  .topbar, .toc, .top-actions, .skip, .controls, .nav-footer, .quiz button { display: none; }
+  body { background: var(--cp-surface); }
+  main { max-width: none; padding: 0; }
+  .hero, .lab { display: block; }
+  .lesson, .card { break-inside: avoid; border-radius: 0; padding: 16px; }
+  .grid, .grid.three { display: block; }
+  .chart svg { min-width: 0; }
+  details > * { display: block; }
+}
+</style>
+</head>
+<body data-page="capacity">
+<a href="#main" class="skip"><span data-lang="zh-CN">跳到正文</span><span data-lang="en">Skip to content</span></a>
+<header class="topbar"><div class="topbar-inner"><a class="brand" data-carry href="index.html">AI INFRA / <span data-lang="zh-CN">精学馆</span><span data-lang="en">ACADEMY</span></a><div class="top-actions"><button id="language" type="button">English</button><button id="theme" type="button"><span data-lang="zh-CN">深色</span><span data-lang="en">Dark</span></button><button id="print" type="button"><span data-lang="zh-CN">打印 / PDF</span><span data-lang="en">Print / PDF</span></button></div></div><div class="reading-progress" aria-hidden="true"></div></header>
+<main id="main">
+<div id="runtime-error" class="error" role="alert" hidden></div>
+<div class="hero"><div><div class="eyebrow">CHAPTER 02 / SIX DECISIONS</div><h1><span data-lang="zh-CN">50 TPS/用户，不等于 50 TPS/集群</span><span data-lang="en">50 TPS per user is not 50 TPS per cluster</span></h1><p class="lead"><span data-lang="zh-CN">TPM/TPS 边界 · Little's Law · 峰值规划 · PTU 权重</span><span data-lang="en">TPM/TPS boundaries · Little's Law · peak sizing · PTU weights</span></p><span class="tag">ZH / EN</span><span class="tag">NO CDN</span><span class="tag">OFFLINE</span><span class="tag">SYNTHETIC ≠ MEASURED</span></div><aside class="hero-aside"><h3><span data-lang="zh-CN">今天记住一句话</span><span data-lang="en">One idea to remember</span></h3><p><span data-lang="zh-CN">50 TPS/用户，不等于 50 TPS/集群</span><span data-lang="en">50 TPS per user is not 50 TPS per cluster</span></p><small><span data-lang="zh-CN">滑块是教学实验，结果是有条件的估算，不是供应商承诺。</span><span data-lang="en">Sliders are teaching experiments; outputs are conditional estimates, not vendor promises.</span></small></aside></div>
+<nav class="toc" aria-label="Page contents"><a href="#concepts"><span data-lang="zh-CN">TPM=60×TPS 只在同一 Token 口径、同一窗口下成立</span><span data-lang="en">TPM=60×TPS only for the same token scope and window</span></a><a href="#capacity"><span data-lang="zh-CN">峰值 QPS 同时决定输入、输出和在途并发</span><span data-lang="en">Peak QPS drives input, output and in-flight concurrency</span></a><a href="#ptu"><span data-lang="zh-CN">缓存与输出权重改变 PTU，却不改变原始 Token 计数</span><span data-lang="en">Caching and output weights change PTU, not raw token counts</span></a><a href="#cost"><span data-lang="zh-CN">达标输出作分母，才不会奖励失败的峰值吞吐</span><span data-lang="en">Use compliant output as the denominator, not failed peak throughput</span></a><a href="#faq"><span data-lang="zh-CN">活跃请求数既不是在线用户数，也不是静态 batch</span><span data-lang="en">Active requests are neither online users nor a fixed batch</span></a><a href="#checklist"><span data-lang="zh-CN">用同一业务画像同时验证吞吐、并发和 quota</span><span data-lang="en">Validate throughput, concurrency and quota against one traffic profile</span></a><a href="#sources"><span data-lang="zh-CN">依据</span><span data-lang="en">Sources</span></a></nav>
+<section class="lesson" id="concepts"><h2><span data-lang="zh-CN">TPM=60×TPS 只在同一 Token 口径、同一窗口下成立</span><span data-lang="en">TPM=60×TPS only for the same token scope and window</span></h2><div class="table-wrap"><table><thead><tr><th scope="col"><span data-lang="zh-CN">范围</span><span data-lang="en">Scope</span></th><th scope="col"><span data-lang="zh-CN">公式</span><span data-lang="en">Formula</span></th><th scope="col"><span data-lang="zh-CN">不要混淆</span><span data-lang="en">Do not confuse</span></th></tr></thead><tbody><tr><th scope="row"><span data-lang="zh-CN">单用户流式速率</span><span data-lang="en">Per-user streaming</span></th><td>TPS_user ≈ 1000 / TPOT_ms</td><td><span data-lang="zh-CN">不含首字等待；不是系统吞吐。</span><span data-lang="en">Excludes first-token wait; not system throughput.</span></td></tr><tr><th scope="row"><span data-lang="zh-CN">系统输入吞吐</span><span data-lang="en">System input throughput</span></th><td>Input TPS = completed_RPS × E[input_tokens]</td><td><span data-lang="zh-CN">稳定系统中 offered≈completed；过载时不成立。</span><span data-lang="en">Offered≈completed only in a stable system.</span></td></tr><tr><th scope="row"><span data-lang="zh-CN">系统输出吞吐</span><span data-lang="en">System output throughput</span></th><td>Output TPS = completed_RPS × E[output_tokens]</td><td><span data-lang="zh-CN">计入首 Token；不要乘活跃 batch 又重复统计。</span><span data-lang="en">Includes first token; do not multiply by batch again.</span></td></tr><tr><th scope="row"><span data-lang="zh-CN">输入/输出 TPM</span><span data-lang="en">Input/output TPM</span></th><td>TPM = 60 × same_scope_TPS</td><td><span data-lang="zh-CN">云 quota 可能按短窗口估算 max_tokens；不是实测一分钟速率。</span><span data-lang="en">Cloud quota may estimate max_tokens in shorter windows; not measured minute throughput.</span></td></tr><tr><th scope="row">Little's Law</th><td>L = λ × E[W]</td><td><span data-lang="zh-CN">L 为平均在系统中请求数；W 为对应系统平均停留时间。不可代入 P99 假装严格等式。</span><span data-lang="en">L is mean in-system requests and W their mean residence. Substituting P99 is not the exact law.</span></td></tr><tr><th scope="row">PTU</th><td><span data-lang="zh-CN">带模型/部署权重的归一化容量</span><span data-lang="en">Model/deployment-weighted normalized capacity</span></td><td><span data-lang="zh-CN">没有通用 1 PTU = X TPM，也没有通用 PTU→GPU 换算。</span><span data-lang="en">No universal PTU→TPM or PTU→GPU conversion.</span></td></tr></tbody></table></div></section><section class="lesson" id="capacity"><h2><span data-lang="zh-CN">峰值 QPS 同时决定输入、输出和在途并发</span><span data-lang="en">Peak QPS drives input, output and in-flight concurrency</span></h2><div class="lab" data-workbench="capacity"><form data-lab="capacity" class="controls" novalidate><div class="control"><label for="capacity-mode"><span data-lang="zh-CN">需求输入模式</span><span data-lang="en">Demand input mode</span></label><select id="capacity-mode" data-key="mode" name="mode"><option value="qps" selected>Direct peak QPS</option><option value="business">DAU → peak QPS</option></select></div><div class="control"><label for="capacity-qps"><span data-lang="zh-CN">业务峰值 QPS</span><span data-lang="en">Business peak QPS</span></label><input id="capacity-qps" data-key="qps" name="qps" type="number" value="10" min="0" max="100000" step="0.1" required></div><div class="control"><label for="capacity-dau"><span data-lang="zh-CN">日活用户 DAU</span><span data-lang="en">Daily active users</span></label><input id="capacity-dau" data-key="dau" name="dau" type="number" value="20000" min="0" max="100000000" step="1" required></div><div class="control"><label for="capacity-requests"><span data-lang="zh-CN">每用户每日请求数</span><span data-lang="en">Requests per user per day</span></label><input id="capacity-requests" data-key="requests" name="requests" type="number" value="10" min="0" max="10000" step="0.1" required></div><div class="control"><label for="capacity-hours"><span data-lang="zh-CN">活跃业务小时/日</span><span data-lang="en">Active business hours/day</span></label><input id="capacity-hours" data-key="hours" name="hours" type="number" value="10" min="0.1" max="24" step="0.1" required></div><div class="control"><label for="capacity-peak"><span data-lang="zh-CN">峰值/活跃时段平均倍率</span><span data-lang="en">Peak/active-hours mean factor</span></label><input id="capacity-peak" data-key="peak" name="peak" type="number" value="3" min="1" max="100" step="0.1" required></div><div class="control"><label for="capacity-headroom"><span data-lang="zh-CN">需求余量倍率</span><span data-lang="en">Demand headroom multiplier</span></label><input id="capacity-headroom" data-key="headroom" name="headroom" type="number" value="1.3" min="1" max="10" step="0.1" required></div><div class="control"><label for="capacity-prompt"><span data-lang="zh-CN">平均输入 Token</span><span data-lang="en">Mean input tokens</span></label><input id="capacity-prompt" data-key="prompt" name="prompt" type="number" value="2048" min="0" max="1048576" step="1" required></div><div class="control"><label for="capacity-output"><span data-lang="zh-CN">平均输出 Token（含首字）</span><span data-lang="en">Mean output tokens (including first)</span></label><input id="capacity-output" data-key="output" name="output" type="number" value="512" min="1" max="65536" step="1" required></div><div class="control"><label for="capacity-ttft"><span data-lang="zh-CN">目标/假设平均 TTFT ms</span><span data-lang="en">Target / assumed mean TTFT ms</span></label><input id="capacity-ttft" data-key="ttft" name="ttft" type="number" value="800" min="0" max="60000" step="1" required></div><div class="control"><label for="capacity-tpot"><span data-lang="zh-CN">目标/假设平均 TPOT ms</span><span data-lang="en">Target / assumed mean TPOT ms</span></label><input id="capacity-tpot" data-key="tpot" name="tpot" type="number" value="20" min="0.1" max="1000" step="0.1" required></div><div class="control"><label for="capacity-inputCapacity"><span data-lang="zh-CN">实例实测输入 TPS（示例值）</span><span data-lang="en">Measured input TPS/instance (example)</span></label><input id="capacity-inputCapacity" data-key="inputCapacity" name="inputCapacity" type="number" value="20000" min="1" max="10000000" step="1" required></div><div class="control"><label for="capacity-outputCapacity"><span data-lang="zh-CN">实例实测输出 TPS（示例值）</span><span data-lang="en">Measured output TPS/instance (example)</span></label><input id="capacity-outputCapacity" data-key="outputCapacity" name="outputCapacity" type="number" value="1500" min="1" max="10000000" step="1" required></div><div class="control"><label for="capacity-batch"><span data-lang="zh-CN">实例活跃请求上限（示例值）</span><span data-lang="en">Active-request cap/instance (example)</span></label><input id="capacity-batch" data-key="batch" name="batch" type="number" value="128" min="1" max="4096" step="1" required></div><div class="control"><label for="capacity-utilization"><span data-lang="zh-CN">实测容量使用比例</span><span data-lang="en">Fraction of measured capacity used</span></label><input id="capacity-utilization" data-key="utilization" name="utilization" type="number" value="0.7" min="0.1" max="1" step="0.05" required></div><button type="reset"><span data-lang="zh-CN">恢复算例</span><span data-lang="en">Reset example</span></button></form><div class="results"><div class="error" role="alert" hidden></div><div data-results="capacity" aria-live="polite" aria-atomic="false"></div><noscript><span data-lang="zh-CN">请启用 JavaScript 使用沙盘；下方公式、FAQ 与算例仍可离线阅读。</span><span data-lang="en">Enable JavaScript for the workbench; formulas, FAQ and worked examples remain readable offline.</span></noscript></div></div><div class="formula">QPS_peak = DAU × requests_per_day × peak_factor / (active_hours × 3600)<br>λ_plan = QPS_peak × demand_headroom<br>W_plan = (mean_TTFT_ms + (N_out−1)×mean_TPOT_ms) / 1000<br>L_plan = λ_plan × W_plan<br>instances ≥ max(ceil(inputTPS/C_input), ceil(outputTPS/C_output), ceil(L/batch_cap))</div><div class="notice"><span data-lang="zh-CN">这里的目标 TTFT/TPOT 被当作规划均值假设，而非已证实均值或 P99。用实测 E[W] 替换后才是 Little's Law 的观测验证。输入和输出容量必须来自同一混合负载实测，不能拼两个独立峰值。</span><span data-lang="en">Targets are treated as assumed planning means, not observed means or P99. Replace them with measured E[W] to verify Little's Law. Input/output capacities must come from the same mixed workload, not two independent peak tests.</span></div><p><span data-lang="zh-CN">默认手算：10 QPS×1.3=13 QPS；输入 26,624 TPS→1,597,440 TPM；输出 6,656 TPS→399,360 TPM；W=0.8+511×0.02=11.02 s，平均在途 L=143.26。使用 70% 容量时，输入/输出/并发约束分别给出 2/7/2 个实例，先取 7，再压测。实例不是一张 GPU。</span><span data-lang="en">Default hand check: 10×1.3=13 QPS; input 26,624 TPS→1,597,440 TPM; output 6,656 TPS→399,360 TPM; W=0.8+511×0.02=11.02 s and L=143.26. At 70% of example capacity, input/output/concurrency bounds require 2/7/2 instances: start from 7, then validate. An instance is not one GPU.</span></p></section><section class="lesson" id="ptu"><h2><span data-lang="zh-CN">缓存与输出权重改变 PTU，却不改变原始 Token 计数</span><span data-lang="en">Caching and output weights change PTU, not raw token counts</span></h2><div class="lab" data-workbench="ptu"><form data-lab="ptu" class="controls" novalidate><div class="control"><label for="ptu-inputTPM"><span data-lang="zh-CN">输入 TPM</span><span data-lang="en">Input TPM</span></label><input id="ptu-inputTPM" data-key="inputTPM" name="inputTPM" type="number" value="200000" min="0" max="1000000000000" step="1" required></div><div class="control"><label for="ptu-outputTPM"><span data-lang="zh-CN">输出 TPM</span><span data-lang="en">Output TPM</span></label><input id="ptu-outputTPM" data-key="outputTPM" name="outputTPM" type="number" value="20000" min="0" max="1000000000000" step="1" required></div><div class="control"><label for="ptu-cache"><span data-lang="zh-CN">输入缓存命中比例</span><span data-lang="en">Input cache-hit fraction</span></label><input id="ptu-cache" data-key="cache" name="cache" type="number" value="0.5" min="0" max="1" step="0.05" required></div><div class="control"><label for="ptu-cachedWeight"><span data-lang="zh-CN">缓存输入权重（相对未缓存=1）</span><span data-lang="en">Cached-input weight (uncached=1)</span></label><input id="ptu-cachedWeight" data-key="cachedWeight" name="cachedWeight" type="number" value="0" min="0" max="100" step="0.1" required></div><div class="control"><label for="ptu-outputWeight"><span data-lang="zh-CN">输出相对输入权重</span><span data-lang="en">Output/input weight</span></label><input id="ptu-outputWeight" data-key="outputWeight" name="outputWeight" type="number" value="8" min="0.1" max="100" step="0.1" required></div><div class="control"><label for="ptu-capacity"><span data-lang="zh-CN">每 PTU 归一化 TPM（手工录入）</span><span data-lang="en">Normalized TPM/PTU (manual)</span></label><input id="ptu-capacity" data-key="capacity" name="capacity" type="number" value="3400" min="1" max="1000000000" step="1" required></div><div class="control"><label for="ptu-minimum"><span data-lang="zh-CN">部署最小 PTU（手工录入）</span><span data-lang="en">Minimum deployment PTU (manual)</span></label><input id="ptu-minimum" data-key="minimum" name="minimum" type="number" value="15" min="1" max="10000" step="1" required></div><div class="control"><label for="ptu-step"><span data-lang="zh-CN">扩容步长 PTU（手工录入）</span><span data-lang="en">PTU scale increment (manual)</span></label><input id="ptu-step" data-key="step" name="step" type="number" value="5" min="1" max="10000" step="1" required></div><button type="reset"><span data-lang="zh-CN">恢复算例</span><span data-lang="en">Reset example</span></button></form><div class="results"><div class="error" role="alert" hidden></div><div data-results="ptu" aria-live="polite" aria-atomic="false"></div><noscript><span data-lang="zh-CN">请启用 JavaScript 使用沙盘；下方公式、FAQ 与算例仍可离线阅读。</span><span data-lang="en">Enable JavaScript for the workbench; formulas, FAQ and worked examples remain readable offline.</span></noscript></div></div><div class="formula">Normalized TPM = Input TPM × [(1−cache_hit) + cache_hit×cached_weight]<br>                 + Output TPM × output_weight<br>Raw PTU = Normalized TPM / normalized_TPM_per_PTU<br>Deploy PTU = minimum + max(0, ceil((Raw PTU−minimum)/step))×step</div><p><span data-lang="zh-CN">这个两权重沙盘的默认数值对应 Microsoft Learn 中 GPT-5.2 Data Zone 的教学算例：输入 200K、输出 20K、输出权重 8、每 PTU 3,400 输入等价 TPM。50% 缓存且缓存权重 0 时得 260K 归一化 TPM→76.47 PTU→80。最小值 15 是手工演示参数，使用前核对实际部署表；不是自动读取的当前 Azure SKU 配额。</span><span data-lang="en">Default weights mirror the GPT-5.2 Data Zone worked example in Microsoft Learn: 200K input, 20K output, output weight 8, 3,400 input-equivalent TPM/PTU. With 50% cache and zero cached weight: 260K normalized TPM→76.47 PTU→80. Minimum 15 is a manual demonstration setting; check the actual deployment table, not a live quota feed.</span></p><div class="notice"><span data-lang="zh-CN">GPT-6+、多模态、长上下文档位、缓存写入等可能采用更多权重。本沙盘只适合两类输入+输出模型的讲解；额外类别必须按当前官方公式单独扩展，不能把它们默认当作免费或零。</span><span data-lang="en">GPT-6+, multimodal inputs, context tiers and cache writes can require additional weights. This workbench only explains two input categories plus output. Extra categories must use current official formulas, not silently become free or zero.</span></div></section><section class="lesson" id="cost"><h2><span data-lang="zh-CN">达标输出作分母，才不会奖励失败的峰值吞吐</span><span data-lang="en">Use compliant output as the denominator, not failed peak throughput</span></h2><div class="lab" data-workbench="cost"><form data-lab="cost" class="controls" novalidate><div class="control"><label for="cost-hourly"><span data-lang="zh-CN">完整集群成本 $/小时（假设）</span><span data-lang="en">Whole-cluster cost $/hour (assumption)</span></label><input id="cost-hourly" data-key="hourly" name="hourly" type="number" value="40" min="0" max="100000" step="0.1" required></div><div class="control"><label for="cost-outputTPS"><span data-lang="zh-CN">达标输出 Goodput tok/s</span><span data-lang="en">Compliant output goodput tok/s</span></label><input id="cost-outputTPS" data-key="outputTPS" name="outputTPS" type="number" value="5000" min="0" max="1000000000" step="1" required></div><div class="control"><label for="cost-inputTPS"><span data-lang="zh-CN">API 输入 TPS</span><span data-lang="en">API input TPS</span></label><input id="cost-inputTPS" data-key="inputTPS" name="inputTPS" type="number" value="20000" min="0" max="1000000000" step="1" required></div><div class="control"><label for="cost-hours"><span data-lang="zh-CN">同负载持续小时</span><span data-lang="en">Hours at the same load</span></label><input id="cost-hours" data-key="hours" name="hours" type="number" value="8" min="0" max="8760" step="0.1" required></div><div class="control"><label for="cost-priceIn"><span data-lang="zh-CN">API 输入 $/1M Token（假设）</span><span data-lang="en">API input $/1M tokens (assumption)</span></label><input id="cost-priceIn" data-key="priceIn" name="priceIn" type="number" value="1" min="0" max="1000" step="0.01" required></div><div class="control"><label for="cost-priceOut"><span data-lang="zh-CN">API 输出 $/1M Token（假设）</span><span data-lang="en">API output $/1M tokens (assumption)</span></label><input id="cost-priceOut" data-key="priceOut" name="priceOut" type="number" value="5" min="0" max="1000" step="0.01" required></div><button type="reset"><span data-lang="zh-CN">恢复算例</span><span data-lang="en">Reset example</span></button></form><div class="results"><div class="error" role="alert" hidden></div><div data-results="cost" aria-live="polite" aria-atomic="false"></div><noscript><span data-lang="zh-CN">请启用 JavaScript 使用沙盘；下方公式、FAQ 与算例仍可离线阅读。</span><span data-lang="en">Enable JavaScript for the workbench; formulas, FAQ and worked examples remain readable offline.</span></noscript></div></div><div class="formula">Self-hosted $/1M_output = whole_cluster_$per_hour × 10⁶ / (3600×output_goodput)<br>API period cost = hours×3600×(inputTPS×price_input + outputTPS×price_output)/10⁶</div><p><span data-lang="zh-CN">默认自建成本：40×10⁶/(3600×5000)=$2.22/1M 达标输出。API 示例：8 小时、20K 输入 TPS×$1 + 5K 输出 TPS×$5，合计 $1,296。两种成本不是同一种商业范围：云单价、输入处理、自建闲置/冗余/人工都要对齐。输出 Goodput=0 时单位成本未定义，不显示 $0。</span><span data-lang="en">Default self-hosted cost: 40×10⁶/(3600×5000)=$2.22/1M compliant output. API example: 8 hours of 20K input TPS at $1 and 5K output TPS at $5 totals $1,296. These are different commercial scopes; align rates, input work, idle/resilience and staffing. At zero output goodput, unit cost is undefined, not $0.</span></p></section><section class="lesson" id="faq"><h2><span data-lang="zh-CN">活跃请求数既不是在线用户数，也不是静态 batch</span><span data-lang="en">Active requests are neither online users nor a fixed batch</span></h2><details><summary><span data-lang="zh-CN">为什么 DAU 不能直接变成并发数？</span><span data-lang="en">Why cannot DAU directly become concurrency?</span></summary><p><span data-lang="zh-CN">DAU 需要请求频率、活跃时段、峰值集中度与响应时间才能映射到 QPS 和在途请求。用户在线但没有生成请求，不占 decode slot。</span><span data-lang="en">DAU needs request frequency, active hours, peak concentration and response time to map to QPS and in-flight requests. An online user with no generation does not occupy a decode slot.</span></p></details><details><summary><span data-lang="zh-CN">为什么输出 4K 的 R1 会比输出 512 的聊天更难规划？</span><span data-lang="en">Why is 4K-token reasoning harder to size than 512-token chat?</span></summary><p><span data-lang="zh-CN">输出拉长 decode 停留时间，增加在途并发和驻留 KV；还可能包含不显示但消耗算力、quota 和费用的推理 Token。要区分业务可见输出、模型生成输出和供应商计费口径。</span><span data-lang="en">Longer output increases decode residence, in-flight concurrency and resident KV. Hidden reasoning tokens may consume compute, quota and billing. Separate visible answer, generated output and provider accounting.</span></p></details><div class="quiz" data-quiz="capacity" data-correct="1"><fieldset><legend><span data-lang="zh-CN">10 QPS、每请求 512 输出 Token，系统 Output TPS 是？</span><span data-lang="en">At 10 QPS with 512 output tokens/request, what is system output TPS?</span></legend><label><input type="radio" name="quiz-capacity" value="0"><span data-lang="zh-CN">50</span><span data-lang="en">50</span></label><label><input type="radio" name="quiz-capacity" value="1"><span data-lang="zh-CN">5,120</span><span data-lang="en">5,120</span></label><label><input type="radio" name="quiz-capacity" value="2"><span data-lang="zh-CN">307,200</span><span data-lang="en">307,200</span></label><button type="button" data-check-quiz><span data-lang="zh-CN">核对答案</span><span data-lang="en">Check answer</span></button><div class="quiz-result" role="status"></div><template data-explanation><span data-lang="zh-CN">10×512=5,120 tok/s；再乘 60 才是 307,200 TPM。</span><span data-lang="en">10×512=5,120 tok/s; multiply by 60 for 307,200 TPM.</span></template></fieldset></div></section><section class="lesson" id="checklist"><h2><span data-lang="zh-CN">用同一业务画像同时验证吞吐、并发和 quota</span><span data-lang="en">Validate throughput, concurrency and quota against one traffic profile</span></h2><div class="checklist"><label><input type="checkbox"><span data-lang="zh-CN">高峰输入、输出长度保留分布，而不只有均值</span><span data-lang="en">Keep peak input/output length distributions, not only means</span></label><label><input type="checkbox"><span data-lang="zh-CN">压测包括排队、拒绝、超时、取消与缓存冷热两种状态</span><span data-lang="en">Include queues, rejection, timeout, cancellation and cold/warm cache</span></label><label><input type="checkbox"><span data-lang="zh-CN">输入/输出容量为同一配置、同一混合负载测量</span><span data-lang="en">Measure input/output capacities on the same configuration and mixed load</span></label><label><input type="checkbox"><span data-lang="zh-CN">PTU 模型版本、区域、部署类型、权重、最小值与步长独立核对</span><span data-lang="en">Verify PTU model version, region, deployment, weights, minimum and increment</span></label></div></section>
+<section class="lesson sources" id="sources"><h2><span data-lang="zh-CN">依据、适用边界与复核日期</span><span data-lang="en">Sources, boundaries and review date</span></h2><p><span data-lang="zh-CN">2026-11-21 复核。公式图与延迟曲线是原创教学模型，不是硬件测量。链接仅供主动查阅；离线阅读不发网络请求。</span><span data-lang="en">Reviewed 2026-11-21. Formula charts and latency curves are original teaching models, not hardware measurements. Links are for intentional reference visits; offline reading sends no requests.</span></p><p><a href="https://docs.vllm.ai/en/latest/configuration/optimization/" rel="noreferrer">vLLM V1 optimization and tuning</a> · implementation<br>Chunked prefill, scheduling tradeoffs, runtime and KV memory behavior are version-dependent; 80-85% is an architect planning margin, not a claimed current default</p><p><a href="https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/provisioned-throughput-sizing" rel="noreferrer">Microsoft Foundry PTU sizing</a> · specification<br>Per-model normalization, cache weights, capacity, deployment minimum and step; GPT-6+ requires newer normalized-token treatment</p><p><a href="https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/provisioned-throughput" rel="noreferrer">Microsoft Foundry provisioned throughput concepts</a> · specification<br>PTU quota is not a universal TPM conversion and is not GPU count</p></section>
+<nav class="nav-footer" aria-label="Chapter navigation"><a class="button" data-carry href="01-metrics.html">← <span data-lang="zh-CN">上一册</span><span data-lang="en">Previous</span></a><a class="button" data-carry href="03-gpu-sizing.html"><span data-lang="zh-CN">下一册</span><span data-lang="en">Next</span> →</a></nav>
+<footer><div id="policy-notice" class="notice" role="status" hidden></div><p><span data-lang="zh-CN">原创双语学习材料 · 零外部依赖 · 所有可视化坐标来自页面公式或确定性教学样本。未独立复现实机性能；离线打开无外部请求，主动点击参考链接除外。</span><span data-lang="en">Original bilingual learning material · No external dependencies · All visual coordinates derive from page formulas or deterministic teaching samples. No independently reproduced hardware performance. Offline opening makes no external requests; intentional reference-link visits are separate.</span></p><a href="../inference-sizing-network/README.md"><span data-lang="zh-CN">双语 FAQ 索引</span><span data-lang="en">Bilingual FAQ index</span></a></footer>
+</main>
+<script>(function (root) {
+  "use strict";
+  const models = {
+    llama8: { name: "Llama 3.1 8B", total: 8.03, active: 8.03, layers: 32, heads: 32, kvHeads: 8, headDim: 128, hidden: 4096, contextLimit: 131072 },
+    llama70: { name: "Llama 3.1 70B", total: 70.6, active: 70.6, layers: 80, heads: 64, kvHeads: 8, headDim: 128, hidden: 8192, contextLimit: 131072 },
+    llama405: { name: "Llama 3.1 405B", total: 405, active: 405, layers: 126, heads: 128, kvHeads: 8, headDim: 128, hidden: 16384, contextLimit: 131072 },
+    qwen72: { name: "Qwen2.5 72B (stock 32K)", total: 72.7, active: 72.7, layers: 80, heads: 64, kvHeads: 8, headDim: 128, hidden: 8192, contextLimit: 32768 },
+    deepseek: { name: "DeepSeek V3 / original R1 671B", total: 671, active: 37, layers: 61, heads: 128, kvHeads: 8, headDim: 128, hidden: 7168, latent: 512, rope: 64, experts: 256, topK: 8, mtp: 14, contextLimit: 131072 }
+  };
+  const gpus = {
+    h100: { name: "H100 SXM 80 GB", memory: 80, bandwidth: 3350, bf16: 989.5, nvlink: 900 },
+    h200: { name: "H200 SXM 141 GB", memory: 141, bandwidth: 4800, bf16: 989.5, nvlink: 900 },
+    b200: { name: "B200 192 GB (design / what-if)", memory: 192, bandwidth: 8000, bf16: 2250, nvlink: 1800 },
+    b200dgx: { name: "DGX B200 180 GB / GPU", memory: 180, bandwidth: 8000, bf16: 2250, nvlink: 1800 },
+    l40s: { name: "L40S 48 GB GDDR6", memory: 48, bandwidth: 864, bf16: 362.05, nvlink: 0 }
+  };
+  function number(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+      throw new RangeError(`${name}: expected a finite number in [${min}, ${max}]`);
+    }
+    return value;
+  }
+  function integer(value, name, min = 0, max = Number.MAX_SAFE_INTEGER) {
+    number(value, name, min, max);
+    if (!Number.isInteger(value)) throw new RangeError(`${name}: expected an integer`);
+    return value;
+  }
+  function preset(items, key) {
+    if (!Object.hasOwn(items, key)) throw new RangeError("Unknown preset");
+    return items[key];
+  }
+  function lifecycle({ queue, prefill, delivery, output, tpot }) {
+    [queue, prefill, delivery].forEach((v) => number(v, "latency"));
+    integer(output, "output", 1);
+    number(tpot, "tpot", 0.001);
+    const ttft = queue + prefill + delivery;
+    const decode = (output - 1) * tpot;
+    return { ttft, decode, e2e: ttft + decode, userTPS: output > 1 ? 1000 / tpot : null, measuredTPOT: output > 1 ? tpot : null };
+  }
+  function capacity(p) {
+    number(p.qps, "qps");
+    number(p.headroom, "headroom", 1, 10);
+    integer(p.prompt, "prompt");
+    integer(p.output, "output", 1);
+    number(p.ttft, "ttft");
+    number(p.tpot, "tpot", 0.001);
+    number(p.inputCapacity, "inputCapacity", 1);
+    number(p.outputCapacity, "outputCapacity", 1);
+    integer(p.batch, "batch", 1);
+    number(p.utilization, "utilization", 0.01, 1);
+    const qps = p.qps * p.headroom;
+    const latency = lifecycle({ queue: 0, prefill: p.ttft, delivery: 0, output: p.output, tpot: p.tpot });
+    const inputTPS = qps * p.prompt;
+    const outputTPS = qps * p.output;
+    const residence = latency.e2e / 1000;
+    const active = qps * residence;
+    const decodeActive = qps * latency.decode / 1000;
+    const inputInstances = Math.ceil(inputTPS / (p.inputCapacity * p.utilization));
+    const outputInstances = Math.ceil(outputTPS / (p.outputCapacity * p.utilization));
+    const batchInstances = Math.ceil(active / p.batch);
+    return { qps, inputTPS, outputTPS, inputTPM: inputTPS * 60, outputTPM: outputTPS * 60, rpm: qps * 60, residence, active, decodeActive, inputInstances, outputInstances, batchInstances, instances: Math.max(inputInstances, outputInstances, batchInstances) };
+  }
+  function businessQPS({ dau, requests, hours, peak }) {
+    number(dau, "dau");
+    number(requests, "requests");
+    number(hours, "hours", 0.1, 24);
+    number(peak, "peak", 1, 100);
+    return dau * requests * peak / (hours * 3600);
+  }
+  function ptu({ inputTPM, outputTPM, cache, cachedWeight, outputWeight, capacity, minimum, step }) {
+    number(inputTPM, "inputTPM");
+    number(outputTPM, "outputTPM");
+    number(cache, "cache", 0, 1);
+    number(cachedWeight, "cachedWeight");
+    number(outputWeight, "outputWeight", 0.001);
+    number(capacity, "PTU capacity", 0.001);
+    integer(minimum, "minimum", 1);
+    integer(step, "step", 1);
+    const normalized = inputTPM * ((1 - cache) + cache * cachedWeight) + outputTPM * outputWeight;
+    const raw = normalized / capacity;
+    const provisioned = normalized === 0 ? 0 : minimum + Math.max(0, Math.ceil((raw - minimum) / step)) * step;
+    return { normalized, raw, provisioned };
+  }
+  function kvPerToken(model, bytes, architecture = "native") {
+    number(bytes, "KV bytes", 0.5, 4);
+    if (!["native", "mha", "gqa", "mla"].includes(architecture)) throw new RangeError("Unknown KV architecture");
+    const mode = architecture === "native" ? (model.latent ? "mla" : "gqa") : architecture;
+    if (mode === "mla") {
+      if (!model.latent) throw new RangeError("MLA is unavailable for this model");
+      return model.layers * (model.latent + model.rope) * bytes;
+    }
+    const heads = mode === "mha" ? model.heads : model.kvHeads;
+    return 2 * model.layers * heads * model.headDim * bytes;
+  }
+  function moeUnion(model, batch) {
+    integer(batch, "batch", 1);
+    if (!model.experts) return model.total;
+    // Solve shared + routed * topK/experts = active under uniform expert sizes.
+    const ratio = model.topK / model.experts;
+    const shared = (model.active - model.total * ratio) / (1 - ratio);
+    const union = -Math.expm1(batch * Math.log1p(-ratio));
+    return shared + (model.total - shared) * union;
+  }
+  function sizing(p) {
+    const model = preset(models, p.model);
+    const gpu = preset(gpus, p.gpu);
+    number(p.weightBytes, "weightBytes", 0.5, 2);
+    number(p.kvBytes, "kvBytes", 1, 2);
+    integer(p.context, "context", 1, 1048576);
+    integer(p.batch, "batch", 1, 4096);
+    integer(p.prefillBatch, "prefillBatch", 1, 4096);
+    number(p.safe, "safe", 0.5, 0.95);
+    number(p.runtime, "runtime");
+    number(p.overhead, "overhead", 0, 1);
+    number(p.replication, "replication", 1, 64);
+    number(p.mbu, "mbu", 0.01, 1);
+    number(p.mfu, "mfu", 0.01, 1);
+    number(p.tpot, "tpot", 0.001);
+    number(p.ttft, "ttft", 0.001);
+    number(p.reserve, "reserve");
+    const usable = gpu.memory * p.safe - p.runtime;
+    if (usable <= 0) throw new RangeError("Runtime reserve exhausts safe GPU memory");
+    if (p.ttft <= p.reserve) throw new RangeError("TTFT budget must exceed non-compute reserve");
+    const totalParams = model.total + (p.mtp ? (model.mtp || 0) : 0);
+    const weight = totalParams * p.weightBytes * (1 + p.overhead);
+    const kv = kvPerToken(model, p.kvBytes) * p.context * p.batch * p.replication / 1e9;
+    const memoryCards = Math.ceil((weight + kv) / usable);
+    const optimisticTraffic = model.active * p.weightBytes;
+    const unionTraffic = moeUnion(model, p.batch) * p.weightBytes;
+    const bandwidthCards = Math.ceil((unionTraffic + kv) / (gpu.bandwidth * p.mbu * p.tpot / 1000));
+    const prefillFLOPs = 2 * model.active * 1e9 * p.context * p.prefillBatch + 2 * model.layers * model.hidden * p.context ** 2 * p.prefillBatch;
+    const computeCards = Math.ceil(prefillFLOPs / (gpu.bf16 * 1e12 * p.mfu * (p.ttft - p.reserve) / 1000));
+    const floor = Math.max(1, memoryCards, bandwidthCards, computeCards);
+    const candidate = 2 ** Math.ceil(Math.log2(floor));
+    return { model, gpu, weight, kv, memoryCards, bandwidthCards, computeCards, floor, candidate, runtime: p.runtime * candidate, optimisticTPOT: optimisticTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, unionTPOT: unionTraffic / (candidate * gpu.bandwidth * p.mbu) * 1000, kvReadTPOT: kv / (candidate * gpu.bandwidth * p.mbu) * 1000, prefillMs: prefillFLOPs / (candidate * gpu.bf16 * 1e12 * p.mfu) * 1000, unionTraffic, contextSupported: p.context <= model.contextLimit };
+  }
+  function transfer(p) {
+    const model = preset(models, p.model);
+    integer(p.context, "context", 1);
+    number(p.kvBytes, "kvBytes", 1, 2);
+    number(p.cache, "cache", 0, 1);
+    number(p.rate, "rate", 0.001);
+    number(p.efficiency, "efficiency", 0.01, 1);
+    integer(p.rails, "rails", 1, 64);
+    number(p.setup, "setup");
+    number(p.overlap, "overlap");
+    number(p.qps, "qps");
+    const bytes = kvPerToken(model, p.kvBytes) * p.context * (1 - p.cache);
+    const bandwidth = p.rate * 1e9 / 8 * p.efficiency * p.rails;
+    const rawMs = bytes / bandwidth * 1000;
+    return { bytes, bandwidth, rawMs, exposedMs: Math.max(0, rawMs - p.overlap) + p.setup, utilization: bytes * p.qps / bandwidth, requiredGbps: bytes * p.qps * 8 / 1e9 / p.efficiency };
+  }
+  function percentile(values, fraction) {
+    if (!Array.isArray(values) || !values.length) throw new RangeError("Percentile requires samples");
+    number(fraction, "percentile", 0.001, 1);
+    values.forEach((v) => number(v, "sample"));
+    return [...values].sort((a, b) => a - b)[Math.ceil(fraction * values.length) - 1];
+  }
+  function pdSamples({ context, base, prefillRate, chunk, residual }) {
+    integer(context, "context", 1);
+    number(base, "base", 0.001);
+    number(prefillRate, "prefillRate", 0.001);
+    integer(chunk, "chunk", 1);
+    number(residual, "residual");
+    const block = context / prefillRate * 1000;
+    const burst = Math.min(context, chunk) / prefillRate * 1000;
+    const samples = { colocated: [], chunked: [], pd: [] };
+    for (let i = 0; i < 200; i += 1) {
+      const interference = i % 20 === 0;
+      const jitter = (i * 17 % 7) * 0.15;
+      samples.colocated.push(base + jitter + (interference ? block : 0));
+      samples.chunked.push(base + jitter + (interference ? burst : 0));
+      samples.pd.push(base + jitter + (interference ? residual : 0));
+    }
+    return { samples, p99: Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, percentile(values, 0.99)])) };
+  }
+  function collective({ operation, ranks, sizeMB, timeMs }) {
+    integer(ranks, "ranks", 2, 65536);
+    number(sizeMB, "sizeMB", 0.001);
+    number(timeMs, "timeMs", 0.001);
+    const factors = { allreduce: 2 * (ranks - 1) / ranks, allgather: (ranks - 1) / ranks, reducescatter: (ranks - 1) / ranks, alltoall: (ranks - 1) / ranks, broadcast: 1, reduce: 1, sendrecv: 1 };
+    const factor = preset(factors, operation);
+    const algbw = sizeMB / timeMs;
+    return { algbw, busbw: algbw * factor, factor };
+  }
+  function goodput({ batch, base, slope, knee, ttftLimit, tpotLimit }) {
+    integer(batch, "batch", 1, 4096);
+    [base, slope, knee, ttftLimit, tpotLimit].forEach((v) => number(v, "goodput parameter", 0.001));
+    const requests = Array.from({ length: batch }, (_, i) => ({
+      ttft: 100 + batch * 4 + (i * 13 % 29) * 3,
+      tpot: base + slope * batch + Math.max(0, batch - knee) * slope * 2 + (i * 7 % 13) * 0.2,
+      output: 128
+    }));
+    const meanTPOT = requests.reduce((sum, r) => sum + r.tpot, 0) / batch;
+    const throughput = batch * 1000 / meanTPOT;
+    const passed = requests.filter((r) => r.ttft <= ttftLimit && r.tpot <= tpotLimit).length;
+    return { requests, meanTPOT, throughput, passed, goodput: throughput * passed / batch };
+  }
+  function cost({ hourly, outputTPS, inputTPS, hours, priceIn, priceOut }) {
+    [hourly, outputTPS, inputTPS, hours, priceIn, priceOut].forEach((v) => number(v, "cost parameter"));
+    return { perMillionOutput: outputTPS === 0 ? null : hourly * 1e6 / (3600 * outputTPS), periodCost: hours * 3600 * (inputTPS * priceIn + outputTPS * priceOut) / 1e6 };
+  }
+  function congestion({ queue, ecn, pfc, xon }, wasPaused = false) {
+    [queue, ecn, pfc, xon].forEach((v) => number(v, "threshold", 0, 100));
+    if (ecn >= pfc || xon >= pfc) throw new RangeError("ECN and Xon must be below PFC Xoff");
+    const paused = queue >= pfc || (wasPaused && queue > xon);
+    return { paused, marked: queue >= ecn, recovering: wasPaused && !paused };
+  }
+  const api = { models, gpus, number, integer, lifecycle, capacity, businessQPS, ptu, kvPerToken, moeUnion, sizing, transfer, percentile, pdSamples, collective, goodput, cost, congestion };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.AcademyMath = Object.freeze(api);
+})(globalThis);
+</script>
+<script>(function () {
+  "use strict";
+  const M = window.AcademyMath;
+  const lang = () => document.documentElement.lang === "en" ? "en" : "zh";
+  const t = (zh, en) => lang() === "en" ? en : zh;
+  const esc = (s) => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  const fmt = (n, digits = 2) => n === null ? "N/A" : n.toLocaleString(lang() === "en" ? "en-US" : "zh-CN", { maximumFractionDigits: digits });
+  const kpi = (value, label) => `<div class="kpi"><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`;
+  const kpis = (items) => `<div class="kpis">${items.map(([v, l]) => kpi(v, l)).join("")}</div>`;
+  const note = (text) => `<div class="notice">${esc(text)}</div>`;
+  const legend = (labels) => `<div class="legend">${labels.map((l, i) => `<span><i class="${["primary", "secondary", "tertiary"][i % 3]}"></i>${esc(l)}</span>`).join("")}</div>`;
+  const dataTable = (headers, rows, caption) => `<div class="table-wrap"><table><caption>${esc(caption)}</caption><thead><tr>${headers.map((v) => `<th scope="col">${esc(v)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((v, i) => i === 0 ? `<th scope="row">${esc(v)}</th>` : `<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  let chartId = 0;
+  function svg(body, caption, height = 310) {
+    const id = `interactive-chart-${chartId++}`;
+    return `<figure class="chart"><svg viewBox="0 0 800 ${height}" role="img" aria-labelledby="${id}"><title id="${id}">${esc(caption)}</title>${body}</svg><figcaption>${esc(caption)}</figcaption></figure>`;
+  }
+  function plot(series, xLabel, yLabel, caption, gate = null) {
+    const width = 640;
+    const height = 200;
+    const x0 = 100;
+    const y0 = 30;
+    const maxX = Math.max(...series.flatMap((s) => s.values.map((p) => p.x)), 1);
+    const maxY = Math.max(...series.flatMap((s) => s.values.map((p) => p.y)), gate === null ? 0 : gate, 1) * 1.1;
+    const x = (v) => x0 + width * v / maxX;
+    const y = (v) => y0 + height - height * v / maxY;
+    let body = "";
+    for (let i = 0; i <= 4; i += 1) {
+      const valueY = maxY * i / 4;
+      const valueX = maxX * i / 4;
+      body += `<path d="M ${x0} ${y(valueY)} H ${x0 + width}" class="grid-line"/><text x="${x0 - 12}" y="${y(valueY) + 5}" text-anchor="end">${fmt(valueY, 1)}</text>`;
+      body += `<text x="${x(valueX)}" y="${y0 + height + 25}" text-anchor="middle">${fmt(valueX, 0)}</text>`;
+    }
+    body += `<path d="M ${x0} ${y0} V ${y0 + height} H ${x0 + width}" class="axis"/>`;
+    if (gate !== null) body += `<path d="M ${x0} ${y(gate)} H ${x0 + width}" class="line tertiary" stroke-dasharray="6 5"/><text x="${x0 + width}" y="${y(gate) - 8}" text-anchor="end">SLO ${fmt(gate)}</text>`;
+    series.forEach((s, index) => {
+      const cls = ["primary", "secondary", "tertiary"][index % 3];
+      body += `<polyline class="line ${cls}" points="${s.values.map((v) => `${x(v.x)},${y(v.y)}`).join(" ")}"/>`;
+      body += s.values.map((v) => `<circle class="${cls}" cx="${x(v.x)}" cy="${y(v.y)}" r="3"><title>${esc(s.label)}: ${fmt(v.x)}, ${fmt(v.y)}</title></circle>`).join("");
+    });
+    body += `<text x="${x0}" y="18">${esc(yLabel)}</text><text x="${x0 + width}" y="285" text-anchor="end">${esc(xLabel)}</text>`;
+    return legend(series.map((s) => s.label)) + svg(body, caption);
+  }
+  function barChart(rows, caption, unit = "") {
+    const max = Math.max(...rows.map((r) => r.value), 1);
+    const height = rows.length * 54 + 40;
+    let body = "";
+    rows.forEach((r, i) => {
+      const y = 20 + i * 54;
+      body += `<text x="10" y="${y + 23}">${esc(r.label)}</text><rect x="225" y="${y}" width="${Math.max(0, r.value / max * 435)}" height="30" rx="4" class="${["primary", "secondary", "tertiary"][i % 3]}"/><text x="${235 + r.value / max * 435}" y="${y + 22}">${fmt(r.value)} ${esc(unit)}</text>`;
+    });
+    return svg(body, caption, height);
+  }
+  const boxes = (items) => items.map((item, i) => {
+    const x = 20 + i * 195;
+    return `<rect x="${x}" y="50" width="175" height="90" rx="8" class="${i === 0 ? "primary" : "surface"}"/><text x="${x + 87}" y="85" text-anchor="middle" class="${i === 0 ? "inverse" : "label"}">${esc(item[0])}</text><text x="${x + 87}" y="115" text-anchor="middle" class="${i === 0 ? "inverse" : "label"}">${esc(item[1])}</text>${i < items.length - 1 ? `<path d="M ${x + 177} 95 H ${x + 192}" class="line secondary"/>` : ""}`;
+  }).join("");
+  function lifecycle(p) {
+    const r = M.lifecycle(p);
+    const segments = [{ label: t("排队", "Queue"), ms: p.queue }, { label: "Prefill", ms: p.prefill }, { label: t("交付", "Delivery"), ms: p.delivery }];
+    const total = Math.max(r.ttft, 1);
+    let cursor = 60;
+    let body = `<text x="60" y="25">${t("TTFT 放大视图（按实际毫秒比例）", "TTFT zoom (proportional milliseconds)")}</text>`;
+    segments.forEach((s, i) => {
+      const w = s.ms / total * 680;
+      body += `<rect x="${cursor}" y="45" width="${w}" height="38" class="${["primary", "secondary", "tertiary"][i]}"><title>${esc(s.label)} ${fmt(s.ms)} ms</title></rect>`;
+      cursor += w;
+    });
+    body += `<text x="60" y="118">0</text><text x="740" y="118" text-anchor="end">${t("首 Token", "First token")} ${fmt(r.ttft)} ms</text>`;
+    body += `<text x="60" y="155">${t("完整请求时间轴", "Full request timeline")}</text><rect x="60" y="177" width="${680 * r.ttft / Math.max(r.e2e, 1)}" height="30" class="primary"/><rect x="${60 + 680 * r.ttft / Math.max(r.e2e, 1)}" y="177" width="${680 * r.decode / Math.max(r.e2e, 1)}" height="30" class="secondary"/>`;
+    body += `<text x="60" y="243">TTFT ${fmt(r.ttft)} ms</text><text x="740" y="243" text-anchor="end">E2EL ${fmt(r.e2e)} ms</text>`;
+    body += `<text x="60" y="280">${t("Decode 后续间隔数", "Subsequent decode intervals")}: ${p.output - 1}; TPOT ${r.measuredTPOT === null ? "N/A" : fmt(p.tpot) + " ms"}</text>`;
+    return kpis([[fmt(r.ttft) + " ms", "TTFT"], [fmt(r.e2e / 1000) + " s", "E2EL"], [fmt(r.userTPS) + (r.userTPS === null ? "" : " tok/s"), t("单用户后续流式速率", "Subsequent per-user streaming")]]) +
+      legend(segments.map((s) => `${s.label} ${fmt(s.ms)} ms`)) + svg(body, t("时间轴由当前输入计算；首 Token 已计入 TTFT。", "Timeline is computed from inputs; the first token is already in TTFT.")) +
+      dataTable([t("阶段", "Stage"), "ms", t("含义", "Meaning")], [[t("排队", "Queue"), fmt(p.queue), t("等待资源", "Waiting for resources")], ["Prefill", fmt(p.prefill), t("含首字计算", "Includes first-token computation")], [t("交付", "Delivery"), fmt(p.delivery), t("网关/网络", "Gateway/network")], ["Decode", fmt(r.decode), `${p.output - 1} × ${fmt(p.tpot)} ms`]], t("可手算的阶段分解", "Hand-checkable stage decomposition"));
+  }
+  function goodput(p) {
+    const r = M.goodput(p);
+    const all = Array.from({ length: 32 }, (_, i) => {
+      const batch = (i + 1) * 4;
+      return { batch, ...M.goodput({ ...p, batch }) };
+    });
+    const frontier = [{ label: t("模拟 Throughput→TPOT", "Synthetic throughput→TPOT"), values: all.map((v) => ({ x: v.throughput, y: v.meanTPOT })) }];
+    const series = [{ label: "Output TPS", values: all.map((v) => ({ x: v.batch, y: v.throughput })) }, { label: "Goodput", values: all.map((v) => ({ x: v.batch, y: v.goodput })) }];
+    const best = all.reduce((a, v) => v.goodput > a.goodput ? v : a, all[0]);
+    return kpis([[fmt(r.throughput) + " tok/s", t("模拟输出吞吐", "Synthetic output throughput")], [fmt(r.goodput) + " tok/s", "Synthetic Goodput"], [`${r.passed}/${p.batch}`, t("双门槛达标请求", "Requests passing both gates")], [fmt(r.meanTPOT) + " ms", "Mean TPOT"], [String(best.batch), t("当前采样网格 Goodput 最优 batch", "Best goodput batch on sampled grid")], ["synthetic", t("不是实测", "Not measured")]]) +
+      plot(frontier, "Output tok/s", "TPOT ms", t("教学 tradeoff 曲线；非实测帕累托前沿。", "Teaching tradeoff curve, not a measured Pareto frontier."), p.tpotLimit) +
+      plot(series, "Active batch", "tok/s", t("Goodput 甜点：越过双门槛后，输出吞吐不再等于达标吞吐。", "Goodput sweet spot: beyond both gates, throughput is no longer compliant throughput.")) +
+      dataTable(["Batch", "TPOT ms", "TPS", "Goodput"], all.filter((v) => [4, 16, 32, 48, 64, 96, 128].includes(v.batch)).map((v) => [v.batch, fmt(v.meanTPOT), fmt(v.throughput), fmt(v.goodput)]), t("确定性教学样本；每请求输出长度相同", "Deterministic teaching samples; equal output length/request"));
+  }
+  function capacity(p) {
+    const qps = p.mode === "business" ? M.businessQPS(p) : p.qps;
+    const r = M.capacity({ ...p, qps });
+    const funnel = `<path d="M 255 20 H 545 L 510 90 H 290 Z" class="primary"/><text x="400" y="48" text-anchor="middle" class="inverse">λ_plan = ${fmt(r.qps)} QPS</text><text x="400" y="73" text-anchor="middle" class="inverse">× E[input / output tokens]</text><path d="M 400 92 V 115 H 205 V 140 M 400 115 H 595 V 140" class="line secondary"/><path d="M 60 145 H 350 L 320 215 H 90 Z" class="secondary"/><path d="M 450 145 H 740 L 710 215 H 480 Z" class="primary"/><text x="205" y="173" text-anchor="middle" class="inverse">Input ${fmt(r.inputTPS)} TPS</text><text x="205" y="199" text-anchor="middle" class="inverse">× 60</text><text x="595" y="173" text-anchor="middle" class="inverse">Output ${fmt(r.outputTPS)} TPS</text><text x="595" y="199" text-anchor="middle" class="inverse">× 60</text><path d="M 205 219 V 245 M 595 219 V 245" class="line secondary"/><rect x="60" y="250" width="290" height="55" rx="8" class="surface"/><rect x="450" y="250" width="290" height="55" rx="8" class="surface"/><text x="205" y="283" text-anchor="middle">${fmt(r.inputTPM, 0)} Input TPM</text><text x="595" y="283" text-anchor="middle">${fmt(r.outputTPM, 0)} Output TPM</text>`;
+    return kpis([[fmt(r.qps), t("含需求余量的 QPS", "QPS with demand headroom")], [fmt(r.inputTPS), "Input TPS"], [fmt(r.outputTPS), "Output TPS"], [fmt(r.inputTPM, 0), "Input TPM"], [fmt(r.outputTPM, 0), "Output TPM"], [fmt(r.active), t("平均在途请求 L", "Mean in-flight requests L")]]) +
+      svg(funnel, t("需求漏斗/单位转换：形状宽度不跨单位编码数值，精确需求显示在标签与表中。", "Demand funnel/unit conversion: shape widths do not encode quantities across units; labels and table carry exact demand."), 335) +
+      barChart([{ label: "Input TPM", value: r.inputTPM }, { label: "Output TPM", value: r.outputTPM }], t("QPS×平均 Token 长度×60；原始 Token 流量，不是 PTU。", "QPS×mean token count×60; raw token demand, not PTU."), "tok/min") +
+      dataTable([t("约束", "Constraint"), t("需求", "Demand"), t("实例下界", "Instance floor")], [
+        ["Input", fmt(r.inputTPS) + " TPS", r.inputInstances],
+        ["Output", fmt(r.outputTPS) + " TPS", r.outputInstances],
+        [t("在途并发", "In-flight concurrency"), fmt(r.active), r.batchInstances],
+        [t("取最大值", "Maximum"), `${fmt(r.residence)} s E[W]`, r.instances]
+      ], t("实例数下界，非单卡数；容量示例必须替换为实测", "Instance floors, not GPU counts; replace example capacities with measurements")) +
+      note(t(`假设平均停留 ${fmt(r.residence)} s；其中后续 decode 活跃 L≈${fmt(r.decodeActive)}。动态 continuous batching 的活跃数不会固定等于这个均值。`, `Assumed mean residence ${fmt(r.residence)} s; subsequent decode-active L≈${fmt(r.decodeActive)}. Continuous-batching occupancy is not fixed at this mean.`));
+  }
+  function ptu(p) {
+    const r = M.ptu(p);
+    return kpis([[fmt(r.normalized, 0), "Normalized TPM"], [fmt(r.raw), t("未取整 PTU", "Raw PTU")], [String(r.provisioned), t("演示部署 PTU", "Illustrative deployed PTU")]]) +
+      barChart([{ label: "Input equivalent", value: p.inputTPM * ((1 - p.cache) + p.cache * p.cachedWeight) }, { label: "Output weighted", value: p.outputTPM * p.outputWeight }], t("按手工权重归一化，不是当前云端 quota 或 GPU 数。", "Normalized using manual weights, not current cloud quota or GPU count."), "equiv TPM") +
+      note(t("若缓存写入/多模态/上下文档位还有独立权重，这个两权重演示不足以报价；请使用当前模型专用公式。", "If cache writes, multimodal or context tiers have additional weights, this two-weight demo is insufficient for a quote; use current model-specific formulas."));
+  }
+  function cost(p) {
+    const r = M.cost(p);
+    return kpis([[r.perMillionOutput === null ? "N/A" : "$" + fmt(r.perMillionOutput), t("自建 $/1M 达标输出", "Self-hosted $/1M compliant output")], ["$" + fmt(r.periodCost), t("同负载时段 API 成本示例", "API period cost at the same load")], [fmt(p.hours) + " h", t("持续时间假设", "Duration assumption")]]) +
+      barChart([{ label: "API input cost", value: p.inputTPS * p.priceIn * p.hours * 3600 / 1e6 }, { label: "API output cost", value: p.outputTPS * p.priceOut * p.hours * 3600 / 1e6 }], t("手工输入单价，不是实时供应商报价；自建与 API 范围需对齐。", "Manual prices, not a live provider quote; align self-hosted and API scope."), "$");
+  }
+  function sizing(p) {
+    const r = M.sizing(p);
+    const counts = [...new Set([1, 2, 4, 8, r.candidate])].sort((a, b) => a - b);
+    const max = Math.max(r.weight + r.kv + p.runtime, r.gpu.memory) * 1.08;
+    const y = (v) => 240 - v / max * 190;
+    let body = `<text x="20" y="24">${t("理想平均每卡显存 GB", "Ideal average per-GPU memory GB")}</text>`;
+    counts.forEach((count, i) => {
+      const x = 85 + i * 135;
+      let used = 0;
+      [[r.weight / count, "secondary"], [r.kv / count, "primary"], [p.runtime, "tertiary"]].forEach(([value, cls]) => {
+        body += `<rect x="${x}" y="${y(used + value)}" width="75" height="${value / max * 190}" class="${cls}"><title>${fmt(value)} GB</title></rect>`;
+        used += value;
+      });
+      body += `<rect x="${x - 4}" y="${y(r.gpu.memory)}" width="83" height="${r.gpu.memory / max * 190}" class="line axis"/><path d="M ${x - 8} ${y(r.gpu.memory * p.safe)} H ${x + 83}" class="grid-line"/><text x="${x + 37}" y="263" text-anchor="middle">${count} GPU</text><text x="${x + 37}" y="${Math.max(38, y(used) - 8)}" text-anchor="middle">${fmt(used, 1)}</text>`;
+    });
+    body += `<text x="20" y="294">${t("外框=物理容量；虚线=规划安全水位；不保证逐 rank 可实现", "Outline=physical capacity; dashed=safe margin; not guaranteed per rank")}</text>`;
+    const lengths = [1024, 4096, 8192, 16384, 32768, 65536, 131072];
+    const comparison = [
+      { label: "MHA (counterfactual)", values: lengths.map((s) => ({ x: s, y: M.kvPerToken(r.model, p.kvBytes, "mha") * s * p.batch / 1e9 })) },
+      { label: "GQA (counterfactual if MLA)", values: lengths.map((s) => ({ x: s, y: M.kvPerToken(r.model, p.kvBytes, "gqa") * s * p.batch / 1e9 })) },
+      { label: "DeepSeek MLA (61 layers)", values: lengths.map((s) => ({ x: s, y: M.kvPerToken(M.models.deepseek, p.kvBytes) * s * p.batch / 1e9 })) }
+    ];
+    return kpis([[`${r.memoryCards}`, t("理想显存下界 GPU", "Ideal memory floor GPUs")], [`${r.bandwidthCards}`, t("权重+KV 读带宽场景下界 GPU", "Weight+KV bandwidth scenario GPUs")], [`${r.computeCards}`, t("Prefill 算力下界 GPU", "Prefill compute floor GPUs")], [`${r.candidate}`, t("待测试候选（2 的幂）", "Candidate to test (power of 2)")], [fmt(r.weight) + " GB", t("总权重含手工开销", "Total weights + manual allowance")], [fmt(r.kv) + " GB", t("驻留 KV 含复制倍率", "Resident KV + replication factor")]]) +
+      legend([t("KV Cache", "KV cache"), t("总权重", "Total weights"), t("每卡运行时预留", "Runtime reserve/GPU")]) + svg(body, t("显存堆叠按公式绘制；多卡项假设理想切分，超物理容量不会被隐藏。", "Memory stacks are formula-derived; multi-GPU bars assume ideal sharding and do not hide overflow."), 325) +
+      plot(comparison, "Context tokens", "Aggregate KV GB", t("KV 对比固定 B 与 dtype：MHA/GQA 用选定模型几何反事实；MLA 用 DeepSeek 的61层，不是同模型替换开关。", "Fixed B/dtype comparison: MHA/GQA use selected-model geometry counterfactuals; MLA uses DeepSeek's 61 layers, not a model replacement switch.")) +
+      dataTable([t("候选卡数下的估算", "Estimates at candidate GPU count"), t("值", "Value"), t("限制", "Limit")], [
+        [t("单 Token 权重乐观 TPOT", "Single-token optimistic weight TPOT"), fmt(r.optimisticTPOT) + " ms", "weights only"],
+        [t("批内专家并集权重 TPOT", "Batch-union weight TPOT"), fmt(r.unionTPOT) + " ms", t("均匀路由假设", "Uniform routing assumption")],
+        [t("每步读全 KV 估算", "Full-KV-read estimate/step"), fmt(r.kvReadTPOT) + " ms", t("额外流量，不含通信/算力", "Additional traffic; excludes communication/compute")],
+        [t("Prefill 计算下界", "Prefill compute floor"), fmt(r.prefillMs) + " ms", t("不含预留/首字/网络", "Excludes reserve/first-token/transport")],
+        [t("权重并集流量", "Batch-union weight traffic"), fmt(r.unionTraffic) + " GB/step", t("不是总加载权重", "Not all loaded weights")]
+      ], t("不是 TTFT/TPOT 达标承诺", "Not a TTFT/TPOT compliance promise")) +
+      (!r.contextSupported ? note(t("上下文超过预设支持范围；显存计算不会赋予模型长上下文能力。", "Context exceeds the preset range; memory calculations do not confer long-context capability.")) : "");
+  }
+  function pd(p) {
+    const r = M.transfer(p);
+    const lengths = [1024, 4096, 8192, 16384, 32768, 65536, 131072];
+    const points = lengths.map((context) => ({ context, ...M.pdSamples({ ...p, context }) }));
+    const labels = { colocated: t("共池", "Colocated"), chunked: "Chunked Prefill", pd: t("PD（残留干扰假设）", "PD (residual assumption)") };
+    const series = Object.entries(labels).map(([key, label]) => ({ label, values: points.map((v) => ({ x: v.context, y: v.p99[key] })) }));
+    const prefill = p.context / p.prefillRate * 1000;
+    const max = Math.max(prefill + 5 * p.base, 1);
+    const scale = (v) => v / max * 630;
+    let timeline = `<text x="10" y="25">${t("共池：Prefill 对 Decode 的合成干扰", "Colocated: synthetic prefill interference")}</text><rect x="100" y="45" width="${scale(prefill)}" height="35" class="primary"/><text x="110" y="105">Prefill ${fmt(prefill)} ms</text>`;
+    for (let i = 0; i < 5; i += 1) {
+      timeline += `<rect x="${100 + scale(prefill + i * p.base)}" y="45" width="${scale(p.base) * 0.85}" height="35" class="secondary"/>`;
+      timeline += `<rect x="${100 + i * 120}" y="173" width="90" height="32" class="secondary"><title>decode work (qualitative pipeline)</title></rect>`;
+    }
+    timeline += `<text x="10" y="150">${t("独立 D 池：去除 Prefill 阻塞，但仍有残留调度/通信", "Separate D pool: no prefill stall, residual scheduling/communication remains")}</text><text x="100" y="245">${t("PD 行是定性流水线示意，不与上一行共享时间比例", "PD row is a qualitative pipeline, not the same time scale")}</text>`;
+    const current = M.pdSamples(p);
+    return kpis([[fmt(r.bytes / 1e9) + " GB", t("新传输 KV Payload", "New KV payload")], [fmt(r.rawMs) + " ms", t("原始传输时间", "Raw transfer time")], [fmt(r.exposedMs) + " ms", t("暴露交接时间", "Exposed handoff")], [fmt(r.utilization * 100) + "%", t("单方向 fabric 负载", "One-way fabric load")], [fmt(r.requiredGbps) + " Gb/s", t("含效率的总线速需求", "Aggregate line-rate need incl. efficiency")], ["200 ITL", t("每上下文点模拟样本数", "Synthetic samples/context point")]]) +
+      (r.utilization >= 1 ? note(t("警告：KV 到达量不低于有效带宽，持续队列不稳定。下面曲线不预测此时的真实 P99；增加带宽、减少交接量或限制接入。", "Warning: KV arrival meets/exceeds effective bandwidth; sustained queues are unstable. Curves do not predict real P99 under this overload. Add bandwidth, reduce handoff or control admission.")) : "") +
+      svg(timeline, t("混部阻塞与分池流水线示意。", "Colocated stalls versus separate-pool pipeline illustration."), 280) +
+      plot(series, "Prompt tokens", "Synthetic P99 ITL ms", t("P99 来自每点 200 个确定性模拟 ITL；nearest-rank，5% Prefill 干扰；不是硬件测量，也不保证 PD 无抖动。", "P99 from 200 deterministic synthetic ITLs/point; nearest-rank, 5% interference; no hardware measurement or zero-jitter promise.")) +
+      dataTable([t("当前上下文", "Current context"), "Synthetic P99 ITL ms", t("样本分母", "Sample count")], Object.entries(labels).map(([key, label]) => [label, fmt(current.p99[key]), 200]), `${p.context} tokens · synthetic`);
+  }
+  function parallel(p) {
+    M.integer(p.ranks, "ranks", 2, 8);
+    M.integer(p.batch, "microbatches", 1, 128);
+    M.number(p.payload, "payload", 0.001);
+    M.number(p.bandwidth, "bandwidth", 0.001);
+    const n = p.ranks;
+    const utilization = p.batch / (p.batch + n - 1);
+    const transferMs = p.payload / p.bandwidth;
+    const mode = {
+      tp: { title: t("TP：同一层的张量切片", "TP: tensor shards of one layer"), subtitle: "AllReduce / RS+AG", caption: t("一个请求进入所有 TP ranks，张量分片再归约；通信往往每层发生。", "One request uses all TP ranks; tensor shards are reduced, often each layer.") },
+      pp: { title: t("PP：连续层分为 stages", "PP: layer ranges become stages"), subtitle: "SendRecv activations", caption: t("同一请求顺序经过所有 stage；更多 microbatch 填满流水线，不把单请求路径变成并行完成。", "One request visits stages serially; microbatches fill the pipeline without parallelizing its entire path.") },
+      dp: { title: t("DP：请求/Attention 分片", "DP: request/attention shards"), subtitle: "Router → shards", caption: t("普通 DP 是独立副本；Attention DP + EP 时只画 attention 请求分片，expert pool 是共享并行组。", "Ordinary DP uses replicas; with attention DP + EP, these are attention request shards with a shared expert group.") },
+      ep: { title: t("EP：专家分布在 ranks", "EP: experts distributed over ranks"), subtitle: "AllToAll dispatch/combine", caption: t("Token 只路由所选 experts；图展示 dispatch/combine，不表示所有请求均匀命中每张卡。", "Tokens route to selected experts; dispatch/combine does not imply uniform rank load.") }
+    };
+    if (!Object.hasOwn(mode, p.kind)) throw new RangeError("Unknown parallel kind");
+    const m = mode[p.kind];
+    let body = `<text x="20" y="28">${esc(m.title)}</text><rect x="20" y="60" width="180" height="95" rx="8" class="primary"/><text x="110" y="97" text-anchor="middle" class="inverse">${p.kind === "dp" ? "Request router" : "Input tokens"}</text><text x="110" y="127" text-anchor="middle" class="inverse">${esc(m.subtitle)}</text>`;
+    const x0 = 250;
+    const width = 480 / n;
+    for (let i = 0; i < n; i += 1) {
+      const x = x0 + i * width;
+      const label = p.kind === "tp" ? `W/${n}` : p.kind === "pp" ? `stage ${i + 1}` : p.kind === "dp" ? `Req ${i + 1}` : `E${i + 1}`;
+      body += `<rect x="${x}" y="65" width="${width - 10}" height="90" rx="6" class="surface"/><text x="${x + (width - 10) / 2}" y="102" text-anchor="middle" class="label">${esc(label)}</text><text x="${x + (width - 10) / 2}" y="128" text-anchor="middle" class="label">rank ${i}</text>`;
+      if (p.kind !== "pp" || i === 0) body += `<path d="M 200 107 L ${x + width / 2} 50 L ${x + width / 2} 60" class="line secondary"/>`;
+      if (p.kind === "pp" && i < n - 1) body += `<path d="M ${x + width - 10} 110 H ${x + width}" class="line primary"/>`;
+    }
+    body += `<rect x="250" y="205" width="470" height="50" rx="8" class="surface"/><text x="485" y="236" text-anchor="middle">${p.kind === "ep" ? "combine → original request shards" : p.kind === "dp" ? "independent outputs / shared expert group when MoE" : "output / communication and synchronization"}</text>`;
+    return kpis([[String(n), `${p.kind.toUpperCase()} ranks`], [fmt(transferMs) + " ms", t("单步骤裸传输估算", "Bare transfer estimate/step")], [p.kind === "pp" ? fmt(utilization * 100) + "%" : "N/A", t("平衡 PP 理想流水利用率", "Ideal balanced-PP utilization")]]) +
+      svg(body, m.caption) +
+      note(t("图解不是实测缩放率；切分合法性、层数、heads、专家容量和通信重叠必须由实际引擎配置确认。", "The diagram is not measured scaling. Validate partition legality, layers, heads, expert capacity and overlap in the actual engine."));
+  }
+  function network(p) {
+    const r = M.collective(p);
+    M.integer(p.rails, "rails", 1, 16);
+    M.number(p.rate, "rate", 0.001);
+    M.number(p.efficiency, "efficiency", 0.01, 1);
+    const budget = p.rate / 8 * p.rails * p.efficiency;
+    return kpis([[fmt(r.algbw) + " GB/s", "algbw"], [fmt(r.busbw) + " GB/s", "busbw"], [fmt(r.factor, 4) + "×", t("标准化修正系数", "Normalization factor")], [fmt(budget) + " GB/s", t("所选单向 payload 预算", "Selected one-way payload budget")]]) +
+      barChart([{ label: "algbw", value: r.algbw }, { label: "busbw", value: r.busbw }, { label: "NIC payload budget", value: budget }], t("不同层次的带宽量并列，不自动把 NIC 预算当 NVLink/混合路径上限。", "Different bandwidth scopes; NIC budget is not automatically a NVLink/mixed-path cap."), "GB/s") +
+      (r.busbw > budget ? note(t("指标高于所选 NIC 预算：核对是否为 NVLink/多端口路径、size 定义与方向，不能直接认为单端口超线速。", "Metric exceeds the chosen NIC budget: verify NVLink/multiport paths, size scope and direction; do not infer one-port overspeed.")) : "") +
+      dataTable(["Operation", "S definition", "Factor"], [
+        ["AllReduce", t("每 rank 完整消息", "Complete per-rank message"), "2(n−1)/n"],
+        ["AllGather", t("所有 ranks 聚合后的总数组", "Total gathered array"), "(n−1)/n"],
+        ["ReduceScatter", t("scatter 前的总数组", "Total pre-scatter array"), "(n−1)/n"],
+        ["AllToAll", t("每 rank 总发送数组", "Total send array per rank"), "(n−1)/n"],
+        ["Broadcast / Reduce", t("根对应的完整消息", "Complete root-associated message"), "1"]
+      ], t("NCCL-tests 消息大小口径", "NCCL-tests message-size scope"));
+  }
+  const pauseStates = new WeakMap();
+  function congestion(p, form) {
+    const r = M.congestion(p, pauseStates.get(form) || false);
+    pauseStates.set(form, r.paused);
+    let body = `<rect x="60" y="60" width="680" height="45" rx="6" class="surface"/><rect x="60" y="60" width="${680 * p.queue / 100}" height="45" class="${r.paused ? "tertiary" : "primary"}"/>`;
+    [[p.ecn, "ECN"], [p.pfc, "Xoff"], [p.xon, "Xon"]].forEach(([value, label], i) => {
+      const x = 60 + 680 * value / 100;
+      const ty = 137 + i * 24;
+      body += `<path d="M ${x} 47 V 110" class="line ${i === 0 ? "secondary" : "tertiary"}"/><text x="${x}" y="${ty}" text-anchor="middle">${label} ${value}%</text>`;
+    });
+    body += boxes([["Switch queue", r.marked ? "ECN: CE mark" : "below ECN"], ["Receiver RNIC", r.marked ? "send CNP" : "no CNP"], ["Sender RNIC", r.marked ? "DCQCN reduce" : "normal rate"], ["Upstream link", r.paused ? "PFC paused" : "PFC clear"]]).replaceAll('y="50"', 'y="220"').replaceAll('y="85"', 'y="255"').replaceAll('y="115"', 'y="285"').replaceAll(" 95", " 265");
+    return kpis([[p.queue + "%", t("队列占用（示意）", "Illustrative queue occupancy")], [r.marked ? "CE / CNP" : "No mark", t("ECN 反馈状态", "ECN feedback state")], [r.paused ? "PAUSE" : "CLEAR", t("PFC 逐跳状态", "PFC hop state")]]) +
+      svg(body, t("状态机保留 PFC 滞回：从 Xoff 以上降到 Xon 以下才恢复；非网络仿真器。", "PFC hysteresis is retained: after Xoff, resume only at/below Xon; not a network simulator."), 335) +
+      note(t("尝试先把队列推至 Xoff 以上，再下降到 Xon 与 Xoff 之间：pause 会保持。恢复算例按钮重置状态；真实 ECN 采用概率/多阈值策略，本图只显示概念。", "Raise the queue above Xoff, then lower it between Xon and Xoff: pause remains. Reset clears state. Real ECN uses probabilistic/multithreshold policies; this chart only explains concepts."));
+  }
+  const renderers = { lifecycle, goodput, capacity, ptu, cost, sizing, pd, parallel, network, congestion };
+  function inputValues(form) {
+    const values = {};
+    for (const input of form.querySelectorAll("[data-key]")) {
+      if (input.disabled) continue;
+      if (input.type === "checkbox") values[input.dataset.key] = input.checked;
+      else if (["model", "gpu", "mode", "kind", "operation"].includes(input.dataset.key)) values[input.dataset.key] = input.value;
+      else {
+        if (!input.value.trim()) throw new RangeError(t("请填写所有启用的数值字段", "Fill every enabled numeric field"));
+        values[input.dataset.key] = Number(input.value);
+      }
+    }
+    return values;
+  }
+  function prepare(form) {
+    if (form.dataset.lab === "capacity") {
+      const business = form.querySelector('[data-key="mode"]').value === "business";
+      for (const key of ["dau", "requests", "hours", "peak"]) form.querySelector(`[data-key="${key}"]`).disabled = !business;
+      form.querySelector('[data-key="qps"]').disabled = business;
+    }
+    if (form.dataset.lab === "sizing") {
+      const input = form.querySelector('[data-key="mtp"]');
+      input.disabled = form.querySelector('[data-key="model"]').value !== "deepseek";
+      if (input.disabled) input.checked = false;
+    }
+  }
+  function render(form) {
+    const workbench = form.closest("[data-workbench]");
+    const errorBox = workbench.querySelector(".error");
+    const results = workbench.querySelector("[data-results]");
+    prepare(form);
+    for (const output of form.querySelectorAll("[data-for]")) output.value = form.querySelector(`[data-key="${output.dataset.for}"]`).value;
+    try {
+      if (!form.checkValidity()) throw new RangeError(t("数值超出字段允许范围，或步长不正确；请检查当前输入。", "A value is outside its allowed range or step; inspect the inputs."));
+      results.innerHTML = renderers[form.dataset.lab](inputValues(form), form);
+      results.removeAttribute("aria-invalid");
+      errorBox.hidden = true;
+      errorBox.textContent = "";
+    } catch (error) {
+      results.replaceChildren();
+      results.setAttribute("aria-invalid", "true");
+      errorBox.hidden = false;
+      errorBox.textContent = t("无法计算：", "Cannot calculate: ") + error.message;
+      if (!(error instanceof RangeError)) {
+        console.error(error);
+        throw error;
+      }
+    }
+  }
+  function staticCharts() {
+    const el = document.querySelector('[data-static-chart="scenarios"]');
+    if (el) {
+      el.innerHTML = barChart([
+        { label: t("语音 LLM 子预算", "Voice LLM sub-budget"), value: 120 },
+        { label: "IDE", value: 200 },
+        { label: t("企业对话", "Enterprise chat"), value: 800 },
+        { label: "R1", value: 2000 }
+      ], t("教学 TTFT 目标，非实测和行业 SLA；离线批处理为 N/A，不绘制为零。", "Teaching TTFT targets, not measurements or industry SLAs; offline batch is N/A, not zero."), "ms");
+    }
+    const matrix = document.querySelector("#acceleration tbody");
+    if (matrix) {
+      for (const row of matrix.rows) {
+        for (let i = 1; i < row.cells.length - 1; i += 1) row.cells[i].className = i === 3 ? "heat-good" : "heat-trade";
+      }
+    }
+  }
+  function carryNavigation() {
+    for (const link of document.querySelectorAll('a[data-carry]')) {
+      const url = new URL(link.getAttribute("href"), location.href);
+      url.searchParams.set("lang", lang() === "en" ? "en" : "zh");
+      url.searchParams.set("scoutTheme", document.documentElement.dataset.theme);
+      link.href = url.href;
+    }
+  }
+  function refresh() {
+    document.querySelectorAll("form[data-lab]").forEach(render);
+    staticCharts();
+    carryNavigation();
+    document.querySelector("#language").textContent = lang() === "en" ? "中文" : "English";
+    document.querySelector("#theme").textContent = t(document.documentElement.dataset.theme === "dark" ? "浅色" : "深色", document.documentElement.dataset.theme === "dark" ? "Light" : "Dark");
+  }
+  document.querySelectorAll("form[data-lab]").forEach((form) => {
+    form.addEventListener("input", () => render(form));
+    form.addEventListener("change", () => render(form));
+    form.addEventListener("submit", (event) => event.preventDefault());
+    form.addEventListener("reset", () => {
+      pauseStates.delete(form);
+      setTimeout(() => render(form), 0);
+    });
+  });
+  document.querySelector("#language").addEventListener("click", () => {
+    document.documentElement.lang = lang() === "en" ? "zh-CN" : "en";
+    refresh();
+    document.querySelectorAll(".quiz-result").forEach((el) => { el.textContent = ""; });
+  });
+  document.querySelector("#theme").addEventListener("click", () => {
+    document.documentElement.dataset.theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    refresh();
+  });
+  document.querySelector("#print").addEventListener("click", () => window.print());
+  for (const quiz of document.querySelectorAll("[data-quiz]")) {
+    quiz.querySelector("[data-check-quiz]").addEventListener("click", () => {
+      const selected = quiz.querySelector("input:checked");
+      const output = quiz.querySelector(".quiz-result");
+      if (!selected) {
+        output.textContent = t("先选择一个答案。", "Select an answer first.");
+        return;
+      }
+      const correct = selected.value === quiz.dataset.correct;
+      output.innerHTML = `<strong>${t(correct ? "正确。 " : "再想一想。 ", correct ? "Correct. " : "Try again. ")}</strong>` + quiz.querySelector("template").innerHTML;
+    });
+  }
+  const progress = document.querySelector(".reading-progress");
+  window.addEventListener("scroll", () => {
+    const total = document.documentElement.scrollHeight - window.innerHeight;
+    progress.style.width = (total <= 0 ? 100 : Math.min(100, window.scrollY / total * 100)) + "%";
+  }, { passive: true });
+  window.AcademyUI = Object.freeze({ refresh });
+  refresh();
+})();
+</script>
+</body>
+</html>
