@@ -6,6 +6,7 @@ import { Script } from "node:vm";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import M from "./academy-math.cjs";
+import { validateContentSources, b } from "./content.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const near = (actual, expected, epsilon = 1e-7) => assert.ok(Math.abs(actual - expected) < epsilon, `${actual} != ${expected}`);
@@ -273,6 +274,17 @@ test("sizing rejects impossible memory/TTFT reserves and unknown hardware rather
   assert.throws(() => M.sizing({ ...sizing, context: Infinity }), RangeError);
   assert.equal(M.sizing({ ...sizing, model: "qwen72", context: 65536 }).contextSupported, false);
 });
+test("GPU floor calculations satisfy their exact declared memory, bandwidth and cold-prefill budgets across presets", () => {
+  for (const model of Object.keys(M.models)) for (const gpu of Object.keys(M.gpus)) {
+    for (const context of [512, 8192, 32768]) for (const batch of [1, 16, 64]) for (const weightBytes of [0.5, 2]) {
+      const p = { ...sizing, model, gpu, context, prefillTokens: Math.min(context,8192), batch, weightBytes };
+      const r = M.sizing(p);
+      assert.ok(r.weight+r.kv+p.runtime*r.memoryCards <= r.gpu.memory*p.safe*r.memoryCards+1e-7);
+      assert.ok((r.unionTraffic+r.kv)/(r.candidate*r.gpu.bandwidth*p.mbu)*1000 <= p.tpot+1e-7);
+      assert.ok(r.prefillMs+p.reserve <= p.ttft+1e-7);
+    }
+  }
+});
 test("B200 design and shipped DGX capacities remain distinct and L40S does not get NVLink", () => {
   const design = M.sizing({ ...sizing, gpu: "b200" });
   const shipped = M.sizing({ ...sizing, gpu: "b200dgx" });
@@ -479,6 +491,29 @@ test("prefix request hit rate is not the fraction of all input avoided; misses a
   assert.equal(M.prefixCaching({ ...p, hitRate: 0 }).savedMs, -2);
   assert.equal(M.prefixCaching({ ...p, prefix: 0 }).cacheGB, 0);
   assert.throws(() => M.prefixCaching({ ...p, prefix: 8193 }), RangeError);
+});
+test("publication generation rejects missing citations, private URLs, missing translations and false hardware provenance", () => {
+  const source = JSON.parse(readFileSync(join(directory,"sources.json"),"utf8"));
+  assert.doesNotThrow(()=>validateContentSources(source));
+  const missing=structuredClone(source);
+  missing.sources=missing.sources.filter((s)=>s.id!=="h100");
+  assert.throws(()=>validateContentSources(missing));
+  const privateURL=structuredClone(source);
+  for (const url of ["https://localhost/reference","https://172.16.0.1/reference","https://[::1]/reference","https://reader:password@example.com/reference"]) {
+    privateURL.sources[0].url=url;
+    assert.throws(()=>validateContentSources(privateURL));
+  }
+  const duplicate=structuredClone(source);
+  duplicate.sources.push(duplicate.sources[0]);
+  assert.throws(()=>validateContentSources(duplicate));
+  assert.throws(()=>validateContentSources({...source,reviewed_at:"2026-02-30"}));
+  assert.throws(()=>validateContentSources({...source,hardware_measured:true}));
+  assert.throws(()=>b("只有中文",""));
+  const zh=readFileSync(join(directory,"..","inference-sizing-network","faq.md"),"utf8").match(/^### Q\d+\./gm);
+  const en=readFileSync(join(directory,"..","inference-sizing-network","faq.en.md"),"utf8").match(/^### Q\d+\./gm);
+  const expected=Array.from({length:24},(_,i)=>`### Q${i+1}.`);
+  assert.deepEqual(zh,expected);
+  assert.deepEqual(en,expected);
 });
 test("all seven pages are standalone, CSP hashes seal actual scripts, bilingual structure and local navigation are present", () => {
   const files = readdirSync(directory).filter((f) => f.endsWith(".html"));

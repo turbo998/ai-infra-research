@@ -8,20 +8,42 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const directory = dirname(fileURLToPath(import.meta.url));
 const edge = join(process.env["ProgramFiles(x86)"] || process.env.ProgramFiles || "", "Microsoft", "Edge", "Application", "msedge.exe");
 if (!existsSync(edge)) throw new Error("This offline browser check requires an installed Windows Microsoft Edge.");
-const temporary = mkdtempSync(join(tmpdir(), "ai-infra-academy-check-"));
 const captureIndex = process.argv.indexOf("--screenshots");
 const screenshots = captureIndex < 0 ? null : process.argv[captureIndex + 1];
 if (captureIndex >= 0 && (!screenshots || !existsSync(screenshots))) throw new Error("--screenshots requires an existing output directory.");
+const onlyIndex = process.argv.indexOf("--only");
+const only = onlyIndex < 0 ? null : process.argv[onlyIndex + 1]?.split(",");
+if (onlyIndex >= 0 && (!only || only.some((name)=>!readdirSync(directory).includes(name) || !name.endsWith(".html")))) throw new Error("--only requires comma-separated academy HTML filenames.");
+const temporary = mkdtempSync(join(tmpdir(), "ai-infra-academy-check-"));
 
 async function probe(exercise, expectedWidth) {
   const failures = [];
   let cases = 0;
   const assert = (condition, message) => { if (!condition) failures.push(message); };
   const wait = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const rgba = (text) => {
+    const values=text.match(/[\d.]+/g)?.map(Number);
+    if (!values || values.length<3) throw new Error("Cannot parse rendered color");
+    return [values[0],values[1],values[2],values[3]===undefined?1:values[3]];
+  };
+  const background = (el) => {
+    if (!el) throw new Error("Rendered background is unresolved");
+    const value=rgba(getComputedStyle(el).backgroundColor);
+    if (value[3]>=1) return value.slice(0,3);
+    const behind=background(el.parentElement);
+    return behind.map((v,i)=>value[i]*value[3]+v*(1-value[3]));
+  };
+  const luminance = (color) => {
+    const c=color.slice(0,3).map((v)=>v/255).map((v)=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4);
+    return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];
+  };
+  const contrast = (a,b) => (Math.max(luminance(a),luminance(b))+0.05)/(Math.min(luminance(a),luminance(b))+0.05);
   const validate = (form) => {
     const error = form.closest("[data-workbench]").querySelector(".error");
     const results = form.closest("[data-workbench]").querySelector("[data-results]");
     assert(error.hidden ? results.children.length > 0 : results.getAttribute("aria-invalid") === "true", "Inconsistent error/results state: " + form.dataset.lab);
+    assert(results.getAttribute("aria-live")==="off", "Large result tables should not be live-announced as a whole");
+    if (error.hidden) assert(form.closest("[data-workbench]").querySelector("[data-result-summary]").textContent.length>0, "Concise result status is missing");
     assert(!/NaN|Infinity/.test(results.innerHTML), "Non-finite result: " + form.dataset.lab);
     for (const axis of results.querySelectorAll("svg path.axis")) {
       assert(getComputedStyle(axis).fill === "none", "An open SVG axis was incorrectly filled as a data area");
@@ -35,9 +57,23 @@ async function probe(exercise, expectedWidth) {
   try {
     assert(window.AcademyMath && window.AcademyUI, "Math/UI initialization missing");
     assert(innerWidth === expectedWidth, "Requested viewport width is not active: " + innerWidth);
+    if (innerWidth!==expectedWidth) {
+      const overflow=[...document.querySelectorAll("main,.hero,.hero-aside,.lesson,.lab,.controls,.control,.results,.kpi,.sources,.toc")].map((el)=>({id:el.id,cls:el.className,right:el.getBoundingClientRect().right,width:el.getBoundingClientRect().width,scroll:el.scrollWidth})).filter((el)=>el.right>expectedWidth+1||el.scroll>el.width+1).slice(0,12);
+      failures.push("Narrow-layout diagnostics: "+JSON.stringify(overflow));
+    }
     assert(matchMedia("(max-width:600px)").matches === (expectedWidth <= 600), "Requested viewport media query is not active");
     assert(document.documentElement.scrollWidth <= innerWidth + 1, "Page-level horizontal overflow");
     assert(document.querySelector("#runtime-error").hidden, "Runtime error banner visible");
+    for (const el of document.querySelectorAll(".lead, .kpi span, footer, a")) {
+      if (!el.getClientRects().length) continue;
+      const style=getComputedStyle(el);
+      const minimum=parseFloat(style.fontSize)>=24 || (parseFloat(style.fontSize)>=18.66 && Number(style.fontWeight)>=700)?3:4.5;
+      assert(contrast(rgba(style.color),background(el))>=minimum, "Rendered text contrast below target: "+el.tagName+" "+el.className);
+    }
+    for (const el of document.querySelectorAll("svg .line.primary, svg .line.secondary, svg .line.tertiary, svg path.axis")) {
+      if (!el.getClientRects().length) continue;
+      assert(contrast(rgba(getComputedStyle(el).stroke),background(el))>=3, "Meaningful chart stroke contrast below3:1");
+    }
     const forms = [...document.querySelectorAll("form[data-lab]")];
     for (const form of forms) {
       validate(form);
@@ -271,6 +307,7 @@ async function probe(exercise, expectedWidth) {
   }
   const result = document.createElement("pre");
   result.id = "academy-browser-check";
+  result.hidden = true;
   result.textContent = JSON.stringify({ failures, cases, width: innerWidth, language: document.documentElement.lang, theme: document.documentElement.dataset.theme, errors: window.AcademyDiagnostics, policy: window.AcademyPolicyDiagnostics });
   document.body.append(result);
 }
@@ -332,11 +369,13 @@ try {
     socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("Isolated Edge connection failed.")); }, { once: true });
   });
   client = new DebugClient(socket);
-  const files = readdirSync(directory).filter((file) => file.endsWith(".html")).sort();
+  const files = readdirSync(directory).filter((file) => file.endsWith(".html") && (!only || only.includes(file))).sort();
   for (const file of files) {
     for (const variant of [
       { width: 1440, language: "zh", theme: "light", exercise: true },
-      { width: 390, language: "en", theme: "dark", exercise: true }
+      { width: 390, language: "en", theme: "dark", exercise: true },
+      { width: 320, language: "en", theme: "dark", exercise: false },
+      { width: 360, language: "zh", theme: "light", exercise: false }
     ]) {
       const script = `(${probe.toString()})(${variant.exercise},${variant.width});`;
       const hash = createHash("sha256").update(script).digest("base64");
@@ -366,6 +405,30 @@ try {
       }
       const result = JSON.parse(resultText);
       result.failures.push(...client.exceptions.slice(exceptionStart));
+      await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 }, sessionId);
+      await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 }, sessionId);
+      const { result: focusTarget } = await client.send("Runtime.evaluate", {
+        expression: "(() => { const input=document.querySelector('form[data-lab] input[type=\"range\"]:not(:disabled)'); const el=input || document.getElementById('language'); el.focus(); return {id:el.id,kind:input?'range':'language',before:input?input.value:document.documentElement.lang}; })()",
+        returnByValue: true
+      }, sessionId);
+      const key = focusTarget.value.kind === "range" ? "ArrowRight" : "Enter";
+      const keyCode = key === "ArrowRight" ? 39 : 13;
+      await client.send("Input.dispatchKeyEvent", { type: "keyDown", key, code: key, windowsVirtualKeyCode: keyCode, ...(key === "Enter" ? { text: "\r", unmodifiedText: "\r" } : {}) }, sessionId);
+      await client.send("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: keyCode }, sessionId);
+      const { result: keyOutcome } = await client.send("Runtime.evaluate", {
+        expression: `(() => { const el=document.getElementById(${JSON.stringify(focusTarget.value.id)}); return {after:${focusTarget.value.kind === "range" ? "el.value" : "document.documentElement.lang"},outline:parseFloat(getComputedStyle(el).outlineWidth),errors:window.AcademyDiagnostics,overflow:document.documentElement.scrollWidth>innerWidth}; })()`,
+        returnByValue: true
+      }, sessionId);
+      if (keyOutcome.value.after === focusTarget.value.before || keyOutcome.value.outline < 3 || keyOutcome.value.errors.length || keyOutcome.value.overflow) {
+        result.failures.push("Native keyboard/focus or narrow-page reflow failed: " + JSON.stringify({ target: focusTarget.value, outcome: keyOutcome.value }));
+      }
+      if (focusTarget.value.kind === "range") {
+        await client.send("Runtime.evaluate", { expression: `new Promise(resolve=>{document.getElementById(${JSON.stringify(focusTarget.value.id)}).form.reset();setTimeout(resolve,10);})`, awaitPromise: true }, sessionId);
+      } else {
+        await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" }, sessionId);
+        await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 }, sessionId);
+      }
+      result.cases += 1;
       if (screenshots) {
         const { data } = await client.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }, sessionId);
         writeFileSync(join(screenshots, `${file.replace(".html", "")}-${variant.width}.png`), Buffer.from(data, "base64"));

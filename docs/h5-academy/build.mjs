@@ -2,13 +2,14 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { chapters, bodies, b, esc, indexContent } from "./content.mjs";
+import { chapters, bodies, studyTasks, validateContentSources, b, esc, indexContent } from "./content.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(directory, "academy.css"), "utf8");
 const math = readFileSync(join(directory, "academy-math.cjs"), "utf8");
 const ui = readFileSync(join(directory, "academy-ui.js"), "utf8");
 const sources = JSON.parse(readFileSync(join(directory, "sources.json"), "utf8"));
+validateContentSources(sources);
 const bootstrap = `(() => {
   const param = new URLSearchParams(window.location.search).get("scoutTheme");
   const theme = ["light", "dark"].includes(param) ? param : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -38,7 +39,7 @@ const hash = (script) => "'sha256-" + createHash("sha256").update(script).digest
 const csp = `default-src 'none'; script-src ${[bootstrap, math, ui].map(hash).join(" ")}; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'`;
 
 function sourceSection(ids) {
-  return `<section class="lesson sources" id="sources"><h2>${b("依据、适用边界与复核日期", "Sources, boundaries and review date")}</h2><p>${b("2026-11-21 复核。公式图与延迟曲线是原创教学模型，不是硬件测量。链接仅供主动查阅；离线阅读不发网络请求。", "Reviewed 2026-11-21. Formula charts and latency curves are original teaching models, not hardware measurements. Links are for intentional reference visits; offline reading sends no requests.")}</p>${sources.sources.filter((s) => ids.includes(s.id)).map((s) => `<p><a href="${esc(s.url)}" rel="noreferrer">${esc(s.title)}</a> · ${esc(s.state)}<br>${esc(s.supports)}</p>`).join("")}</section>`;
+  return `<section class="lesson sources" id="sources"><h2>${b("依据、适用边界与复核日期", "Sources, boundaries and review date")}</h2><p>${b(`${esc(sources.reviewed_at)}复核。公式图与延迟曲线是原创教学模型，不是硬件测量。链接仅供主动查阅；离线阅读不发网络请求。`, `Reviewed ${esc(sources.reviewed_at)}. Formula charts and latency curves are original teaching models, not hardware measurements. Links are for intentional reference visits; offline reading sends no requests.`)}</p>${sources.sources.filter((s) => ids.includes(s.id)).map((s) => `<p><a href="${esc(s.url)}" rel="noreferrer">${esc(s.title)}</a> · ${esc(s.state)}<br>${esc(s.supports)}</p>`).join("")}</section>`;
 }
 function build(chapter, index) {
   const isIndex = !chapter;
@@ -46,6 +47,7 @@ function build(chapter, index) {
   const titleEn = isIndex ? "AI Infra Inference, Fabric & Capacity Academy" : chapter.en;
   const body = isIndex ? indexContent() : bodies[chapter.id]();
   const sourceIds = isIndex ? sources.sources.map((s) => s.id) : chapter.sources;
+  const task = isIndex ? "" : `<div class="study-task"><h3>${b("今晚先试这一件事", "First experiment tonight")}</h3><p>${b(studyTasks[chapter.id][1], studyTasks[chapter.id][2])}</p><a class="button" href="#${studyTasks[chapter.id][0]}">${b("打开默认算例", "Open default example")} →</a></div>`;
   const sectionIds = [...body.matchAll(/<section class="lesson" id="([^"]+)"><h2>(.*?)<\/h2>/g)].map((m) => [m[1], m[2]]);
   const navLink = (c, text) => `<a class="button" data-carry href="${c.file}">${text}</a>`;
   const navigation = isIndex ? "" : `<nav class="nav-footer" aria-label="Chapter navigation">${index > 0 ? navLink(chapters[index - 1], "← " + b("上一册", "Previous")) : '<a class="button" data-carry href="index.html">← Academy</a>'}${index < chapters.length - 1 ? navLink(chapters[index + 1], b("下一册", "Next") + " →") : '<a class="button" data-carry href="index.html">Academy →</a>'}</nav>`;
@@ -65,7 +67,7 @@ function build(chapter, index) {
 <header class="topbar"><div class="topbar-inner"><a class="brand" data-carry href="index.html">AI INFRA / ${b("精学馆", "ACADEMY")}</a><div class="top-actions"><button id="language" type="button">English</button><button id="theme" type="button">${b("深色", "Dark")}</button><button id="print" type="button">${b("打印 / PDF", "Print / PDF")}</button></div></div><div class="reading-progress" aria-hidden="true"></div></header>
 <main id="main">
 <div id="runtime-error" class="error" role="alert" hidden></div>
-<div class="hero"><div><div class="eyebrow">${isIndex ? "SOLUTION ARCHITECT / LEARNING LAB" : `CHAPTER 0${index + 1} / SIX DECISIONS`}</div><h1>${b(titleZh, titleEn)}</h1><p class="lead">${isIndex ? b("六大专题，把用户体验、容量、GPU 与智算网络串成可复算的架构决策。", "Six chapters connect user experience, capacity, GPUs and fabric into hand-checkable architecture decisions.") : b(chapter.subtitleZh, chapter.subtitleEn)}</p><span class="tag">ZH / EN</span><span class="tag">NO CDN</span><span class="tag">OFFLINE</span><span class="tag">SYNTHETIC ≠ MEASURED</span></div><aside class="hero-aside"><h3>${b("今天记住一句话", "One idea to remember")}</h3><p>${isIndex ? b("以用户 SLA 定边界，以达标 Goodput 定容量；显存、算力、网络都必须说清口径。", "Use user SLOs to set boundaries and compliant goodput to size capacity. Specify memory, compute and fabric scopes.") : b(chapter.zh, chapter.en)}</p><small>${b("滑块是教学实验，结果是有条件的估算，不是供应商承诺。", "Sliders are teaching experiments; outputs are conditional estimates, not vendor promises.")}</small></aside></div>
+<div class="hero"><div><div class="eyebrow">${isIndex ? "SOLUTION ARCHITECT / LEARNING LAB" : `CHAPTER 0${index + 1} / SIX DECISIONS`}</div><h1>${b(titleZh, titleEn)}</h1><p class="lead">${isIndex ? b("六大专题，把用户体验、容量、GPU与智算网络串成可复算的架构决策。", "Six chapters connect user experience, capacity, GPUs and fabric into hand-checkable architecture decisions.") : b(chapter.subtitleZh, chapter.subtitleEn)}</p><span class="tag">ZH / EN</span><span class="tag">NO CDN</span><span class="tag">OFFLINE</span><span class="tag">SYNTHETIC ≠ MEASURED</span></div><aside class="hero-aside"><h3>${b("今天记住一句话", "One idea to remember")}</h3><p>${isIndex ? b("以用户SLA定边界，以达标Goodput定容量；显存、算力、网络都必须说清口径。", "Use user SLOs to set boundaries and compliant goodput to size capacity. Specify memory, compute and fabric scopes.") : b(chapter.zh, chapter.en)}</p><small>${b("滑块是教学实验，结果是有条件的估算，不是供应商承诺。", "Sliders are teaching experiments; outputs are conditional estimates, not vendor promises.")}</small>${task}</aside></div>
 <nav class="toc" aria-label="Page contents">${sectionIds.map(([id, text]) => `<a href="#${id}">${text}</a>`).join("")}<a href="#sources">${b("依据", "Sources")}</a></nav>
 ${body}
 ${sourceSection(sourceIds)}

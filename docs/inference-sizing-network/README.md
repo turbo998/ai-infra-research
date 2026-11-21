@@ -54,7 +54,17 @@ node docs\h5-academy\browser-check.mjs
 
 它在临时独立 profile 中加载七册，检查 1440px 中文浅色与 390px 英文深色、字段边界/选项/错误、自测、主题/语言、页面溢出、JS/CSP 和自动资源请求。临时探针只加入测试副本，不修改交付 HTML。
 
+收口检查还覆盖320px英文深色、360px中文浅色、原生键盘操作、重点文本/图形对比度与较短的辅助技术状态播报。每册顶部提供一个“今晚先试”任务，图表坐标可展开成数据表。结果只是这些检查的证据，不是完整WCAG合规认证。
+
+只检查受影响页面可使用：
+
+```powershell
+node docs\h5-academy\browser-check.mjs --only 03-gpu-sizing.html
+```
+
 源码位于 `h5-academy`：`content.mjs` 维护双语课程，`academy-math.cjs` 为可测试公式内核，`academy-ui.js` 为交互，`academy.css` 为主题，`build.mjs` 内联所有资源并为脚本生成 CSP 哈希。修改源码后必须重新生成 HTML；`--check` 可检测漂移。
+
+生成器会拒绝缺失/重复来源ID、明显私网/带凭据URL、缺失中英片段与错误的实机测量归因，防止来源被静默丢弃。来源与公式仍需人工技术复核。
 
 ## 集成导航建议
 

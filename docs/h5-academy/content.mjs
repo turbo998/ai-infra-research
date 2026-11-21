@@ -1,7 +1,10 @@
 import math from "./academy-math.cjs";
 
 export const esc = (text) => String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-export const b = (zh, en) => `<span data-lang="zh-CN">${zh}</span><span data-lang="en">${en}</span>`;
+export const b = (zh, en) => {
+  if (typeof zh !== "string" || typeof en !== "string" || !zh.trim() || !en.trim()) throw new Error("Both Chinese and English content fragments are required");
+  return `<span data-lang="zh-CN">${zh}</span><span data-lang="en">${en}</span>`;
+};
 const p = (zh, en) => `<p>${b(zh, en)}</p>`;
 const formula = (text) => `<div class="formula">${text}</div>`;
 const note = (zh, en) => `<div class="notice">${b(zh, en)}</div>`;
@@ -14,7 +17,7 @@ const check = (lab, key, zh, en, checked = false) => `<div class="control"><labe
 const textarea = (lab, key, zh, en, value) => `<div class="control"><label for="${lab}-${key}">${b(zh, en)}</label><textarea id="${lab}-${key}" name="${key}" data-key="${key}" rows="18" maxlength="250000" required spellcheck="false">${esc(value)}</textarea></div>`;
 const models = Object.entries(math.models).map(([id, m]) => [id, m.name]);
 const gpus = Object.entries(math.gpus).map(([id, g]) => [id, g.name]);
-const lab = (id, controls) => `<div class="lab" data-workbench="${id}"><form data-lab="${id}" class="controls" novalidate>${controls}<button type="reset">${b("恢复算例", "Reset example")}</button></form><div class="results"><div class="error" role="alert" hidden></div><div data-results="${id}" aria-live="polite" aria-atomic="false"></div><noscript>${b("请启用 JavaScript 使用沙盘；下方公式、FAQ 与算例仍可离线阅读。", "Enable JavaScript for the workbench; formulas, FAQ and worked examples remain readable offline.")}</noscript></div></div>`;
+const lab = (id, controls) => `<div class="lab" data-workbench="${id}"><form data-lab="${id}" class="controls" aria-describedby="${id}-error" novalidate>${controls}<button type="reset">${b("恢复算例", "Reset example")}</button></form><div class="results"><div id="${id}-error" class="error" role="alert" hidden></div><div class="sr-only" role="status" aria-live="polite" data-result-summary="${id}"></div><div data-results="${id}" aria-live="off"></div><noscript>${b("请启用JavaScript使用沙盘；下方公式、FAQ与算例仍可离线阅读。", "Enable JavaScript for the workbench; formulas, FAQ and worked examples remain readable offline.")}</noscript></div></div>`;
 const quiz = (id, zh, en, answers, correct, explainZh, explainEn) => `<div class="quiz" data-quiz="${id}" data-correct="${correct}"><fieldset><legend>${b(zh, en)}</legend>${answers.map(([z, e], i) => `<label><input type="radio" name="quiz-${id}" value="${i}">${b(z, e)}</label>`).join("")}<button type="button" data-check-quiz>${b("核对答案", "Check answer")}</button><div class="quiz-result" role="status"></div><template data-explanation>${b(explainZh, explainEn)}</template></fieldset></div>`;
 const checklist = (items) => `<div class="checklist">${items.map(([z, e]) => `<label><input type="checkbox">${b(z, e)}</label>`).join("")}</div>`;
 const diagram = (id, titleZh, titleEn, content, captionZh, captionEn, height = 260) => `<figure class="chart"><svg viewBox="0 0 800 ${height}" role="img" aria-labelledby="${id}-title"><title id="${id}-title">${titleZh} / ${titleEn}</title>${content}</svg><figcaption>${b(captionZh, captionEn)}</figcaption></figure>`;
@@ -28,6 +31,37 @@ export const chapters = [
   { id: "parallel", file: "05-parallelism-acceleration.html", zh: "TP 分张量，PP 分层，DP 分请求，EP 分专家", en: "TP splits tensors, PP layers, DP requests, EP experts", subtitleZh: "通信原语 · NVLink / RDMA 边界 · 加速收益/代价矩阵", subtitleEn: "Collectives · NVLink / RDMA boundaries · acceleration tradeoffs", minutes: 25, sources: ["vllm", "sglang", "deepseek", "nccl", "blackwell", "tensor-parallel", "speculative", "prefix"] },
   { id: "network", file: "06-rdma-roce-nvlink.html", zh: "900 GB/s NVLink和400 Gb/s网卡，先统一口径", en: "Normalize units before comparing900 GB/s NVLink with a400 Gb/s NIC", subtitleZh: "GPUDirect RDMA ·RoCEv2流控 ·多轨拓扑 ·NCCL带宽", subtitleEn: "GPUDirect RDMA ·RoCEv2 congestion ·rail topology ·NCCL bandwidth", minutes: 25, sources: ["gpudirect", "nccl", "blackwell", "h100", "ib", "ecn", "pcie", "rail-ra", "nccl-count", "pfc-headroom", "dynamo-pd-layout"] }
 ];
+export const studyTasks = {
+  metrics: ["lifecycle", "先把输出128改成1，观察TPOT的N/A；再对比trace平均/最大ITL门槛。", "Change output128 to1 and inspect TPOT N/A; then compare mean/max-ITL trace gates."],
+  capacity: ["capacity", "先走QPS→TPS/TPM；再调高推理占比，观察并发为何由少数长请求主导。", "Start with QPS→TPS/TPM, then increase reasoning share to see long-request concurrency dominance."],
+  sizing: ["sizing", "分开改S_p和驻留S；再对比TP8/TP16，别把聚合显存下界当实际配置。", "Change S_p and resident S separately; compare TP8/TP16 rather than treating an aggregate floor as a configuration."],
+  pd: ["pd", "独立改变线量与D状态复制；切换P先发首字，比较TTFT和首次间隔。", "Change wire and D-state copies separately; switch to early P output and compare TTFT with the first gap."],
+  parallel: ["parallel", "切四种流向图；把投机接受率从0.8降到0，检查是否反而变慢。", "Switch the four flow views; reduce speculative acceptance from0.8 to0 and check for a slowdown."],
+  network: ["network", "核对NCCL count，再改NIC PCIe代际；注入rail故障并关闭重映射。", "Check NCCL count scope, change NIC PCIe generation, then fail a rail without remapping."]
+};
+export function validateContentSources(document) {
+  if (!document || !Array.isArray(document.sources) || !document.sources.length || !/^\d{4}-\d{2}-\d{2}$/.test(document.reviewed_at)) throw new Error("Academy sources require a reviewed source catalog");
+  const reviewed = new Date(document.reviewed_at + "T00:00:00Z");
+  if (!Number.isFinite(reviewed.getTime()) || reviewed.toISOString().slice(0,10)!==document.reviewed_at) throw new Error("Source review date must be a valid calendar date");
+  if (document.hardware_measured !== false || document.independently_reproduced !== false) throw new Error("Educational academy provenance must not claim independently measured hardware benchmarks");
+  const ids = new Set();
+  for (const source of document.sources) {
+    if (!/^[a-z][a-z0-9-]*$/.test(source.id) || ids.has(source.id) || !source.title || !source.supports || !["specification", "implementation", "unverified"].includes(source.state)) throw new Error("Source catalog IDs, state and descriptions must be explicit and unique");
+    const url = new URL(source.url);
+    const host=url.hostname.toLowerCase();
+    const octets=/^\d+\.\d+\.\d+\.\d+$/.test(host)?host.split(".").map(Number):null;
+    const localIP=octets && (octets[0]===0||octets[0]===10||octets[0]===127||(octets[0]===169&&octets[1]===254)||(octets[0]===172&&octets[1]>=16&&octets[1]<=31)||(octets[0]===192&&octets[1]===168));
+    if (url.protocol !== "https:" || url.username || url.password || localIP || host==="localhost" || host==="[::1]" || /^\[(fc|fd|fe80)/.test(host) || /\.(localhost|local|internal)$/.test(host)) throw new Error("Archive citations must use public HTTPS URLs without credentials");
+    ids.add(source.id);
+  }
+  const files = new Set();
+  for (const chapter of chapters) {
+    if (!/^\d{2}-[a-z0-9-]+\.html$/.test(chapter.file) || files.has(chapter.file)) throw new Error("Chapter outputs must be unique local HTML basenames");
+    if (chapter.sources.some((id)=>!ids.has(id)) || new Set(chapter.sources).size!==chapter.sources.length) throw new Error("Every chapter citation must resolve to one explicit source record");
+    if (!studyTasks[chapter.id] || !chapter.zh || !chapter.en) throw new Error("Every chapter needs bilingual goals and a learning entry");
+    files.add(chapter.file);
+  }
+}
 
 export function indexContent() {
   return section("route", "今晚先走一条业务问题驱动的学习路线", "Follow a business-question learning route tonight",
@@ -53,7 +87,7 @@ export function indexContent() {
         "先满足体验指标，再求达标吞吐；网络服务于并行与 KV 交接，不是孤立采购参数。",
         "Satisfy user experience before maximizing goodput; fabric supports parallelism and KV handoff, not an isolated purchasing spec.")) +
     section("study", "每次只改一个变量，才知道瓶颈转移到了哪里", "Change one variable at a time to see the bottleneck move",
-      `<div class="grid"><article class="card"><h3>${b("30 分钟速读", "30-minute fast route")}</h3>${p("先读 01 的生命周期，02 的 QPS→TPM，03 的三道水位线。再把自己的业务 QPS、输入/输出长度和目标延迟代入。", "Read the lifecycle in 01, QPS→TPM in 02 and the three bounds in 03. Substitute your traffic, token lengths and latency targets.")}</article><article class="card"><h3>${b("两小时精读", "Two-hour deep route")}</h3>${p("完整走六册。把 batch 从 1 改到 32，再把上下文从 2K 改到 32K，观察显存、专家并集、Goodput 和 KV 网络负载如何变化。", "Walk through all six chapters. Increase batch from 1 to 32 and context from 2K to 32K; observe memory, expert union, goodput and KV fabric load.")}</article></div>` +
+      `<div class="grid"><article class="card"><h3>${b("30分钟速读", "30-minute fast route")}</h3>${p("先读01的生命周期，02的QPS→TPM，03的三道水位线。再把自己的业务QPS、输入/输出长度和目标延迟代入。", "Read the lifecycle in01, QPS→TPM in02 and the three bounds in03. Substitute your traffic, token lengths and latency targets.")}</article><article class="card"><h3>${b("2–3小时精读", "2–3-hour deep route")}</h3>${p("完整走六册，每册先做顶部「今晚先试」默认算例，再按问题查深度沙盘与FAQ。把batch从1改到32、上下文从2K改到32K，观察瓶颈转移。", "Walk through six chapters, starting with each top'First experiment tonight' before consulting deeper workbenches/FAQ. Change batch1→32 and context2K→32K to see bottlenecks move.")}</article></div>` +
       p("离线使用：保留整个 h5-academy 目录，双击 index.html。每一册本身是独立 HTML，无需服务器；中英切换、明暗主题、交互、图表和自测全部内联。手机首页可左右滑动专题卡片，长图和表格可在自身区域横滑。",
         "Offline: keep the h5-academy folder and double-click index.html. Every chapter is a standalone HTML file with embedded language switching, themes, interactions, charts and quizzes. On mobile, swipe the chapter cards; wide figures and tables scroll within their own regions."));
 }

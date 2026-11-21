@@ -36,11 +36,13 @@
     if (gate !== null) body += `<path d="M ${x0} ${y(gate)} H ${x0 + width}" class="line tertiary" stroke-dasharray="6 5"/><text x="${x0 + width}" y="${y(gate) - 8}" text-anchor="end">${esc(gateLabel)} ${fmt(gate)}</text>`;
     series.forEach((s, index) => {
       const cls = s.colorClass || ["primary", "secondary", "tertiary"][index % 3];
-      body += `<polyline class="line ${cls}" points="${s.values.map((v) => `${x(v.x)},${y(v.y)}`).join(" ")}"/>`;
+      body += `<polyline class="line ${cls}"${cls === "secondary" ? ' stroke-dasharray="7 4"' : cls === "tertiary" ? ' stroke-dasharray="2 4"' : ""} points="${s.values.map((v) => `${x(v.x)},${y(v.y)}`).join(" ")}"/>`;
       body += s.values.map((v) => `<circle class="${cls}" cx="${x(v.x)}" cy="${y(v.y)}" r="3"><title>${esc(s.label)}: ${fmt(v.x)}, ${fmt(v.y)}</title></circle>`).join("");
     });
     body += `<text x="${x0}" y="18">${esc(yLabel)}</text><text x="${x0 + width}" y="285" text-anchor="end">${esc(xLabel)}</text>`;
-    return legend(series.map((s) => s.label), series.map((s, i) => s.colorClass || ["primary", "secondary", "tertiary"][i % 3])) + svg(body, caption);
+    const rows = series.flatMap((s) => s.values.map((value) => [s.label, fmt(value.x), fmt(value.y)]));
+    return legend(series.map((s) => s.label), series.map((s, i) => s.colorClass || ["primary", "secondary", "tertiary"][i % 3])) + svg(body, caption) +
+      `<details><summary>${t("查看图表原始坐标", "View chart coordinates")}</summary>${dataTable([t("序列", "Series"), xLabel, yLabel], rows, t("重复X表示阶梯跳变，未合并或置零", "Repeated X values preserve step transitions, without merging or zero substitution"))}</details>`;
   }
   function barChart(rows, caption, unit = "") {
     const max = Math.max(...rows.map((r) => r.value), 1);
@@ -50,7 +52,7 @@
       const y = 20 + i * 54;
       body += `<text x="10" y="${y + 23}">${esc(r.label)}</text><rect x="225" y="${y}" width="${Math.max(0, r.value / max * 435)}" height="30" rx="4" class="${["primary", "secondary", "tertiary"][i % 3]}"/><text x="${235 + r.value / max * 435}" y="${y + 22}">${fmt(r.value)} ${esc(unit)}</text>`;
     });
-    return svg(body, caption, height);
+    return svg(body, caption, height) + `<details><summary>${t("查看条形图数据", "View bar-chart data")}</summary>${dataTable([t("类别", "Category"), unit || t("值", "Value")], rows.map((row) => [row.label, fmt(row.value)]), caption)}</details>`;
   }
   const boxes = (items) => items.map((item, i) => {
     const x = 20 + i * 195;
@@ -552,16 +554,26 @@
     const workbench = form.closest("[data-workbench]");
     const errorBox = workbench.querySelector(".error");
     const results = workbench.querySelector("[data-results]");
+    const summary = workbench.querySelector("[data-result-summary]");
     prepare(form);
     for (const output of form.querySelectorAll("[data-for]")) output.value = form.querySelector(`[data-key="${output.dataset.for}"]`).value;
     try {
       if (!form.checkValidity()) throw new RangeError(t("数值超出字段允许范围，或步长不正确；请检查当前输入。", "A value is outside its allowed range or step; inspect the inputs."));
       results.innerHTML = renderers[form.dataset.lab](inputValues(form), form);
+      summary.textContent = [...results.querySelectorAll(".kpi")].slice(0, 3).map((el) => `${el.querySelector("strong").textContent} ${el.querySelector("span").textContent}`).join(". ");
+      form.removeAttribute("aria-invalid");
+      for (const input of form.querySelectorAll("[data-key]")) input.removeAttribute("aria-invalid");
       results.removeAttribute("aria-invalid");
       errorBox.hidden = true;
       errorBox.textContent = "";
     } catch (error) {
       results.replaceChildren();
+      summary.textContent = "";
+      form.setAttribute("aria-invalid", "true");
+      for (const input of form.querySelectorAll("[data-key]")) {
+        if (!input.disabled && !input.checkValidity()) input.setAttribute("aria-invalid", "true");
+        else input.removeAttribute("aria-invalid");
+      }
       results.setAttribute("aria-invalid", "true");
       errorBox.hidden = false;
       errorBox.textContent = t("无法计算：", "Cannot calculate: ") + error.message;
@@ -639,6 +651,10 @@
     });
   }
   const progress = document.querySelector(".reading-progress");
+  const updateHeaderOffset = () => document.documentElement.style.setProperty("--header-offset", document.querySelector(".topbar").offsetHeight + 16 + "px");
+  updateHeaderOffset();
+  if (typeof ResizeObserver === "function") new ResizeObserver(updateHeaderOffset).observe(document.querySelector(".topbar"));
+  else window.addEventListener("resize", updateHeaderOffset);
   window.addEventListener("scroll", () => {
     const total = document.documentElement.scrollHeight - window.innerHeight;
     progress.style.width = (total <= 0 ? 100 : Math.min(100, window.scrollY / total * 100)) + "%";
