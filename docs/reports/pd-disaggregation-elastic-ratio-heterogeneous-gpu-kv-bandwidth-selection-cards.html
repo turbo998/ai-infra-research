@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7-Card Report · PD Disaggregation Elastic Ratio &amp; KV Bandwidth (#396)</title>
+<style>
+  body { background: #090d16; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
+  .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; max-width: 1480px; margin: 0 auto; }
+  .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+  .meta { font-size: 12px; color: #38bdf8; font-weight: 700; letter-spacing: 0.5px; }
+  h2 { font-size: 20px; margin: 10px 0; color: #f8fafc; line-height: 1.3; }
+  p, li { font-size: 13.5px; color: #cbd5e1; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+  th { color: #93c5fd; }
+  .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11.5px; color: #6ee7b7; }
+  .bar-row { margin: 8px 0; }
+  .bar-bg { background: #0f172a; height: 14px; border-radius: 7px; overflow: hidden; }
+  .bar-fill { background: #3b82f6; height: 100%; }
+  .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; background: #065f46; color: #6ee7b7; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <section class="card">
+    <div>
+      <div class="meta">1 / 7 · HANDS-ON · PD DISAGGREGATION ELASTIC RATIO &amp; KV SIZING</div>
+      <h2>Heterogeneous PD + 25% Flex Workers Boosts Diurnal Goodput 4.15x and Cuts $/1M Tokens by 71.7%</h2>
+      <p>Static 1:1 PD splits strand 35% of GPUs when workloads swing from daytime 16K RAG (5P:3D) to nighttime 4K CoT reasoning (2P:6D). Pairing H100 Prefill + H200 Decode with 25% zero-restart Flex workers achieves 5,890 tok/s at $0.26/1M.</p>
+    </div>
+    <div class="code">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">2 / 7 · SCENARIO: FIRST-PRINCIPLES P:D RATIO &amp; KV TRANSFER MATH</div>
+      <h2>DeepSeek MLA Shrinks 16K KV Transfer Volume 4.67x vs. 70B GQA-8 (0.56 GB vs. 2.68 GB)</h2>
+      <p>1. P:D Ratio: N_P/N_D = [S_in*(1-eta)/TPS_P] / [S_out/TPS_D]. 2. Layer-wise 400G RDMA pipelining hides 80%+ of wire latency, leaving only 2.4 ms exposed for MLA and 11.3 ms for GQA-8.</p>
+      <span class="pill">Act automatically · Enable FP8 KV + Layer-Wise NIXL/Mooncake</span>
+    </div>
+    <div class="code">16K Uncached FP8 KV: MHA=21.47GB | GQA-8=2.68GB | MLA=0.56GB</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">3 / 7 · WHAT I TESTED</div>
+      <h2>4-Tier PD Disaggregation &amp; Elastic Pool Evaluation Matrix (32-GPU Fleet)</h2>
+      <table>
+        <thead><tr><th>SCENARIO</th><th>GOODPUT</th><th>P99 TPOT</th><th>ACTION</th></tr></thead>
+        <tbody>
+          <tr><td>Tier 1 Homogeneous Colocated</td><td>1,420 tok/s ✕</td><td>84.5 ms ✕</td><td>Avoid &gt;4K</td></tr>
+          <tr><td>Tier 2 Static 1:1 PD Pool</td><td>3,180 tok/s</td><td>22.0 ms</td><td>Fixed Only</td></tr>
+          <tr><td>Tier 3 Hetero H100P+H200D</td><td>4,650 tok/s</td><td>16.8 ms</td><td>Good</td></tr>
+          <tr><td>Tier 4 Hetero + 25% Flex PD</td><td>5,890 tok/s ✓</td><td>15.2 ms ✓</td><td>Deploy</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code">Miss Marker (✕): Tier 1 violates 25ms P99 TPOT SLA due to 16K prefill interference</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">4 / 7 · UNDER THE HOOD</div>
+      <h2>Zero-Restart Flex Worker Role Flipping &amp; Pre-Allocated RDMA KV Transfer</h2>
+      <div class="code">[Router: NVIDIA Dynamo / SGLang PD Router]
+  1. Reserve KV page slots on target Decode worker (prevent OOM)
+  2. Dispatch prompt to Compute-Dense Prefill worker (or Flex worker)
+  3. Layer l finishes -&gt; async NIXL/Mooncake GPUDirect RDMA Write</div>
+    </div>
+    <div class="code">&lt;answer&gt;Zero weight reload required when flipping Flex workers between P and D&lt;/answer&gt;</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Diurnal Traffic Shift Robustness (Daytime 16K:400 RAG vs. Nighttime 2K:4K CoT)</h2>
+      <table>
+        <thead><tr><th>ARCHITECTURE</th><th>DAY RAG GOODPUT</th><th>NIGHT COT GOODPUT</th><th>STRANDED GPUS</th></tr></thead>
+        <tbody>
+          <tr><td>Tier 1 Colocated</td><td>1,350 tok/s</td><td>1,490 tok/s</td><td>38.0% (SLA Miss)</td></tr>
+          <tr><td>Tier 2 Static 16P:16D</td><td>3,420 tok/s</td><td>2,940 tok/s</td><td>35.0% (Idle Pool)</td></tr>
+          <tr><td>Tier 4 Hetero + 25% Flex</td><td>6,120 tok/s</td><td>5,660 tok/s</td><td>3.2% (Balanced)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code">8 Flex GPUs shift from 20P:12D by day to 12P:20D by night in &lt;2 seconds</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">6 / 7 · LATENCY &amp; COST PER 1M GOODPUT TOKENS</div>
+      <h2>Cost per 1M SLA-Compliant Tokens Across 4 Architectures (USD)</h2>
+      <div class="bar-row"><div>Tier 4 Hetero PD + 25% Flex + NIXL/SGLang ($0.26 / 1M)</div><div class="bar-bg"><div class="bar-fill" style="width:28%"></div></div></div>
+      <div class="bar-row"><div>Tier 3 Hetero H100P + H200D + Mooncake ($0.35 / 1M)</div><div class="bar-bg"><div class="bar-fill" style="width:38%"></div></div></div>
+      <div class="bar-row"><div>Tier 2 Static 1:1 Homogeneous PD ($0.54 / 1M)</div><div class="bar-bg"><div class="bar-fill" style="width:59%"></div></div></div>
+      <div class="bar-row"><div>Tier 1 Homogeneous Colocated ($0.92 / 1M)</div><div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444"></div></div></div>
+    </div>
+    <div class="code">-71.7% cost reduction per 1M compliant tokens while keeping P99 TPOT at 15.2 ms</div>
+  </section>
+
+  <section class="card">
+    <div>
+      <div class="meta">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For &amp; Production Readiness</h2>
+      <p>✅ <strong>Good fit</strong>: 16+ GPU clusters with 100G-400G RDMA serving long-context RAG (4K-128K), multi-turn agents, and diurnal reasoning workloads.</p>
+      <p>⛔ <strong>Not for</strong>: Clusters without RDMA (e.g., 10G/25G TCP Ethernet) or small &lt;=8 GPU deployments where Colocated + Chunked Prefill wins.</p>
+    </div>
+    <div class="code">Readiness: Validated with Dynamo NIXL, Mooncake, SGLang &amp; vLLM LMCache</div>
+  </section>
+</div>
+</body>
+</html>

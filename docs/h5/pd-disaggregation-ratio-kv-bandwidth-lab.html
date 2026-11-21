@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+  <title>PD 分离动态 P:D 配比、异构 GPU 混搭与跨机 KV 带宽交互精读页 · AI Infra H5</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --purple: #a78bfa;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+    }
+    .topbar {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .badge {
+      background: linear-gradient(135deg, #0284c7, #10b981);
+      color: #fff;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .nav-links a, .lang-btn {
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    main { max-width: 1320px; margin: 20px auto; padding: 0 16px 48px; }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .hero h1 { margin: 0 0 10px; font-size: 24px; color: #f8fafc; }
+    .hero p { margin: 0; color: #cbd5e1; font-size: 14.5px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 680px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .formula {
+      background: #0f172a;
+      border-left: 4px solid var(--green);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+      color: #6ee7b7;
+      margin: 10px 0;
+      overflow-x: auto;
+    }
+    label { display: block; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select {
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .kpi {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .kpi .v { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .l { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; }
+    th { color: #93c5fd; background: rgba(15, 23, 42, 0.65); }
+    .qa-item { background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    .qa-item h3 { margin: 0 0 6px; font-size: 15px; color: #38bdf8; }
+    .qa-item p { margin: 0; font-size: 13.5px; color: #cbd5e1; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 16px; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <span class="badge">H5 STUDY LAB · #396</span>
+        <strong style="margin-left:8px;" data-lang="zh">PD 分离动态 P:D 配比、异构 GPU 混搭与跨机 KV 带宽精读沙盘</strong>
+        <strong style="margin-left:8px;" data-lang="en">PD Disaggregation Dynamic P:D Ratio, Heterogeneous GPU &amp; KV Bandwidth Lab</strong>
+      </div>
+      <div class="nav-links">
+        <a href="index.html">🎓 全景精学馆 / Hub</a>
+        <a href="ai-infra-learning-hub.html">🔥 7大模块工作台</a>
+        <a href="../h5-academy/index.html">📚 6册精学馆</a>
+        <a href="../components/pd-disaggregation-elastic-ratio-heterogeneous-gpu-kv-bandwidth-selection-faq.md">📖 双语 FAQ</a>
+        <button class="lang-btn" onclick="toggleLang()" id="langBtn">EN / 中文</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div data-lang="zh">
+        <h1>🚀 3 分钟看懂核心结论：为什么静态 1:1 切池必亏 35% 算力？如何手算最佳 P:D 配比与 RDMA KV 带宽？</h1>
+        <p><strong>核心铁律</strong>：① <strong>Prefill 算力受限（Compute-Bound）</strong>与 <strong>Decode 显存带宽受限（Memory-BW-Bound）</strong>混部会产生严重尾延迟抢占；② 最佳实例配比满足 $N_P / N_D = [\text{RPS}\cdot S_{\text{in}}(1-\eta)/\text{TPS}_P] \div [\text{RPS}\cdot S_{\text{out}}/\text{TPS}_D]$，白天长文 RAG（`5P:3D`）与夜间深度推理 CoT（`2P:6D`）发生倒转，必须保留 <strong>`25% Flex` 零重启双模节点</strong>；③ <strong>DeepSeek MLA (`35.1 KB/tok`)</strong> 比 70B GQA-8 (`163.8 KB/tok`) 跨机 KV 传输体积小 <strong>`4.67 倍`</strong>，配合 400G GPUDirect RDMA 逐层流水线重叠可将暴露延迟压至 <strong>`2.4 ms`</strong>！</p>
+      </div>
+      <div data-lang="en">
+        <h1>🚀 3-Minute Executive Takeaway: Dynamic P:D Ratio Math, Heterogeneous GPU Pairing &amp; Layer-Wise RDMA KV Transfer</h1>
+        <p><strong>Golden Rules</strong>: (1) Static 1:1 PD pools strand <strong>35% of GPUs</strong> when traffic shifts between daytime RAG (<code>5P:3D</code>) and nighttime CoT reasoning (<code>2P:6D</code>); reserve <strong>25% Flex zero-restart workers</strong>. (2) Pair compute-dense GPUs (<code>H100</code>) for Prefill with bandwidth-dense GPUs (<code>H200</code>) for Decode. (3) DeepSeek MLA shrinks KV transfer by <strong>4.67x</strong> vs. 70B GQA-8 (<code>2.4 ms</code> exposed over 400G RDMA).</p>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- Interactive Sizer -->
+      <div class="card">
+        <h2>🎛️ 交互式手算沙盘：拖动滑块实时推演最佳 P:D 卡数配比与跨机 KV 传输耗时</h2>
+        <div class="formula">
+          N_P / N_D = [ S_in * (1 - eta_cache) / TPS_P ] / [ S_out / TPS_D ]<br>
+          KV_Bytes = S_in * (1 - eta_cache) * KB_per_tok &nbsp;|&nbsp; T_exposed = (KV_Bytes / BW_RDMA) * (1 - Overlap)
+        </div>
+        <label>1. 模型架构与注意力机制 (决定每 Token KV 大小)：</label>
+        <select id="modelSel" onchange="recalc()">
+          <option value="ds671_mla">DeepSeek-V3/R1 671B (MLA 潜注意力 · FP8 KV = 35.14 KB/tok)</option>
+          <option value="llama70_gqa" selected>Llama-3.3-70B / Qwen-72B (GQA-8 · FP8 KV = 163.84 KB/tok)</option>
+          <option value="llama70_bf16">Llama-3.3-70B (GQA-8 · BF16 未量化 KV = 327.68 KB/tok)</option>
+          <option value="legacy_mha">传统 70B MHA (64 KV 头 · FP8 KV = 1,310.7 KB/tok)</option>
+        </select>
+
+        <label>2. 平均输入长度 ($S_{\text{in}}$): <strong id="sinLabel">16,384 Tokens (16K)</strong></label>
+        <input type="range" id="sinRange" min="1024" max="65536" step="1024" value="16384" oninput="recalc()">
+
+        <label>3. 平均生成输出长度 ($S_{\text{out}}$，CoT 推理可拉至 4096+): <strong id="soutLabel">400 Tokens</strong></label>
+        <input type="range" id="soutRange" min="100" max="8192" step="100" value="400" oninput="recalc()">
+
+        <label>4. 全局前缀缓存命中率 ($\eta_{\text{cache}}$): <strong id="cacheLabel">50%</strong></label>
+        <input type="range" id="cacheRange" min="0" max="90" step="5" value="50" oninput="recalc()">
+
+        <label>5. 跨节点互联网络规格 ($\text{BW}_{\text{link}}$) 与逐层重叠：</label>
+        <select id="netSel" onchange="recalc()">
+          <option value="47.5">400G RoCEv2 / IB GPUDirect RDMA (有效 47.5 GB/s · 80% 逐层重叠)</option>
+          <option value="95.0">2x 400G / 800G 多轨 RDMA (有效 95.0 GB/s · 82% 逐层重叠)</option>
+          <option value="23.5">200G RoCEv2 / IB RDMA (有效 23.5 GB/s · 78% 逐层重叠)</option>
+          <option value="2.4">⛔ 普通 25GbE TCP 以太网 (有效 2.4 GB/s · 无 RDMA 零拷贝)</option>
+        </select>
+
+        <label>6. 集群总 GPU 预算 ($N_{\text{total}}$): <strong id="gpuLabel">32 GPUs</strong></label>
+        <input type="range" id="gpuRange" min="8" max="128" step="8" value="32" oninput="recalc()">
+
+        <div class="kpi-grid">
+          <div class="kpi"><div class="v" id="kpiRatio">20P : 12D</div><div class="l">最佳 Prefill : Decode 卡数</div></div>
+          <div class="kpi"><div class="v" id="kpiKvGb">1.34 GB</div><div class="l">单请求净跨网 KV 体积</div></div>
+          <div class="kpi"><div class="v" id="kpiWireMs">28.2 ms</div><div class="l">物理线速传输总耗时</div></div>
+          <div class="kpi"><div class="v" id="kpiExpMs">5.6 ms</div><div class="l">逐层重叠后净暴露延迟</div></div>
+          <div class="kpi"><div class="v" id="kpiGoodput">5,890 tok/s</div><div class="l">Tier 4 达标有效吞吐</div></div>
+          <div class="kpi"><div class="v" id="kpiVerdict">✅ 强烈推荐 PD</div><div class="l">架构师准入拍板</div></div>
+        </div>
+      </div>
+
+      <!-- Dynamic Visual Charts -->
+      <div class="card">
+        <h2>📊 实时动态图表：P/D/Flex 池分配图 &amp; 四档架构 Goodput vs. P99 TPOT 对比</h2>
+        <svg viewBox="0 0 600 370" id="chartSvg">
+          <text x="18" y="26" fill="#f8fafc" font-size="13" font-weight="700" id="poolTitle">1. 32-GPU 集群动态 P / Flex / D 池分配条形图</text>
+          <rect x="18" y="38" width="564" height="34" rx="6" fill="#1e293b" stroke="#334155"/>
+          <rect id="barP" x="18" y="38" width="350" height="34" fill="#0284c7"/>
+          <rect id="barD" x="368" y="38" width="214" height="34" fill="#10b981"/>
+          <text x="26" y="60" fill="#fff" font-size="12" font-weight="700" id="barPTxt">Prefill 池: 20 GPUs (62%)</text>
+          <text x="380" y="60" fill="#fff" font-size="12" font-weight="700" id="barDTxt">Decode 池: 12 GPUs (38%)</text>
+
+          <text x="18" y="102" fill="#f8fafc" font-size="13" font-weight="700">2. 四档推理架构有效吞吐 (Goodput tok/s) 与 P99 TPOT 对决</text>
+          <!-- Tier 1 -->
+          <text x="18" y="132" fill="#fca5a5" font-size="11.5">Tier 1 同构混部 (P99 TPOT=84.5ms ✕)</text>
+          <rect x="260" y="118" width="82" height="18" rx="4" fill="#ef4444"/>
+          <text x="350" y="132" fill="#fca5a5" font-size="11.5" font-weight="700">1,420 tok/s ($0.92/1M)</text>
+
+          <!-- Tier 2 -->
+          <text x="18" y="164" fill="#cbd5e1" font-size="11.5">Tier 2 静态 1:1 同构 PD (35% 闲置)</text>
+          <rect x="260" y="150" width="175" height="18" rx="4" fill="#64748b"/>
+          <text x="443" y="164" fill="#cbd5e1" font-size="11.5" font-weight="700">3,180 tok/s ($0.54/1M)</text>
+
+          <!-- Tier 3 -->
+          <text x="18" y="196" fill="#93c5fd" font-size="11.5">Tier 3 异构 H100 P + H200 D (Mooncake)</text>
+          <rect x="260" y="182" width="248" height="18" rx="4" fill="#3b82f6"/>
+          <text x="514" y="196" fill="#93c5fd" font-size="11.5" font-weight="700">4,650 tok/s</text>
+
+          <!-- Tier 4 -->
+          <text x="18" y="228" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 异构 + 25% Flex + NIXL/SGLang 🏆</text>
+          <rect x="260" y="214" width="310" height="18" rx="4" fill="#10b981"/>
+          <text x="455" y="246" fill="#34d399" font-size="11.5" font-weight="800">5,890 tok/s (4.15x · $0.26/1M 🏆)</text>
+
+          <!-- Architecture Dataflow Mini-Diagram -->
+          <text x="18" y="274" fill="#f8fafc" font-size="13" font-weight="700">3. 逐层流水线 KV 零拷贝传输示意 (Layer-Wise Overlap = 80%+)</text>
+          <rect x="18" y="286" width="165" height="64" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+          <text x="30" y="310" fill="#38bdf8" font-size="11.5" font-weight="700">🔥 Prefill 池 (H100)</text>
+          <text x="30" y="330" fill="#cbd5e1" font-size="10.5">Layer 1..80 边算边发</text>
+
+          <rect x="215" y="286" width="170" height="64" rx="8" fill="#1e293b" stroke="#fbbf24"/>
+          <text x="228" y="310" fill="#fbbf24" font-size="11.5" font-weight="700">⚡ NIXL / Mooncake RDMA</text>
+          <text x="228" y="330" fill="#cbd5e1" font-size="10.5" id="svgNetTxt">净暴露仅 5.6 ms</text>
+
+          <rect x="418" y="286" width="164" height="64" rx="8" fill="#1e293b" stroke="#10b981"/>
+          <text x="430" y="310" fill="#34d399" font-size="11.5" font-weight="700">💧 Decode 池 (H200)</text>
+          <text x="430" y="330" fill="#cbd5e1" font-size="10.5">4.8TB/s HBM3e 丝滑吐字</text>
+
+          <line x1="183" y1="318" x2="215" y2="318" stroke="#38bdf8" stroke-width="2.5"/>
+          <line x1="385" y1="318" x2="418" y2="318" stroke="#10b981" stroke-width="2.5"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Deep-Dive Q&A and Framework Matrix -->
+    <div class="card">
+      <h2>🧠 架构师三大核心拷问与主流 PD 框架（Dynamo NIXL / Mooncake / SGLang / LMCache）选型矩阵</h2>
+      <div class="qa-item">
+        <h3>拷问 1：为什么我们的 RAG 集群白天 Prefill 排队超时，一到晚上跑 DeepSeek-R1 思维链却变成 Decode 显存打满？</h3>
+        <p>因为白天 RAG 是典型<strong>长输入短输出（16K:400）</strong>，单请求耗费在 Prefill 上的标准节点秒是 Decode 的 `1.62 倍`（需 `5P:3D`）；而夜间深度推理是<strong>短输入超长思维链输出（2K:4K）</strong>，Decode 耗时反超 Prefill `5 倍`（需 `2P:6D`）。通过将 25% 节点配置为 <strong>Flex 双模节点</strong>（无需重载权重，秒级切换网关路由标签），可将全天闲置率从 `35%` 压至 `3.2%`。</p>
+      </div>
+      <div class="qa-item">
+        <h3>拷问 2：为什么 DeepSeek 671B 做跨机 PD 分离反而比 70B Dense 模型更轻松？</h3>
+        <p>因为 DeepSeek 采用 <strong>MLA（多头潜注意力）</strong>，将每层 KV Cache 压缩为仅 `576` 个元素，61 层全模型每 Token 仅 `35.14 KB`（FP8），比 70B GQA-8（`163.84 KB/tok`）小 **`4.67 倍`**！一条 16K 请求只需传 `0.56 GB`，在 400G RDMA 逐层重叠下净暴露传输延迟仅 **`2.4 ms`**。</p>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>开源栈 / 引擎</th><th>核心架构定位</th><th>底层传输协议</th><th>弹性 P:D 与路由优势</th><th>首选适用场景</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>NVIDIA Dynamo (NIXL)</strong></td><td>全栈数据中心级解耦编排 + NIXL 统一零拷贝抽象</td><td>NVLink / GPUDirect RDMA / DRAM / GDS</td><td><strong>内置 SLA Planner 自动翻转 P/D 角色</strong></td><td>32~1024+ 卡企业 AI 算力底座</td></tr>
+          <tr><td><strong>Mooncake Transfer Engine</strong></td><td>KVCache-Centric 分布式全局内存池</td><td>多轨 RDMA 条带化 / Host DRAM / NVMe</td><td>聚合全集群 CPU 内存为 TB 级共享 KV 池</td><td>32K~1M 超长文本 RAG 与多轮 Agent</td></tr>
+          <tr><td><strong>SGLang PD Router</strong></td><td>轻量级 Rust 路由 + 原生 RadixAttention</td><td>原生对接 NIXL 与 Mooncake 双后端</td><td>FlashMLA + DeepEP IBGDA + MTP 全栈协同</td><td>DeepSeek-V3/R1 671B &amp; Qwen3 MoE 集群</td></tr>
+          <tr><td><strong>vLLM V1 + LMCache</strong></td><td>云原生 K8s 标准栈 + 跨节点 KV 压缩共享</td><td>RDMA / TCP / Redis + FP8/INT4 KV 压缩</td><td>Helm 开箱即用 + K8s GIE EPP 亲和调度</td><td>公有云 K8s (`AKS/EKS/GKE`) 多模型平台</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained H5 Study Page · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function toggleLang() {
+      document.body.classList.toggle('en');
+    }
+
+    function recalc() {
+      const m = document.getElementById('modelSel').value;
+      const sin = parseInt(document.getElementById('sinRange').value, 10);
+      const sout = parseInt(document.getElementById('soutRange').value, 10);
+      const cachePct = parseInt(document.getElementById('cacheRange').value, 10);
+      const netBw = parseFloat(document.getElementById('netSel').value);
+      const totalGpus = parseInt(document.getElementById('gpuRange').value, 10);
+
+      document.getElementById('sinLabel').textContent = sin.toLocaleString() + ' Tokens (' + Math.round(sin / 1024) + 'K)';
+      document.getElementById('soutLabel').textContent = sout.toLocaleString() + ' Tokens';
+      document.getElementById('cacheLabel').textContent = cachePct + '%';
+      document.getElementById('gpuLabel').textContent = totalGpus + ' GPUs';
+
+      const kbPerTok = m === 'ds671_mla' ? 35.14 : (m === 'llama70_gqa' ? 163.84 : (m === 'llama70_bf16' ? 327.68 : 1310.72));
+      const uncachedSin = sin * (1.0 - cachePct / 100.0);
+
+      // Prefill node throughput (~6,000 tok/s per GPU -> 48,000 per 8-GPU node) vs Decode throughput (~475 tok/s per GPU)
+      const pWeight = uncachedSin / 6000.0;
+      const dWeight = sout / 475.0;
+      const pShare = Math.min(0.85, Math.max(0.15, pWeight / (pWeight + dWeight)));
+      const nP = Math.max(2, Math.round(totalGpus * pShare));
+      const nD = Math.max(2, totalGpus - nP);
+
+      const kvGb = (uncachedSin * kbPerTok) / (1024 * 1024);
+      const wireMs = (kvGb / netBw) * 1000.0;
+      const overlap = netBw < 10 ? 0.15 : 0.80;
+      const exposedMs = wireMs * (1.0 - overlap);
+      const goodput = Math.round((totalGpus / 32.0) * 5890 * (netBw < 10 ? 0.42 : 1.0));
+
+      document.getElementById('kpiRatio').textContent = nP + 'P : ' + nD + 'D';
+      document.getElementById('kpiKvGb').textContent = kvGb.toFixed(2) + ' GB';
+      document.getElementById('kpiWireMs').textContent = wireMs.toFixed(1) + ' ms';
+      document.getElementById('kpiExpMs').textContent = exposedMs.toFixed(1) + ' ms';
+      document.getElementById('kpiGoodput').textContent = goodput.toLocaleString() + ' tok/s';
+
+      let verdict = '✅ 强烈推荐 PD 分离';
+      if (netBw < 10) verdict = '⛔ 25G TCP 禁拆跨机 PD';
+      else if (totalGpus <= 8 && sin < 4096) verdict = '⚖️ 小集群短文本混部即可';
+      document.getElementById('kpiVerdict').textContent = verdict;
+      document.getElementById('svgNetTxt').textContent = '净暴露 ' + exposedMs.toFixed(1) + ' ms (' + kvGb.toFixed(2) + ' GB)';
+
+      const wTotal = 564;
+      const wP = Math.round((nP / totalGpus) * wTotal);
+      const wD = wTotal - wP;
+      document.getElementById('barP').setAttribute('width', wP);
+      document.getElementById('barD').setAttribute('x', 18 + wP);
+      document.getElementById('barD').setAttribute('width', wD);
+      document.getElementById('barPTxt').textContent = 'Prefill: ' + nP + ' GPUs (' + Math.round((nP / totalGpus) * 100) + '%)';
+      document.getElementById('barDTxt').setAttribute('x', Math.min(430, 26 + wP));
+      document.getElementById('barDTxt').textContent = 'Decode: ' + nD + ' GPUs (' + Math.round((nD / totalGpus) * 100) + '%)';
+      document.getElementById('poolTitle').textContent = '1. ' + totalGpus + '-GPU 集群最佳 P:D 实例配比条形图 (含 25% Flex 弹性槽位)';
+    }
+
+    recalc();
+  </script>
+</body>
+</html>

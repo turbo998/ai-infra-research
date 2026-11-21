@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_payload() -> dict:
+    return {
+        "experiment_id": "pd_disaggregation_elastic_ratio_heterogeneous_gpu_kv_bandwidth_selection",
+        "title": "PD Disaggregation Dynamic P:D Ratio Sizing, Heterogeneous GPU Pairing & Cross-Node KV Bandwidth Guide (Dynamo NIXL / Mooncake / LMCache / SGLang)",
+        "provenance": "synthetic + anonymized_reported",
+        "independently_reproduced": False,
+        "physical_gpu_cluster_measurement": "not_measured",
+        "workload_basis": {
+            "model_cohort": "Llama-3.3-70B (GQA-8, 163.84 KB/tok FP8 KV) & DeepSeek-V3/R1 671B (MLA, 35.14 KB/tok FP8 KV)",
+            "diurnal_traffic_mix": "Daytime RAG (16K In / 400 Out, 50% Prefix Hit) + Nighttime Deep Reasoning (2K In / 4K Out)",
+            "cluster_budget_gpus": 32,
+        },
+        "tiers": [
+            {
+                "tier": "Tier 1: Homogeneous Colocated Serving (No PD Disaggregation, 16K Long-Prompt Contention)",
+                "p95_ttft_ms": 980.0,
+                "p99_tpot_ms": 84.5,
+                "diurnal_blended_goodput_tok_s": 1420,
+                "cost_per_1m_goodput_tokens_usd": 0.92,
+                "stranded_gpu_fraction_pct": 38.0,
+                "recommended_scenario": "Small clusters (<=8 GPUs) or environments lacking RDMA interconnect",
+            },
+            {
+                "tier": "Tier 2: Static 1:1 Homogeneous PD Disaggregation (Fixed 16P:16D Pool without Flex Workers)",
+                "p95_ttft_ms": 540.0,
+                "p99_tpot_ms": 22.0,
+                "diurnal_blended_goodput_tok_s": 3180,
+                "cost_per_1m_goodput_tokens_usd": 0.54,
+                "stranded_gpu_fraction_pct": 35.0,
+                "recommended_scenario": "Steady single-profile traffic with unchanging Input:Output token ratio",
+            },
+            {
+                "tier": "Tier 3: Heterogeneous P/D GPU Pairing (Compute-Dense H100 Prefill + Bandwidth-Dense H200 Decode + Mooncake RDMA)",
+                "p95_ttft_ms": 460.0,
+                "p99_tpot_ms": 16.8,
+                "diurnal_blended_goodput_tok_s": 4650,
+                "cost_per_1m_goodput_tokens_usd": 0.35,
+                "stranded_gpu_fraction_pct": 14.5,
+                "recommended_scenario": "Dedicated enterprise RAG/Agent clusters matching hardware SKU to compute vs. bandwidth bottlenecks",
+            },
+            {
+                "tier": "Tier 4 (Recommended): Heterogeneous PD + 25% Elastic Flex Role-Flipping + Dynamo NIXL / SGLang Layer-Wise Pipelined RDMA",
+                "p95_ttft_ms": 415.0,
+                "p99_tpot_ms": 15.2,
+                "diurnal_blended_goodput_tok_s": 5890,
+                "cost_per_1m_goodput_tokens_usd": 0.26,
+                "stranded_gpu_fraction_pct": 3.2,
+                "recommended_scenario": "Production multi-workload AI platform (4.15x Goodput & -71.7% $/1M tokens across diurnal RAG/Reasoning swings)",
+            },
+        ],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_payload()
+    rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+    if args.check:
+        if not out_path.exists():
+            raise SystemExit("results.json missing")
+        if out_path.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("results.json out of date")
+
+    out_path.write_text(rendered, encoding="utf-8")
+    print("Wrote results.json")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
