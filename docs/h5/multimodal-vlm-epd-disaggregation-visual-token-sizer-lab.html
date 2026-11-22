@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>多模态大模型 (VLM / Video-LLM) 视觉 Token 手算与三阶段 E-P-D 异构解耦沙盘 (#451)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--green); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-multimodal-vlm-epd-disaggregation-visual-token-cache-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-multimodal-vlm-epd-disaggregation-visual-token-cache-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-multimodal-vlm-epd-disaggregation-visual-token-cache-sizing-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>🖼️ 多模态大模型 (`VLM / Video-LLM`) 视觉 Token 手算与三阶段异构 `E-P-D` 解耦沙盘 (#451)</h1>
+      <p><strong>3 分钟核心结论</strong>：① 1 张 `1920×1080` 图片按 $28\times 28$ 像素合并会产生 <strong>`2,691` 个视觉 Token</strong>，一段 60 秒视频更会产生 <strong>`30,720` 个视觉 Token</strong>；② 将仅 `0.6B` 参数的 `ViT` 视觉编码器从昂贵的 `H200` 上剥离至 **廉价 `L40S` 编码池 (`E Pool`)**，配合 **`H100 Prefill (P Pool)` + `H200 Decode (D Pool)` + `SHA-256` 图像特征缓存**，可将首字 `P95 TTFT` 从 `2,480ms` 压至 <strong>`310ms` (快 8 倍)</strong>、成本降低 <strong>`85.2%`</strong>！</p>
+    </div>
+    <div data-lang="en">
+      <h1>🖼️ Enterprise Multimodal VLM Visual Token Sizer &amp; 3-Stage Heterogeneous `E-P-D` Disaggregation Lab (#451)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) A single `1920×1080` image generates `2,691` visual tokens ($\lceil H/28\rceil \times \lceil W/28\rceil$). (2) Disaggregating into <strong>`L40S ViT Encode Pool (E) + H100 Prefill Pool (P) + H200 Decode Pool (D)`</strong> with SHA-256 embedding caching cuts `P95 TTFT` <strong>8.0x (`310ms` vs. `2,480ms`)</strong> and lowers cost by <strong>85.2%</strong>.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiVisTok">2,691 视觉 Tokens</div><div class="lbl">单次请求视觉 Token 总数</div></div>
+    <div class="kpi"><div class="val" id="kpiKvMb">441 MB</div><div class="lbl">单请求 72B FP8 KV 显存占用</div></div>
+    <div class="kpi"><div class="val" id="kpiPools">8E : 12P : 12D</div><div class="lbl">L40S : H100 : H200 配比</div></div>
+    <div class="kpi"><div class="val" id="kpiTtft">310 ms vs 2,480 ms</div><div class="lbl">Tier 4 vs Tier 1 P95 TTFT</div></div>
+    <div class="kpi"><div class="val" id="kpiGoodput">46.8 req/s (5.57x)</div><div class="lbl">32卡集群达标吞吐</div></div>
+    <div class="kpi"><div class="val" id="kpiCost">$0.62 / 千轮 (-85.2%)</div><div class="lbl">每千轮多模态对话成本</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 交互式多模态视觉 Token、KV 显存与 E-P-D 配比计算器</h2>
+      <div class="formula">
+        Image: N_vis = ceil(H / 28) * ceil(W / 28) * N_images<br/>
+        Video: N_vis = (Duration_s * FPS / 2) * Tokens_per_frame
+      </div>
+
+      <label><span>1. 输入视觉模态与分辨率规格</span></label>
+      <select id="resSel">
+        <option value="1080p" selected>1920 × 1080 (FHD 高清截图 / 单页文档 · 单图 2,691 Tokens)</option>
+        <option value="720p">1280 × 720 (HD 压缩图 · 单图 1,218 Tokens)</option>
+        <option value="4k">⚠️ 3840 × 2160 (4K 未压缩原图 · 单图 10,764 Tokens)</option>
+        <option value="video30">🎬 30秒视频流 (2 FPS 抽帧 · 共 15,360 Tokens)</option>
+      </select>
+
+      <label><span>2. 单次请求附带图片张数 ($N_{\text{img}}$)</span><strong id="imgVal">1 张图片</strong></label>
+      <input type="range" id="imgSlider" min="1" max="8" step="1" value="1" />
+
+      <label><span>3. 多轮对话图像特征缓存命中率 ($\eta_{\text{img}}$)</span><strong id="hitVal">60%</strong></label>
+      <input type="range" id="hitSlider" min="0" max="90" step="10" value="60" />
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：四档多模态架构首字延迟 (`P95 TTFT`) 与 E-P-D 三池分工</h2>
+      <svg viewBox="0 0 580 320">
+        <text x="16" y="24" fill="#f8fafc" font-size="12.5" font-weight="700">1. 四档多模态推理架构首字延迟 (P95 TTFT ms · 越短越快)</text>
+
+        <text x="16" y="56" fill="#fca5a5" font-size="11.5">Tier 1 单体同构混部 (无图像缓存)</text>
+        <rect x="235" y="42" width="280" height="18" rx="4" fill="#ef4444"/>
+        <text x="520" y="56" fill="#fca5a5" font-size="11" font-weight="700">2,480ms ✕</text>
+
+        <text x="16" y="88" fill="#fde68a" font-size="11.5">Tier 2 混部 + SHA-256 特征缓存</text>
+        <rect x="235" y="74" width="140" height="18" rx="4" fill="#f59e0b"/>
+        <text x="382" y="88" fill="#fde68a" font-size="11" font-weight="700">1,240ms</text>
+
+        <text x="16" y="120" fill="#93c5fd" font-size="11.5">Tier 3 两阶段 PD (ViT 绑在 H100)</text>
+        <rect x="235" y="106" width="70" height="18" rx="4" fill="#3b82f6"/>
+        <text x="312" y="120" fill="#93c5fd" font-size="11" font-weight="700">620ms ✓</text>
+
+        <text x="16" y="152" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 三阶段 E-P-D 异构解耦 🏆</text>
+        <rect x="235" y="138" width="35" height="18" rx="4" fill="#10b981"/>
+        <text x="278" y="152" fill="#34d399" font-size="11.5" font-weight="800" id="svgTtftTxt">310ms (快 8.0x · 46.8 req/s 🏆)</text>
+
+        <text x="16" y="196" fill="#f8fafc" font-size="12.5" font-weight="700">2. 三阶段异构 E-P-D (Encode-Prefill-Decode) 硬件各司其职流水线</text>
+        <rect x="16" y="210" width="168" height="90" rx="8" fill="#1e293b" stroke="#f59e0b"/>
+        <text x="28" y="234" fill="#fde68a" font-size="11.5" font-weight="700">🎨 E 池: 8x L40S</text>
+        <text x="28" y="254" fill="#cbd5e1" font-size="10.5">0.6B ViT 独立编码</text>
+        <text x="28" y="274" fill="#6ee7b7" font-size="10.5">+ SHA-256 特征缓存</text>
+
+        <rect x="206" y="210" width="168" height="90" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="218" y="234" fill="#38bdf8" font-size="11.5" font-weight="700">🔥 P 池: 12x H100</text>
+        <text x="218" y="254" fill="#cbd5e1" font-size="10.5">高算力并行 LLM Prefill</text>
+        <text x="218" y="274" fill="#6ee7b7" font-size="10.5" id="svgVisCount">处理 2,691 视觉 Tok</text>
+
+        <rect x="396" y="210" width="168" height="90" rx="8" fill="#1e293b" stroke="#10b981"/>
+        <text x="408" y="234" fill="#34d399" font-size="11.5" font-weight="700">💧 D 池: 12x H200</text>
+        <text x="408" y="254" fill="#cbd5e1" font-size="10.5">4.8TB/s HBM3e 吐字</text>
+        <text x="408" y="274" fill="#6ee7b7" font-size="10.5">P99 TPOT 稳守 14.1ms</text>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function update() {
+      const res = document.getElementById('resSel').value;
+      const nImg = parseInt(document.getElementById('imgSlider').value, 10);
+      const hit = parseInt(document.getElementById('hitSlider').value, 10);
+
+      document.getElementById('imgVal').textContent = nImg + ' 张图片';
+      document.getElementById('hitVal').textContent = hit + '%';
+
+      const baseTok = res === '720p' ? 1218 : (res === '1080p' ? 2691 : (res === '4k' ? 10764 : 15360));
+      const visTok = res === 'video30' ? baseTok : baseTok * nImg;
+      const kvMb = Math.round((visTok * 163.84) / 1024.0);
+      const ttft = Math.round(310 * (visTok / 2691.0) * (1.0 - hit * 0.45 / 100.0));
+
+      document.getElementById('kpiVisTok').textContent = visTok.toLocaleString() + ' 视觉 Tokens';
+      document.getElementById('kpiKvMb').textContent = kvMb.toLocaleString() + ' MB KV';
+      document.getElementById('kpiTtft').textContent = ttft + ' ms vs 2,480 ms';
+      document.getElementById('svgVisCount').textContent = '处理 ' + visTok.toLocaleString() + ' 视觉 Tok';
+    }
+    ['resSel', 'imgSlider', 'hitSlider'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>
