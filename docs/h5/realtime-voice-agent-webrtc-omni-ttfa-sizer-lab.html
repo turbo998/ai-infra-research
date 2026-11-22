@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业实时全双工语音 Agent (WebRTC vs. Omni) &lt;250ms TTFA 延迟与异构 GPU 计算器 (#466)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-realtime-voice-agent-webrtc-asr-llm-tts-omni-latency-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-realtime-voice-agent-webrtc-asr-llm-tts-omni-latency-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-realtime-voice-agent-webrtc-asr-llm-tts-omni-latency-sizing-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-realtime-voice-agent-webrtc-asr-llm-tts-omni-latency-sizing-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🎙️ 企业实时全双工语音对话 Agent `&lt; 250ms` TTFA 延迟瀑布流与异构 GPU 算卡沙盘 (#466)</h1>
+    <p class="subtitle">拖动滑块调整在线并发通话路数、单次平均通话时长与架构档位，实时测算首包音频延迟 (`P99 TTFA`) 与 `L40S (ASR/TTS) + H200 (LLM)` 异构卡数。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 语音通话并发与架构参数设定</h2>
+        <div class="control">
+          <label><span>语音 Agent 架构档位</span></label>
+          <select id="arch">
+            <option value="tier1">Tier 1: 传统 REST/WS 回合制级联 (静音 VAD + 整句 TTS)</option>
+            <option value="tier2">Tier 2: WebSocket 标点分句流式级联 (按逗号切分)</option>
+            <option value="tier3" selected>Tier 3: WebRTC 全双工异构池 (2x L40S + 6x H200 + 4-Token TTS) 🏆</option>
+            <option value="tier4">Tier 4: 原生端到端 Speech-to-Speech Omni (12.5Hz 音频 Token)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>同时在线并发语音通话路数 (`Concurrent Calls`)</span><strong id="callsVal">2,560 路</strong></label>
+          <input type="range" id="calls" min="64" max="10240" step="64" value="2560" />
+        </div>
+        <div class="control">
+          <label><span>单通电话平均时长 (`Call Duration min`)</span><strong id="durVal">6 分钟</strong></label>
+          <input type="range" id="dur" min="1" max="20" step="1" value="6" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">端到端首包音频延迟 (P99 TTFA)</div>
+            <div class="val" id="ttfaOut">235 ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">用户插话打断恢复 (Barge-In)</div>
+            <div class="val" id="bargeOut">28 ms ✓</div>
+          </div>
+          <div class="kpi">
+            <div class="label">推荐异构 GPU 配置 (L40S + H200)</div>
+            <div class="val" id="gpuOut">8 L40S + 24 H200</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单路通话每小时算力成本</div>
+            <div class="val" id="costOut">$0.068 / hr</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种语音架构首包音频延迟 (P99 TTFA vs. 250ms 人类自然会话红线)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 传统 REST/WS 回合制级联 (静音 VAD 650ms)</span><strong id="b1">2,035 ms ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f1" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: WebSocket 标点分句流式级联</span><strong id="b2">840 ms ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f2" style="width:41%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: WebRTC 全双工异构池 (语义VAD + 4-Token微块TTS) 🏆</span><strong id="b3">235 ms 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f3" style="width:12%;background:#10b981;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 原生端到端 Speech-to-Speech Omni (12.5Hz)</span><strong id="b4">178 ms 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f4" style="width:9%;background:#38bdf8;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>架构师手算要诀</strong>：对于 6 分钟以上的长通话，原生 Omni 模型的音频 Token (`12.5 Hz`) 会使 KV Cache 较文本级联膨胀约 <strong>5 倍</strong>。因此企业客服首选 <strong>Tier 3 (2x L40S + 6x H200 异构流式级联)</strong>，口语陪练首选 <strong>Tier 4 (Omni)</strong>。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const callsEl = document.getElementById('calls');
+    const durEl = document.getElementById('dur');
+
+    function update() {
+      const arch = archEl.value;
+      const calls = parseInt(callsEl.value, 10);
+      const dur = parseInt(durEl.value, 10);
+
+      document.getElementById('callsVal').textContent = calls.toLocaleString() + ' 路';
+      document.getElementById('durVal').textContent = dur + ' 分钟';
+
+      const specs = {
+        tier1: { ttfa: 2035, barge: 680, capPerUnit: 96, cost: 0.42 },
+        tier2: { ttfa: 840, barge: 210, capPerUnit: 240, cost: 0.18 },
+        tier3: { ttfa: 235, barge: 28, capPerUnit: 640, cost: 0.068 },
+        tier4: { ttfa: 178, barge: 18, capPerUnit: Math.max(240, Math.round(480 * (6 / Math.max(4, dur)))), cost: 0.092 * (dur / 6) }
+      };
+      const cur = specs[arch];
+      const units = Math.ceil(calls / cur.capPerUnit);
+
+      const ttfaEl = document.getElementById('ttfaOut');
+      ttfaEl.textContent = cur.ttfa + ' ms' + (cur.ttfa <= 250 ? ' 🏆' : ' ✕');
+      ttfaEl.style.color = cur.ttfa <= 250 ? '#10b981' : '#ef4444';
+
+      document.getElementById('bargeOut').textContent = cur.barge + ' ms';
+      if (arch === 'tier3') {
+        document.getElementById('gpuOut').textContent = (units * 2) + ' L40S + ' + (units * 6) + ' H200';
+      } else {
+        document.getElementById('gpuOut').textContent = (units * 8) + ' H200';
+      }
+      document.getElementById('costOut').textContent = '$' + cur.cost.toFixed(3) + ' / hr';
+    }
+
+    [archEl, callsEl, durEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
