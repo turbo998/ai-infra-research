@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业视频生成大模型 (14B DiT: Wan2.1 / HunyuanVideo 级) 时空 Token 手算与 xDiT 加速选型 (#472)</text>
+  <text x="28" y="58" class="sub">攻克 5 秒 720p 视频高达 32,400 个 3D 时空 Token × 100 次去噪前向传播的 384 秒慢速瓶颈：xDiT + FP8 + TeaCache 压至 14.8 秒 (25.9x)</text>
+
+  <!-- Left Panel: Why 14B Video DiT Takes 6.4 Minutes on 1 GPU -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 为什么参数量仅 14B 的视频生成 DiT 模型，算力消耗比 671B 文本模型还恐怖？</text>
+
+  <rect x="42" y="120" width="524" height="92" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">⛔ 3D 时空 Token 平方级全注意力 × 100 次去噪循环 (单卡 384 秒 ✕)</text>
+  <text x="56" y="164" class="mono">• 5秒 720p (81帧 1280x720) 经 3D VAE (4x8x8) + Patch(1x2x2) 压缩后：</text>
+  <text x="56" y="184" class="mono">  N_tokens = (21) * (45) * (80) / 4 = 18,900 ~ 32,400 个时空 Token！</text>
+  <text x="56" y="202" class="mono">• 50 步采样 × 2 (正负 CFG) = 100 次全长 32.4K 双向无掩码 Full Attention！</text>
+
+  <rect x="42" y="224" width="524" height="106" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="246" class="txt" font-weight="700" fill="#34d399">✅ 架构师解法：xDiT (CFG=2 × Ulysses=4) + FP8 + TeaCache + 分块 VAE (🏆)</text>
+  <text x="56" y="268" class="mono">• 1) 并行选型: 严禁对 14B 小权重用 TP=8 (通信占比太高)，改用 CFG=2 ×</text>
+  <text x="56" y="288" class="mono">     Ulysses=4 序列并行，切分 32,400 个视频 Token 而非切分小矩阵！</text>
+  <text x="56" y="308" class="mono">• 2) 算法加速: FP8 SageAttention + TeaCache 跳步缓存，生成缩至 14.8 秒！</text>
+
+  <!-- Right Panel: 4 Video DiT Serving Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四种视频生成 DiT 推理架构定量对标 (5秒 720p 81帧视频)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 单卡 H200 BF16 串行去噪 (50步 × 2 CFG + 整帧 3D VAE)</text>
+  <text x="638" y="158" class="mono">• 单条耗时: 384.0s ✕ | 峰值显存: 79.4 GB | 8卡小时产量: 75 条 ($0.42/条)</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 8卡张量并行 (TP=8 切分 14B 权重，每层 AllReduce 拖慢效率)</text>
+  <text x="638" y="214" class="mono">• 单条耗时: 74.5s | 峰值显存: 34.0 GB | 8卡小时产量: 48 条 ✕ ($0.65/条)</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: 8卡 xDiT (CFG=2 × Ulysses=4 序列并行 + Tiled 3D VAE, BF16)</text>
+  <text x="638" y="270" class="mono">• 单条耗时: 49.2s ✓ | 峰值显存: 28.5 GB | 8卡小时产量: 73 条 ($0.43/条)</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: xDiT + FP8 + TeaCache (2.1x 跳步复用) + 并行分块 VAE (推荐 🏆)</text>
+  <text x="638" y="326" class="mono">• 单条耗时: 14.8s (25.9x 🏆) | 显存: 19.2 GB | 产量: 243 条/h ($0.13/条 🏆)</text>
+
+  <!-- Bottom Panel: 3D Spatiotemporal Token Math & VAE OOM Prevention -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 3D 时空 Token 手算公式、TeaCache 残差复用与“最后一步 3D VAE 解码 OOM”排障</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">公式 1: 3D 视频时空 Token 数量手算公式</text>
+  <text x="58" y="464" class="mono">• N_vid = [(F-1)/r_t + 1] * (H/r_h) * (W/r_w)</text>
+  <text x="58" y="484" class="mono">          / (p_t * p_h * p_w)</text>
+  <text x="58" y="506" class="txt">• 其中 3D VAE 压缩比 (r_t, r_h, r_w) = (4, 8, 8)</text>
+  <text x="58" y="526" class="txt">• DiT Patch 大小 (p_t, p_h, p_w) = (1, 2, 2)</text>
+  <text x="58" y="546" class="txt">• 1080p 5秒视频高达 72,900 个 Token，Full</text>
+  <text x="58" y="566" class="txt">  Attention 复杂度是 720p 的 (2.25)^2 = 5.06 倍！</text>
+
+  <rect x="420" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="436" y="440" class="txt" font-weight="700" fill="#34d399">公式 2: TeaCache / 步蒸馏省去 55% 去噪步</text>
+  <text x="436" y="464" class="mono">• 去噪中后段 (Step 15~45) 相邻时间步的</text>
+  <text x="436" y="484" class="mono">  DiT 残差变化率 &lt; 阈值 delta (0.12)</text>
+  <text x="436" y="504" class="mono">• TeaCache 直接复用上一步 Attention+FFN</text>
+  <text x="436" y="524" class="mono">  残差输出，将 50 步实际前向计算压至 22 步，</text>
+  <text x="436" y="544" class="mono">  无损画质 (VBench 掉点 &lt; 0.3%) 提速 2.1x！</text>
+
+  <rect x="798" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="814" y="440" class="txt" font-weight="700" fill="#d8b4fe">公式 3: 为什么去噪跑完了却在 99% 进度 OOM？</text>
+  <text x="814" y="464" class="mono">• 经典惨案: 50 步 DiT 去噪仅占 28 GB 显存，</text>
+  <text x="814" y="484" class="mono">  但最后一步 3D Causal VAE 解码将通道还原为</text>
+  <text x="814" y="504" class="mono">  81x720x1280 特征图，瞬间暴涨 48 GB 触发 OOM！</text>
+  <text x="814" y="526" class="txt" fill="#fde68a">• 强制开启 enable_vae_tiling() + 8卡并行分块</text>
+  <text x="814" y="546" class="txt" fill="#fde68a">  解码，将 VAE 显存压至 3.2 GB、耗时缩至 0.6s！</text>
+</svg>

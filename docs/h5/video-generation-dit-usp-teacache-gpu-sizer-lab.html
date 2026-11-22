@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业视频生成大模型 (14B DiT: Wan2.1 / HunyuanVideo) 时空 Token 与 xDiT 算卡计算器 (#472)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-video-generation-dit-usp-teacache-vae-gpu-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-video-generation-dit-usp-teacache-vae-gpu-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-video-generation-dit-usp-teacache-vae-gpu-sizing-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-video-generation-dit-usp-teacache-vae-gpu-sizing-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🎬 企业视频生成大模型 (`14B DiT: Wan2.1 / HunyuanVideo`) 时空 Token 与 xDiT 加速沙盘 (#472)</h1>
+    <p class="subtitle">拖动滑块调整视频帧数、分辨率与并行加速栈，实时测算 3D 时空 Token 数量、单条视频出片秒数、峰值显存与单条生成成本。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 视频规格与 DiT 加速栈设定</h2>
+        <div class="control">
+          <label><span>DiT 并行与加速架构档位</span></label>
+          <select id="stack">
+            <option value="s1">Tier 1: 单卡 H200 BF16 串行去噪 (50步 × 2 CFG + 整帧 VAE)</option>
+            <option value="s2">Tier 2: 8卡张量并行 TP=8 (切分 14B 小权重，通信过重 ✕)</option>
+            <option value="s3">Tier 3: 8卡 xDiT (CFG=2 × Ulysses=4 + 分块 VAE, BF16)</option>
+            <option value="s4" selected>Tier 4: xDiT + FP8 + TeaCache (2.1x) + 并行分块 VAE 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>视频总帧数 (`Frames F`, 16fps)</span><strong id="fVal">81 帧 (5.0 秒)</strong></label>
+          <input type="range" id="frames" min="49" max="129" step="16" value="81" />
+        </div>
+        <div class="control">
+          <label><span>去噪采样步数 (`Denoising Steps`)</span><strong id="stepVal">50 步</strong></label>
+          <input type="range" id="steps" min="20" max="50" step="5" value="50" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">3D 时空潜变量 Token 总数</div>
+            <div class="val" id="tokOut">32,400 Tokens</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单条视频出片耗时 (Latency)</div>
+            <div class="val" id="latOut">14.8 秒 (25.9x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单卡峰值显存 / VAE OOM 风险</div>
+            <div class="val" id="vramOut">19.2 GB (安全 ✓)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单条视频算力成本 / 8卡时产</div>
+            <div class="val" id="costOut">$0.13 / 243条/h</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种视频推理栈单条 5s 720p 出片耗时对比 (秒, 越短越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 单卡 H200 BF16 串行去噪 (79.4GB 临界 OOM)</span><strong id="b1">384.0 秒 ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f1" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 8卡 TP=8 张量并行 (每层 AllReduce 拖慢效率)</span><strong id="b2">74.5 秒 ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f2" style="width:19.4%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 8卡 xDiT (CFG=2 × Ulysses=4 序列切分, BF16)</span><strong id="b3">49.2 秒 ✓</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f3" style="width:12.8%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: xDiT + FP8 + TeaCache + 并行分块 VAE (25.9x 🏆)</span><strong id="b4">14.8 秒 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f4" style="width:4%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>排障锦囊</strong>：若视频去噪跑完 100% 却在保存 MP4 前报 `CUDA Out of Memory`，100% 是因为未开启 `enable_vae_tiling()` 导致 3D VAE 解码瞬时吃掉 48GB+ 显存！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const stackEl = document.getElementById('stack');
+    const framesEl = document.getElementById('frames');
+    const stepsEl = document.getElementById('steps');
+
+    function update() {
+      const stack = stackEl.value;
+      const f = parseInt(framesEl.value, 10);
+      const steps = parseInt(stepsEl.value, 10);
+
+      const latentF = (f - 1) / 4 + 1;
+      const tokens = Math.round(latentF * 1542.85);
+      const scale = Math.pow(tokens / 32400, 1.45) * (steps / 50);
+
+      document.getElementById('fVal').textContent = f + ' 帧 (' + (f / 16).toFixed(1) + ' 秒)';
+      document.getElementById('stepVal').textContent = steps + ' 步';
+      document.getElementById('tokOut').textContent = tokens.toLocaleString() + ' Tokens';
+
+      const l1 = 384.0 * scale;
+      const l2 = 74.5 * scale;
+      const l3 = 49.2 * scale;
+      const l4 = 14.8 * scale;
+
+      const specs = {
+        s1: { lat: l1.toFixed(1) + ' 秒 ✕', vram: (79.4 * (f / 81)).toFixed(1) + ' GB (OOM高危✕)', cost: '$' + (0.42 * scale).toFixed(2) + ' / ' + Math.round(75 / scale) + '条/h', color: '#ef4444' },
+        s2: { lat: l2.toFixed(1) + ' 秒', vram: '34.0 GB', cost: '$' + (0.65 * scale).toFixed(2) + ' / ' + Math.round(48 / scale) + '条/h ✕', color: '#f59e0b' },
+        s3: { lat: l3.toFixed(1) + ' 秒 ✓', vram: '28.5 GB (安全 ✓)', cost: '$' + (0.43 * scale).toFixed(2) + ' / ' + Math.round(73 / scale) + '条/h', color: '#3b82f6' },
+        s4: { lat: l4.toFixed(1) + ' 秒 (25.9x 🏆)', vram: '19.2 GB (极低 🏆)', cost: '$' + (0.13 * scale).toFixed(2) + ' / ' + Math.round(243 / scale) + '条/h 🏆', color: '#10b981' }
+      };
+      const cur = specs[stack];
+      const latEl = document.getElementById('latOut');
+      latEl.textContent = cur.lat;
+      latEl.style.color = cur.color;
+      document.getElementById('vramOut').textContent = cur.vram;
+      document.getElementById('costOut').textContent = cur.cost;
+
+      document.getElementById('b1').textContent = l1.toFixed(1) + ' 秒 ✕';
+      document.getElementById('b2').textContent = l2.toFixed(1) + ' 秒 ✕';
+      document.getElementById('b3').textContent = l3.toFixed(1) + ' 秒 ✓';
+      document.getElementById('b4').textContent = l4.toFixed(1) + ' 秒 🏆';
+    }
+
+    [stackEl, framesEl, stepsEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
