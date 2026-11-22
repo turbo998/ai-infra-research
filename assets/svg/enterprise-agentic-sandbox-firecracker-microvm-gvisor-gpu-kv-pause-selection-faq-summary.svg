@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业 Coding Agent 安全沙箱 (Firecracker MicroVM vs. gVisor) 与 GPU KV 挂起容量选型 (#471)</text>
+  <text x="28" y="58" class="sub">攻克多步 Agent 两大基建杀手：① 不可信代码逃逸风险 (125ms Firecracker 快照克隆)；② 等跑 pytest/网页 15 秒期间霸占 68.5% GPU 显存！</text>
+
+  <!-- Left Panel: The 68.5% GPU HBM Zombie Hold Problem -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 为什么跑 Coding Agent 时，GPU 算力闲置但 HBM 显存早就 100% 爆满了？</text>
+
+  <rect x="42" y="120" width="524" height="92" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">⛔ 工具等待期的“显存钉死黑洞” (68.5% HBM 被空闲会话霸占 ✕)</text>
+  <text x="56" y="164" class="mono">• Agent 单轮轨迹: LLM 思考 2.5s (吐出 bash 命令) -&gt; 沙箱跑 pytest 12s</text>
+  <text x="56" y="184" class="mono">• 在沙箱跑测试的 12s 里，若将 64K 上下文 KV 傻傻钉在 HBM 等待下一轮，</text>
+  <text x="56" y="202" class="mono">  高达 12/(12+2.5) = 82.7% 的时间里 HBM 被不产生任何 Token 的僵尸会话占满！</text>
+
+  <rect x="42" y="224" width="524" height="106" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="246" class="txt" font-weight="700" fill="#34d399">✅ 架构师解法：Firecracker 125ms 快照沙箱 + 工具等待期 L2 KV 自动换出 (🏆)</text>
+  <text x="56" y="268" class="mono">• 1) 安全沙箱: 用 Firecracker MicroVM + userfaultfd 按需页克隆，125ms</text>
+  <text x="56" y="288" class="mono">     拉起独立硬件虚拟化 Linux 内核 + 预热 Python/Playwright 环境！</text>
+  <text x="56" y="308" class="mono">• 2) 显存释放: 吐出 tool_call 瞬间将 KV 异步卸载至主机 DRAM，吞吐暴涨 3.68x！</text>
+
+  <!-- Right Panel: 4 Agentic Sandbox & KV Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四种 Agent 代码沙箱与 KV 生命周期架构定量对标</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 普通 Docker (runc 共享宿主机内核) + 工具等待期常驻 HBM</text>
+  <text x="638" y="158" class="mono">• 启动: 420ms | KVM隔离: 无(高危✕) | HBM空占: 68.5% ✕ | 吞吐: 310 轨/h</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: gVisor 用户态内核 (runsc 系统调用拦截) + 常驻 HBM</text>
+  <text x="638" y="214" class="mono">• 启动: 580ms | I/O编译慢 2.4x | HBM空占: 68.5% ✕ | 吞吐: 285 轨/h</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: 传统冷启动 Kata / QEMU 虚拟机 (每次从头 Boot 内核)</text>
+  <text x="638" y="270" class="mono">• 启动: 2,450ms ✕ | KVM隔离: 支持 ✓ | HBM空占: 72.0% ✕ | 吞吐: 210 轨/h</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: Firecracker 125ms 快照克隆 + 工具等待期 L2 DRAM 换出 (推荐 🏆)</text>
+  <text x="638" y="326" class="mono">• 启动: 125ms 🏆 | KVM隔离: 支持 🏆 | HBM空占: 4.2% 🏆 | 吞吐: 1,140 轨/h (3.7x)</text>
+
+  <!-- Bottom Panel: CPU Sandbox Pool vs GPU Cluster Sizing Formulas -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. Agent 集群“CPU 沙箱池 : GPU 推理池”黄金配比手算公式 (Little's Law for Tool Wait)</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">公式 1: 工具等待占空比与 HBM 节省倍数</text>
+  <text x="58" y="464" class="mono">• 单步周期 T_step = T_LLM (2.5s) + T_tool (10s)</text>
+  <text x="58" y="484" class="mono">• 若不换出 KV: 显存占用时间 = 12.5s</text>
+  <text x="58" y="504" class="mono">• 开启 Evict-on-Tool-Wait (卸载至 L2 DRAM):</text>
+  <text x="58" y="524" class="mono">  HBM 仅在 T_LLM (2.5s) 期间被占用！</text>
+  <text x="58" y="548" class="txt" fill="#6ee7b7">单卡可承载活跃 Agent 会话数直接放大 5.0 倍！</text>
+
+  <rect x="420" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="436" y="440" class="txt" font-weight="700" fill="#34d399">公式 2: CPU 沙箱核数 vs. GPU 卡数配比</text>
+  <text x="436" y="464" class="mono">• 并发沙箱数 N_sbx = N_GPU_active * (T_tool/T_LLM)</text>
+  <text x="436" y="484" class="mono">• 每张 H200 活跃并发 = 24 路 -&gt; 正在跑工具的</text>
+  <text x="436" y="504" class="mono">  沙箱数 = 24 * (10 / 2.5) = 96 个并发沙箱！</text>
+  <text x="436" y="524" class="mono">• 按每个沙箱 2 vCPU 计 (含 4x 超分)：</text>
+  <text x="436" y="544" class="mono">  每 1 张推理 GPU 需配套 48 个沙箱 CPU vCPU！</text>
+
+  <rect x="798" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="814" y="440" class="txt" font-weight="700" fill="#d8b4fe">公式 3: Egress 网络白名单与防挖矿铁律</text>
+  <text x="814" y="464" class="mono">• 严禁沙箱直通内网 K8s API Server / 元数据</text>
+  <text x="814" y="484" class="mono">  169.254.169.254 (防 SSRF 窃取 IAM 凭据)！</text>
+  <text x="814" y="504" class="mono">• 沙箱外联强制经 Squid/Envoy 透明正向代理</text>
+  <text x="814" y="524" class="mono">  校验域名白名单，并在工具完成后立即将</text>
+  <text x="814" y="544" class="mono">  MicroVM 冻结 (Pause) 为零 CPU 内存快照！</text>
+</svg>

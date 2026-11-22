@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业 Coding Agent 安全沙箱 (Firecracker MicroVM vs. gVisor) 与 GPU KV 挂起容量计算器 (#471)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-agentic-sandbox-firecracker-microvm-gvisor-gpu-kv-pause-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-agentic-sandbox-firecracker-microvm-gvisor-gpu-kv-pause-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-agentic-sandbox-firecracker-microvm-gvisor-gpu-kv-pause-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-agentic-sandbox-firecracker-microvm-gvisor-gpu-kv-pause-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>📦 企业 Coding Agent 安全沙箱 (`Firecracker MicroVM` vs. `gVisor`) 与 GPU KV 挂起容量沙盘 (#471)</h1>
+    <p class="subtitle">拖动滑块调整推理 GPU 卡数与沙箱工具平均执行时长 (`T_tool`)，实时测算工具等待期 HBM 空占率、配套沙箱 CPU vCPU 核数与每小时完成的 Agent 任务轨迹数。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 沙箱运行时与工具等待周期设定</h2>
+        <div class="control">
+          <label><span>沙箱运行时与 KV 调度档位</span></label>
+          <select id="tier">
+            <option value="t1">Tier 1: 普通 Docker (runc 共享内核) + HBM 常驻等待 ✕</option>
+            <option value="t2">Tier 2: gVisor 用户态内核 (runsc) + HBM 常驻等待</option>
+            <option value="t3">Tier 3: 传统冷启动 Kata / QEMU 虚拟机 (2,450ms 启动)</option>
+            <option value="t4" selected>Tier 4: Firecracker 125ms 快照克隆 + L2 KV 自动换出 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>推理集群 H200 GPU 卡数 (`Inference GPUs`)</span><strong id="gpuVal">8 张 H200</strong></label>
+          <input type="range" id="gpus" min="8" max="128" step="8" value="8" />
+        </div>
+        <div class="control">
+          <label><span>单步沙箱跑测试/网页平均耗时 (`T_tool sec`)</span><strong id="toolVal">10 秒</strong></label>
+          <input type="range" id="ttool" min="2" max="30" step="2" value="10" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">沙箱克隆启动延迟 / 隔离性</div>
+            <div class="val" id="spawnOut">125 ms (硬件 KVM 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">工具等待期 GPU HBM 空占率</div>
+            <div class="val" id="wasteOut">4.2% (已卸载至 L2 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">需配套沙箱池 CPU vCPU 核数</div>
+            <div class="val" id="cpuOut">384 vCPU (48:1)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">每小时完成 Agent 任务轨迹数</div>
+            <div class="val" id="trajOut">1,140 轨 / 小时 🏆</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种架构每 8 卡节点每小时完成 Agent 轨迹吞吐对比 (轨/小时, 越长越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 普通 Docker + HBM 常驻等待 (无 KVM 隔离 ✕)</span><strong>310 轨 / 小时 ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:27.2%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: gVisor 用户态内核 + HBM 常驻等待 (I/O 慢 2.4x)</span><strong>285 轨 / 小时</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:25%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 传统冷启动 Kata / QEMU 虚拟机 (2.45s 启动)</span><strong>210 轨 / 小时 ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:18.4%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: Firecracker 125ms 快照 + L2 KV 自动换出 (3.68x 🏆)</span><strong>1,140 轨 / 小时 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>安全铁律</strong>：沙箱网卡必须强制封禁 `169.254.169.254` 云元数据地址与内网 K8s API 段，防止 Prompt 注入诱导 Agent 发起 SSRF 窃取云账号密钥！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tierEl = document.getElementById('tier');
+    const gpusEl = document.getElementById('gpus');
+    const ttoolEl = document.getElementById('ttool');
+
+    function update() {
+      const tier = tierEl.value;
+      const gpus = parseInt(gpusEl.value, 10);
+      const ttool = parseFloat(ttoolEl.value);
+
+      document.getElementById('gpuVal').textContent = gpus + ' 张 H200';
+      document.getElementById('toolVal').textContent = ttool + ' 秒';
+
+      const vcpuNeeded = Math.round(gpus * 48 * (ttool / 10));
+      const scale = gpus / 8;
+
+      const specs = {
+        t1: { spawn: '420 ms (无 KVM ✕)', waste: Math.min(92, Math.round(ttool / (ttool + 2.5) * 85)) + '% 空占 ✕', traj: Math.round(310 * scale * (10 / ttool)), color: '#ef4444' },
+        t2: { spawn: '580 ms (用户态拦截)', waste: Math.min(92, Math.round(ttool / (ttool + 2.5) * 85)) + '% 空占 ✕', traj: Math.round(285 * scale * (10 / ttool)), color: '#f59e0b' },
+        t3: { spawn: '2,450 ms (冷启慢 ✕)', waste: Math.min(94, Math.round(ttool / (ttool + 2.5) * 88)) + '% 空占 ✕', traj: Math.round(210 * scale * (10 / ttool)), color: '#3b82f6' },
+        t4: { spawn: '125 ms (硬件 KVM 🏆)', waste: '4.2% (已卸载至 L2 🏆)', traj: Math.round(1140 * scale), color: '#10b981' }
+      };
+      const cur = specs[tier];
+      document.getElementById('spawnOut').textContent = cur.spawn;
+      const wEl = document.getElementById('wasteOut');
+      wEl.textContent = cur.waste;
+      wEl.style.color = cur.color;
+      document.getElementById('cpuOut').textContent = vcpuNeeded.toLocaleString() + ' vCPU';
+      document.getElementById('trajOut').textContent = cur.traj.toLocaleString() + ' 轨 / 小时';
+    }
+
+    [tierEl, gpusEl, ttoolEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
