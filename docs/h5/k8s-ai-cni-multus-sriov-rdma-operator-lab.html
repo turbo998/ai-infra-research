@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业 Kubernetes 智算网络虚拟化 (Multus + SR-IOV + NVIDIA Network Operator) 选型计算器 (#479)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-k8s-ai-cni-multus-sriov-rdma-network-operator-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-k8s-ai-cni-multus-sriov-rdma-network-operator-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-k8s-ai-cni-multus-sriov-rdma-network-operator-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-k8s-ai-cni-multus-sriov-rdma-network-operator-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>☸️ 企业 Kubernetes 智算网络虚拟化 (`Multus + SR-IOV + PIX 拓扑对齐`) 沙盘 (#479)</h1>
+    <p class="subtitle">切换 K8s CNI 网络模式与 Kubelet Topology Manager 拓扑对齐开关，实时观测 `400G` 网卡实测 `busbw`、跨节点 KV 搬运耗时与多租户安全隔离状态。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. K8s CNI 模式与 NUMA 拓扑设定</h2>
+        <div class="control">
+          <label><span>K8s 智算网络虚拟化档位</span></label>
+          <select id="mode">
+            <option value="m1">Tier 1: 默认单网卡 Overlay CNI (VXLAN 回退 TCP Socket ✕)</option>
+            <option value="m2">Tier 2: hostNetwork=true + 特权容器 (无多租隔离/端口冲突 ✕)</option>
+            <option value="m3">Tier 3: Multus + IPvlan + RDMA Shared Device Plugin</option>
+            <option value="m4" selected>Tier 4: NVIDIA Network Operator (Multus + SR-IOV VF) 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>Kubelet Topology Manager 策略 (`GPU-NIC 对齐`)</span></label>
+          <select id="topo">
+            <option value="pix" selected>single-numa-node / DRA 已开启 (GPU与NIC同PCIe Switch PIX 🏆)</option>
+            <option value="sys">none (默认随机分配，GPU与NIC跨CPU Socket SYS 掉速 65% ✕)</option>
+          </select>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">单卡实测 NCCL 总线带宽 (busbw)</div>
+            <div class="val" id="bwOut">47.6 GB/s (95.2% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单边 RDMA 延迟 / 32K KV 搬运</div>
+            <div class="val" id="latOut">1.8 us / 110 ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">多租户命名空间与 QoS 隔离</div>
+            <div class="val" id="isoOut">硬件 VF 级隔离 ✓</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单机切分多个 2xGPU Pod 支持</div>
+            <div class="val" id="podOut">原生支持零冲突 ✓</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种 K8s 网络方案 400G 实测总线带宽对比 (GB/s, 越长越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 默认 VXLAN Overlay CNI (回退内核 TCP)</span><strong>4.2 GB/s (-91.2% ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:8.8%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>未开 Topology Manager 跨 NUMA 错配 (SYS 绕行 CPU)</span><strong>16.5 GB/s (-65.3% ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:34.6%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: Multus + IPvlan + RDMA Shared Plugin (PIX)</span><strong>45.8 GB/s ✓</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:96.2%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: Network Operator (Multus + SR-IOV VF + PIX 🏆)</span><strong>47.6 GB/s (95.2% 线速 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>排障必背</strong>：若容器内报 `ibv_reg_mr() failed: Cannot allocate memory`，是因为容器默认 `memlock ulimit` 仅 64KB，需配置 `memlock=-1` 与 `IPC_LOCK`！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const modeEl = document.getElementById('mode');
+    const topoEl = document.getElementById('topo');
+
+    function update() {
+      const m = modeEl.value;
+      const topo = topoEl.value;
+      const sysPenalty = (topo === 'sys' && m !== 'm1') ? 0.346 : 1.0;
+
+      const specs = {
+        m1: { bw: 4.2, lat: '42.0 us / 1,250 ms ✕', iso: '软件隔离 ✓', pod: '支持 ✓', color: '#ef4444' },
+        m2: { bw: 47.2 * sysPenalty, lat: '1.8 us / 112 ms', iso: '无隔离 (暴露Root ✕)', pod: '多Pod端口冲突 ✕', color: '#f59e0b' },
+        m3: { bw: 45.8 * sysPenalty, lat: '2.1 us / 115 ms ✓', iso: '软命名空间隔离 ✓', pod: '支持 ✓', color: '#3b82f6' },
+        m4: { bw: 47.6 * sysPenalty, lat: (topo === 'pix' ? '1.8 us / 110 ms 🏆' : '4.5 us / 318 ms ✕'), iso: '硬件 VF 级隔离 🏆', pod: '原生支持零冲突 🏆', color: topo === 'pix' ? '#10b981' : '#ef4444' }
+      };
+      const cur = specs[m];
+      const bwEl = document.getElementById('bwOut');
+      bwEl.textContent = cur.bw.toFixed(1) + ' GB/s (' + (cur.bw * 2).toFixed(1) + '% 线速)';
+      bwEl.style.color = cur.color;
+      document.getElementById('latOut').textContent = cur.lat;
+      document.getElementById('isoOut').textContent = cur.iso;
+      document.getElementById('podOut').textContent = cur.pod;
+    }
+
+    [modeEl, topoEl].forEach(el => el.addEventListener('change', update));
+    update();
+  </script>
+</body>
+</html>
