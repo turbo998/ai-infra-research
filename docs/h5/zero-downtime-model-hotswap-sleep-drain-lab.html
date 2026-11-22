@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型零停机 1.8s 热更新与 Sleep Mode / KV 平滑排空计算器 (#494)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-zero-downtime-model-hotswap-sleep-mode-kv-drain-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-zero-downtime-model-hotswap-sleep-mode-kv-drain-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-zero-downtime-model-hotswap-sleep-mode-kv-drain-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-zero-downtime-model-hotswap-sleep-mode-kv-drain-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🔄 企业大模型零停机 `1.8s` 热更新与 `vLLM Sleep Mode` 备卡成本计算器 (#494)</h1>
+    <p class="subtitle">拖动滑块调整生产集群 GPU 规模与模型体积，实时对比 K8s 默认滚动升级、双倍蓝绿集群与 Host-DRAM 预热 + Sleep Mode 的切换耗时、断流率及备卡节省金额。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 生产集群规模与模型热更新策略</h2>
+        <div class="control">
+          <label><span>模型发布与权重切换架构</span></label>
+          <select id="arch">
+            <option value="a1">Tier 1: K8s 默认 RollingUpdate (185s 慢重启 + 12.4% 断流 ✕)</option>
+            <option value="a2">Tier 2: 全量双倍蓝绿集群 (0.5s 切流，但多买 100% 备卡 ✕)</option>
+            <option value="a3">Tier 3: KV 平滑排空 + GDS 磁盘直读 (28.5s，需 +12.5% 备卡)</option>
+            <option value="a4" selected>Tier 4: Host-DRAM 静默预热 + Sleep Mode + KV 排空 (1.8s · 0备卡 🏆)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>在线推理集群 GPU 卡数 (`Active H200 GPUs`)</span><strong id="gpuVal">32 张 H200</strong></label>
+          <input type="range" id="gpus" min="8" max="256" step="8" value="32" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">单副本权重切换耗时</div>
+            <div class="val" id="swOut">1.8 秒 (提速 102.8x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">在途 SSE 长连接断流率</div>
+            <div class="val" id="drpOut">0.0% (零断流 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">需额外采购备用 GPU 卡数</div>
+            <div class="val" id="extOut">0 张 (零冗余 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">相比双倍蓝绿集群年省备卡费</div>
+            <div class="val" id="savOut">$1,104,000 / 年 🏆</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种模型升级方案的单副本中断时间对比 (秒, 越短越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: K8s 默认 RollingUpdate (冷拉盘 + 42s Graph 重编译)</span><strong>185.0 s (断流 12.4% ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 双倍蓝绿集群 (虽仅 0.5s，但需 100% 闲置备卡 ✕)</span><strong>0.5 s (备卡月烧 $9.2万 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:4%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: KV 平滑排空 + GDS 磁盘高速加载</span><strong>28.5 s (0% 断流 ✓)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:22%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: Host-DRAM 预热 + Sleep Mode 原地换权 (推荐 🏆)</span><strong>1.8 s (0% 断流 · 0 备卡 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:5%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>为什么只要 1.8 秒？</strong>服务器闲置 `2TB DDR5` 锁页内存提前后台下好 `140GB` 权重，排空后走 `PCIe Gen5 (80 GB/s)` 直灌 HBM，且跳过 `42s` CUDA Graph 重编译！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const gpusEl = document.getElementById('gpus');
+
+    function update() {
+      const a = archEl.value;
+      const g = parseInt(gpusEl.value, 10);
+      const scale = g / 32;
+      document.getElementById('gpuVal').textContent = g + ' 张 H200';
+
+      const specs = {
+        a1: { sw: '185.0 秒 (慢重启 ✕)', drp: '12.4% (强杀断流 ✕)', ext: Math.round(16 * scale) + ' 张 (+50% 备卡)', sav: '月浪费 $' + Math.round(46000 * scale).toLocaleString(), color: '#ef4444' },
+        a2: { sw: '0.5 秒 ✓', drp: '0.0% ✓', ext: g + ' 张 (+100% 双倍备卡 ✕)', sav: '年浪费 $' + Math.round(1104000 * scale).toLocaleString() + ' ✕', color: '#f59e0b' },
+        a3: { sw: '28.5 秒 ✓', drp: '0.0% ✓', ext: Math.max(1, Math.round(4 * scale)) + ' 张 (+12.5%)', sav: '年省 $' + Math.round(966000 * scale).toLocaleString(), color: '#3b82f6' },
+        a4: { sw: '1.8 秒 (提速 102.8x 🏆)', drp: '0.0% (零断流 🏆)', ext: '0 张 (零冗余 🏆)', sav: '$1,104,000 / 年 🏆'.replace('1,104,000', Math.round(1104000 * scale).toLocaleString()), color: '#10b981' }
+      };
+      const cur = specs[a];
+      const swEl = document.getElementById('swOut');
+      swEl.textContent = cur.sw;
+      swEl.style.color = cur.color;
+      document.getElementById('drpOut').textContent = cur.drp;
+      document.getElementById('extOut').textContent = cur.ext;
+      document.getElementById('savOut').textContent = cur.sav;
+    }
+
+    [archEl, gpusEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

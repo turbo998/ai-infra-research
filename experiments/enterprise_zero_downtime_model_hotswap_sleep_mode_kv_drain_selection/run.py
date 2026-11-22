@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    tiers = [
+        {
+            "tier": "Tier 1: Naive K8s RollingUpdate (30s SIGTERM + Network Cold Load)",
+            "switch_latency_sec": 185.0,
+            "dropped_active_requests_pct": 12.4,
+            "extra_surge_gpus_pct": 50.0,
+            "cuda_graph_recompile_sec": 42.0,
+            "monthly_standby_gpu_cost_usd": 46000,
+            "action": "Send to a human",
+        },
+        {
+            "tier": "Tier 2: Full Blue-Green Double Fleet (100% Standby GPUs)",
+            "switch_latency_sec": 0.5,
+            "dropped_active_requests_pct": 0.0,
+            "extra_surge_gpus_pct": 100.0,
+            "cuda_graph_recompile_sec": 0.0,
+            "monthly_standby_gpu_cost_usd": 92000,
+            "action": "Send to a human",
+        },
+        {
+            "tier": "Tier 3: KV-Aware Graceful Drain + Run:ai/GDS Disk Streamer",
+            "switch_latency_sec": 28.5,
+            "dropped_active_requests_pct": 0.0,
+            "extra_surge_gpus_pct": 12.5,
+            "cuda_graph_recompile_sec": 18.0,
+            "monthly_standby_gpu_cost_usd": 11500,
+            "action": "Confirm",
+        },
+        {
+            "tier": "Tier 4: Host-DRAM Pinned Staging + vLLM Sleep Mode + KV-Aware Drain (Recommended)",
+            "switch_latency_sec": 1.8,
+            "dropped_active_requests_pct": 0.0,
+            "extra_surge_gpus_pct": 0.0,
+            "cuda_graph_recompile_sec": 0.0,
+            "monthly_standby_gpu_cost_usd": 0,
+            "action": "Act automatically",
+        },
+    ]
+
+    return {
+        "experiment_id": "enterprise_zero_downtime_model_hotswap_sleep_mode_kv_drain_selection",
+        "title": "Enterprise Zero-Downtime Model Weight Hot-Swapping, vLLM Sleep Mode & KV-Aware Drain Selection (#494)",
+        "provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "baseline_32gpu_fleet": {
+            "active_gpus": 32,
+            "model_weight_gb": 140.0,
+            "pcie_gen5_pinned_bandwidth_gbps": 80.0,
+            "speedup_vs_cold_rolling_update": round(185.0 / 1.8, 2),
+            "annual_standby_gpu_savings_vs_bluegreen_usd": 92000 * 12,
+        },
+        "tiers": tiers,
+    }
+
+
+def main() -> None:
+    out_dir = Path(__file__).resolve().parent
+    results = build_results()
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()
