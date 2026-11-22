@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型实时安全护栏 (投机双流并行 vs. 同步串行) 首字延迟与容量计算器 (#473)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-ai-safety-guardrails-speculative-parallel-shield-ttft-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-ai-safety-guardrails-speculative-parallel-shield-ttft-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-ai-safety-guardrails-speculative-parallel-shield-ttft-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-ai-safety-guardrails-speculative-parallel-shield-ttft-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🛡️ 企业大模型实时安全护栏 (`投机双流并行 vs. 同步串行`) 零延迟沙盘 (#473)</h1>
+    <p class="subtitle">拖动滑块调整主模型 Prefill 耗时、护栏小模型耗时与恶意攻击流量比例，实时观测投机并行护栏如何将附加首字延迟压至 `0.8ms`。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 护栏架构与首字耗时参数设定</h2>
+        <div class="control">
+          <label><span>安全护栏架构档位</span></label>
+          <select id="arch">
+            <option value="a1">Tier 1: 同步串行输入审核 + 整段攒齐输出审核 (无流式 ✕)</option>
+            <option value="a2">Tier 2: 同步前置 Llama-Guard-3 8B + 按句缓冲输出</option>
+            <option value="a3">Tier 3: 纯 CPU 正则表达式匹配 (41% 召回率极易绕过 ✕)</option>
+            <option value="a4" selected>Tier 4: 投机式双流并行输入护栏 + 16-Token 滑窗异步熔断 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>主模型 70B/671B Prefill 耗时 (`T_main_prefill`)</span><strong id="mVal">260 ms</strong></label>
+          <input type="range" id="tmain" min="100" max="800" step="20" value="260" />
+        </div>
+        <div class="control">
+          <label><span>L40S 护栏小模型审核耗时 (`T_guard`)</span><strong id="gVal">85 ms</strong></label>
+          <input type="range" id="tguard" min="30" max="250" step="5" value="85" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">首字附加延迟 (Added P99 TTFT)</div>
+            <div class="val" id="addOut">+0.8 ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">用户感知总首字延迟 (Total TTFT)</div>
+            <div class="val" id="totOut">260.8 ms</div>
+          </div>
+          <div class="kpi">
+            <div class="label">越狱与提示词注入拦截召回率</div>
+            <div class="val" id="recOut">98.4% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">恶意请求提前 Cancel 算力开销</div>
+            <div class="val" id="wasteOut">仅 0.9%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种护栏架构附加首字延迟对比 (Added TTFT ms, 越短越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 同步输入审核 + 整段攒齐输出缓冲</span><strong>+2,140.0 ms ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 同步前置 Llama-Guard-3 8B (串行排队)</span><strong id="b2">+185.0 ms ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:18%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 纯 CPU 正则匹配 (仅 41% 拦截率，高危漏报 ✕)</span><strong>+2.4 ms (不安全 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:2%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 投机式双流并行护栏 + 16-Token 滑窗熔断 🏆</span><strong id="b4">+0.8 ms (98.4% 拦截 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:1%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>架构师金律</strong>：每 **12~16 张 H200 主模型卡** 配套 **1 张独立 L40S 护栏卡**（跑 `Prompt-Guard-86M + Llama-Guard-3-8B FP8`），即可在不侵占主模型 HBM 的前提下实现零延迟全量护航！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const tmainEl = document.getElementById('tmain');
+    const tguardEl = document.getElementById('tguard');
+
+    function update() {
+      const arch = archEl.value;
+      const tmain = parseFloat(tmainEl.value);
+      const tguard = parseFloat(tguardEl.value);
+
+      document.getElementById('mVal').textContent = tmain + ' ms';
+      document.getElementById('gVal').textContent = tguard + ' ms';
+
+      const specAdded = Math.max(0, tguard - tmain) + 0.8;
+      const specs = {
+        a1: { add: '+2,140.0 ms ✕', tot: (tmain + 2140).toFixed(1) + ' ms', rec: '98.6%', waste: '0.0%', color: '#ef4444' },
+        a2: { add: '+' + tguard.toFixed(1) + ' ms ✕', tot: (tmain + tguard).toFixed(1) + ' ms', rec: '97.8%', waste: '0.0%', color: '#f59e0b' },
+        a3: { add: '+2.4 ms', tot: (tmain + 2.4).toFixed(1) + ' ms', rec: '41.0% (漏报高危 ✕)', waste: '0.0%', color: '#ef4444' },
+        a4: { add: '+' + specAdded.toFixed(1) + ' ms 🏆', tot: (tmain + specAdded).toFixed(1) + ' ms', rec: '98.4% 🏆', waste: '仅 0.9%', color: '#10b981' }
+      };
+      const cur = specs[arch];
+      const addEl = document.getElementById('addOut');
+      addEl.textContent = cur.add;
+      addEl.style.color = cur.color;
+      document.getElementById('totOut').textContent = cur.tot;
+      document.getElementById('recOut').textContent = cur.rec;
+      document.getElementById('wasteOut').textContent = cur.waste;
+      document.getElementById('b2').textContent = '+' + tguard.toFixed(1) + ' ms ✕';
+      document.getElementById('b4').textContent = '+' + specAdded.toFixed(1) + ' ms (98.4% 拦截 🏆)';
+    }
+
+    [archEl, tmainEl, tguardEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
