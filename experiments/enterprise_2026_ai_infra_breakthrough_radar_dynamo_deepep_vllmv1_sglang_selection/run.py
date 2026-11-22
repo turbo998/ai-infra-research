@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    generations = [
+        {
+            "generation": "Gen 1: Legacy vLLM v0.4 / TGI Monolith (Colocated BF16, Sync Python Loop)",
+            "output_tokens_per_sec_per_gpu": 620.0,
+            "p99_tpot_ms": 58.0,
+            "cpu_scheduler_overhead_pct": 28.0,
+            "required_h200_gpus_at_50rps": 48,
+            "action": "Send to a human",
+        },
+        {
+            "generation": "Gen 2: Standard vLLM v0.6 + Basic FP8 (Colocated Chunked Prefill)",
+            "output_tokens_per_sec_per_gpu": 1450.0,
+            "p99_tpot_ms": 32.0,
+            "cpu_scheduler_overhead_pct": 11.5,
+            "required_h200_gpus_at_50rps": 24,
+            "action": "Send to a human",
+        },
+        {
+            "generation": "Gen 3: Static PD Disaggregation + Standard NCCL KV Copy",
+            "output_tokens_per_sec_per_gpu": 2280.0,
+            "p99_tpot_ms": 21.0,
+            "cpu_scheduler_overhead_pct": 5.2,
+            "required_h200_gpus_at_50rps": 16,
+            "action": "Confirm",
+        },
+        {
+            "generation": "Gen 4: 2026 Next-Gen Stack (vLLM V1 / SGLang + Dynamo NIXL + DeepEP + Native MTP)",
+            "output_tokens_per_sec_per_gpu": 4150.0,
+            "p99_tpot_ms": 12.4,
+            "cpu_scheduler_overhead_pct": 1.8,
+            "required_h200_gpus_at_50rps": 8,
+            "action": "Act automatically",
+        },
+    ]
+
+    return {
+        "experiment_id": "enterprise_2026_ai_infra_breakthrough_radar_dynamo_deepep_vllmv1_sglang_selection",
+        "title": "Enterprise 2026 AI Infra Breakthrough Radar (NVIDIA Dynamo/NIXL, DeepSeek DeepEP/3FS, vLLM V1 & SGLang MTP) Sizer (#507)",
+        "provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "radar_summary": {
+            "throughput_gain_factor_vs_gen1": round(4150.0 / 620.0, 2),
+            "gpu_saving_pct_vs_gen1": round((1.0 - 8 / 48) * 100, 1),
+            "p99_tpot_reduction_pct": round((1.0 - 12.4 / 58.0) * 100, 1),
+        },
+        "generations": generations,
+    }
+
+
+def main() -> None:
+    out_dir = Path(__file__).resolve().parent
+    results = build_results()
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()
