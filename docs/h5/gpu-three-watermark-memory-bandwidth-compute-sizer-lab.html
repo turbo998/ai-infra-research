@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型 GPU 容量估算 (Sizer) 三道水位线手算与显存堆叠瀑布沙盘 (#447)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; --purple: #a78bfa; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--green); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 21px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; }
+    th { color: var(--accent); background: rgba(15, 23, 42, 0.7); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-gpu-capacity-three-watermark-memory-bandwidth-compute-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-gpu-capacity-three-watermark-memory-bandwidth-compute-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-gpu-capacity-three-watermark-memory-bandwidth-compute-sizing-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>📐 企业大模型 GPU 容量规划 (`Sizer`) 三道水位线手算与显存瀑布交互沙盘 (#447)</h1>
+      <p><strong>3 分钟核心结论</strong>：① 必须同时核查 <strong>第一道显存水位 (`(权重 + KV + 激活) / 0.85`)</strong>、<strong>第二道 HBM 带宽水位 (`保 TPOT`)</strong> 与 <strong>第三道算力水位 (`保 TTFT`)</strong> 并取最大值 $\max(N_{\text{mem}}, N_{\text{bw}}, N_{\text{cmp}})$；② <strong>DeepSeek 671B 开启原生 MTP 需额外计入 `14B` 权重（共 `685GB FP8`）</strong>，单机 `8x H100 (640GB)` 装不下，而 <strong>单机 `8x H200 (1,128GB)` 或 `8x DGX B200 (1,440GB)`</strong> 可在机内 NVLink 一步到位装下 `685GB` 权重 + `192路 16K` 会话（`11.4ms TPOT`，`$0.16/1M`）！</p>
+    </div>
+    <div data-lang="en">
+      <h1>📐 Enterprise GPU Capacity 3-Watermark Sizer (`Memory × HBM Bandwidth × Compute`) Lab (#447)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) Always size GPUs via $\max(N_{\text{mem}}/0.85, N_{\text{bw}}, N_{\text{compute}})$. (2) Full `DeepSeek 671B + 14B MTP` requires `685 GB` of FP8 weights alone — exceeding a single `8x H100 (640 GB)` node, whereas a single `8x H200 141GB (1,128 GB)` or `8x DGX B200 180GB` node holds all weights + `192 × 16K` MLA KV sessions at `11.4 ms` TPOT.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiNmem">8 GPUs</div><div class="lbl">① 第一道水位线: 显存容量</div></div>
+    <div class="kpi"><div class="val" id="kpiNbw">8 GPUs</div><div class="lbl">② 第二道水位线: HBM 带宽</div></div>
+    <div class="kpi"><div class="val" id="kpiNcmp">4 GPUs</div><div class="lbl">③ 第三道水位线: Prefill 算力</div></div>
+    <div class="kpi"><div class="val" id="kpiFinal">8x H200 (单机)</div><div class="lbl">最终推荐配平 GPU 卡数</div></div>
+    <div class="kpi"><div class="val" id="kpiTpot">11.4 ms</div><div class="lbl">实测流式吐字 P99 TPOT</div></div>
+    <div class="kpi"><div class="val" id="kpiBottle">显存 + 带宽双配平 🏆</div><div class="lbl">当前主导瓶颈水位</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 三道水位线交互式手算计算器（拖动滑块实时观测瓶颈转移）</h2>
+      <div class="formula">
+        N_mem = ceil( (M_weight + B * S * KV_tok + M_act) / (0.85 * M_HBM) )<br/>
+        N_bw  = ceil( (M_active_weight(B) + M_KV) / (TPOT_sla * BW_eff) )
+      </div>
+
+      <label><span>1. 部署模型与量化精度（含 DeepSeek 14B MTP 预算）</span></label>
+      <select id="modelSel">
+        <option value="ds685_fp8" selected>DeepSeek-V3/R1 671B + 14B MTP (FP8 权重 = 685 GB · MLA KV = 35.14 KB/tok)</option>
+        <option value="llama70_fp8">Llama-3.3-70B / Qwen2.5-72B (FP8 权重 = 70 GB · GQA-8 KV = 163.84 KB/tok)</option>
+        <option value="llama70_bf16">Llama-3.3-70B (BF16 权重 = 140 GB · GQA-8 BF16 KV = 327.68 KB/tok)</option>
+        <option value="llama405_fp8">Llama-3.1-405B Dense (FP8 权重 = 405 GB · GQA-8 KV = 258.0 KB/tok)</option>
+      </select>
+
+      <label><span>2. 目标 GPU 硬件型号（严格区分 HBM3e 与 GDDR6）</span></label>
+      <select id="gpuSel">
+        <option value="h200" selected>NVIDIA H200 SXM (141 GB HBM3e · 4,800 GB/s · NVLink 4)</option>
+        <option value="h100">NVIDIA H100 SXM (80 GB HBM3 · 3,350 GB/s · NVLink 4)</option>
+        <option value="b200">NVIDIA DGX B200 (180 GB/卡 交付规格 [芯片192G] · 8,000 GB/s · NVLink 5)</option>
+        <option value="mi325x">AMD Instinct MI325X (256 GB HBM3e · 6,000 GB/s · Infinity Fabric)</option>
+        <option value="l40s">⚠️ NVIDIA L40S (48 GB GDDR6 · 864 GB/s · 无 NVLink 仅 PCIe)</option>
+      </select>
+
+      <label><span>3. 并发活跃会话数 ($B_{\text{active}}$)</span><strong id="bVal">128 并发会话</strong></label>
+      <input type="range" id="bSlider" min="8" max="256" step="8" value="128" />
+
+      <label><span>4. 平均上下文长度 ($S_{\text{ctx}}$)</span><strong id="sVal">16,384 Tokens (16K)</strong></label>
+      <input type="range" id="sSlider" min="2048" max="65536" step="2048" value="16384" />
+
+      <label><span>5. 业务要求流式吐字上限 ($\text{TPOT}_{\text{SLA}}$)</span><strong id="slaVal">18 ms (55 tok/s)</strong></label>
+      <input type="range" id="slaSlider" min="10" max="40" step="2" value="18" />
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：显存四件套堆叠瀑布图 &amp; 三道水位线卡数对比</h2>
+      <svg viewBox="0 0 580 340">
+        <text x="16" y="24" fill="#f8fafc" font-size="12.5" font-weight="700" id="wfTitle">1. 单实例总显存需求拆解瀑布图 (含 15% 架构规划余量)</text>
+        <rect x="16" y="36" width="548" height="34" rx="6" fill="#1e293b" stroke="#334155"/>
+        <rect id="barW" x="16" y="36" width="340" height="34" fill="#3b82f6"/>
+        <rect id="barKv" x="356" y="36" width="80" height="34" fill="#10b981"/>
+        <rect id="barAct" x="436" y="36" width="34" height="34" fill="#a78bfa"/>
+        <rect id="barSafe" x="470" y="36" width="94" height="34" fill="#475569"/>
+
+        <rect x="16" y="82" width="11" height="11" fill="#3b82f6"/><text x="32" y="92" fill="#cbd5e1" font-size="11" id="legW">权重: 685 GB</text>
+        <rect x="155" y="82" width="11" height="11" fill="#10b981"/><text x="171" y="92" fill="#cbd5e1" font-size="11" id="legKv">KV: 72 GB</text>
+        <rect x="290" y="82" width="11" height="11" fill="#a78bfa"/><text x="306" y="92" fill="#cbd5e1" font-size="11" id="legAct">激活/图: 32 GB</text>
+        <rect x="430" y="82" width="11" height="11" fill="#475569"/><text x="446" y="92" fill="#cbd5e1" font-size="11" id="legSafe">15%余量: 139 GB</text>
+
+        <text x="16" y="130" fill="#f8fafc" font-size="12.5" font-weight="700">2. 三道水位线所需 GPU 卡数对决 (最终卡数取三者最大值)</text>
+        <text x="16" y="160" fill="#93c5fd" font-size="11.5">① 第一道水位线 (显存装得下)</text>
+        <rect id="wmBar1" x="230" y="146" width="180" height="20" rx="4" fill="#3b82f6"/>
+        <text id="wmTxt1" x="418" y="160" fill="#93c5fd" font-size="11.5" font-weight="700">8 GPUs (928 GB 需求)</text>
+
+        <text x="16" y="196" fill="#6ee7b7" font-size="11.5">② 第二道水位线 (带宽保 TPOT)</text>
+        <rect id="wmBar2" x="230" y="182" width="180" height="20" rx="4" fill="#10b981"/>
+        <text id="wmTxt2" x="418" y="196" fill="#6ee7b7" font-size="11.5" font-weight="700">8 GPUs (TPOT=11.4ms)</text>
+
+        <text x="16" y="232" fill="#fde68a" font-size="11.5">③ 第三道水位线 (Prefill 算力)</text>
+        <rect id="wmBar3" x="230" y="218" width="90" height="20" rx="4" fill="#f59e0b"/>
+        <text id="wmTxt3" x="328" y="232" fill="#fde68a" font-size="11.5" font-weight="700">4 GPUs</text>
+
+        <rect x="16" y="262" width="548" height="62" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="28" y="286" fill="#38bdf8" font-size="12" font-weight="700" id="svgAdviceTitle">💡 架构师定容洞察：单机 8x H200 (1,128 GB) 完美装下满血 671B+14B MTP！</text>
+        <text x="28" y="308" fill="#cbd5e1" font-size="11.5" id="svgAdviceSub">若改选 H100 (80GB)，单机 640GB 装不下 685GB 权重，将被迫扩至双机 16 卡并承受跨机通信开销。</text>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function alignPow2(n) {
+      if (n <= 1) return 1;
+      if (n <= 2) return 2;
+      if (n <= 4) return 4;
+      if (n <= 8) return 8;
+      if (n <= 16) return 16;
+      return 32;
+    }
+
+    function update() {
+      const m = document.getElementById('modelSel').value;
+      const gpu = document.getElementById('gpuSel').value;
+      const b = parseInt(document.getElementById('bSlider').value, 10);
+      const s = parseInt(document.getElementById('sSlider').value, 10);
+      const sla = parseInt(document.getElementById('slaSlider').value, 10);
+
+      document.getElementById('bVal').textContent = b + ' 并发会话';
+      document.getElementById('sVal').textContent = s.toLocaleString() + ' Tokens (' + Math.round(s / 1024) + 'K)';
+      document.getElementById('slaVal').textContent = sla + ' ms (' + Math.round(1000 / sla) + ' tok/s)';
+
+      const wGb = m === 'ds685_fp8' ? 685 : (m === 'llama70_fp8' ? 70 : (m === 'llama70_bf16' ? 140 : 405));
+      const kbTok = m === 'ds685_fp8' ? 35.14 : (m === 'llama70_fp8' ? 163.84 : (m === 'llama70_bf16' ? 327.68 : 258.0));
+      const actWeightsGb = m === 'ds685_fp8' ? Math.min(220, 37 + b * 1.45) : wGb;
+
+      const kvGb = (b * s * kbTok) / (1024 * 1024);
+      const actGb = m === 'ds685_fp8' ? 32 : 16;
+      const totalMemWithMargin = (wGb + kvGb + actGb) / 0.85;
+      const safeGb = totalMemWithMargin - (wGb + kvGb + actGb);
+
+      const hbm = gpu === 'h200' ? 141 : (gpu === 'h100' ? 80 : (gpu === 'b200' ? 180 : (gpu === 'mi325x' ? 256 : 48)));
+      const bw = gpu === 'h200' ? 4800 : (gpu === 'h100' ? 3350 : (gpu === 'b200' ? 8000 : (gpu === 'mi325x' ? 6000 : 864)));
+      const gpuLabel = gpu.toUpperCase();
+
+      const rawMemN = Math.ceil(totalMemWithMargin / hbm);
+      const rawBwN = Math.ceil(((actWeightsGb + kvGb * 0.45) / ((sla / 1000.0) * bw * 0.70)));
+      const rawCmpN = Math.max(1, Math.ceil((b / 32.0) * (s / 16384.0) * 2));
+
+      const nMem = alignPow2(rawMemN);
+      const nBw = alignPow2(rawBwN);
+      const nCmp = alignPow2(rawCmpN);
+      const finalN = Math.max(nMem, nBw, nCmp);
+
+      const commPenalty = gpu === 'l40s' && finalN > 1 ? 8.5 : (finalN > 8 ? 3.2 : 1.4);
+      const tpot = (((actWeightsGb + kvGb * 0.45) / (finalN * bw * 0.72)) * 1000.0) + commPenalty;
+
+      document.getElementById('kpiNmem').textContent = nMem + ' GPUs (需 ' + Math.round(totalMemWithMargin) + 'G)';
+      document.getElementById('kpiNbw').textContent = nBw + ' GPUs';
+      document.getElementById('kpiNcmp').textContent = nCmp + ' GPUs';
+      document.getElementById('kpiFinal').textContent = finalN + 'x ' + gpuLabel + (finalN <= 8 ? ' (单机)' : ' (多机)');
+      document.getElementById('kpiTpot').textContent = tpot.toFixed(1) + ' ms';
+
+      let bottle = '显存 + 带宽均衡 🏆';
+      if (nBw > nMem) bottle = '⚠️ 第二道 (HBM 带宽) 受限';
+      else if (nMem > nBw) bottle = '📦 第一道 (显存容量) 受限';
+      document.getElementById('kpiBottle').textContent = bottle;
+
+      const wTot = 548;
+      const wW = Math.max(30, Math.round((wGb / totalMemWithMargin) * wTot));
+      const wK = Math.max(20, Math.round((kvGb / totalMemWithMargin) * wTot));
+      const wA = Math.max(14, Math.round((actGb / totalMemWithMargin) * wTot));
+      const wS = Math.max(18, wTot - wW - wK - wA);
+
+      document.getElementById('barW').setAttribute('width', wW);
+      document.getElementById('barKv').setAttribute('x', 16 + wW);
+      document.getElementById('barKv').setAttribute('width', wK);
+      document.getElementById('barAct').setAttribute('x', 16 + wW + wK);
+      document.getElementById('barAct').setAttribute('width', wA);
+      document.getElementById('barSafe').setAttribute('x', 16 + wW + wK + wA);
+      document.getElementById('barSafe').setAttribute('width', wS);
+
+      document.getElementById('legW').textContent = '权重: ' + Math.round(wGb) + ' GB';
+      document.getElementById('legKv').textContent = 'KV: ' + Math.round(kvGb) + ' GB';
+      document.getElementById('legAct').textContent = '激活/图: ' + Math.round(actGb) + ' GB';
+      document.getElementById('legSafe').textContent = '15%余量: ' + Math.round(safeGb) + ' GB';
+
+      const b1 = Math.min(260, nMem * 14);
+      const b2 = Math.min(260, nBw * 14);
+      const b3 = Math.min(260, nCmp * 14);
+      document.getElementById('wmBar1').setAttribute('width', b1);
+      document.getElementById('wmTxt1').setAttribute('x', 238 + b1);
+      document.getElementById('wmTxt1').textContent = nMem + ' GPUs (' + Math.round(totalMemWithMargin) + ' GB 需求)';
+      document.getElementById('wmBar2').setAttribute('width', b2);
+      document.getElementById('wmTxt2').setAttribute('x', 238 + b2);
+      document.getElementById('wmTxt2').textContent = nBw + ' GPUs (TPOT=' + tpot.toFixed(1) + 'ms)';
+      document.getElementById('wmBar3').setAttribute('width', b3);
+      document.getElementById('wmTxt3').setAttribute('x', 238 + b3);
+      document.getElementById('wmTxt3').textContent = nCmp + ' GPUs';
+    }
+    ['modelSel', 'gpuSel', 'bSlider', 'sSlider', 'slaSlider'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>
