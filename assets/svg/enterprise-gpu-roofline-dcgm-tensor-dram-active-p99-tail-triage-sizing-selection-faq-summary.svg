@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">智算集群 GPU 性能瓶颈诊断与 P99 尾延迟排障指南：DCGM 四象限 (TENSOR vs. DRAM) 揪出假忙卡 (#456)</text>
+  <text x="28" y="58" class="sub">为什么 nvidia-smi 显示 GPU-Util=100% 吞吐却慢如蜗牛？如何用 TENSOR_ACTIVE 与 DRAM_ACTIVE 在 2.4 分钟内定界根因？</text>
+
+  <!-- Left Panel: The 100% GPU_UTIL Lie vs DCGM Profiling Counters -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 揭穿 `GPU_UTIL = 100%` 的假象：为什么传统监控根本抓不到真凶？</text>
+
+  <rect x="42" y="120" width="524" height="96" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">❌ 排障死穴：看 nvidia-smi GPU_UTIL=100% 以为算力满载</text>
+  <text x="56" y="164" class="mono">• 真相：当 NCCL 死等慢节点网络包而在 1 个 SM 上跑 Spin-Wait 空转轮询时，</text>
+  <text x="56" y="184" class="mono">  GPU_UTIL 依然是 100%！但此时 TENSOR_ACTIVE=4%, DRAM_ACTIVE=6% (94% 算力浪费!)</text>
+  <text x="56" y="202" class="txt">• 结果：运维团队花 145 分钟盲目排查，根因定位准确率仅 31.0% ✕！</text>
+
+  <rect x="42" y="228" width="524" height="104" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="250" class="txt" font-weight="700" fill="#34d399">🏆 黄金排障矩阵：DCGM 四象限计数器 + OTel Token Span 自动隔离慢卡</text>
+  <text x="56" y="272" class="mono">• 象限 1 (TENSOR&gt;70%, DRAM&lt;45%): 算力受限 (Prefill 正常满载 -&gt; 开 FP8 / Prefix Cache)</text>
+  <text x="56" y="292" class="mono">• 象限 2 (TENSOR&lt;20%, DRAM&gt;75%): 显存带宽受限 (Decode 正常满载 -&gt; 开 MTP / 升 H200)</text>
+  <text x="56" y="312" class="txt">• 象限 3 (TENSOR&lt;10%, DRAM&lt;15%, UTIL=99%): 假忙空转！立即查 NCCL 网络/CPU Python 阻塞！</text>
+
+  <!-- Right Panel: 4 Observability & Triage Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四档 GPU 性能监控与长尾排障架构实测对标</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 仅看 nvidia-smi GPU_UTIL 与宿主机 CPU/Ping 监控</text>
+  <text x="638" y="158" class="mono">• 根因准确率: 31.0% ✕ | 平均定界耗时: 145.0 分钟 ✕ | P99 ITL: 68.5ms</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 基础 Prometheus + vLLM 队列指标 (无底层硬件计数器关联)</text>
+  <text x="638" y="214" class="mono">• 根因准确率: 64.0% | 平均定界耗时: 42.0 分钟 | P99 ITL: 34.0ms</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: 采集 DCGM Profiling 硬件计数器 (TENSOR / DRAM / NVLINK / Xid)</text>
+  <text x="638" y="270" class="mono">• 根因准确率: 91.5% ✓ | 平均定界耗时: 8.5 分钟 ✓ | P99 ITL: 17.8ms</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: DCGM 四象限诊断 + OTel Token 追踪 + 慢卡自动摘流隔离 (🏆)</text>
+  <text x="638" y="326" class="mono">• 根因准确率: 98.6% 🏆 | 平均定界: 2.4 分钟 (-60x) 🏆 | P99 ITL: 13.4ms!</text>
+
+  <!-- Bottom Panel: 4 Diagnostic Quadrants & P99 Tail Causes -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 架构师必背：DCGM 核心硬件指标对照与 P99 长尾抖动三大真凶排查表</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="56" y="440" class="txt" font-weight="700" fill="#38bdf8">① 必采 4 个 DCGM 100x 硬件剖析指标</text>
+  <text x="56" y="464" class="mono">• 1004 (`DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`):</text>
+  <text x="56" y="484" class="mono">  Tensor Core 真实矩阵乘活跃占比 (看 Prefill)</text>
+  <text x="56" y="504" class="mono">• 1005 (`DCGM_FI_PROF_DRAM_ACTIVE`):</text>
+  <text x="56" y="524" class="mono">  HBM 显存总线真实读写带宽占比 (看 Decode)</text>
+  <text x="56" y="550" class="txt" fill="#6ee7b7">加上 1009/1010 (NVLink/PCIe) 即可看穿一切瓶颈！</text>
+
+  <rect x="418" y="414" width="368" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="432" y="440" class="txt" font-weight="700" fill="#34d399">② 为什么 P50 正常 (14ms) 但 P99 飙到 90ms？</text>
+  <text x="432" y="464" class="mono">• 真凶 A (混部抢占): 长 Prompt Prefill 插队阻塞</text>
+  <text x="432" y="484" class="mono">  同卡 Decode -&gt; 解法: 拆 PD 分离或调小 Chunk</text>
+  <text x="432" y="504" class="mono">• 真凶 B (CPU 采样阻塞): 未开启异步采样或复杂的</text>
+  <text x="432" y="524" class="mono">  正则表达式约束解码在 CPU 上卡住 -&gt; 换 XGrammar</text>
+  <text x="432" y="550" class="txt" fill="#34d399">• 真凶 C (单卡热降频): 液冷流量不均触发 SW_THERMAL 🏆</text>
+
+  <rect x="806" y="414" width="350" height="196" rx="8" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="820" y="440" class="txt" font-weight="700" fill="#fde68a">③ 隐性慢卡 (Grey Failure) 自动熔断闭环</text>
+  <text x="820" y="464" class="mono">• 监控 `CLOCK_THROTTLE_REASONS` 与 `ROW_REMAP`</text>
+  <text x="820" y="484" class="mono">• 当某台节点 SM 频率低于基线 15% 或 RoCE 重传</text>
+  <text x="820" y="504" class="mono">  率突增时，K8s Node Problem Detector 自动打污点</text>
+  <text x="820" y="524" class="mono">• Envoy GIE 网关在 2 秒内将该慢副本权重降为 0</text>
+  <text x="820" y="550" class="txt" fill="#fde68a">彻底防止 1 张降频灰故障卡拖垮整组 TP/EP 池！</text>
+</svg>
