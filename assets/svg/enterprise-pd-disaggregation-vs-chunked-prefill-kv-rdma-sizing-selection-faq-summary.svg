@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业级 PD 分离 (Prefill-Decode Disaggregation) vs. 混部 (Chunked Prefill) 准入边界与跨机 KV 带宽精算 (#444)</text>
+  <text x="28" y="58" class="sub">为什么长输入 Prefill (算力受限) 与流式 Decode (HBM 带宽受限) 混部必触发 P99 吐字卡顿？如何手算 P:D 实例比与 RDMA KV 传输耗时？</text>
+
+  <!-- Left Panel: Roofline Conflict & Colocated vs PD Boundary -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 物理瓶颈冲突机理与“何时混部 vs. 何时拆 PD 分离”黄金准入线</text>
+
+  <rect x="42" y="120" width="524" height="96" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">❌ 混部冲突根源：算术强度相差 100 倍的两类负载争抢同一张 GPU</text>
+  <text x="56" y="164" class="mono">• Prefill (读题): AI = 2,000~16,000 FLOPs/B (远超屋脊点 295，纯算力受限)</text>
+  <text x="56" y="184" class="mono">• Decode (吐字): AI = B_active = 16~128 FLOPs/B (每步全读权重+KV，纯带宽受限)</text>
+  <text x="56" y="202" class="txt">• 后果：无切块混部 P99 TPOT 飙至 88.4ms ✕；哪怕开 Chunked Prefill 仍有 29.5ms 尾抖动</text>
+
+  <rect x="42" y="228" width="524" height="104" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="250" class="txt" font-weight="700" fill="#34d399">🏆 架构师准入三原则与 P:D 黄金配比手算公式</text>
+  <text x="56" y="272" class="mono">• 保持混部 + Chunked Prefill: 集群 &lt;=8~16 卡，或无 &gt;=100G RDMA，或短输入 (&lt;2K)</text>
+  <text x="56" y="292" class="mono">• 强制上 PD 分离: &gt;=16 卡 + 100G~400G RDMA + 平均输入 &gt;=4K (I:O &gt;= 8:1)</text>
+  <text x="56" y="312" class="txt">• 配比公式：N_P / N_D = [S_in*(1-eta)/TPS_P] / [S_out/TPS_D] + 预留 25% Flex 双模池！</text>
+
+  <!-- Right Panel: 4 Inference Architectures Head-to-Head -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四档推理架构实测对标 (32x H200 · 16K 输入 / 512 输出 · 50% 前缀缓存)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 同构混部 Continuous Batching (未开 Chunked Prefill)</text>
+  <text x="638" y="158" class="mono">• P95 TTFT: 1,120ms ✕ | P99 TPOT: 88.4ms ✕ | Goodput: 1,360 tok/s ($0.96/1M)</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#93c5fd">Tier 2: 同构混部 + Chunked Prefill (chunk_size=1024 · 小集群首选)</text>
+  <text x="638" y="214" class="mono">• P95 TTFT: 685ms | P99 TPOT: 29.5ms | Goodput: 2,840 tok/s ($0.46/1M) ✓</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#fde68a">Tier 3: 25GbE TCP 跨机 PD 分离 (无 RDMA 零拷贝 · 典型踩坑反模式)</text>
+  <text x="638" y="270" class="mono">• 暴露 KV 传输耗时高达 952ms ✕ | P95 TTFT 恶化至 1,480ms ✕ | 严禁在 TCP 上拆跨机 PD</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: 弹性 PD 分离 (20P:12D + 25% Flex + 400G RDMA NIXL/Mooncake) (🏆)</text>
+  <text x="638" y="326" class="mono">• P95 TTFT: 395ms 🏆 | P99 TPOT: 14.6ms 🏆 | Goodput: 6,120 tok/s (4.5x · $0.22/1M)!</text>
+
+  <!-- Bottom Panel: KV Transfer Math & 4 Open-Source Stacks -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 三代注意力机制跨机 KV 带宽手算 (MHA vs. GQA-8 vs. MLA) 与四大开源栈选型</text>
+
+  <rect x="42" y="414" width="268" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="56" y="440" class="txt" font-weight="700" fill="#38bdf8">① MHA vs. GQA-8 vs. MLA KV 体积</text>
+  <text x="56" y="464" class="mono">• 传统 70B MHA (FP8): 1,310.7 KB/tok</text>
+  <text x="56" y="484" class="mono">  8K 净输入需传 10.24 GB (暴露 43.1ms)</text>
+  <text x="56" y="504" class="mono">• 主流 70B GQA-8 (FP8): 163.84 KB/tok</text>
+  <text x="56" y="524" class="mono">  8K 净输入需传 1.28 GB (暴露 5.4ms)</text>
+  <text x="56" y="544" class="mono">• DeepSeek 671B MLA: 35.14 KB/tok</text>
+  <text x="56" y="566" class="txt" fill="#6ee7b7">8K 仅传 0.275 GB，暴露延迟仅 1.2ms！</text>
+
+  <rect x="328" y="414" width="268" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="342" y="440" class="txt" font-weight="700" fill="#34d399">② NVIDIA Dynamo (NIXL 传输引擎)</text>
+  <text x="342" y="464" class="mono">• 内置 KV-Aware 全局基数树前缀路由</text>
+  <text x="342" y="484" class="mono">• SLA Planner 自动翻转 Flex P/D 角色</text>
+  <text x="342" y="504" class="mono">• NIXL 统一封装 NVLink / GPUDirect</text>
+  <text x="342" y="524" class="mono">  RDMA / Host DRAM / GDS 异步零拷贝</text>
+  <text x="342" y="550" class="txt" fill="#34d399">32~1024+ 卡企业统一 AI 平台首选 🏆</text>
+
+  <rect x="614" y="414" width="268" height="196" rx="8" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="628" y="440" class="txt" font-weight="700" fill="#fde68a">③ Mooncake &amp; SGLang PD Router</text>
+  <text x="628" y="464" class="mono">• Mooncake: KVCache-Centric 内存池化</text>
+  <text x="628" y="484" class="mono">  聚合全集群 CPU DRAM + 多轨条带化</text>
+  <text x="628" y="504" class="mono">• SGLang Router: Rust 轻量级 PD 路由</text>
+  <text x="628" y="524" class="mono">  原生打通 FlashMLA + DeepEP + MTP</text>
+  <text x="628" y="550" class="txt" fill="#fde68a">DeepSeek 671B &amp; 128K+ 长文本首选 🏆</text>
+
+  <rect x="900" y="414" width="258" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="914" y="440" class="txt" font-weight="700" fill="#d8b4fe">④ vLLM V1 + LMCache (K8s 栈)</text>
+  <text x="914" y="464" class="mono">• 云原生 Helm + K8s GIE EPP 最友好</text>
+  <text x="914" y="484" class="mono">• LMCache 支持跨节点 KV 量化压缩</text>
+  <text x="914" y="504" class="mono">  适应公有云 50G~100G 虚拟网络</text>
+  <text x="914" y="524" class="mono">• 覆盖 100+ 开源模型与异构加速卡</text>
+  <text x="914" y="550" class="txt" fill="#d8b4fe">公有云托管 AKS/EKS 多模型底座首选 ✅</text>
+</svg>
