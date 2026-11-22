@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>第 460 篇里程碑：企业级训推一体潮汐共池、2.1s 异步快照与超融合存储 (3FS/Lustre/WEKA) 沙盘 (#460)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-converged-training-inference-tidal-cluster-storage-gds-tco-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-converged-training-inference-tidal-cluster-storage-gds-tco-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-converged-training-inference-tidal-cluster-storage-gds-tco-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>🏆 第 460 篇里程碑：企业级训推一体潮汐共池、`2.1s` 两阶段异步快照与超融合存储 (`3FS / Lustre / WEKA`) 沙盘 (#460)</h1>
+      <p><strong>3 分钟核心结论</strong>：① 打破训练池与推理池物理隔离烟囱：夜间将空闲在线推理副本切入 **`Level-1 Sleep` (释放 98% HBM)** 让渡给 `GRPO/SFT` 后训练，早高峰突袭时 **`2.1s` 两阶段异步保存训练快照 + `2.8s` 唤醒在线推理（全程仅 `4.9 秒`）**；② 开启 **超融合 `DeepSeek 3FS + GDS`** 池化计算节点自带 NVMe 跑出 `2.34 TB/s`，24h 集群有效利用率从 `38.5%` 冲上 **`93.4%`**，128 卡集群每年净省 **`$288 万` (-63.2%)**！</p>
+    </div>
+    <div data-lang="en">
+      <h1>🏆 Milestone #460: Converged Training-Inference Tidal Cluster, `2.1s` Async Checkpoint &amp; `3FS / Lustre` GDS Lab (#460)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) Replace siloed training/inference clusters with a converged tidal pool: `2.1s` two-stage async Host-DRAM checkpointing + `2.8s` Level-1 Sleep serving wakeup completes role handover in <strong>4.9 seconds</strong>. (2) Hyperconverged `3FS + GDS` pools internal NVMe drives at `2.34 TB/s`, lifting 24h utilization to <strong>93.4%</strong> and saving <strong>$2.88M/year (-63.2%)</strong>.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiUtil">93.4% vs 38.5%</div><div class="lbl">24 小时训推共池有效利用率</div></div>
+    <div class="kpi"><div class="val" id="kpiCkpt">2.1s vs 225.0s</div><div class="lbl">训练 Checkpoint 阻塞 GPU 耗时</div></div>
+    <div class="kpi"><div class="val" id="kpiHandover">4.9 秒无缝交接</div><div class="lbl">早高峰训练让路给推理总耗时</div></div>
+    <div class="kpi"><div class="val" id="kpiBw">2.34 TB/s (3FS GDS)</div><div class="lbl">超融合并行文件系统聚合带宽</div></div>
+    <div class="kpi"><div class="val" id="kpiTco">$168 万 vs $456 万</div><div class="lbl">128 卡集群年度全口径总 TCO</div></div>
+    <div class="kpi"><div class="val" id="kpiSave">年省 $288.0 万</div><div class="lbl">潮汐共池 + 超融合存储净节省</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 交互式训推潮汐切换与两阶段异步 Checkpoint 计算器</h2>
+      <div class="formula">
+        T_Ckpt_Stall = (Total_Ckpt_TB * 1024 / N_Nodes) / Per_Node_PCIe5_D2H_BW_GBps<br/>
+        T_Handover = T_Ckpt_Stall (2.1s) + T_Sleep_Wakeup (2.8s) = 4.9s
+      </div>
+
+      <label><span>1. 集群总 GPU 规模 ($N_{\text{GPU}}$，每节点 8 卡)</span><strong id="gpuVal">128 GPUs (16 台 8 卡节点)</strong></label>
+      <input type="range" id="gpuSlider" min="32" max="512" step="32" value="128" />
+
+      <label><span>2. 单次分布式训练 Checkpoint 总大小 ($M_{\text{ckpt}}$)</span><strong id="ckptVal">9.0 TB (671B 16Ψ 状态)</strong></label>
+      <input type="range" id="ckptSlider" min="1" max="18" step="1" value="9" />
+
+      <label><span>3. 训推切换与存储底座架构档位</span></label>
+      <select id="tierSel">
+        <option value="tier4" selected>🏆 Tier 4: 训推潮汐 (2.8s Sleep) + 超融合 3FS GDS + 两阶段异步 DRAM 快照</option>
+        <option value="tier3">Tier 3: Kueue 抢占 + 两阶段异步快照 + 独立 WEKA/Lustre 存储柜</option>
+        <option value="tier2">Tier 2: 共享 K8s (销毁重建 Pod 切换) + 同步写 Lustre</option>
+        <option value="tier1">⛔ Tier 1: 训推物理隔离烟囱集群 + 同步写 NFS/Ceph</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：4.9s 潮汐交接时序 &amp; 四档集群年度 TCO 对比</h2>
+      <svg viewBox="0 0 580 310">
+        <text x="16" y="24" fill="#f8fafc" font-size="12.5" font-weight="700">1. 早高峰突发流量下“训练保存让出 -&gt; 推理秒级唤醒” 4.9 秒交接时序条</text>
+        <rect x="16" y="36" width="548" height="32" rx="6" fill="#1e293b" stroke="#334155"/>
+        <rect x="16" y="36" width="235" height="32" fill="#f59e0b"/>
+        <rect x="251" y="36" width="313" height="32" fill="#10b981"/>
+        <text x="26" y="56" fill="#070b14" font-size="11" font-weight="800" id="svgStep1">① 训练 D2H 异步写本机 DRAM (2.1s)</text>
+        <text x="262" y="56" fill="#070b14" font-size="11" font-weight="800" id="svgStep2">② 在线推理 Level-1 Sleep 唤醒接客 (2.8s 🏆)</text>
+
+        <text x="16" y="98" fill="#f8fafc" font-size="12.5" font-weight="700">2. 四档训推与存储底座年度全口径总 TCO 对决 (含 GPU 折旧 + 存储柜)</text>
+
+        <text x="16" y="130" fill="#fca5a5" font-size="11.5">Tier 1 训推物理隔离烟囱 (利用率 38.5%)</text>
+        <rect x="265" y="116" width="240" height="18" rx="4" fill="#ef4444"/>
+        <text x="512" y="130" fill="#fca5a5" font-size="11" font-weight="700" id="tco1Txt">$456万/年 ✕</text>
+
+        <text x="16" y="162" fill="#fde68a" font-size="11.5">Tier 2 共享 K8s 重建 Pod + 独立 Lustre</text>
+        <rect x="265" y="148" width="168" height="18" rx="4" fill="#f59e0b"/>
+        <text x="440" y="162" fill="#fde68a" font-size="11" font-weight="700" id="tco2Txt">$318万/年</text>
+
+        <text x="16" y="194" fill="#93c5fd" font-size="11.5">Tier 3 Kueue + 异步快照 + 独立 WEKA</text>
+        <rect x="265" y="180" width="124" height="18" rx="4" fill="#3b82f6"/>
+        <text x="396" y="194" fill="#93c5fd" font-size="11" font-weight="700" id="tco3Txt">$234万/年 ✓</text>
+
+        <text x="16" y="226" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 训推潮汐 + 超融合 3FS GDS 🏆</text>
+        <rect x="265" y="212" width="88" height="18" rx="4" fill="#10b981"/>
+        <text x="360" y="226" fill="#34d399" font-size="11.5" font-weight="800" id="tco4Txt">$168万/年 (年省 $288万 🏆)</text>
+
+        <rect x="16" y="250" width="548" height="48" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="28" y="279" fill="#6ee7b7" font-size="11.5" font-weight="700" id="svgStorageNote">🔥 超融合 3FS 红利：16 台节点 × 8 块 NVMe 直接提供 2.34 TB/s 吞吐，省去 $80万 独立存储柜！</text>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function update() {
+      const gpus = parseInt(document.getElementById('gpuSlider').value, 10);
+      const ckptTb = parseInt(document.getElementById('ckptSlider').value, 10);
+      const tier = document.getElementById('tierSel').value;
+
+      const nodes = gpus / 8;
+      document.getElementById('gpuVal').textContent = gpus + ' GPUs (' + nodes + ' 台 8 卡节点)';
+      document.getElementById('ckptVal').textContent = ckptTb + '.0 TB';
+
+      const perNodeGb = (ckptTb * 1024.0) / nodes;
+      const d2hSec = (perNodeGb / 268.0);
+      const syncSec = (ckptTb * 1024.0) / 40.0;
+
+      const ckptStall = (tier === 'tier4' || tier === 'tier3') ? d2hSec : (tier === 'tier2' ? syncSec * 0.2 : syncSec);
+      const wakeSec = tier === 'tier4' ? 2.8 : (tier === 'tier3' ? 15.4 : 80.0);
+      const handover = ckptStall + wakeSec;
+
+      const scale = gpus / 128.0;
+      const t1 = Math.round(456 * scale);
+      const t2 = Math.round(318 * scale);
+      const t3 = Math.round(234 * scale);
+      const t4 = Math.round(168 * scale);
+      const save = t1 - t4;
+
+      document.getElementById('kpiCkpt').textContent = ckptStall.toFixed(1) + 's vs ' + Math.round(syncSec) + 's';
+      document.getElementById('kpiHandover').textContent = handover.toFixed(1) + ' 秒无缝交接';
+      document.getElementById('kpiBw').textContent = (nodes * 0.146).toFixed(2) + ' TB/s (3FS GDS)';
+      document.getElementById('kpiTco').textContent = '$' + t4 + ' 万 vs $' + t1 + ' 万';
+      document.getElementById('kpiSave').textContent = '年省 $' + save + ' 万';
+
+      document.getElementById('svgStep1').textContent = '① 训练 D2H 写 DRAM (' + d2hSec.toFixed(1) + 's)';
+      document.getElementById('tco1Txt').textContent = '$' + t1 + '万/年 ✕';
+      document.getElementById('tco2Txt').textContent = '$' + t2 + '万/年';
+      document.getElementById('tco3Txt').textContent = '$' + t3 + '万/年 ✓';
+      document.getElementById('tco4Txt').textContent = '$' + t4 + '万/年 (省 $' + save + '万 🏆)';
+    }
+    ['gpuSlider', 'ckptSlider', 'tierSel'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>
