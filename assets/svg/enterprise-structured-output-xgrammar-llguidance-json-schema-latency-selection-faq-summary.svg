@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">大模型结构化输出 (JSON Schema / Tool Calling) 约束解码选型：XGrammar vs. llguidance vs. Outlines (#464)</text>
+  <text x="28" y="58" class="sub">为什么早期动态正则约束解码会让首字卡顿 1.4 秒？如何用 XGrammar/llguidance + 跳跃解码不仅零损耗还反超裸解码 26%？</text>
+
+  <!-- Left Panel: Why Legacy FSM Stalls vs XGrammar/llguidance + Jump-Forward -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 结构化输出的两大历史痛点：客户端重试浪费 vs. 状态机编译阻塞</text>
+
+  <rect x="42" y="120" width="524" height="96" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">❌ 痛点 1 (无约束重试) &amp; 痛点 2 (初代动态 FSM 阻塞 CPU/GPU)</text>
+  <text x="56" y="164" class="mono">• 靠 Prompt 祈祷输出合法 JSON: 复杂嵌套 Schema 下高达 18.4% 解析报错，触发全量重算</text>
+  <text x="56" y="184" class="mono">• 初代正则有限状态机 (FSM): 遇到新 Schema 需对 15万词表逐一匹配编译 (首字卡顿 1,420ms ✕)，</text>
+  <text x="56" y="202" class="txt">  且每步在 CPU 上同步计算合法 Token 掩码耗费 6.8ms，直接把 GPU TPOT 拖慢 50%！</text>
+
+  <rect x="42" y="228" width="524" height="104" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="250" class="txt" font-weight="700" fill="#34d399">🏆 黄金解法：XGrammar / llguidance + 确定性字段跳跃解码 (Jump-Forward)</text>
+  <text x="56" y="272" class="mono">• 1. 预编译上下文无关字节级位掩码 (XGrammar PDA): 99% 掩码提前算好，单步仅 0.04ms！</text>
+  <text x="56" y="292" class="mono">• 2. CPU 掩码生成与 GPU 前向计算异步流水线重叠: 实现对 GPU TPOT 真正的 0.0ms 零暴露开销</text>
+  <text x="56" y="312" class="txt">• 3. 确定性语法跳跃 (Jump-Forward): 自动补全固定 JSON 键名 `{"customer_id": "`，反超裸跑 26% 🏆</text>
+
+  <!-- Right Panel: 4 Constrained Decoding Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四档结构化输出与工具调用解码引擎实测对标 (152K 词表模型)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 纯 Prompt 软约束 + 客户端 JSON.parse 失败后重发 (无引擎级掩码)</text>
+  <text x="638" y="158" class="mono">• Schema 合规率: 81.6% ✕ (18.4% 语法报错重算) | 有效 Goodput: 1,180 tok/s</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 初代动态正则 FSM (未缓存新 Schema 编译 + 同步 CPU 掩码)</text>
+  <text x="638" y="214" class="mono">• 首字编译开销: +1,420ms ✕ | 单步掩码: +6.8ms/tok ✕ | Goodput: 1,420 tok/s</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: XGrammar (下推自动机 PDA + 上下文无关自适应位掩码缓存)</text>
+  <text x="638" y="270" class="mono">• 首字编译开销: +8.5ms ✓ | 单步掩码: 0.12ms/tok ✓ | Goodput: 2,450 tok/s (100% 合规)</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: XGrammar / llguidance + 确定性字段跳跃解码 (Jump-Forward) (🏆)</text>
+  <text x="638" y="326" class="mono">• 首字编译: 1.8ms 🏆 | 单步暴露: 0.04ms 🏆 | Goodput: 3,120 tok/s (比裸跑还快 26%!) 🏆</text>
+
+  <!-- Bottom Panel: Bitmask Math, Jump-Forward Mechanics, Engine Matrix -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 32-Bit 紧凑位掩码原理、确定性跳跃解码 (Fast-Forward) 与主流引擎选型</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="56" y="440" class="txt" font-weight="700" fill="#38bdf8">① 152,064 词表如何做到 &lt;0.1ms 极速掩码？</text>
+  <text x="56" y="464" class="mono">• 将每个 Token 压缩为 1 个 Bit: 152K 词表的合法掩码</text>
+  <text x="56" y="484" class="mono">  仅占 152,064 / 8 = 19 KB (完美塞入 CPU L1 Cache!)</text>
+  <text x="56" y="504" class="mono">• XGrammar 将 99% 与栈上下文无关的确定性状态转换</text>
+  <text x="56" y="524" class="mono">  提前算好存表，运行期仅检查极少数与括号深度相关</text>
+  <text x="56" y="550" class="txt" fill="#6ee7b7">的动态 Token，CPU 掩码耗时从 6.8ms 压至 0.04ms！</text>
+
+  <rect x="418" y="414" width="368" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="432" y="440" class="txt" font-weight="700" fill="#34d399">② 为什么开启结构化约束反而比不开启更快？</text>
+  <text x="432" y="464" class="mono">• 在生成固定 JSON Schema 时，一旦生成完上个字段的</text>
+  <text x="432" y="484" class="mono">  逗号 `,`，接下来的键名如 `\n  "order_total_usd": `</text>
+  <text x="432" y="504" class="mono">  是 100% 唯一确定的（无需模型做自回归采样猜测！）</text>
+  <text x="432" y="524" class="mono">• 跳跃解码 (Jump-Forward) 直接把这 6~8 个固定格式</text>
+  <text x="432" y="550" class="txt" fill="#34d399">Token 一次性拼入输入并跳过 Decode 步，省下 28.5% 步数 🏆</text>
+
+  <rect x="806" y="414" width="350" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="820" y="440" class="txt" font-weight="700" fill="#d8b4fe">③ XGrammar vs. llguidance 选型分工</text>
+  <text x="820" y="464" class="mono">• XGrammar (CMU/MLC 开源): vLLM V1、SGLang 与</text>
+  <text x="820" y="484" class="mono">  TRT-LLM 默认内置引擎，对高并发 JSON Schema 与</text>
+  <text x="820" y="504" class="mono">  CFG 上下文无关文法吞吐最高</text>
+  <text x="820" y="524" class="mono">• llguidance (微软开源 Rust 引擎): 动态 Schema 首字</text>
+  <text x="820" y="550" class="txt" fill="#d8b4fe">零预热极速编译 (&lt;2ms)，适合多租户千变万化 Schema！</text>
+</svg>

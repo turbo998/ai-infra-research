@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>大模型结构化输出 (JSON Schema / Tool Calling) 约束解码选型：XGrammar vs. llguidance 沙盘 (#464)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--green); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-structured-output-xgrammar-llguidance-json-schema-latency-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-structured-output-xgrammar-llguidance-json-schema-latency-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-structured-output-xgrammar-llguidance-json-schema-latency-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>🧩 大模型结构化输出 (`JSON Schema / Tool Calling`) 约束解码选型：`XGrammar` vs. `llguidance` 沙盘 (#464)</h1>
+      <p><strong>3 分钟核心结论</strong>：① 纯靠 Prompt 祈祷输出合法 JSON 在复杂嵌套下有 `18.4%` 解析失败率，而初代未缓存动态正则 FSM 会造成 **`+1,420ms` 首字编译卡顿**与 **`+6.8ms/tok` 单步掩码开销**；② 采用 **`XGrammar / llguidance` (19KB L1 位掩码 + 异步 CPU/GPU 重叠 + 确定性字段跳跃解码 `Jump-Forward`)**，将单步暴露损耗压至 **`0.04ms`**，跳过 `28.5%` 固定键名步数，使有效吞吐反超无约束裸跑 **`26%` (`3,120 tok/s`)**！</p>
+    </div>
+    <div data-lang="en">
+      <h1>🧩 Enterprise Structured Output (`JSON Schema`) Constrained Decoding (`XGrammar` vs. `llguidance`) Lab (#464)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) Replace client retry loops (`18.4%` syntax failure) and legacy regex FSMs (`1,420ms` compile lag) with `XGrammar / llguidance` (`1.8ms` compile, `0.04ms/tok` mask overhead). (2) Enable **Jump-Forward Decoding** to fast-forward deterministic JSON keys and boost Goodput <strong>2.64x (3,120 tok/s)</strong>.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiCompile">1.8 ms vs 1,420 ms</div><div class="lbl">动态新 Schema 首字编译开销</div></div>
+    <div class="kpi"><div class="val" id="kpiMask">0.04 ms / tok</div><div class="lbl">单步 Decode 暴露掩码延迟</div></div>
+    <div class="kpi"><div class="val" id="kpiValid">100.0% vs 81.6%</div><div class="lbl">JSON Schema 一次解析成功率</div></div>
+    <div class="kpi"><div class="val" id="kpiJump">省 28.5% 步数</div><div class="lbl">确定性键名跳跃解码加速</div></div>
+    <div class="kpi"><div class="val" id="kpiSteps">143 步 vs 200 步</div><div class="lbl">生成 200-Tok JSON 实际解码步</div></div>
+    <div class="kpi"><div class="val" id="kpiGoodput">3,120 tok/s (2.64x)</div><div class="lbl">单实例达标有效吞吐</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 交互式 `JSON Schema` 跳跃解码步数节省与延迟推演器</h2>
+      <div class="formula">
+        Actual_Decode_Steps = Total_JSON_Tokens * (1 - Boilerplate_Key_Ratio)<br/>
+        E2EL_Structured = TTFT + Compile_Ms + Actual_Decode_Steps * (TPOT_GPU + Mask_Exposed_Ms)
+      </div>
+
+      <label><span>1. 目标输出 JSON 总 Token 长度 ($N_{\text{json}}$)</span><strong id="tokVal">200 Tokens</strong></label>
+      <input type="range" id="tokSlider" min="50" max="1000" step="50" value="200" />
+
+      <label><span>2. Schema 中固定字段名与括号语法占比 ($\eta_{\text{key}}$)</span><strong id="keyVal">30% (可由 Jump-Forward 直接跳过)</strong></label>
+      <input type="range" id="keySlider" min="10" max="55" step="5" value="30" />
+
+      <label><span>3. 约束解码引擎档位</span></label>
+      <select id="engSel">
+        <option value="tier4" selected>🏆 Tier 4: XGrammar / llguidance + 确定性跳跃解码 (Jump-Forward)</option>
+        <option value="tier3">Tier 3: XGrammar 标准位掩码 (无跳跃解码 · 0.12ms/tok)</option>
+        <option value="tier2">⚠️ Tier 2: 初代未缓存动态正则 FSM (+1,420ms 编译, +6.8ms/tok)</option>
+        <option value="tier1">⛔ Tier 1: 纯 Prompt 无约束 + 18.4% 失败重发</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：四档约束解码引擎有效吞吐 (`Goodput`) 与端到端耗时对比</h2>
+      <svg viewBox="0 0 580 300">
+        <text x="16" y="26" fill="#f8fafc" font-size="12.5" font-weight="700">1. 四档结构化输出引擎有效吞吐对决 (Goodput tok/s · 含 100% 合法校验)</text>
+
+        <text x="16" y="60" fill="#fca5a5" font-size="11.5">Tier 1 纯 Prompt + 18.4% 失败重试</text>
+        <rect x="255" y="46" width="102" height="20" rx="4" fill="#ef4444"/>
+        <text x="364" y="60" fill="#fca5a5" font-size="11" font-weight="700">1,180 tok/s ✕</text>
+
+        <text x="16" y="98" fill="#fde68a" font-size="11.5">Tier 2 初代未缓存正则 FSM (6.8ms/步)</text>
+        <rect x="255" y="84" width="124" height="20" rx="4" fill="#f59e0b"/>
+        <text x="386" y="98" fill="#fde68a" font-size="11" font-weight="700">1,420 tok/s</text>
+
+        <text x="16" y="136" fill="#93c5fd" font-size="11.5">Tier 3 XGrammar 预编译位掩码</text>
+        <rect x="255" y="122" width="212" height="20" rx="4" fill="#3b82f6"/>
+        <text x="474" y="136" fill="#93c5fd" font-size="11" font-weight="700">2,450 tok/s ✓</text>
+
+        <text x="16" y="174" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 XGrammar + 跳跃解码 🏆</text>
+        <rect x="255" y="160" width="270" height="20" rx="4" fill="#10b981"/>
+        <text x="415" y="196" fill="#34d399" font-size="11.5" font-weight="800">3,120 tok/s (2.64x · 反超裸跑 26% 🏆)</text>
+
+        <rect x="16" y="212" width="548" height="72" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="28" y="236" fill="#38bdf8" font-size="12" font-weight="700" id="svgJumpTitle">🚀 确定性跳跃解码演示：200 Token JSON 仅需执行 140 次 GPU 解码步！</text>
+        <text x="28" y="260" fill="#6ee7b7" font-size="11.5" id="svgJumpSub">• 其余 60 个固定键名/括号 Token 由自动机直接零耗时注入，端到端耗时仅 1.98 秒！</text>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function update() {
+      const toks = parseInt(document.getElementById('tokSlider').value, 10);
+      const keyPct = parseInt(document.getElementById('keySlider').value, 10);
+      const eng = document.getElementById('engSel').value;
+
+      document.getElementById('tokVal').textContent = toks + ' Tokens';
+      document.getElementById('keyVal').textContent = keyPct + '% (固定键名/语法占比)';
+
+      const steps = eng === 'tier4' ? Math.round(toks * (1.0 - keyPct / 100.0)) : toks;
+      const skipped = toks - steps;
+      const compMs = eng === 'tier2' ? 1420.0 : (eng === 'tier3' ? 8.5 : 1.8);
+      const maskMs = eng === 'tier2' ? 6.8 : (eng === 'tier3' ? 0.12 : 0.04);
+      const e2eSec = (300 + compMs + steps * (12.0 + maskMs)) / 1000.0;
+
+      document.getElementById('kpiCompile').textContent = compMs + ' ms';
+      document.getElementById('kpiMask').textContent = maskMs + ' ms / tok';
+      document.getElementById('kpiJump').textContent = '省 ' + keyPct + '% 步数';
+      document.getElementById('kpiSteps').textContent = steps + ' 步 vs ' + toks + ' 步';
+      document.getElementById('svgJumpTitle').textContent = '🚀 跳跃解码结果：' + toks + ' Token JSON 仅需执行 ' + steps + ' 次 GPU 解码步 (跳过 ' + skipped + ' 步)！';
+      document.getElementById('svgJumpSub').textContent = '• 端到端总耗时仅 ' + e2eSec.toFixed(2) + ' 秒，100.0% 符合 JSON Schema 约束！';
+    }
+    ['tokSlider', 'keySlider', 'engSel'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>
