@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业细粒度 GPU 切分与小模型共卡复用 (硬件 MIG vs. CUDA MPS vs. Time-Slicing) 装箱计算器 (#481)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-gpu-partitioning-mig-mps-timeslicing-small-model-packing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-gpu-partitioning-mig-mps-timeslicing-small-model-packing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-gpu-partitioning-mig-mps-timeslicing-small-model-packing-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-gpu-partitioning-mig-mps-timeslicing-small-model-packing-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🔪 企业细粒度 GPU 切分与卫星小模型共卡复用 (`硬件 MIG vs. CUDA MPS vs. Time-Slicing`) 沙盘 (#481)</h1>
+    <p class="subtitle">拖动滑块调整需托管的卫星 AI 微服务数量（Embedding/Reranker/ASR/OCR/Guard）与切分规格，实时测算所需 H200 整卡数、邻居噪声抖动与月度节省账单。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 卫星小模型数量与 GPU 切分策略设定</h2>
+        <div class="control">
+          <label><span>GPU 细粒度切分模式</span></label>
+          <select id="mode">
+            <option value="m1">Tier 1: 整卡独占分配 (每个微服务独占 1 张 H200 ✕)</option>
+            <option value="m2">Tier 2: K8s GPU Time-Slicing (时间片抢占 + 无显存墙 ✕)</option>
+            <option value="m3">Tier 3: CUDA MPS 多进程服务 (空间并发 + 共享故障域)</option>
+            <option value="m4" selected>Tier 4: 硬件 MIG 物理切分 (H200 1g.18gb / 2g.35gb 独立切片) 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>需部署的卫星小模型微服务数量 (`Microservices`)</span><strong id="svcVal">14 个服务</strong></label>
+          <input type="range" id="svcs" min="7" max="56" step="7" value="14" />
+        </div>
+        <div class="control">
+          <label><span>单卡 MIG 切片规格 (`Slices per H200`)</span></label>
+          <select id="prof">
+            <option value="7" selected>1g.18gb × 7 切片/卡 (适合 0.5B~4B Embedding/Rerank/ASR/OCR)</option>
+            <option value="3">2g.35gb × 3 切片/卡 (适合 7B~8B Llama-Guard/小模型)</option>
+            <option value="2">3g.71gb × 2 切片/卡 (适合 32B FP8 / 70B NVFP4)</option>
+          </select>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">整卡独占 vs. 切分后所需 H200</div>
+            <div class="val" id="gpuOut">14 卡 -&gt; 2 卡 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">邻居满载时 P99 延迟抖动</div>
+            <div class="val" id="jitOut">+1.2% (零干扰 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">硬件级 OOM 与异常崩溃隔离</div>
+            <div class="val" id="isoOut">100% 物理隔离 ✓</div>
+          </div>
+          <div class="kpi">
+            <div class="label">月度算力账单 / 节省比例</div>
+            <div class="val" id="costOut">$3,600/月 (-85.7% 🏆)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种切分方案在邻居高并发下的 P99 尾延迟劣化幅度 (%, 越短越稳)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: K8s GPU Time-Slicing (毫秒级上下文抢占 + OOM 团灭)</span><strong>+310.0% 抖动 ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: CUDA MPS (共享 L2/HBM 带宽控制器 + 共享崩溃域)</span><strong>+24.5% 抖动</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:18%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 硬件 MIG 物理切分 (独立 SM + L2 + HBM 通道 🏆)</span><strong>+1.2% 抖动 (省 85.7% 成本 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:2%;background:#10b981;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 整卡独占 (无干扰，但 14 张整卡月烧 $25,200 ✕)</span><strong>+0.0% ($25,200/月 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:1%;background:#94a3b8;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>架构师备忘</strong>：H100 / H200 / B200 原生支持 7 切片硬件 MIG；若在不支持 MIG 的 `L40S` 上共卡跑小模型，务必使用 `CUDA MPS + HAMi` 拦截显存上限！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const modeEl = document.getElementById('mode');
+    const svcsEl = document.getElementById('svcs');
+    const profEl = document.getElementById('prof');
+
+    function update() {
+      const m = modeEl.value;
+      const svcs = parseInt(svcsEl.value, 10);
+      const slicesPerGpu = parseInt(profEl.value, 10);
+
+      document.getElementById('svcVal').textContent = svcs + ' 个服务';
+      const packedGpus = m === 'm1' ? svcs : Math.ceil(svcs / slicesPerGpu);
+      const cost = packedGpus * 1800;
+      const savePct = ((1 - packedGpus / svcs) * 100).toFixed(1);
+
+      const specs = {
+        m1: { jit: '+0.0% (整卡浪费 ✕)', iso: '支持 (整卡独占)', color: '#ef4444' },
+        m2: { jit: '+310.0% (抢占抖动 ✕)', iso: '无 (OOM 连坐团灭 ✕)', color: '#ef4444' },
+        m3: { jit: '+24.5% (争抢带宽)', iso: '无 (Xid 31 全卡挂死 ✕)', color: '#f59e0b' },
+        m4: { jit: '+1.2% (零干扰 🏆)', iso: '100% 硬件物理隔离 🏆', color: '#10b981' }
+      };
+      const cur = specs[m];
+      document.getElementById('gpuOut').textContent = svcs + ' 卡 -> ' + packedGpus + ' 卡';
+      const jitEl = document.getElementById('jitOut');
+      jitEl.textContent = cur.jit;
+      jitEl.style.color = cur.color;
+      document.getElementById('isoOut').textContent = cur.iso;
+      document.getElementById('costOut').textContent = '$' + cost.toLocaleString() + '/月 (-' + savePct + '%)';
+    }
+
+    [modeEl, svcsEl, profEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

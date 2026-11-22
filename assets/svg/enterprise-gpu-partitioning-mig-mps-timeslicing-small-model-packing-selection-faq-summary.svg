@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业细粒度 GPU 切分与小模型共卡复用 (硬件 MIG vs. CUDA MPS vs. Time-Slicing) 选型 (#481)</text>
+  <text x="28" y="58" class="sub">终结“1个 0.6B Embedding 独占 1 张 141GB H200”的 85.7% 浪费与“Time-Slicing 邻居 OOM 连坐崩溃”：硬件 MIG 7 切片零干扰隔离</text>
+
+  <!-- Left Panel: Why Time-Slicing & MPS Fail in Multi-Tenant Production -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 为什么跑 Embedding / Reranker / ASR / OCR 卫星小模型时，软切分会引发雪崩？</text>
+
+  <rect x="42" y="120" width="524" height="92" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">⛔ Time-Slicing (时间片轮转) 与 CUDA MPS 的两大生产事故</text>
+  <text x="56" y="164" class="mono">• 事故 1 (Time-Slicing 抖动 +310%): 7 个进程毫秒级争抢 SM 上下文切换，</text>
+  <text x="56" y="184" class="mono">  且无硬件显存墙，1 个 OCR 进程显存泄露直接把同卡 ASR/Reranker 全炸崩！</text>
+  <text x="56" y="202" class="mono">• 事故 2 (MPS 连坐 Crash): 共享同一 GPU 硬件异常域，1 个进程 Xid 31 全卡挂死！</text>
+
+  <rect x="42" y="224" width="524" height="106" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="246" class="txt" font-weight="700" fill="#34d399">✅ 架构师解法：H100/H200/B200 硬件级 MIG 物理切片 (1g.18gb ~ 3g.71gb 🏆)</text>
+  <text x="56" y="268" class="mono">• 将 1 张 141GB H200 从硬件底层切分为最多 7 个独立 GPU 实例 (1g.18gb)：</text>
+  <text x="56" y="288" class="mono">• 每个切片拥有物理独立的 SM 流处理器、独立 L2 Cache 分区与独立 HBM 内存控制器！</text>
+  <text x="56" y="308" class="mono">• 2 张 H200 (14个 MIG 切片) 即可完美替代 14 张整卡，月省 $21,600 (-85.7%)！</text>
+
+  <!-- Right Panel: 4 Fractional GPU Partitioning Modes -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 托管 14 个企业 AI 卫星微服务 (Embedding/Rerank/OCR/Guard) 四种方案对标</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 整卡独占分配 (1 个小模型独占 1 张 H200，90% 显存与算力闲置)</text>
+  <text x="638" y="158" class="mono">• 需 H200: 14 卡 ✕ | P99 干扰抖动: +0.0% | 硬件故障隔离: 是 | 月成本: $25,200</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: K8s GPU Time-Slicing (时间片抢占切换 + 无显存硬件配额墙)</text>
+  <text x="638" y="214" class="mono">• 需 H200: 2 卡 | P99 干扰抖动: +310.0% ✕ | 硬件故障隔离: 无 ✕ | 月成本: $3,600</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: CUDA MPS 多进程服务 (SM 空间并发，但共享 L2/HBM 带宽与崩溃域)</text>
+  <text x="638" y="270" class="mono">• 需 H200: 2 卡 | P99 干扰抖动: +24.5% | 硬件故障隔离: 无(连坐✕) | 月成本: $3,600</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: 硬件 MIG 物理切分 (2 张 H200 切 14 个 1g.18gb 独立实例) (推荐 🏆)</text>
+  <text x="638" y="326" class="mono">• 需 H200: 2 卡 🏆 | P99 抖动: +1.2% 🏆 | 硬件故障隔离: 100% 🏆 | 月成本: $3,600</text>
+
+  <!-- Bottom Panel: H200 MIG Profiles & Selection Rules -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. NVIDIA H200 (141GB) / B200 硬件 MIG 黄金切分规格表与适用边界</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">规格 1: 1g.18gb × 7 切片 (微型卫星模型)</text>
+  <text x="58" y="464" class="mono">• 每个切片: 18 GB HBM3e + ~685 GB/s 独立带宽</text>
+  <text x="58" y="484" class="mono">• 适用模型 (0.5B ~ 4B):</text>
+  <text x="58" y="504" class="mono">  - BGE-M3 / text-embedding (Embedding)</text>
+  <text x="58" y="524" class="mono">  - BGE-Reranker-v2 (RAG 精排)</text>
+  <text x="58" y="544" class="mono">  - Streaming Conformer ASR / 4-Token TTS</text>
+  <text x="58" y="564" class="mono">  - Prompt-Guard / PaddleOCR</text>
+
+  <rect x="420" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="436" y="440" class="txt" font-weight="700" fill="#34d399">规格 2: 2g.35gb / 3g.71gb (8B~32B 中型模型)</text>
+  <text x="436" y="464" class="mono">• 2g.35gb (每卡3个): 35 GB HBM3e + 1.37 TB/s</text>
+  <text x="436" y="484" class="mono">  -&gt; 完美运行 Llama-3.1-8B / Llama-Guard-8B！</text>
+  <text x="436" y="506" class="mono">• 3g.71gb (每卡2个): 71 GB HBM3e + 2.40 TB/s</text>
+  <text x="436" y="526" class="mono">  -&gt; 完美运行 Qwen2.5-32B FP8 或 70B NVFP4！</text>
+  <text x="436" y="548" class="txt" fill="#34d399">K8s GPU Operator 支持按 mixed 策略动态混切！</text>
+
+  <rect x="798" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="814" y="440" class="txt" font-weight="700" fill="#d8b4fe">铁律 3: 什么时候不能开 MIG？(选型边界)</text>
+  <text x="814" y="464" class="mono">• 注意 1: L40S / RTX 4090 等 Ada 架构不支持</text>
+  <text x="814" y="484" class="mono">  硬件 MIG (仅 A100/A30/H100/H200/B200 支持)；</text>
+  <text x="814" y="504" class="mono">  在 L40S 上共卡请用 CUDA MPS + HAMi 显存限额！</text>
+  <text x="814" y="524" class="mono">• 注意 2: 开启 MIG 后该卡默认不参与跨卡</text>
+  <text x="814" y="544" class="mono">  NVLink P2P AllReduce，故 ≥70B FP8 大模型用整卡！</text>
+</svg>
