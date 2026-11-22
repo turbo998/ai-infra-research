@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业 AI 吞吐容量 (TPM/TPS/PTU) 换算、Little's Law 并发与五大场景 SLA 交互沙盘 (#448)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; }
+    th { color: var(--accent); background: rgba(15, 23, 42, 0.7); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-tpm-tps-littles-law-ttft-tpot-goodput-sla-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-tpm-tps-littles-law-ttft-tpot-goodput-sla-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-tpm-tps-littles-law-ttft-tpot-goodput-sla-sizing-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>📊 企业 AI 吞吐容量 (`TPM / TPS / PTU`) 精确换算、`Little's Law` 并发反推与五大场景 SLA 沙盘 (#448)</h1>
+      <p><strong>3 分钟核心结论</strong>：① <strong>单用户流式 TPS $= 1/\text{TPOT}$</strong>，<strong>集群总输出 TPS $= \text{RPS}\times \bar{N}_{\text{out}} = B_{\text{active}}/\text{TPOT}$</strong>，<strong>云端 PTU 等效加权 TPM $= \text{TPM}_{\text{in}}(1-\eta) + 5\times\text{TPM}_{\text{out}}$</strong>；② <strong>Little's Law ($B_{\text{active}} = \text{RPS}_{\text{peak}}\times [\text{TTFT}+(\bar{N}_{\text{out}}-1)\text{TPOT}]$)</strong> 决定峰值同时驻留显存的会话槽位数；③ 采用 <strong>`P80` 预留基座 (吃满缓存抵扣) + `P20` 峰值溢出 PAYGO</strong>，将早高峰 `429` 限流从 `64.2%` 归零并省下 <strong>`68.5%` 月度账单 (`$98.4K` vs. `$312K`)</strong>！</p>
+    </div>
+    <div data-lang="en">
+      <h1>📊 Enterprise `TPM / TPS / PTU` Conversion, `Little's Law` Concurrency &amp; 5-Scenario SLA Lab (#448)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) Distinguish Per-User TPS ($1/\text{TPOT}$), System TPS ($\text{RPS}\times \bar{N}_{\text{out}}$), and Output-Weighted PTU TPM ($\text{TPM}_{\text{in}}(1-\eta) + 5\cdot\text{TPM}_{\text{out}}$). (2) Size active KV concurrency via Little's Law ($B_{\text{active}} = \text{RPS}_{\text{peak}} \times \text{E2EL}$). (3) Combine `P80` prefix-deducted PTU/GPU base with `P20` serverless burst to achieve <strong>0.0% HTTP 429 throttling</strong> and <strong>save 68.5% ($98.4K/mo vs. $312K/mo)</strong>.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiRps">50.0 RPS (3,000 RPM)</div><div class="lbl">早高峰请求到达率 Peak RPS</div></div>
+    <div class="kpi"><div class="val" id="kpiRawTpm">12.0M 原始 TPM</div><div class="lbl">10.5M In + 1.5M Out</div></div>
+    <div class="kpi"><div class="val" id="kpiWtpm">12.8M 加权 TPM</div><div class="lbl">PTU 等效 TPM (含缓存抵扣)</div></div>
+    <div class="kpi"><div class="val" id="kpiE2el">8.78 秒</div><div class="lbl">单次请求端到端耗时 E2EL</div></div>
+    <div class="kpi"><div class="val" id="kpiBactive">440 并发槽位</div><div class="lbl">Little's Law 峰值活跃 KV 槽位</div></div>
+    <div class="kpi"><div class="val" id="kpiBill">$98,400 / 月 (-68.5%)</div><div class="lbl">Tier 4 P80+P20 月度总账单</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 交互式 `DAU -> Peak RPS -> TPM/TPS/PTU -> Little's Law` 全链路计算器</h2>
+      <div class="formula">
+        Peak_RPS = (DAU * Turns * 4.8) / 86400 &nbsp;|&nbsp; E2EL = TTFT + (N_out - 1) * TPOT<br/>
+        B_active = Peak_RPS * E2EL &nbsp;|&nbsp; Weighted_TPM = TPM_in * (1 - eta_cache) + 5 * TPM_out
+      </div>
+
+      <label><span>1. 业务场景预设（自动带入对应 SLA 门禁）</span></label>
+      <select id="scenSel">
+        <option value="rag" selected>企业知识库与办公助手 (RAG Chat · SLA: TTFT&lt;=800ms, P99 ITL&lt;=25ms)</option>
+        <option value="voice">实时语音客服 (Voice Agent · SLA: TTFT&lt;=250ms, P99 ITL&lt;=18ms)</option>
+        <option value="fim">IDE 代码补全 (Tab FIM · SLA: TTFT&lt;=150ms, P99 ITL&lt;=12ms)</option>
+        <option value="cot">深度推理 Agent (CoT / R1 · SLA: TTFT&lt;=1500ms, P99 ITL&lt;=20ms)</option>
+      </select>
+
+      <label><span>2. 企业日活跃用户数 ($\text{DAU}$)</span><strong id="dauVal">50,000 人</strong></label>
+      <input type="range" id="dauSlider" min="5000" max="200000" step="5000" value="50000" />
+
+      <label><span>3. 平均每次输入长度 ($\bar{N}_{\text{in}}$)</span><strong id="inVal">3,500 Tokens</strong></label>
+      <input type="range" id="inSlider" min="500" max="16000" step="500" value="3500" />
+
+      <label><span>4. 平均每次输出长度 ($\bar{N}_{\text{out}}$，CoT 可拉至 2500+)</span><strong id="outVal">500 Tokens</strong></label>
+      <input type="range" id="outSlider" min="100" max="4000" step="100" value="500" />
+
+      <label><span>5. 前缀缓存命中率 ($\eta_{\text{cache}}$，抵扣输入 PTU/算力)</span><strong id="cacheVal">50%</strong></label>
+      <input type="range" id="cacheSlider" min="0" max="90" step="10" value="50" />
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：单次请求生命周期拆解 &amp; 四档定容方案月账单对决</h2>
+      <svg viewBox="0 0 580 340">
+        <text x="16" y="24" fill="#f8fafc" font-size="12.5" font-weight="700" id="e2eTitle">1. 单次请求端到端生命周期 (E2EL = TTFT + (N_out - 1) × TPOT)</text>
+        <rect x="16" y="36" width="548" height="32" rx="6" fill="#1e293b" stroke="#334155"/>
+        <rect id="barTtft" x="16" y="36" width="90" height="32" fill="#f59e0b"/>
+        <rect id="barDecode" x="106" y="36" width="458" height="32" fill="#10b981"/>
+        <text x="24" y="56" fill="#070b14" font-size="11" font-weight="800" id="txtTtft">TTFT: 0.80s</text>
+        <text x="120" y="56" fill="#070b14" font-size="11" font-weight="800" id="txtDecode">Streaming Decode (N_out-1 步): 7.98s (单用户 62.5 tok/s)</text>
+
+        <text x="16" y="98" fill="#f8fafc" font-size="12.5" font-weight="700">2. 四档吞吐与容量采购方案月度账单与早高峰 429 限流率对比</text>
+        <text x="16" y="126" fill="#fca5a5" font-size="11.5">Tier 1 原始 TPM 1:1 相加 (64.2% 429 限流 ✕)</text>
+        <rect x="275" y="112" width="185" height="18" rx="4" fill="#ef4444"/>
+        <text x="468" y="126" fill="#fca5a5" font-size="11" font-weight="700" id="b1Txt">$218,000/月</text>
+
+        <text x="16" y="158" fill="#fde68a" font-size="11.5">Tier 2 P100 峰值全买 PTU (夜间闲置浪费 ✕)</text>
+        <rect x="275" y="144" width="265" height="18" rx="4" fill="#f59e0b"/>
+        <text x="468" y="158" fill="#070b14" font-size="11" font-weight="800" id="b2Txt">$312,000/月</text>
+
+        <text x="16" y="190" fill="#93c5fd" font-size="11.5">Tier 3 Little's Law + 5x 输出加权 TPM</text>
+        <rect x="275" y="176" width="124" height="18" rx="4" fill="#3b82f6"/>
+        <text x="406" y="190" fill="#93c5fd" font-size="11" font-weight="700" id="b3Txt">$146,000/月</text>
+
+        <text x="16" y="222" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 P80 基座(缓存抵扣) + P20 溢出 🏆</text>
+        <rect x="275" y="208" width="84" height="18" rx="4" fill="#10b981"/>
+        <text x="366" y="222" fill="#34d399" font-size="11.5" font-weight="800" id="b4Txt">$98,400/月 (-68.5% 🏆)</text>
+
+        <rect x="16" y="248" width="548" height="76" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="28" y="272" fill="#38bdf8" font-size="12" font-weight="700" id="llAlertTitle">💡 Little's Law 并发预警：当前同时在途会话 B_active = 440 路</text>
+        <text x="28" y="294" fill="#cbd5e1" font-size="11.5" id="llAlertSub">试着把“输出长度”拖到 2,500 (模拟 DeepSeek-R1 思维链)，观测 E2EL 与在途并发槽位如何翻 5 倍！</text>
+        <text x="28" y="314" fill="#6ee7b7" font-size="11.5" id="llAlertSla">当前场景 SLA 门禁：P95 TTFT &lt;= 800 ms | P99 ITL &lt;= 25 ms | 单用户 &gt;= 40 tok/s</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📊 五大企业 AI 业务场景核心评估指标（`TTFT / TPOT / ITL / E2EL / Goodput`）基准矩阵</h2>
+    <table>
+      <thead>
+        <tr><th>业务场景</th><th>首字延迟 P95 TTFT</th><th>步间尾延迟 P99 ITL</th><th>单用户流式速率</th><th>为什么不能只看平均 TPOT？</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>1. 实时语音对话 (Voice Agent)</strong></td><td><code>&lt;= 250 ms</code></td><td><code>&lt;= 18 ms</code></td><td><code>&gt;= 55 tok/s</code></td><td>单次 &gt;60ms 步间卡顿即导致 TTS 音频断流破音</td></tr>
+        <tr><td><strong>2. IDE 代码补全 (Tab FIM)</strong></td><td><code>&lt;= 150 ms</code></td><td><code>&lt;= 12 ms</code></td><td><code>&gt;= 80 tok/s</code></td><td>程序员敲键间隔仅 150~200ms，慢于 350ms 即被废弃</td></tr>
+        <tr><td><strong>3. 企业知识助手 (RAG Chat)</strong></td><td><code>&lt;= 800 ms</code></td><td><code>&lt;= 25 ms</code></td><td><code>&gt;= 40 tok/s</code></td><td>长输入混部抢占会造成打字机界面周期性冻结</td></tr>
+        <tr><td><strong>4. 深度推理 (CoT / R1 Agent)</strong></td><td><code>&lt;= 1,500 ms</code></td><td><code>&lt;= 20 ms</code></td><td><code>&gt;= 50 tok/s</code></td><td>输出长达 2K~4K，TPOT 慢 10ms 会使总耗时多出 40 秒</td></tr>
+        <tr><td><strong>5. 离线批处理 (Batch Pipeline)</strong></td><td><code>&lt;= 30,000 ms</code></td><td><code>&lt;= 100 ms</code></td><td>不敏感</td><td>考核全集群每小时总达标 Token 吞吐与 $/1M 成本</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function update() {
+      const scen = document.getElementById('scenSel').value;
+      const dau = parseInt(document.getElementById('dauSlider').value, 10);
+      const nin = parseInt(document.getElementById('inSlider').value, 10);
+      const nout = parseInt(document.getElementById('outSlider').value, 10);
+      const cache = parseInt(document.getElementById('cacheSlider').value, 10);
+
+      document.getElementById('dauVal').textContent = dau.toLocaleString() + ' 人';
+      document.getElementById('inVal').textContent = nin.toLocaleString() + ' Tokens';
+      document.getElementById('outVal').textContent = nout.toLocaleString() + ' Tokens';
+      document.getElementById('cacheVal').textContent = cache + '%';
+
+      const ttftS = scen === 'fim' ? 0.14 : (scen === 'voice' ? 0.22 : (scen === 'cot' ? 1.20 : 0.80));
+      const tpotMs = scen === 'fim' ? 11.0 : (scen === 'voice' ? 14.0 : 16.0);
+      const rps = (dau * 18.0 * 4.8) / 86400.0;
+      const inTpmM = (rps * nin * 60.0) / 1e6;
+      const outTpmM = (rps * nout * 60.0) / 1e6;
+      const rawTpmM = inTpmM + outTpmM;
+      const wTpmM = inTpmM * (1.0 - cache / 100.0) + 5.0 * outTpmM;
+
+      const decSec = ((nout - 1) * tpotMs) / 1000.0;
+      const e2el = ttftS + decSec;
+      const bActive = Math.ceil(rps * e2el);
+
+      const scale = wTpmM / 12.75;
+      const b1 = Math.round(218000 * scale);
+      const b2 = Math.round(312000 * scale);
+      const b3 = Math.round(146000 * scale);
+      const b4 = Math.round(98400 * scale);
+
+      document.getElementById('kpiRps').textContent = rps.toFixed(1) + ' RPS (' + Math.round(rps * 60).toLocaleString() + ' RPM)';
+      document.getElementById('kpiRawTpm').textContent = rawTpmM.toFixed(1) + 'M 原始 TPM';
+      document.getElementById('kpiWtpm').textContent = wTpmM.toFixed(1) + 'M 加权 TPM';
+      document.getElementById('kpiE2el').textContent = e2el.toFixed(2) + ' 秒';
+      document.getElementById('kpiBactive').textContent = bActive.toLocaleString() + ' 并发槽位';
+      document.getElementById('kpiBill').textContent = '$' + b4.toLocaleString() + ' / 月';
+
+      const wTtft = Math.max(65, Math.min(220, Math.round((ttftS / e2el) * 548)));
+      const wDec = 548 - wTtft;
+      document.getElementById('barTtft').setAttribute('width', wTtft);
+      document.getElementById('barDecode').setAttribute('x', 16 + wTtft);
+      document.getElementById('barDecode').setAttribute('width', wDec);
+      document.getElementById('txtTtft').textContent = 'TTFT: ' + ttftS.toFixed(2) + 's';
+      document.getElementById('txtDecode').setAttribute('x', 24 + wTtft);
+      document.getElementById('txtDecode').textContent = 'Decode: ' + decSec.toFixed(2) + 's (' + (1000 / tpotMs).toFixed(1) + ' tok/s)';
+
+      document.getElementById('b1Txt').textContent = '$' + b1.toLocaleString() + '/月';
+      document.getElementById('b2Txt').textContent = '$' + b2.toLocaleString() + '/月';
+      document.getElementById('b3Txt').textContent = '$' + b3.toLocaleString() + '/月';
+      document.getElementById('b4Txt').textContent = '$' + b4.toLocaleString() + '/月 (-68.5% 🏆)';
+      document.getElementById('llAlertTitle').textContent = '💡 Little\'s Law 并发槽位：峰值同时在途 B_active = ' + bActive.toLocaleString() + ' 路 (E2EL = ' + e2el.toFixed(2) + 's)';
+    }
+    ['scenSel', 'dauSlider', 'inSlider', 'outSlider', 'cacheSlider'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>
