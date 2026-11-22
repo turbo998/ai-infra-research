@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业百至千级租户 Multi-LoRA 共池服务 (vLLM / SGLang / S-LoRA) 显存与 TCO 计算器 (#468)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-multi-lora-serving-slora-punica-hbm-cache-tco-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-multi-lora-serving-slora-punica-hbm-cache-tco-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-multi-lora-serving-slora-punica-hbm-cache-tco-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-multi-lora-serving-slora-punica-hbm-cache-tco-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🧩 企业百至千级租户微调模型共池服务 (`Multi-LoRA / S-LoRA`) 显存与 TCO 沙盘 (#468)</h1>
+    <p class="subtitle">拖动滑块调整微调租户数量、LoRA Rank 秩大小与显存热槽数，实时对比“合并权重独立部署”与“Multi-LoRA 共基座混合批处理”的 GPU 卡数与月度账单。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 多租户 LoRA 规模与缓存池参数</h2>
+        <div class="control">
+          <label><span>企业微调模型租户数 (`Tenant Adapters`)</span><strong id="tenVal">128 个微调模型</strong></label>
+          <input type="range" id="tenants" min="8" max="512" step="8" value="128" />
+        </div>
+        <div class="control">
+          <label><span>LoRA 微调秩大小 (`Rank r`)</span><strong id="rankVal">r = 32 (335.5 MB/个)</strong></label>
+          <select id="rank">
+            <option value="8">r = 8 (83.9 MB / 适配器)</option>
+            <option value="16">r = 16 (167.8 MB / 适配器)</option>
+            <option value="32" selected>r = 32 (335.5 MB / 适配器) 🏆</option>
+            <option value="64">r = 64 (671.1 MB / 适配器)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>GPU HBM 常驻热槽数 (`max_loras`)</span><strong id="slotVal">32 个热槽</strong></label>
+          <input type="range" id="slots" min="8" max="64" step="8" value="32" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">合并权重独立部署所需 H200</div>
+            <div class="val" id="dedGpu" style="color:#ef4444;">256 张 ($46.1万/月)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Multi-LoRA 共池所需 H200</div>
+            <div class="val" id="loraGpu">8 张 ($1.44万/月 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单卡 L1 HBM 适配器槽位占用</div>
+            <div class="val" id="hbmOut">5.37 GB / 卡</div>
+          </div>
+          <div class="kpi">
+            <div class="label">主机 L2 DRAM 全量缓存占用</div>
+            <div class="val" id="dramOut">42.9 GB DRAM</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种多微调模型托管方案月度 GPU 账单对比 ($/mo, 越短越省钱)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 合并权重独立部署 (每个租户 2x H200 Pod)</span><strong id="b1">$460,800 / mo ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f1" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 串行权重加减热切换 (TPOT 劣化至 92ms)</span><strong id="b2">$28,800 / mo ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f2" style="width:12%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: vLLM / SGLang Multi-LoRA (HBM 热槽 + CPU 温池)</span><strong id="b3">$14,400 / mo ✓</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f3" style="width:6%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: S-LoRA 统一分页 + 网关亲和路由 (-96.9% 成本 🏆)</span><strong id="b4">$14,400 / mo 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" id="f4" style="width:6%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>安全隔离红线</strong>：开启 Multi-LoRA 时，Prefix Caching 的哈希键必须拼接 `lora_adapter_id`，防止租户 A 的微调 KV Cache 被租户 B 误命中！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tenantsEl = document.getElementById('tenants');
+    const rankEl = document.getElementById('rank');
+    const slotsEl = document.getElementById('slots');
+
+    function update() {
+      const tenants = parseInt(tenantsEl.value, 10);
+      const rank = parseInt(rankEl.value, 10);
+      const slots = parseInt(slotsEl.value, 10);
+
+      const mbPerAdapter = 10.485 * rank;
+      document.getElementById('tenVal').textContent = tenants + ' 个微调模型';
+      document.getElementById('rankVal').textContent = 'r = ' + rank + ' (' + mbPerAdapter.toFixed(1) + ' MB/个)';
+      document.getElementById('slotVal').textContent = slots + ' 个热槽';
+
+      const dedGpus = tenants * 2;
+      const dedCost = dedGpus * 1800;
+      const sharedGpus = Math.max(8, Math.ceil(tenants / 32) * 2);
+      const sharedCost = sharedGpus * 1800;
+
+      const hbmPerGpu = (slots * mbPerAdapter / 1024) / 2;
+      const hostDram = (tenants * mbPerAdapter) / 1024;
+
+      document.getElementById('dedGpu').textContent = dedGpus + ' 张 ($' + (dedCost / 10000).toFixed(1) + '万/月)';
+      document.getElementById('loraGpu').textContent = sharedGpus + ' 张 ($' + (sharedCost / 10000).toFixed(2) + '万/月 🏆)';
+      document.getElementById('hbmOut').textContent = hbmPerGpu.toFixed(2) + ' GB / 卡';
+      document.getElementById('dramOut').textContent = hostDram.toFixed(1) + ' GB DRAM';
+
+      document.getElementById('b1').textContent = '$' + dedCost.toLocaleString() + ' / mo ✕';
+      document.getElementById('b2').textContent = '$' + (sharedCost * 2).toLocaleString() + ' / mo ✕';
+      document.getElementById('b3').textContent = '$' + sharedCost.toLocaleString() + ' / mo ✓';
+      document.getElementById('b4').textContent = '$' + sharedCost.toLocaleString() + ' / mo 🏆';
+    }
+
+    [tenantsEl, rankEl, slotsEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

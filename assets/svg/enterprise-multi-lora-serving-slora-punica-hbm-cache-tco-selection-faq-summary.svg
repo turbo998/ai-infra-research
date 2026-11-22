@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业百至千级微调模型共池服务 (Multi-LoRA Serving: vLLM / SGLang / S-LoRA) 显存手算与选型 (#468)</text>
+  <text x="28" y="58" class="sub">终结“1个部门微调1个独立70B副本”的 256 卡灾难：共享 70B FP8 基座 + 异构微调混合 Batch 将算力压至 8 卡 (省 96.9%)</text>
+
+  <!-- Left Panel: Dedicated Merged Pods vs Multi-LoRA Shared Base -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 为什么给 128 个微调租户各起一个 Pod 会直接把算力预算烧穿？</text>
+
+  <rect x="42" y="120" width="524" height="92" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">⛔ 合并权重独立部署 (Merge-and-Deploy = 256 张 H200 / $46.1万/月 ✕)</text>
+  <text x="56" y="164" class="mono">• 将 LoRA 合并回 70B 底座后，每个业务线必须独占 2 张 H200 (140GB)</text>
+  <text x="56" y="184" class="mono">• 128 个租户 = 256 张 GPU，但 90% 长尾租户日均请求不足 0.2 RPS！</text>
+  <text x="56" y="202" class="txt" fill="#cbd5e1">若改用“串行 Merge/Unmerge 热切换”，不同租户请求无法合批，TPOT 飙至 92ms。</text>
+
+  <rect x="42" y="224" width="524" height="106" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="246" class="txt" font-weight="700" fill="#34d399">✅ Multi-LoRA 共基座混合 Batch: Y = X * W_0 + (X * A_i) * B_i (🏆)</text>
+  <text x="56" y="268" class="mono">• 64 个并发请求来自 32 个不同租户？占 99.5% 算力的底座矩阵 X * W_0</text>
+  <text x="56" y="288" class="mono">  合成为 1 次稠密大 Batch GEMM；仅占 0.5% 的旁路 (X*A_i)*B_i 跑分组小算子！</text>
+  <text x="56" y="308" class="mono">• 8 张 H200 即可承载全部 128 个微调模型，月账单从 $46.1万 降至 $1.44万！</text>
+
+  <!-- Right Panel: 4 Multi-LoRA Serving Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 128 个租户微调模型 (Llama-70B Rank-32) 四种部署方案对标</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 合并权重独立副本 (128 个独立 2x H200 Pod)</text>
+  <text x="638" y="158" class="mono">• GPU 数: 256 卡 ✕ | 混批 TPOT: 14.5ms | 月成本: $460,800</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 串行权重加减热切换 (Unbatched Merge/Unmerge)</text>
+  <text x="638" y="214" class="mono">• GPU 数: 16 卡 | 冷切延迟: 340ms ✕ | 混批 TPOT: 92.0ms ✕ | 月成本: $28,800</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: vLLM / SGLang Multi-LoRA (32 热槽 HBM + 128 槽 CPU DRAM)</text>
+  <text x="638" y="270" class="mono">• GPU 数: 8 卡 ✓ | 冷切延迟: 8.2ms | 混批 TPOT: 16.8ms | 月成本: $14,400</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: S-LoRA 统一分页池 + 网关亲和路由 + 基座前缀共享 (推荐 🏆)</text>
+  <text x="638" y="326" class="mono">• GPU 数: 8 卡 🏆 | 冷切: 1.9ms 🏆 | TPOT: 14.9ms | 月成本: $14,400 (-96.9%)</text>
+
+  <!-- Bottom Panel: LoRA Footprint & Cache Sizing Formulas -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 单个 LoRA 适配器体积手算与三级缓存池 (HBM -&gt; Pinned DRAM -&gt; NVMe) 规划</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">公式 1: 单个 LoRA 适配器精确显存公式</text>
+  <text x="58" y="464" class="mono">• M_LoRA = 2_bytes(BF16) * L_layers * r_rank</text>
+  <text x="58" y="484" class="mono">           * Sum[(d_in + d_out)_m]</text>
+  <text x="58" y="506" class="txt">• 以 Llama-3.3-70B (80层, Q/K/V/O+Gate/Up/Down</text>
+  <text x="58" y="526" class="txt">  全模块微调) 为例：</text>
+  <text x="58" y="548" class="mono">  - Rank r = 16 -&gt; 167.8 MB / 个</text>
+  <text x="58" y="568" class="mono">  - Rank r = 32 -&gt; 335.5 MB / 个 (仅底座的 0.48%!)</text>
+
+  <rect x="420" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="436" y="440" class="txt" font-weight="700" fill="#34d399">公式 2: HBM 热槽 vs. CPU 锁页内存容量</text>
+  <text x="436" y="464" class="mono">• HBM 热槽 (max_loras = 32):</text>
+  <text x="436" y="484" class="mono">  32 * 335.5 MB = 10.74 GB (TP=2 每卡仅 5.37 GB)</text>
+  <text x="436" y="506" class="mono">• CPU Pinned DRAM 温池 (max_cpu_loras = 256):</text>
+  <text x="436" y="526" class="mono">  256 * 335.5 MB = 85.9 GB 主机内存</text>
+  <text x="436" y="548" class="txt" fill="#34d399">PCIe Gen5 (52 GB/s) 换入 1 个分片仅需 3.2ms，</text>
+  <text x="436" y="568" class="txt" fill="#34d399">与首层 Prefill 异步重叠后暴露延迟仅 1.9ms！</text>
+
+  <rect x="798" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="814" y="440" class="txt" font-weight="700" fill="#d8b4fe">公式 3: 网关适配器亲和路由与前缀共享</text>
+  <text x="814" y="464" class="mono">• AI Gateway 按 model="tenant-lora-id" 做</text>
+  <text x="814" y="484" class="mono">  一致性哈希 (Bounded-Load Consistent Hash)</text>
+  <text x="814" y="506" class="mono">• 同一租户请求聚合至同一副本，避免多机重复</text>
+  <text x="814" y="526" class="mono">  缓存相同 LoRA 槽位（HBM 命中率 &gt; 98%）</text>
+  <text x="814" y="548" class="txt" fill="#fde68a">注意：KV Cache 必须绑定 lora_id 命名空间隔离，</text>
+  <text x="814" y="568" class="txt" fill="#fde68a">仅未挂 LoRA 的底层或同租户内部可共享 Prefix！</text>
+</svg>
