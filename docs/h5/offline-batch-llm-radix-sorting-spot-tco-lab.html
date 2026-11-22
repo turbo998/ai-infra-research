@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业百亿 Token 离线批处理推理 (字典序前缀重排 + Spot 竞价池) 吞吐与成本计算器 (#474)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-offline-batch-llm-inference-radix-prefix-sorting-spot-tco-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-offline-batch-llm-inference-radix-prefix-sorting-spot-tco-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-offline-batch-llm-inference-radix-prefix-sorting-spot-tco-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-offline-batch-llm-inference-radix-prefix-sorting-spot-tco-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>📦 企业百亿 Token 离线批处理推理 (`字典序前缀重排 + 长度分桶 + Spot 竞价池`) 沙盘 (#474)</h1>
+    <p class="subtitle">拖动滑块调整离线批处理总 Token 规模（十亿级）与并行 GPU 卡数，实时对比无序在线池、云端半价 Batch API 与字典序重排 Spot 池的耗时与总账单。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 离线批处理规模与流水线设定</h2>
+        <div class="control">
+          <label><span>离线批处理流水线档位</span></label>
+          <select id="pipe">
+            <option value="p1">Tier 1: 无序混入在线实时池 (Batch&lt;=32, 命中率 18.5% ✕)</option>
+            <option value="p2">Tier 2: 公有云托管 50% 折扣 Batch API (24h 异步返回)</option>
+            <option value="p3">Tier 3: 独立按需 GPU 批处理池 (Batch=256, 未做前缀排序)</option>
+            <option value="p4" selected>Tier 4: Ray Data + 字典序前缀重排 + 长度分桶 + Spot 卡 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>离线数据集总 Token 量 (`Dataset Billions`)</span><strong id="tokVal">10 B (100亿 Tokens)</strong></label>
+          <input type="range" id="toks" min="1" max="100" step="1" value="10" />
+        </div>
+        <div class="control">
+          <label><span>离线池 H200 GPU 卡数 (`Batch GPUs`)</span><strong id="gpuVal">16 张 H200</strong></label>
+          <input type="range" id="gpus" min="8" max="128" step="8" value="16" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">Prefix Cache 命中率</div>
+            <div class="val" id="hitOut">94.2% (字典序重排 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单卡有效吞吐 (tok/s/GPU)</div>
+            <div class="val" id="tpsOut">9,840 tok/s (6.93x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">全量批处理预计完工时间</div>
+            <div class="val" id="timeOut">17.6 小时</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单百万成本 / 全量总账单</div>
+            <div class="val" id="costOut">$0.028/1M ($280 🏆)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种流水线单张 GPU 吞吐对比 (tok/s/GPU, 越长越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 无序混入在线实时池 ($0.340/1M)</span><strong>1,420 tok/s ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:14.4%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 公有云 50% 折扣 Batch API ($0.170/1M)</span><strong>2,800 tok/s</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:28.5%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 独立按需 GPU 池 无序输入 ($0.110/1M)</span><strong>3,650 tok/s ✓</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:37.1%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 字典序前缀重排 + 长度分桶 + Spot 卡 ($0.028/1M 🏆)</span><strong>9,840 tok/s 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>为什么一行排序能省 90% 成本？</strong> 离线批处理前先执行 `df.sort_values('prompt')`，让共享同一篇长文档的数千条问题连续落入同一张卡，消除 94.2% 的重复 Prefill！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const pipeEl = document.getElementById('pipe');
+    const toksEl = document.getElementById('toks');
+    const gpusEl = document.getElementById('gpus');
+
+    function update() {
+      const pipe = pipeEl.value;
+      const bToks = parseFloat(toksEl.value);
+      const gpus = parseInt(gpusEl.value, 10);
+
+      document.getElementById('tokVal').textContent = bToks + ' B (' + (bToks * 10) + '亿 Tokens)';
+      document.getElementById('gpuVal').textContent = gpus + ' 张 H200';
+
+      const specs = {
+        p1: { hit: '18.5% (缓存颠簸 ✕)', tps: 1420, price: 0.340, color: '#ef4444' },
+        p2: { hit: '50.0%', tps: 2800, price: 0.170, color: '#f59e0b' },
+        p3: { hit: '24.0% (未排序)', tps: 3650, price: 0.110, color: '#3b82f6' },
+        p4: { hit: '94.2% (字典序重排 🏆)', tps: 9840, price: 0.028, color: '#10b981' }
+      };
+      const cur = specs[pipe];
+      const hrs = (bToks * 1e9) / (cur.tps * gpus * 3600);
+      const totalBill = bToks * 1000 * cur.price;
+
+      const hitEl = document.getElementById('hitOut');
+      hitEl.textContent = cur.hit;
+      hitEl.style.color = cur.color;
+      document.getElementById('tpsOut').textContent = cur.tps.toLocaleString() + ' tok/s';
+      document.getElementById('timeOut').textContent = hrs.toFixed(1) + ' 小时';
+      document.getElementById('costOut').textContent = '$' + cur.price.toFixed(3) + '/1M ($' + Math.round(totalBill).toLocaleString() + ')';
+    }
+
+    [pipeEl, toksEl, gpusEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
