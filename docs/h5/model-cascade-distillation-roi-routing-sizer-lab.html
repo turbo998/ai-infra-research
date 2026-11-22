@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大小模型级联路由与知识蒸馏 ROI (671B Teacher -&gt; 32B/8B Student) 回本周期计算器 (#488)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-model-cascade-distillation-roi-teacher-student-routing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-model-cascade-distillation-roi-teacher-student-routing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-model-cascade-distillation-roi-teacher-student-routing-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-model-cascade-distillation-roi-teacher-student-routing-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>⚗️ 企业大小模型级联路由与知识蒸馏 ROI (`671B Teacher -&gt; 32B/8B Student 飞轮`) 沙盘 (#488)</h1>
+    <p class="subtitle">拖动滑块调整线上请求速率 (`RPS`) 与蒸馏学生模型分流比例 (`Student Route %`)，实时手算所需 H200 卡数、月度节省金额与蒸馏训练投入回本小时数。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 流量规模与教师-学生分流设定</h2>
+        <div class="control">
+          <label><span>大小模型路由与蒸馏档位</span></label>
+          <select id="tier">
+            <option value="t1">Tier 1: 100% 流量全跑 671B 旗舰教师模型 (无分流 ✕)</option>
+            <option value="t2">Tier 2: 100% 裸跑未蒸馏 8B/14B 小模型 (准确率仅 74.2% ✕)</option>
+            <option value="t3">Tier 3: 串行试错回退级联 (8B 不自信再重跑 671B，破坏流式)</option>
+            <option value="t4" selected>Tier 4: 领域蒸馏 32B/8B 学生 + 671B 教师 前置路由飞轮 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>业务线上请求速率 (`Production RPS`)</span><strong id="rpsVal">50 RPS</strong></label>
+          <input type="range" id="rps" min="10" max="200" step="10" value="50" />
+        </div>
+        <div class="control">
+          <label><span>蒸馏学生模型承接流量占比 (`Student Share %`)</span><strong id="shVal">82%</strong></label>
+          <input type="range" id="share" min="50" max="92" step="2" value="82" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">垂直业务准确率 / 加权 TPOT</div>
+            <div class="val" id="accOut">95.1% / 7.4 ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">所需 H200 GPU 总卡数</div>
+            <div class="val" id="gpuOut">16 张 (-75.0% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">月度推理账单 / 每月净省</div>
+            <div class="val" id="costOut">$28.8k/月 (省 $86.4k)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">$1,850 蒸馏投入回本时间</div>
+            <div class="val" id="roiOut">0.64 天 (15.4 小时 🏆)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种方案在 50 RPS 下月度推理算力账单对比 ($/mo, 越短越省钱)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 100% 流量全跑 671B 旗舰模型 (64 张 H200)</span><strong id="b1">$115,200 / mo ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 串行试错级联 (28 张 H200，重复计算 + 无法首字流式)</span><strong id="b3">$50,400 / mo</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:43.8%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 领域蒸馏学生 (82%) + 671B 教师 (18%) 飞轮 🏆</span><strong id="b4">$28,800 / mo (95.1% 准确率 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:25%;background:#10b981;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 未蒸馏开源 8B 裸跑 (准确率跌至 74.2% 不可用 ✕)</span><strong id="b2">$14,400 / mo (准确率崩盘 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:12.5%;background:#3b82f6;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>数据飞轮秘诀</strong>：把每天被路由器分给 `671B` 教师模型的 18% 困难真实请求收集起来，每周末在夜间潮汐空闲卡上自动增量微调学生模型，分流比可一路爬升至 90%！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tierEl = document.getElementById('tier');
+    const rpsEl = document.getElementById('rps');
+    const shareEl = document.getElementById('share');
+
+    function update() {
+      const t = tierEl.value;
+      const rps = parseInt(rpsEl.value, 10);
+      const sh = parseInt(shareEl.value, 10) / 100;
+      const scale = rps / 50;
+
+      document.getElementById('rpsVal').textContent = rps + ' RPS';
+      document.getElementById('shVal').textContent = Math.round(sh * 100) + '%';
+
+      const g1 = Math.ceil(64 * scale);
+      const g2 = Math.max(8, Math.ceil(8 * scale));
+      const g3 = Math.ceil(28 * scale);
+      const g4 = Math.max(8, Math.ceil((g2 * sh + g1 * (1 - sh)) / 4) * 4);
+
+      const c1 = g1 * 1800;
+      const c2 = g2 * 1800;
+      const c3 = g3 * 1800;
+      const c4 = g4 * 1800;
+      const dailySave = Math.max(100, (c1 - c4) / 30);
+      const roiDays = 1850 / dailySave;
+
+      const specs = {
+        t1: { acc: '95.4% / 18.5 ms', gpu: g1 + ' 张 H200 ✕', cost: '$' + (c1 / 1000).toFixed(1) + 'k/月', roi: '无蒸馏 (月亏 $' + ((c1 - c4) / 1000).toFixed(1) + 'k)', color: '#ef4444' },
+        t2: { acc: '74.2% (崩盘 ✕) / 5.2 ms', gpu: g2 + ' 张 H200', cost: '$' + (c2 / 1000).toFixed(1) + 'k/月', roi: '精度不达标 ✕', color: '#ef4444' },
+        t3: { acc: '94.6% / 24.8 ms ✕', gpu: g3 + ' 张 H200', cost: '$' + (c3 / 1000).toFixed(1) + 'k/月', roi: '破坏流式 SSE ✕', color: '#f59e0b' },
+        t4: { acc: '95.1% / 7.4 ms 🏆', gpu: g4 + ' 张 (-' + Math.round((1 - g4 / g1) * 100) + '% 🏆)', cost: '$' + (c4 / 1000).toFixed(1) + 'k/月 (省 $' + ((c1 - c4) / 1000).toFixed(1) + 'k)', roi: roiDays.toFixed(2) + ' 天 (' + (roiDays * 24).toFixed(1) + ' 小时 🏆)', color: '#10b981' }
+      };
+      const cur = specs[t];
+      const aEl = document.getElementById('accOut');
+      aEl.textContent = cur.acc;
+      aEl.style.color = cur.color;
+      document.getElementById('gpuOut').textContent = cur.gpu;
+      document.getElementById('costOut').textContent = cur.cost;
+      document.getElementById('roiOut').textContent = cur.roi;
+
+      document.getElementById('b1').textContent = '$' + c1.toLocaleString() + ' / mo ✕';
+      document.getElementById('b3').textContent = '$' + c3.toLocaleString() + ' / mo';
+      document.getElementById('b4').textContent = '$' + c4.toLocaleString() + ' / mo 🏆';
+      document.getElementById('b2').textContent = '$' + c2.toLocaleString() + ' / mo (准确率崩盘 ✕)';
+    }
+
+    [tierEl, rpsEl, shareEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
