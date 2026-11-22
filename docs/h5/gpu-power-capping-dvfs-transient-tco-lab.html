@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业智算中心功耗封顶 (Power Capping &amp; DVFS 甜点) 与机房多装卡计算器 (#492)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-gpu-power-capping-dvfs-sweetspot-transient-smoothing-tco-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-gpu-power-capping-dvfs-sweetspot-transient-smoothing-tco-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-gpu-power-capping-dvfs-sweetspot-transient-smoothing-tco-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-gpu-power-capping-dvfs-sweetspot-transient-smoothing-tco-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>⚡ 企业智算中心功耗封顶 (`Power Capping & DVFS 甜点`) 与机房多装卡计算器 (#492)</h1>
+    <p class="subtitle">拖动滑块调整机房总 IT 电力配额上限（kW）与功耗封顶策略，实时测算可上架 GPU 总卡数、Prefill/Decode 速度保留率与整座机房总算力净增益。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 机房电力配额与功耗封顶设定</h2>
+        <div class="control">
+          <label><span>GPU 功耗封顶策略档位</span></label>
+          <select id="prof">
+            <option value="p1">Tier 1: 全集群 700W 满血硬跑 (无封顶，装卡最少)</option>
+            <option value="p2">Tier 2: 一刀切激进限电 400W (Prefill 严重掉速 25.5% ✕)</option>
+            <option value="p3">Tier 3: 全集群统一 550W 三次方甜点封顶</option>
+            <option value="p4" selected>Tier 4: PD 角色感知封顶 (P池 650W / D池 500W) + 瞬态平滑 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>机房可用 IT 电力配额上限 (`Facility IT Cap kW`)</span><strong id="kwVal">1,500 kW (1.5 MW)</strong></label>
+          <input type="range" id="kw" min="500" max="5000" step="250" value="1500" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">同一电表配额下可上架 GPU 数</div>
+            <div class="val" id="gpuOut">1,280 张 (+25.0% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Prefill / Decode 单卡速度保留</div>
+            <div class="val" id="spdOut">98.4% / 98.8% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单焦耳能量产出 Token 效率</div>
+            <div class="val" id="effOut">1.31x 能效提升 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">整座机房总有效 Token 产出增益</div>
+            <div class="val" id="totOut">+23.5% 净增吞吐 🏆</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种策略在 1.5 MW 电力上限下可部署 GPU 数量对比 (卡, 越长容量越大)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 700W 满血硬跑 (基准 1,024 卡)</span><strong id="b1">1,024 张 GPU</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:66.7%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 400W 激进限电 (虽装 1,536 卡，但 Prefill 慢 25.5% ✕)</span><strong id="b2">1,536 张 (Prefill 降速 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 550W 统一甜点封顶 (Decode 保留 97.2%)</span><strong id="b3">1,248 张 GPU (+21.9% ✓)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:81.3%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: PD 角色感知封顶 (P=650W, D=500W, 速度 98.8% 🏆)</span><strong id="b4">1,280 张 GPU (+25.0% 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:83.3%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>为什么 Decode 锁 500W 不掉速？</strong> `nvidia-smi -pl 500` 只降 SM 核心频率，不降 `HBM3e (4.8 TB/s)` 显存频率！访存受限的 Decode 节点白省 200W/卡！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const profEl = document.getElementById('prof');
+    const kwEl = document.getElementById('kw');
+
+    function update() {
+      const p = profEl.value;
+      const kw = parseInt(kwEl.value, 10);
+      const scale = kw / 1500;
+
+      document.getElementById('kwVal').textContent = kw.toLocaleString() + ' kW (' + (kw / 1000).toFixed(2) + ' MW)';
+
+      const g1 = Math.floor((1024 * scale) / 8) * 8;
+      const g2 = Math.floor((1536 * scale) / 8) * 8;
+      const g3 = Math.floor((1248 * scale) / 8) * 8;
+      const g4 = Math.floor((1280 * scale) / 8) * 8;
+
+      const specs = {
+        p1: { gpu: g1 + ' 张 (基准)', spd: '100.0% / 100.0%', eff: '1.00x', tot: '基准 100.0%', color: '#94a3b8' },
+        p2: { gpu: g2 + ' 张 (+50%)', spd: '74.5% (首字慢✕) / 92.0%', eff: '1.48x', tot: '+11.8% (首字超标 ✕)', color: '#f59e0b' },
+        p3: { gpu: g3 + ' 张 (+21.9% ✓)', spd: '92.8% / 97.2% ✓', eff: '1.24x ✓', tot: '+18.5% 净增 ✓', color: '#3b82f6' },
+        p4: { gpu: g4 + ' 张 (+25.0% 🏆)', spd: '98.4% / 98.8% 🏆', eff: '1.31x 🏆', tot: '+23.5% 净增吞吐 🏆', color: '#10b981' }
+      };
+      const cur = specs[p];
+      document.getElementById('gpuOut').textContent = cur.gpu;
+      const sEl = document.getElementById('spdOut');
+      sEl.textContent = cur.spd;
+      sEl.style.color = cur.color;
+      document.getElementById('effOut').textContent = cur.eff;
+      document.getElementById('totOut').textContent = cur.tot;
+
+      document.getElementById('b1').textContent = g1.toLocaleString() + ' 张 GPU';
+      document.getElementById('b2').textContent = g2.toLocaleString() + ' 张 (Prefill 降速 ✕)';
+      document.getElementById('b3').textContent = g3.toLocaleString() + ' 张 GPU (+21.9% ✓)';
+      document.getElementById('b4').textContent = g4.toLocaleString() + ' 张 GPU (+25.0% 🏆)';
+    }
+
+    [profEl, kwEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
