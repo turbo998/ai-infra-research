@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>超大规模 MoE 推理专家负载均衡 (EPLB) 与双模式通信 (DeepEP Normal / IBGDA) 交互沙盘 (#454)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-moe-expert-load-balancing-eplb-deepep-ibgda-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-moe-expert-load-balancing-eplb-deepep-ibgda-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-moe-expert-load-balancing-eplb-deepep-ibgda-sizing-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>⚖️ 超大规模 MoE 推理专家负载均衡 (`EPLB`) 与双模式通信 (`DeepEP Normal / IBGDA`) 沙盘 (#454)</h1>
+      <p><strong>3 分钟核心结论</strong>：① 静态均匀放置 256 个专家会因热门代码/领域专家过载 `3.45 倍` 引发全集群木桶等待；② 开启 <strong>层级式 `EPLB` (`256 逻辑专家 + 32 冗余热专家槽位`)</strong> 仅需每卡多花 <strong>`2.4 GB` HBM (`1.7%` 显存)</strong>，即可将倾斜比从 `3.45x` 压平至 **`1.12x`**；③ 配合 **`DeepEP` 双模通信（Prefill `Normal` 聚合去重 / Decode `IBGDA` SM 直发网卡）+ 双微批乒乓重叠**，将单层暴露通信压至 **`38 us`**、单卡吞吐提升 **`2.86 倍` (`2,460 tok/s`)**！</p>
+    </div>
+    <div data-lang="en">
+      <h1>⚖️ Enterprise MoE Expert Load Balancing (`EPLB`) &amp; Dual-Mode `DeepEP` (`Normal / IBGDA`) Lab (#454)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) Static expert placement suffers from `3.45x` hotspot skew. (2) Adding `+32` redundant hot-expert slots via `Hierarchical EPLB` costs only <strong>2.4 GB/GPU (`1.7%` HBM)</strong> while flattening load skew to <strong>1.12x</strong>. (3) Pairing `EPLB` with `Dual-Mode DeepEP` (`Normal` Prefill + `IBGDA` Decode + Dual-Microbatch overlap) cuts exposed `All-to-All` to <strong>38 us/layer</strong> and lifts Goodput <strong>2.86x (2,460 tok/s/GPU)</strong>.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiSkew">1.12x vs 3.45x</div><div class="lbl">最忙卡 / 平均卡专家倾斜比</div></div>
+    <div class="kpi"><div class="val" id="kpiExtraMem">+2.44 GB / GPU</div><div class="lbl">EPLB 冗余专家额外 HBM 占用</div></div>
+    <div class="kpi"><div class="val" id="kpiComm">38 us vs 620 us</div><div class="lbl">每层 All-to-All 净暴露耗时</div></div>
+    <div class="kpi"><div class="val" id="kpiTpot">11.6 ms vs 29.8 ms</div><div class="lbl">流式吐字间隔 P99 TPOT</div></div>
+    <div class="kpi"><div class="val" id="kpiGoodput">2,460 tok/s (2.86x)</div><div class="lbl">单张 H200 达标有效吞吐</div></div>
+    <div class="kpi"><div class="val" id="kpiMode">Normal(P) + IBGDA(D)</div><div class="lbl">DeepEP 双阶段通信模式</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 交互式 `EPLB` 冗余专家槽位与 `DeepEP` 通信掩盖计算器</h2>
+      <div class="formula">
+        Effective_Skew = 1.0 + (Raw_Skew - 1.0) / (1 + Redundant_Slots / Hot_Experts)<br/>
+        Extra_HBM_per_GPU = (Redundant_Slots / EP_Size) * 58_Layers * 42_MB
+      </div>
+
+      <label><span>1. 业务流量热门专家原始倾斜比 ($\text{Raw Skew}$)</span><strong id="skewVal">3.45x (重度垂域/代码偏斜)</strong></label>
+      <input type="range" id="skewSlider" min="1.5" max="5.0" step="0.25" value="3.5" />
+
+      <label><span>2. 全集群 `EPLB` 冗余热门专家槽位数 ($N_{\text{red}}$)</span><strong id="redVal">+32 冗余槽位 (共 288 物理专家)</strong></label>
+      <input type="range" id="redSlider" min="0" max="64" step="8" value="32" />
+
+      <label><span>3. 跨卡 `All-to-All` 通信引擎与重叠策略</span></label>
+      <select id="commSel">
+        <option value="deepep_overlap" selected>🏆 Tier 4: DeepEP IBGDA (SM 直发网卡) + 双微批乒乓重叠 (暴露 38us/层)</option>
+        <option value="deepep_nooverlap">Tier 2: DeepEP IBGDA 异步通信 (未开双微批重叠 · 暴露 210us/层)</option>
+        <option value="nccl_block">⛔ Tier 1: 传统阻塞式 NCCL All-to-All (暴露 620us/层)</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：专家热度削峰效果 &amp; 四档架构单卡 Goodput 对比</h2>
+      <svg viewBox="0 0 580 310">
+        <text x="16" y="26" fill="#f8fafc" font-size="12.5" font-weight="700">1. 四档 MoE 并行架构单卡达标吞吐 (Goodput tok/s/GPU)</text>
+
+        <text x="16" y="60" fill="#fca5a5" font-size="11.5">Tier 1 静态 256 专家 + 阻塞 NCCL</text>
+        <rect x="245" y="46" width="95" height="20" rx="4" fill="#ef4444"/>
+        <text x="348" y="60" fill="#fca5a5" font-size="11" font-weight="700">860 tok/s (29.8ms ✕)</text>
+
+        <text x="16" y="96" fill="#fde68a" font-size="11.5">Tier 2 静态专家 + DeepEP</text>
+        <rect x="245" y="82" width="164" height="20" rx="4" fill="#f59e0b"/>
+        <text x="416" y="96" fill="#fde68a" font-size="11" font-weight="700">1,480 tok/s (19.4ms)</text>
+
+        <text x="16" y="132" fill="#93c5fd" font-size="11.5">Tier 3 层级 EPLB (+32) + 阻塞通信</text>
+        <rect x="245" y="118" width="190" height="20" rx="4" fill="#3b82f6"/>
+        <text x="442" y="132" fill="#93c5fd" font-size="11" font-weight="700">1,720 tok/s (17.6ms)</text>
+
+        <text x="16" y="168" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 EPLB + DeepEP 双微批重叠 🏆</text>
+        <rect id="barT4" x="245" y="154" width="272" height="20" rx="4" fill="#10b981"/>
+        <text id="txtT4" x="395" y="190" fill="#34d399" font-size="11.5" font-weight="800">2,460 tok/s (2.86x · 11.6ms TPOT 🏆)</text>
+
+        <rect x="16" y="206" width="548" height="86" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="28" y="230" fill="#38bdf8" font-size="12" font-weight="700" id="svgEplbTitle">⚖️ EPLB 削峰账本：+32 冗余槽位将倾斜比从 3.50x 压至 1.12x</text>
+        <text x="28" y="254" fill="#cbd5e1" font-size="11.5" id="svgEplbSub">• 每张 H200 仅多存 1.0 个冗余专家/层 (58层共 +2.44 GB HBM，仅占 141GB 的 1.7%)</text>
+        <text x="28" y="276" fill="#6ee7b7" font-size="11.5">• 配合 DeepEP IBGDA 双微批乒乓调度，单步 58 层总暴露通信仅 2.2 ms！</text>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function update() {
+      const rawSkew = parseFloat(document.getElementById('skewSlider').value);
+      const red = parseInt(document.getElementById('redSlider').value, 10);
+      const comm = document.getElementById('commSel').value;
+
+      document.getElementById('skewVal').textContent = rawSkew.toFixed(2) + 'x';
+      document.getElementById('redVal').textContent = '+' + red + ' 冗余槽位 (共 ' + (256 + red) + ' 物理专家)';
+
+      const effSkew = 1.0 + (rawSkew - 1.0) / (1.0 + (red / 12.0));
+      const extraGb = (red / 32.0) * 58 * 0.042;
+      const commUs = comm === 'deepep_overlap' ? 38 : (comm === 'deepep_nooverlap' ? 210 : 620);
+
+      const baseComputeMs = 8.4 * effSkew;
+      const commTotalMs = (58 * commUs) / 1000.0;
+      const tpot = baseComputeMs + commTotalMs;
+      const goodput = Math.round(2460 * (11.6 / tpot));
+
+      document.getElementById('kpiSkew').textContent = effSkew.toFixed(2) + 'x vs ' + rawSkew.toFixed(2) + 'x';
+      document.getElementById('kpiExtraMem').textContent = '+' + extraGb.toFixed(2) + ' GB / GPU';
+      document.getElementById('kpiComm').textContent = commUs + ' us vs 620 us';
+      document.getElementById('kpiTpot').textContent = tpot.toFixed(1) + ' ms vs 29.8 ms';
+      document.getElementById('kpiGoodput').textContent = goodput.toLocaleString() + ' tok/s';
+
+      document.getElementById('txtT4').textContent = goodput.toLocaleString() + ' tok/s (' + tpot.toFixed(1) + 'ms TPOT 🏆)';
+      document.getElementById('svgEplbTitle').textContent = '⚖️ EPLB 削峰账本：+' + red + ' 冗余槽位将倾斜比从 ' + rawSkew.toFixed(2) + 'x 压至 ' + effSkew.toFixed(2) + 'x';
+      document.getElementById('svgEplbSub').textContent = '• 每张 H200 额外占用 +' + extraGb.toFixed(2) + ' GB HBM (占 141GB 的 ' + ((extraGb / 141) * 100).toFixed(1) + '%)';
+    }
+    ['skewSlider', 'redSlider', 'commSel'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>

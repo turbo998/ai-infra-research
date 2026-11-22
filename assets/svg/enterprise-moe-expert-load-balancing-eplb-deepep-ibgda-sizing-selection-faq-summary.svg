@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">超大规模 MoE 推理专家负载均衡 (EPLB) 与双模式通信 (DeepEP Normal / IBGDA) 选型指南 (#454)</text>
+  <text x="28" y="58" class="sub">为什么 1 张热门专家卡过载 3.45 倍会让其余 31 张 GPU 集体干等？如何仅花 2.4GB/卡显存将单卡吞吐拉升 2.86 倍？</text>
+
+  <!-- Left Panel: Expert Hotspot Straggler Problem vs EPLB + DeepEP -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. MoE 专家热度倾斜 (3.45x Skew) 木桶效应与 EPLB 动态冗余解法</text>
+
+  <rect x="42" y="120" width="524" height="96" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">❌ 静态专家切分的死穴：1 颗热门语法/代码专家拖垮整组 EP 集群</text>
+  <text x="56" y="164" class="mono">• 物理现象：真实业务(如全员写 Python)下，少数热门专家被命中的频次是均值的 3.45 倍！</text>
+  <text x="56" y="184" class="mono">• 木桶等待：每层 Combine 必须等最慢的那张热门专家卡算完，其余 31 张卡 65% 时间空转</text>
+  <text x="56" y="202" class="txt">• 结果：P99 TPOT 恶化至 29.8ms ✕，单卡有效吞吐仅 860 tok/s！</text>
+
+  <rect x="42" y="228" width="524" height="104" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="250" class="txt" font-weight="700" fill="#34d399">🏆 黄金解法：层级式 EPLB (256+32 冗余热专家) + DeepEP 双模 (Normal/IBGDA)</text>
+  <text x="56" y="272" class="mono">• 1. 冗余复制 (EPLB): 逻辑 256 专家 -&gt; 物理部署 288 槽位 (多出的 32 槽位专门复制热门专家)</text>
+  <text x="56" y="292" class="mono">• 2. 显存代价极小: 每卡仅多放 1~2 个冗余专家 (仅占 2.4GB/卡 HBM)，倾斜比从 3.45x 压至 1.12x!</text>
+  <text x="56" y="312" class="txt">• 3. 双模通信: Prefill 走 Normal 高吞吐模式，Decode 走 IBGDA 网卡直发 + 双微批乒乓重叠！</text>
+
+  <!-- Right Panel: 4 MoE EP & Load Balancing Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四档 MoE 专家并行与负载均衡架构对标 (32x H200 · DeepSeek 671B)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 静态均匀放置 (256 专家) + 阻塞式 NCCL All-to-All</text>
+  <text x="638" y="158" class="mono">• 负载倾斜比: 3.45x ✕ | 暴露通信: 620us/层 | P99 TPOT: 29.8ms (860 tok/s/GPU)</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 静态专家放置 + DeepEP 异步通信 (未开 EPLB 冗余复制)</text>
+  <text x="638" y="214" class="mono">• 负载倾斜比: 3.45x ✕ | 暴露通信: 210us/层 | P99 TPOT: 19.4ms (1,480 tok/s/GPU)</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: 层级式 EPLB (256+32 冗余专家) + 传统阻塞式 All-to-All</text>
+  <text x="638" y="270" class="mono">• 负载倾斜比: 1.18x ✓ | 暴露通信: 390us/层 | P99 TPOT: 17.6ms (1,720 tok/s/GPU)</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: 层级式 EPLB (256+32) + DeepEP 双模式 + 双微批乒乓重叠 (🏆)</text>
+  <text x="638" y="326" class="mono">• 负载倾斜比: 1.12x 🏆 | 暴露通信: 38us/层 🏆 | TPOT: 11.6ms (2,460 tok/s · 2.86x)!</text>
+
+  <!-- Bottom Panel: DeepEP Normal vs IBGDA & EPLB Math -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. DeepEP 双模式 (Normal vs. IBGDA) 架构机理与 EPLB 显存代价手算</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="56" y="440" class="txt" font-weight="700" fill="#38bdf8">① Prefill 阶段：DeepEP Normal 高吞吐模式</text>
+  <text x="56" y="464" class="mono">• 流量特征: 4K~16K 大批量 Token，重带宽</text>
+  <text x="56" y="484" class="mono">• 转发路径: 先走机内 NVLink 聚合相同目标节点</text>
+  <text x="56" y="504" class="mono">  的 Token，再走对应同轨 RDMA 网卡批量发出</text>
+  <text x="56" y="524" class="mono">• 跨机流量直接减少 8 倍 (1/8 节点级去重)！</text>
+  <text x="56" y="550" class="txt" fill="#6ee7b7">单卡跨机带宽吃满 47.6 GB/s，仅占 20~24 个 SM！</text>
+
+  <rect x="418" y="414" width="368" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="432" y="440" class="txt" font-weight="700" fill="#34d399">② Decode 阶段：DeepEP IBGDA 超低延迟模式</text>
+  <text x="432" y="464" class="mono">• 流量特征: 每步仅几十个小包 Token，极端延迟敏感</text>
+  <text x="432" y="484" class="mono">• 转发路径: 开启 GPUDirect Async (IBGDA)，由</text>
+  <text x="432" y="504" class="mono">  GPU SM 直接写 RDMA 网卡门铃寄存器 (Doorbell)</text>
+  <text x="432" y="524" class="mono">  绕开 CPU 代理线程与 NVLink 二次中转跳数</text>
+  <text x="432" y="550" class="txt" fill="#34d399">单次 All-to-All 物理延迟压至 168us，重叠后仅暴露 38us 🏆</text>
+
+  <rect x="806" y="414" width="350" height="196" rx="8" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="820" y="440" class="txt" font-weight="700" fill="#fde68a">③ EPLB 冗余专家显存账本手算</text>
+  <text x="820" y="464" class="mono">• DeepSeek 671B 单个路由专家每层仅约 40MB (FP8)</text>
+  <text x="820" y="484" class="mono">• 32 卡 EP=32 下，每张卡原本放 256/32 = 8 个专家</text>
+  <text x="820" y="504" class="mono">• 开启 +32 冗余槽位后，每张卡仅多放 1 个热专家</text>
+  <text x="820" y="524" class="mono">  (61 层合计每卡仅多占 2.44 GB HBM 显存!)</text>
+  <text x="820" y="550" class="txt" fill="#fde68a">用 1.7% 的显存代价换取 +186% 的全集群吞吐提升！</text>
+</svg>
