@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>智算集群 K8s 拓扑调度 (Kueue TAS + DRA)、KEDA 扩缩容与 GPU 秒级冷启动沙盘 (#452)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-k8s-kueue-dra-keda-autoscaling-gpu-fast-coldstart-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-k8s-kueue-dra-keda-autoscaling-gpu-fast-coldstart-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-k8s-kueue-dra-keda-autoscaling-gpu-fast-coldstart-sizing-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>☸️ 智算集群 K8s 拓扑调度 (`Kueue TAS + DRA`)、`KEDA` 扩缩容与 `2.8s` GPU 极速唤醒沙盘 (#452)</h1>
+      <p><strong>3 分钟核心结论</strong>：① 严禁用失真的 `DCGM_FI_DEV_GPU_UTIL` 做 HPA，必须用 <strong>`KEDA` 监控 `num_requests_waiting &gt; 4` 与 `gpu_cache_usage_perc &gt; 80%`</strong>；② 用 <strong>`Kueue TAS` (机柜级成组调度) + `K8s DRA` (GPU+NIC 同 PCIe Switch 绑定)</strong> 将拓扑错配降为 `0.0%`；③ 用 <strong>`Run:ai Streamer / GDS` (14.2s 并发直读) + `Level-1 Sleep Mode` (2.8s Host Pinned DRAM 秒级唤醒)</strong> 替代 540 秒传统冷启动，24h 集群利用率跃升至 <strong>`91.2%`</strong>！</p>
+    </div>
+    <div data-lang="en">
+      <h1>☸️ Enterprise K8s GPU Orchestration (`Kueue TAS + DRA`), `KEDA` &amp; `2.8s` Fast Cold-Start Lab (#452)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) Replace `DCGM_GPU_UTIL` HPA with `KEDA` (`waiting_queue &gt; 4` or `kv_cache &gt; 80%`). (2) Enforce `0.0%` topology splits via `Kueue TAS + K8s DRA`. (3) Cut `140GB` replica cold-start from `540s` to <strong>14.2s (`Run:ai Streamer / GDS`)</strong> and <strong>2.8s (`Level-1 Sleep Host-DRAM Wakeup`)</strong>, lifting 24h utilization to <strong>91.2%</strong>.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiCold">2.8s (热) / 14.2s (冷)</div><div class="lbl">副本扩容就绪耗时 (vs 540s)</div></div>
+    <div class="kpi"><div class="val" id="kpiTopo">0.0% (DRA PIX 锁死)</div><div class="lbl">跨 PCIe Switch 拓扑错配率</div></div>
+    <div class="kpi"><div class="val" id="kpiReplicas">6 -&gt; 9 副本 (+3)</div><div class="lbl">KEDA 实时计算目标副本数</div></div>
+    <div class="kpi"><div class="val" id="kpiUtil">91.2% vs 36.0%</div><div class="lbl">24 小时训推共池有效利用率</div></div>
+    <div class="kpi"><div class="val" id="kpiDrop">0.2% vs 44.2%</div><div class="lbl">早高峰突发流量 SLA 违约率</div></div>
+    <div class="kpi"><div class="val" id="kpiSpeedup">192x 极速唤醒</div><div class="lbl">相对传统单线程拉取加速比</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 交互式 `KEDA` 弹性副本计算与模型权重加载耗时沙盘</h2>
+      <div class="formula">
+        Target_Replicas = max( ceil(N_curr * Waiting_Q / 4), ceil(N_curr * KV_Usage / 80%) )<br/>
+        T_Load = Weight_GB / Effective_Stream_BW_GBps + T_CUDA_Graph_Init
+      </div>
+
+      <label><span>1. 模型权重体积 ($M_{\text{weight}}$)</span><strong id="wVal">140 GB (70B BF16 / 140B FP8)</strong></label>
+      <input type="range" id="wSlider" min="35" max="685" step="35" value="140" />
+
+      <label><span>2. 权重加载与唤醒技术方案</span></label>
+      <select id="loadSel">
+        <option value="sleep" selected>🏆 Tier 4A: vLLM/SGLang Level-1 Sleep (Host Pinned DRAM PCIe Gen5 秒级唤醒 · 55 GB/s)</option>
+        <option value="gds">🏆 Tier 4B: Run:ai Model Streamer / GDS 64线程并行流式直读 (12 GB/s)</option>
+        <option value="nvme">Tier 2: 宿主机本地 NVMe 单线程 mmap 加载 (1.9 GB/s)</option>
+        <option value="http">⛔ Tier 1: 远端镜像拉取 + 单线程 Safetensors 初始化 (0.26 GB/s)</option>
+      </select>
+
+      <label><span>3. 当前在线副本平均等待队列长度 (`num_requests_waiting`)</span><strong id="qVal">6 条排队请求</strong></label>
+      <input type="range" id="qSlider" min="0" max="20" step="1" value="6" />
+
+      <label><span>4. 当前在线副本平均 KV 显存水位 (`gpu_cache_usage_perc`)</span><strong id="kvVal">84%</strong></label>
+      <input type="range" id="kvSlider" min="30" max="98" step="2" value="84" />
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：四档权重加载就绪时间对比 (`540s -> 2.8s`)</h2>
+      <svg viewBox="0 0 580 310">
+        <text x="16" y="26" fill="#f8fafc" font-size="12.5" font-weight="700">1. 140GB 模型副本扩容就绪耗时对决 (秒 · 越短越快响应洪峰)</text>
+
+        <text x="16" y="60" fill="#fca5a5" font-size="11.5">Tier 1 镜像拉取 + 单线程加载</text>
+        <rect x="225" y="46" width="280" height="20" rx="4" fill="#ef4444"/>
+        <text x="512" y="60" fill="#fca5a5" font-size="11" font-weight="700">540.0s ✕</text>
+
+        <text x="16" y="96" fill="#fde68a" font-size="11.5">Tier 2 本地 NVMe 单线程 mmap</text>
+        <rect x="225" y="82" width="65" height="20" rx="4" fill="#f59e0b"/>
+        <text x="298" y="96" fill="#fde68a" font-size="11" font-weight="700">78.0s</text>
+
+        <text x="16" y="132" fill="#93c5fd" font-size="11.5">Tier 3 Run:ai Streamer / GDS</text>
+        <rect x="225" y="118" width="18" height="20" rx="4" fill="#3b82f6"/>
+        <text x="250" y="132" fill="#93c5fd" font-size="11" font-weight="700">14.2s (快 38x ✓)</text>
+
+        <text x="16" y="168" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 Level-1 Sleep 热备唤醒 🏆</text>
+        <rect x="225" y="154" width="8" height="20" rx="4" fill="#10b981"/>
+        <text x="242" y="168" fill="#34d399" font-size="11.5" font-weight="800" id="svgWakeTxt">2.8s (快 192x · 零 CUDA 重编译 🏆)</text>
+
+        <rect x="16" y="204" width="548" height="88" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="28" y="230" fill="#38bdf8" font-size="12" font-weight="700" id="kedaDecision">📈 KEDA 自动扩缩容决策：当前 6 副本 -&gt; 立即扩容至 9 副本 (+3)</text>
+        <text x="28" y="254" fill="#cbd5e1" font-size="11.5">• 触发原因：等待队列 (6 &gt; 4) 且 KV 水位 (84% &gt; 80%) 双超阈值</text>
+        <text x="28" y="276" fill="#6ee7b7" font-size="11.5">• Kueue TAS + DRA 动作：抢占 3 个夜间低优微调 Pod，2.8 秒唤醒在线推理实例！</text>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function update() {
+      const wGb = parseInt(document.getElementById('wSlider').value, 10);
+      const mode = document.getElementById('loadSel').value;
+      const q = parseInt(document.getElementById('qSlider').value, 10);
+      const kv = parseInt(document.getElementById('kvSlider').value, 10);
+
+      document.getElementById('wVal').textContent = wGb + ' GB';
+      document.getElementById('qVal').textContent = q + ' 条排队请求';
+      document.getElementById('kvVal').textContent = kv + '%';
+
+      const bw = mode === 'sleep' ? 55.0 : (mode === 'gds' ? 11.5 : (mode === 'nvme' ? 1.9 : 0.26));
+      const initOverhead = mode === 'sleep' ? 0.3 : 2.0;
+      const tSec = (wGb / bw) + initOverhead;
+      const baseHttpSec = (wGb / 0.26) + 2.0;
+      const speedup = Math.round(baseHttpSec / tSec);
+
+      const currRep = 6;
+      const repByQ = q > 4 ? Math.ceil(currRep * (q / 4.0)) : currRep;
+      const repByKv = kv > 80 ? Math.ceil(currRep * (kv / 80.0)) : currRep;
+      const targetRep = Math.max(currRep, repByQ, repByKv);
+      const delta = targetRep - currRep;
+
+      document.getElementById('kpiCold').textContent = tSec.toFixed(1) + 's (vs ' + Math.round(baseHttpSec) + 's)';
+      document.getElementById('kpiReplicas').textContent = currRep + ' -> ' + targetRep + ' 副本 (+' + delta + ')';
+      document.getElementById('kpiSpeedup').textContent = speedup + 'x 极速就绪';
+      document.getElementById('svgWakeTxt').textContent = tSec.toFixed(1) + 's (快 ' + speedup + 'x 🏆)';
+      document.getElementById('kedaDecision').textContent = '📈 KEDA 实时扩缩决策：当前 ' + currRep + ' 副本 -> 目标 ' + targetRep + ' 副本 (+' + delta + ' 副本，' + tSec.toFixed(1) + 's 就绪)';
+    }
+    ['wSlider', 'loadSel', 'qSlider', 'kvSlider'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>
