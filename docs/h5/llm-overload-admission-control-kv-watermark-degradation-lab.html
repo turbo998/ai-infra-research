@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型高并发过载保护、预测准入与 80/85/90/95% 四阶平滑降级交互沙盘 (#459)</title>
+  <style>
+    :root { --bg: #0b1120; --card: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1260px; margin: 0 auto; }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .nav a, .lang-btn { color: var(--accent); text-decoration: none; background: #0f172a; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-block; margin-right: 6px; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-left: 5px solid var(--green); border-radius: 14px; padding: 20px 24px; margin-bottom: 18px; }
+    .hero h1 { font-size: 23px; margin-bottom: 8px; }
+    .hero p { font-size: 14px; color: #cbd5e1; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: #1e293b; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .kpi .val { font-size: 20px; font-weight: 800; color: var(--green); }
+    .kpi .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+    .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .formula { background: #0f172a; border-left: 4px solid var(--green); padding: 10px 14px; border-radius: 8px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-bottom: 12px; overflow-x: auto; }
+    label { display: flex; justify-content: space-between; font-size: 13px; color: #cbd5e1; margin: 10px 0 4px; }
+    input[type="range"], select { width: 100%; accent-color: var(--accent); }
+    select { background: #0f172a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+    svg { width: 100%; height: auto; display: block; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <a href="./index.html">← 🎓 AI Infra 全景精学馆</a>
+      <a href="../components/enterprise-llm-overload-admission-control-kv-watermark-graceful-degradation-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-llm-overload-admission-control-kv-watermark-graceful-degradation-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-llm-overload-admission-control-kv-watermark-graceful-degradation-selection-cards.html">🃏 7-Card 评测卡</a>
+    </div>
+    <button class="lang-btn" onclick="document.body.classList.toggle('en')">EN / 中文</button>
+  </div>
+
+  <section class="hero">
+    <div data-lang="zh">
+      <h1>🛡️ 企业大模型高并发过载保护、预测准入与 `80/85/90/95%` 四阶平滑降级沙盘 (#459)</h1>
+      <p><strong>3 分钟核心结论</strong>：① 无界 FIFO 排队在遭遇 3 倍突发洪峰时会因客户端超时重试产生 **`58.5%` 的僵尸算力浪费**，导致有效 `Goodput` 暴跌至 `14.2%`；② 采用 **预测性 `TTFT` 准入 + HTTP 断连穿透中止 + 四阶水位降级（`80%` 关 MTP $\to$ `85%` 缩 `&lt;think&gt;` $\to$ `90%` 云/小模型溢出 $\to$ `95%` 卸批处理）**，在 3 倍洪峰下保持 **`99.6%` Goodput 达标率**与 **`520ms` P99 TTFT**！</p>
+    </div>
+    <div data-lang="en">
+      <h1>🛡️ Enterprise LLM Overload Protection, Predictive Admission &amp; 4-Stage Graceful Degradation Lab (#459)</h1>
+      <p><strong>3-Min Executive Takeaway</strong>: (1) Unbounded FIFO queues waste `58.5%` of GPU compute on timed-out zombie requests during 3x traffic spikes. (2) Combining predictive `TTFT` admission, HTTP disconnect abort propagation, and <strong>`80/85/90/95%` 4-Stage Graceful Degradation</strong> sustains <strong>99.6% Goodput attainment</strong> and <strong>520ms P99 TTFT</strong>.</p>
+    </div>
+  </section>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="val" id="kpiStage">阶梯 2: 收紧 &lt;think&gt; 预算</div><div class="lbl">当前激活的保护阶梯</div></div>
+    <div class="kpi"><div class="val" id="kpiEstTtft">480 ms (&lt;=800ms SLA)</div><div class="lbl">预测首字等待时间 Est_TTFT</div></div>
+    <div class="kpi"><div class="val" id="kpiZombie">0.4% vs 58.5%</div><div class="lbl">断开连接僵尸算力浪费率</div></div>
+    <div class="kpi"><div class="val" id="kpiGoodput">99.6% vs 14.2%</div><div class="lbl">洪峰期双 SLA 有效 Goodput 率</div></div>
+    <div class="kpi"><div class="val" id="kpiErr">0.4% vs 72.0%</div><div class="lbl">用户可见报错/超时失败率</div></div>
+    <div class="kpi"><div class="val" id="kpiSavedKv">+55% 可用 KV 槽位</div><div class="lbl">动态降级释放的并发余量</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🎛️ 交互式高并发洪峰水位与四阶平滑降级模拟器</h2>
+      <div class="formula">
+        Est_TTFT = (Queued_Tokens + S_in * (1 - eta)) / TPS_Prefill<br/>
+        Watermarks: 80% Disable MTP -&gt; 85% Cap &lt;think&gt; -&gt; 90% Spillover -&gt; 95% Shed Batch
+      </div>
+
+      <label><span>1. 实时集群 KV 显存与算力负载水位 ($\text{Load Watermark}$)</span><strong id="wmVal">86% (触发第 2 阶保护)</strong></label>
+      <input type="range" id="wmSlider" min="50" max="99" step="1" value="86" />
+
+      <label><span>2. 当前排队待处理未缓存输入 Token 总量 ($\sum S_q$)</span><strong id="qTokVal">24,000 Tokens</strong></label>
+      <input type="range" id="qTokSlider" min="0" max="120000" step="4000" value="24000" />
+    </div>
+
+    <div class="card">
+      <h2>📊 实时动态图表：四阶水位保护状态机 &amp; 3x 洪峰下四档架构 Goodput 对决</h2>
+      <svg viewBox="0 0 580 310">
+        <text x="16" y="24" fill="#f8fafc" font-size="12.5" font-weight="700">1. 80% / 85% / 90% / 95% 四阶平滑有损降级水位条</text>
+        <rect x="16" y="34" width="548" height="32" rx="6" fill="#1e293b" stroke="#334155"/>
+        <rect x="16" y="34" width="320" height="32" fill="#10b981"/>
+        <rect x="336" y="34" width="55" height="32" fill="#38bdf8"/>
+        <rect x="391" y="34" width="55" height="32" fill="#f59e0b"/>
+        <rect x="446" y="34" width="60" height="32" fill="#a855f7"/>
+        <rect x="506" y="34" width="58" height="32" fill="#ef4444"/>
+        <text x="26" y="55" fill="#070b14" font-size="10.5" font-weight="800">&lt;80% 全血模式</text>
+        <text x="340" y="55" fill="#070b14" font-size="10" font-weight="800">80%关MTP</text>
+        <text x="396" y="55" fill="#070b14" font-size="10" font-weight="800">85%缩CoT</text>
+        <text x="452" y="55" fill="#fff" font-size="10" font-weight="800">90%云溢出</text>
+        <text x="510" y="55" fill="#fff" font-size="10" font-weight="800">95%卸批</text>
+
+        <circle id="wmDot" cx="415" cy="50" r="8" fill="#fff" stroke="#070b14" stroke-width="2.5"/>
+
+        <text x="16" y="98" fill="#f8fafc" font-size="12.5" font-weight="700">2. 3倍突发洪峰下四档架构双 SLA 达标有效吞吐率 (Goodput Attainment %)</text>
+
+        <text x="16" y="130" fill="#fca5a5" font-size="11.5">Tier 1 无界排队 + 重试风暴 (58.5% 僵尸算力)</text>
+        <rect x="275" y="116" width="38" height="18" rx="4" fill="#ef4444"/>
+        <text x="320" y="130" fill="#fca5a5" font-size="11" font-weight="700">14.2% (全面雪崩 ✕)</text>
+
+        <text x="16" y="162" fill="#fde68a" font-size="11.5">Tier 2 静态 HTTP QPS 一刀切限流</text>
+        <rect x="275" y="148" width="174" height="18" rx="4" fill="#f59e0b"/>
+        <text x="456" y="162" fill="#fde68a" font-size="11" font-weight="700">64.5% (35.5% 弹 429)</text>
+
+        <text x="16" y="194" fill="#93c5fd" font-size="11.5">Tier 3 预测 TTFT 准入 + 断连穿透</text>
+        <rect x="275" y="180" width="254" height="18" rx="4" fill="#3b82f6"/>
+        <text x="435" y="212" fill="#93c5fd" font-size="11" font-weight="700">94.2% ✓</text>
+
+        <text x="16" y="242" fill="#6ee7b7" font-size="11.5" font-weight="700">Tier 4 预测准入 + 四阶平滑降级 🏆</text>
+        <rect x="275" y="228" width="272" height="18" rx="4" fill="#10b981"/>
+        <text x="415" y="262" fill="#34d399" font-size="11.5" font-weight="800">99.6% (P99 TTFT 520ms · 零雪崩 🏆)</text>
+
+        <text x="16" y="294" fill="#38bdf8" font-size="11.5" font-weight="700" id="svgActionTxt">⚡ 当前动作：关断 MTP 并收紧 &lt;think&gt; 思维链上限至 1,024 Tok，释放 55% KV 槽位！</text>
+      </svg>
+    </div>
+  </div>
+
+  <footer>
+    Provenance: synthetic + anonymized_reported (independently_reproduced=false) · Self-Contained Interactive H5 Study Lab · turbo998/ai-infra-research
+  </footer>
+
+  <script>
+    function update() {
+      const wm = parseInt(document.getElementById('wmSlider').value, 10);
+      const qTok = parseInt(document.getElementById('qTokSlider').value, 10);
+
+      document.getElementById('wmVal').textContent = wm + '%';
+      document.getElementById('qTokVal').textContent = qTok.toLocaleString() + ' Tokens';
+
+      const estTtft = Math.round((qTok + 4096) / 60.0);
+      let stage = '✅ <80% 正常全血模式';
+      let action = '全血 671B + 原生 MTP + 4,096 完整思维链';
+      let saved = '无需降级';
+
+      if (wm >= 95) {
+        stage = '🚨 阶梯 4 (>=95%): 卸载批处理 + 早拒';
+        action = '暂停全部后台跑批任务，超长低优请求 2ms 返回友好降级提示';
+        saved = '100% 死保 VIP 在线请求';
+      } else if (wm >= 90 || estTtft > 800) {
+        stage = '🟦 阶梯 3 (>=90%): 云端/小模型无感溢出';
+        action = '新到达请求由网关自动溢出至 Serverless PAYGO 或本地 14B 蒸馏模型';
+        saved = '无上限弹性吸收尖峰';
+      } else if (wm >= 85) {
+        stage = '🟨 阶梯 2 (>=85%): 收紧 <think> 预算';
+        action = '关断 MTP 并将 <think> 预算从 4,096 收紧至 1,024 Tok';
+        saved = '+55% 可用 KV 槽位';
+      } else if (wm >= 80) {
+        stage = '🟦 阶梯 1 (>=80%): 自动关断 MTP 投机';
+        action = '动态关闭 MTP 草稿验证，将 TensorCore 算力 100% 让渡给主解码';
+        saved = '+35% 并发吞吐容量';
+      }
+
+      document.getElementById('kpiStage').textContent = stage;
+      document.getElementById('kpiEstTtft').textContent = estTtft + ' ms';
+      document.getElementById('kpiSavedKv').textContent = saved;
+      document.getElementById('svgActionTxt').textContent = '⚡ 当前动作：' + action;
+
+      const cx = 16 + Math.round(((wm - 50) / 50.0) * 540);
+      document.getElementById('wmDot').setAttribute('cx', cx);
+    }
+    ['wmSlider', 'qTokSlider'].forEach(id => {
+      document.getElementById(id).addEventListener('input', update);
+      document.getElementById(id).addEventListener('change', update);
+    });
+    update();
+  </script>
+</body>
+</html>

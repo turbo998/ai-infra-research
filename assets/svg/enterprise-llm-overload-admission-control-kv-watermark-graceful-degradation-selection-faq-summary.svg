@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业大模型高并发过载保护、自适应准入控制 (Admission Control) 与四阶平滑降级选型指南 (#459)</text>
+  <text x="28" y="58" class="sub">为什么 3 倍突发流量会让无界队列集群 Goodput 跌剩 14.2%？如何用“80/85/90/95% 四阶水位降级”实现 99.6% SLA 零雪崩？</text>
+
+  <!-- Left Panel: Retry Storm & Zombie Compute Collapse vs 4-Stage Degradation -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 大模型过载雪崩的物理机理：僵尸请求 (Zombie Prefill) + KV 抢占循环</text>
+
+  <rect x="42" y="120" width="524" height="96" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">❌ 无界排队 (Tier 1) 的双重死亡螺旋</text>
+  <text x="56" y="164" class="mono">• 螺旋 1 (僵尸算力): 请求在队列里等了 20 秒，前端 HTTP 早已超时断开并自动发起第 2 次重试，</text>
+  <text x="56" y="184" class="mono">  但后端 vLLM 毫不知情，依然浪费 58.5% 的 GPU 算力去跑早已断开的死请求！</text>
+  <text x="56" y="202" class="txt">• 螺旋 2 (KV 换出震荡): HBM 满载触发频繁 Recompute/Swap，集群有效 Goodput 暴跌至 14.2% ✕</text>
+
+  <rect x="42" y="228" width="524" height="104" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="250" class="txt" font-weight="700" fill="#34d399">🏆 黄金防线：预测性 TTFT 准入 + 断连穿透 + 80/85/90/95% 四阶平滑降级</text>
+  <text x="56" y="272" class="mono">• 预测公式: Est_TTFT = Sum(Queue_Tokens)/TPS_P + S_in/TPS_P &gt; SLA_Deadline 则立即转分流</text>
+  <text x="56" y="292" class="mono">• 四阶水位: 80% 关 MTP -&gt; 85% 限缩 &lt;think&gt; -&gt; 90% 溢出云端/小模型 -&gt; 95% 卸掉低优批处理</text>
+  <text x="56" y="312" class="txt">• 效果: 哪怕遭遇 3 倍洪峰冲击，核心在线用户报错率仅 0.4%，Goodput 保持 99.6% 🏆</text>
+
+  <!-- Right Panel: 4 Overload Protection Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四档高并发过载保护架构对标 (3x 流量洪峰冲击场景)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 无界 FIFO 排队 + 客户端超时自动重试风暴 (典型生产雪崩)</text>
+  <text x="638" y="158" class="mono">• P99 TTFT: 28,400ms ✕ | 僵尸算力浪费: 58.5% ✕ | Goodput 达标率仅 14.2%</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 传统网关静态 QPS 限流 (不分请求长短与优先级一刀切弹 429)</text>
+  <text x="638" y="214" class="mono">• P99 TTFT: 1,820ms | 用户感知报错率: 35.5% ✕ | Goodput 达标率: 64.5%</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: 预测性 TTFT/KV 水位准入控制 + HTTP Disconnect 毫秒级穿透终止</text>
+  <text x="638" y="270" class="mono">• P99 TTFT: 740ms ✓ | 僵尸算力浪费: 1.8% ✓ | Goodput 达标率: 94.2%</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: 预测准入 + 四阶平滑有损降级 (80%关MTP/85%缩CoT/90%云溢出/95%保VIP) (🏆)</text>
+  <text x="638" y="326" class="mono">• P99 TTFT: 520ms 🏆 | 僵尸浪费: 0.4% 🏆 | Goodput 达标率: 99.6% (用户报错仅 0.4%)!</text>
+
+  <!-- Bottom Panel: 4 Watermark Stages Detail -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 架构师四阶水位平滑降级状态机 (80% -&gt; 85% -&gt; 90% -&gt; 95% 阶梯防御)</text>
+
+  <rect x="42" y="414" width="268" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="56" y="440" class="txt" font-weight="700" fill="#38bdf8">① 80% 水位：自动关断投机解码</text>
+  <text x="56" y="464" class="mono">• 触发条件: 活跃 Batch &gt;= 48 或</text>
+  <text x="56" y="484" class="mono">  GPU TensorCore 利用率 &gt; 80%</text>
+  <text x="56" y="504" class="mono">• 动作: 动态关闭 MTP / EAGLE-3 草稿</text>
+  <text x="56" y="524" class="mono">  验证，省下 3x 验证算力给主解码</text>
+  <text x="56" y="550" class="txt" fill="#6ee7b7">零精度损失，单机并发容量立涨 +35%！</text>
+
+  <rect x="328" y="414" width="268" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="342" y="440" class="txt" font-weight="700" fill="#34d399">② 85% 水位：动态收紧 &lt;think&gt; 预算</text>
+  <text x="342" y="464" class="mono">• 触发条件: HBM KV Cache 水位 &gt; 85%</text>
+  <text x="342" y="484" class="mono">• 动作: 将推理模型思维链上限从 4,096</text>
+  <text x="342" y="504" class="mono">  平滑收紧至 1,024 Tokens，缩短单次</text>
+  <text x="342" y="524" class="mono">  请求 E2EL 驻留时长</text>
+  <text x="342" y="550" class="txt" fill="#34d399">按 Little's Law 瞬间释放 55% 活跃 KV 槽位 🏆</text>
+
+  <rect x="614" y="414" width="268" height="196" rx="8" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="628" y="440" class="txt" font-weight="700" fill="#fde68a">③ 90% 水位：溢出云端 / 降级轻量模型</text>
+  <text x="628" y="464" class="mono">• 触发条件: 预测排队 Est_TTFT &gt; 600ms</text>
+  <text x="628" y="484" class="mono">• 动作: 网关自动将新到达的非敏感会话</text>
+  <text x="628" y="504" class="mono">  平滑溢出至云端 Serverless API 或</text>
+  <text x="628" y="524" class="mono">  本机轻量 8B/14B 蒸馏模型池</text>
+  <text x="628" y="550" class="txt" fill="#fde68a">用户只觉响应依旧飞快，完全无感后台分流！</text>
+
+  <rect x="900" y="414" width="258" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="914" y="440" class="txt" font-weight="700" fill="#d8b4fe">④ 95% 水位：QoS 优先级卸载与早拒</text>
+  <text x="914" y="464" class="mono">• 触发条件: 全池 KV 水位 &gt; 95%</text>
+  <text x="914" y="484" class="mono">• 动作: 暂停一切后台异步跑批/评测任务，</text>
+  <text x="914" y="504" class="mono">  对超长低优请求在 2ms 内快速返回</text>
+  <text x="914" y="524" class="mono">  带 Retry-After 的友好降级卡片</text>
+  <text x="914" y="550" class="txt" fill="#d8b4fe">100% 死保 VIP 与核心交易链路永不宕机！</text>
+</svg>
