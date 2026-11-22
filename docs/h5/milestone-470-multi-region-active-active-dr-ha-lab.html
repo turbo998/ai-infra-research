@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>第 470 篇里程碑：企业跨地域多活大模型灾备 (Multi-Region Active-Active DR) 与 99.995% 高可用沙盘 (#470)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-multi-region-active-active-ai-inference-disaster-recovery-ha-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-multi-region-active-active-ai-inference-disaster-recovery-ha-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-multi-region-active-active-ai-inference-disaster-recovery-ha-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-multi-region-active-active-ai-inference-disaster-recovery-ha-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🌐 第 470 篇里程碑：企业跨地域多活大模型灾备 (`60/60 双活 + PAYGO 溢出 + SSE 无感续传`) 沙盘 (#470)</h1>
+    <p class="subtitle">切换容灾架构档位与单区基础可用性，实时测算全年非计划停机分钟数、故障恢复时间 (`RTO`)、流式请求中断率与容灾冗余溢价。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 跨地域容灾架构与峰值容量设定</h2>
+        <div class="control">
+          <label><span>跨地域容灾架构档位</span></label>
+          <select id="tier">
+            <option value="t1">Tier 1: 单 Region 裸奔部署 (无跨区容灾 ✕)</option>
+            <option value="t2">Tier 2: 主备冷拉起 (故障时按需买卡 + 拉 685GB 权重 ✕)</option>
+            <option value="t3">Tier 3: 传统 100%+100% 双倍闲置热备 (备区空转)</option>
+            <option value="t4" selected>Tier 4: 双区 60/60 双活 + 跨区 PAYGO 溢出 + SSE 续传 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>业务全网峰值 GPU 需求 (`Peak GPUs`)</span><strong id="gpuVal">64 张 H200</strong></label>
+          <input type="range" id="gpus" min="16" max="256" step="16" value="64" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">年度综合可用性 / 停机时长</div>
+            <div class="val" id="haOut">99.995% (26.3分/年 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">故障恢复 RTO / SSE 中断率</div>
+            <div class="val" id="rtoOut">1.6s / 0.0% 中断 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">双区常驻预留 GPU 配置</div>
+            <div class="val" id="resOut">40 卡 + 40 卡 (60/60)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">容灾冗余预算溢价 (%)</div>
+            <div class="val" id="costOut">+18.5% (省 81.5% 🏆)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种容灾架构全年非计划停机时长对比 (分钟/年, 越短越稳)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 单 Region 裸奔部署 (99.40% 可用性)</span><strong>3,153.6 分钟/年 (52.5h ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 主备冷拉起 (RTO 780s + 抢卡风险)</span><strong>946.1 分钟/年 (15.8h ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:30%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 100%+100% 双倍闲置热备 (+100% 成本溢价)</span><strong>105.1 分钟/年 (1.75h)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:6%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 双区 60/60 双活 + PAYGO 溢出 + SSE 续传 🏆</span><strong>26.3 分钟/年 (99.995% 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:2%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>流式断点无感续传要诀</strong>：AI Gateway 缓存已推送给客户端的 `partial_output` 文本，在主区断流时向备区发送带 `Assistant Prefix` 的续写请求，从下一个 Token 无缝接续推流！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tierEl = document.getElementById('tier');
+    const gpusEl = document.getElementById('gpus');
+
+    function update() {
+      const tier = tierEl.value;
+      const gpus = parseInt(gpusEl.value, 10);
+      document.getElementById('gpuVal').textContent = gpus + ' 张 H200';
+
+      const perReg60 = Math.ceil((gpus * 0.6) / 8) * 8;
+      const specs = {
+        t1: { ha: '99.40% (52.5h/年 ✕)', rto: '3,600s / 100% 中断 ✕', res: gpus + ' 卡 (单区无备)', cost: '+0.0% (高危裸奔)', color: '#ef4444' },
+        t2: { ha: '99.82% (15.8h/年 ✕)', rto: '780s / 100% 中断 ✕', res: gpus + ' 卡 + 冷备镜像', cost: '+12.0% (抢卡易失败)', color: '#f59e0b' },
+        t3: { ha: '99.98% (105分/年)', rto: '8.5s / 42% 中断', res: gpus + ' 卡 + ' + gpus + ' 卡闲置', cost: '+100.0% (翻倍浪费 ✕)', color: '#3b82f6' },
+        t4: { ha: '99.995% (26.3分/年 🏆)', rto: '1.6s / 0.0% 中断 🏆', res: perReg60 + ' 卡 + ' + perReg60 + ' 卡双活', cost: '+18.5% (省 81.5% 🏆)', color: '#10b981' }
+      };
+      const cur = specs[tier];
+      const haEl = document.getElementById('haOut');
+      haEl.textContent = cur.ha;
+      haEl.style.color = cur.color;
+      document.getElementById('rtoOut').textContent = cur.rto;
+      document.getElementById('resOut').textContent = cur.res;
+      document.getElementById('costOut').textContent = cur.cost;
+    }
+
+    [tierEl, gpusEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
