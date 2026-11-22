@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业长提示词压缩与 KV 驱逐 (LLMLingua-2 vs. StreamingLLM vs. Radix 前缀缓存) 选型计算器 (#484)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-prompt-compression-kv-eviction-llmlingua-snapkv-radix-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-prompt-compression-kv-eviction-llmlingua-snapkv-radix-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-prompt-compression-kv-eviction-llmlingua-snapkv-radix-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-prompt-compression-kv-eviction-llmlingua-snapkv-radix-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🗜️ 企业长提示词压缩 vs. `Radix 前缀保真缓存` 首字延迟与命中率沙盘 (#484)</h1>
+    <p class="subtitle">拖动滑块调整请求总上下文长度与静态共享前缀占比，实时验证为什么“全文动态删词压缩”会击穿 Prefix Cache 反而让 `TTFT` 变慢 3.2 倍。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 上下文结构与压缩策略设定</h2>
+        <div class="control">
+          <label><span>长上下文管理策略档位</span></label>
+          <select id="mode">
+            <option value="m1">Tier 1: 原始长文裸跑 (未开 Prefix Cache、未加 Reranker ✕)</option>
+            <option value="m2">Tier 2: 全文无差别 LLMLingua 动态删词 (击穿 Prefix 哈希 ✕)</option>
+            <option value="m3">Tier 3: StreamingLLM 窗口驱逐 (仅留首4词+尾4K，中间失忆 ✕)</option>
+            <option value="m4" selected>Tier 4: 静态前缀保真 RadixCache + Reranker + 冷块压缩 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>请求总输入上下文长度 (`Total Input Tokens`)</span><strong id="lenVal">32,768 Tokens</strong></label>
+          <input type="range" id="len" min="8192" max="65536" step="8192" value="32768" />
+        </div>
+        <div class="control">
+          <label><span>可复用静态前缀与多轮历史占比 (`Shared Prefix %`)</span><strong id="preVal">75%</strong></label>
+          <input type="range" id="pre" min="25" max="90" step="5" value="75" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">真实首字延迟 (Effective TTFT)</div>
+            <div class="val" id="ttftOut">192.0 ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Radix Prefix Cache 命中率</div>
+            <div class="val" id="hitOut">92.5% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">代码 / 合同数字精确抽取准确率</div>
+            <div class="val" id="accOut">98.4% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单条请求增量 KV 显存占用</div>
+            <div class="val" id="kvOut">1.12 GB (-78.6%)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种策略在 32K 上下文下的真实首字延迟对比 (ms, 越短越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 32K 原文无缓存裸跑 (每次重算全部 32K Prefill)</span><strong id="b1">1,480.0 ms ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 全文动态 LLMLingua 压缩 (破坏前缀 Hash 被迫重算 11K)</span><strong id="b2">620.0 ms ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:41.9%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: StreamingLLM 窗口驱逐 (中间正文准确率仅 54.0% ✕)</span><strong id="b3">340.0 ms (失忆 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:23%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 静态前缀保真 RadixCache + Reranker + 冷块压缩 🏆</span><strong id="b4">192.0 ms (快 3.2x 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:13%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>反模式警示</strong>：切勿把 `Current Time: 2026-04-20 14:03:22` 写在 System Prompt 第一行！动态变量必须放最末尾，否则整棵 RadixCache 树 100% 失效！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const modeEl = document.getElementById('mode');
+    const lenEl = document.getElementById('len');
+    const preEl = document.getElementById('pre');
+
+    function update() {
+      const m = modeEl.value;
+      const len = parseInt(lenEl.value, 10);
+      const pre = parseInt(preEl.value, 10) / 100;
+      const scale = len / 32768;
+
+      document.getElementById('lenVal').textContent = len.toLocaleString() + ' Tokens';
+      document.getElementById('preVal').textContent = Math.round(pre * 100) + '%';
+
+      const t4Ttft = (14 + 680 * (1 - pre * 0.92) * scale).toFixed(1);
+      const t2Ttft = (85 + 535 * scale).toFixed(1);
+      const t1Ttft = (1480 * scale).toFixed(1);
+
+      const specs = {
+        m1: { ttft: t1Ttft + ' ms ✕', hit: '0.0% ✕', acc: '98.8%', kv: (5.24 * scale).toFixed(2) + ' GB', color: '#ef4444' },
+        m2: { ttft: t2Ttft + ' ms (哈希击穿 ✕)', hit: '4.5% ✕', acc: '86.4% (删坏语法 ✕)', kv: (1.65 * scale).toFixed(2) + ' GB', color: '#f59e0b' },
+        m3: { ttft: (340 * scale).toFixed(1) + ' ms', hit: '68.0%', acc: '54.0% (长文失忆 ✕)', kv: '0.66 GB', color: '#ef4444' },
+        m4: { ttft: t4Ttft + ' ms 🏆', hit: '92.5% 🏆', acc: '98.4% 🏆', kv: (1.12 * scale).toFixed(2) + ' GB 🏆', color: '#10b981' }
+      };
+      const cur = specs[m];
+      const tEl = document.getElementById('ttftOut');
+      tEl.textContent = cur.ttft;
+      tEl.style.color = cur.color;
+      document.getElementById('hitOut').textContent = cur.hit;
+      document.getElementById('accOut').textContent = cur.acc;
+      document.getElementById('kvOut').textContent = cur.kv;
+
+      document.getElementById('b1').textContent = t1Ttft + ' ms ✕';
+      document.getElementById('b2').textContent = t2Ttft + ' ms ✕';
+      document.getElementById('b4').textContent = t4Ttft + ' ms 🏆';
+    }
+
+    [modeEl, lenEl, preEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

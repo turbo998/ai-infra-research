@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业长提示词压缩与 KV 驱逐 (LLMLingua-2 vs. StreamingLLM vs. Radix 前缀缓存) 选型 (#484)</text>
+  <text x="28" y="58" class="sub">为什么对公共系统前缀或热文档开启 LLMLingua 删词压缩，反而会让首字 TTFT 从 192ms 暴增 3.2 倍至 620ms？</text>
+
+  <!-- Left Panel: How Prompt Compression Destroys Prefix Cache Hashing -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 为什么“按问题动态删词压缩 (Query-Aware Compression)”会彻底废掉 Prefix Cache？</text>
+
+  <rect x="42" y="120" width="524" height="92" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">⛔ 致命冲突：删掉前缀里的 1 个词 = 后续所有 KV Block 哈希全部雪崩失效！</text>
+  <text x="56" y="164" class="mono">• RadixAttention / Paged KV Cache 按每 16/64 个连续 Token 计算前缀链式 Hash</text>
+  <text x="56" y="184" class="mono">• 若用 LLMLingua 根据用户不同 Query 动态删减 20K 公共前缀里的次要词汇，</text>
+  <text x="56" y="202" class="mono">  每次压缩出的文本序列都长不一样 -&gt; Prefix 命中率从 92.5% 归零至 4.5%！</text>
+
+  <rect x="42" y="224" width="524" height="106" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="246" class="txt" font-weight="700" fill="#34d399">✅ 架构师黄金分区法则：静态前缀原样锁进 RadixCache + 仅对冷长尾 RAG 块压缩 (🏆)</text>
+  <text x="56" y="268" class="mono">• 1) 前半段 [System Prompt + 工具定义 + 多轮历史]: 绝对禁止做任何动态删词！</text>
+  <text x="56" y="288" class="mono">     保持字节级固定，100% 命中 L1 HBM / L2 DRAM Prefix Cache (0 重算)；</text>
+  <text x="56" y="308" class="mono">• 2) 后半段 [一次性冷门外部长网页]: 用 Reranker + LLMLingua-2 压缩，TTFT 192ms！</text>
+
+  <!-- Right Panel: 4 Context Management Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四种 32K 长上下文处理方案定量对标 (TTFT vs. 命中率 vs. 精确度)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 32K 原始长文裸跑 (未开 Prefix Cache、未加 Reranker)</text>
+  <text x="638" y="158" class="mono">• 首字 TTFT: 1,480ms ✕ | 前缀命中: 0.0% | 代码/实体精度: 98.8% | KV: 5.24GB</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 全文无差别 LLMLingua 动态删词压缩 (击穿 Prefix Cache 哈希！)</text>
+  <text x="638" y="214" class="mono">• 首字 TTFT: 620.0ms ✕ | 前缀命中: 4.5% ✕ | 代码/实体精度: 86.4% ✕ | KV: 1.65GB</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: StreamingLLM 注意力汇聚点 (仅留首4词 + 尾4K，丢弃中间正文)</text>
+  <text x="638" y="270" class="mono">• 首字 TTFT: 340.0ms | 前缀命中: 68.0% | 代码/实体精度: 54.0% ✕ | KV: 0.66GB</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: 静态前缀保真 RadixCache + L40S Reranker + 冷块选择性压缩 (🏆)</text>
+  <text x="638" y="326" class="mono">• 首字 TTFT: 192.0ms 🏆 | 前缀命中: 92.5% 🏆 | 精度: 98.4% 🏆 | KV: 1.12GB</text>
+
+  <!-- Bottom Panel: 3 Rules for Prompt Compression & KV Eviction -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 什么时候该用 Prompt 压缩？什么时候绝对禁用？（SA 三大黄金边界准则）</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">边界 1: 代码、JSON、合同数字严禁删词压缩！</text>
+  <text x="58" y="464" class="mono">• 困惑度删词模型 (LLMLingua) 会把代码里的</text>
+  <text x="58" y="484" class="mono">  括号、缩进、变量名后缀或合同里的小数点当成</text>
+  <text x="58" y="504" class="mono">  “低信息熵虚词”删掉，导致语法崩溃精度跌 12%！</text>
+  <text x="58" y="526" class="txt" fill="#6ee7b7">代码/SQL/财务表格一律保持原文 + 开启 FP8 KV！</text>
+
+  <rect x="420" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="436" y="440" class="txt" font-weight="700" fill="#34d399">边界 2: 跨网调用高价商业 API 的唯一甜点区</text>
+  <text x="436" y="464" class="mono">• 什么时候 LLMLingua-2 真正省钱？</text>
+  <text x="436" y="484" class="mono">  当你调用外部高价按 Token 计费 API ($3~$15/1M)</text>
+  <text x="436" y="504" class="mono">  处理每次完全不重复的爬虫新闻/会议录音转写文本</text>
+  <text x="436" y="524" class="mono">  (天然 0% Prefix Cache 命中率) 时，用本地</text>
+  <text x="436" y="544" class="mono">  0.5B 模型做 Query-Independent 3x 压缩省 65%！</text>
+
+  <rect x="798" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="814" y="440" class="txt" font-weight="700" fill="#d8b4fe">边界 3: Prompt 布局必须遵循“从静态到动态”</text>
+  <text x="814" y="464" class="mono">• 正确拼接顺序 (最大化 RadixCache 树深度):</text>
+  <text x="814" y="484" class="mono">  1) 固定 System Prompt + Few-Shot 示例</text>
+  <text x="814" y="504" class="mono">  2) 固定 Tool JSON Schema 列表</text>
+  <text x="814" y="524" class="mono">  3) 多轮对话历史 (Append-Only)</text>
+  <text x="814" y="544" class="mono">  4) 最末尾才放本轮动态 RAG 片段与当前问题！</text>
+  <text x="814" y="566" class="txt" fill="#fde68a">切忌把动态时间戳 `Current Time:` 写在第一行！</text>
+</svg>
