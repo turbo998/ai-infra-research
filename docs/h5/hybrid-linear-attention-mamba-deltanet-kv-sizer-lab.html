@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业超长上下文混合线性注意力模型 (7:1 Hybrid Mamba/DeltaNet + Full Attention) 算卡计算器 (#478)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-hybrid-linear-attention-mamba-deltanet-kv-state-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-hybrid-linear-attention-mamba-deltanet-kv-state-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-hybrid-linear-attention-mamba-deltanet-kv-state-sizing-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-hybrid-linear-attention-mamba-deltanet-kv-state-sizing-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🧬 企业超长上下文混合线性注意力模型 (`7:1 Hybrid Mamba/DeltaNet + Full Attention`) 算卡沙盘 (#478)</h1>
+    <p class="subtitle">拖动滑块调整上下文序列长度（64K 至 1M Tokens）与注意力层混合比，实时对比单条请求状态显存、首字 `TTFT`、大海捞针召回率与 8x H200 并发会话数。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 注意力架构与上下文长度设定</h2>
+        <div class="control">
+          <label><span>模型注意力架构档位 (80层总深度)</span></label>
+          <select id="arch">
+            <option value="a1">Tier 1: 纯全量 GQA-8 Transformer (80层 Full KV)</option>
+            <option value="a2">Tier 2: 纯线性注意力 / 纯 Mamba-2 (0层 Full KV, 大海捞针掉点 ✕)</option>
+            <option value="a3">Tier 3: 纯滑动窗口注意力 (SWA 4K 窗口, 长文失忆 ✕)</option>
+            <option value="a4" selected>Tier 4: 7:1 混合线性架构 (70层 DeltaNet/Mamba + 10层 Full GQA) 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>超长上下文序列长度 (`Context Length K`)</span><strong id="seqVal">256K Tokens</strong></label>
+          <input type="range" id="seq" min="64" max="1024" step="64" value="256" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">单条请求 KV + 循环状态显存</div>
+            <div class="val" id="memOut">5.26 GB (-87.2% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">首字延迟 TTFT / 解码 TPOT</div>
+            <div class="val" id="latOut">1.62s / 11.4ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">大海捞针精确检索召回率</div>
+            <div class="val" id="recOut">99.1% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">8x H200 最大同时在线长会话数</div>
+            <div class="val" id="conOut">124 路并发 (7.75x)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 单条超长请求显存占用对比 (GB, 越短越省显存)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 纯全量 GQA-8 Transformer (80层随长度暴涨)</span><strong id="b1">40.96 GB ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 纯线性 / 纯 Mamba-2 (大海捞针仅 64.0% ✕)</span><strong>0.16 GB (召回不足 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:2%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 纯 4K 滑动窗口 (大海捞针仅 38.5% ✕)</span><strong>0.64 GB (窗口外失忆 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:3%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 7:1 混合线性注意力 (99.1% 召回 + 省 87.2% 显存 🏆)</span><strong id="b4">5.26 GB 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:12.8%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>工程关键点</strong>：混合线性模型开启 Prefix Caching 时，必须每隔 `512` Token 保存一份 `140 MB` 的线性状态快照 (`Interval State Snapshot`)，才能支持多轮分支回退！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const seqEl = document.getElementById('seq');
+
+    function update() {
+      const arch = archEl.value;
+      const seqK = parseInt(seqEl.value, 10);
+      const scale = seqK / 256;
+
+      document.getElementById('seqVal').textContent = seqK + 'K Tokens';
+
+      const m1 = 40.96 * scale;
+      const m4 = 5.12 * scale + 0.14;
+
+      const specs = {
+        a1: { mem: m1.toFixed(2) + ' GB ✕', lat: (8.40 * Math.pow(scale, 1.7)).toFixed(2) + 's / ' + (48.5 * scale).toFixed(1) + 'ms', rec: '99.2%', con: Math.max(1, Math.floor(650 / m1)), color: '#ef4444' },
+        a2: { mem: '0.16 GB (恒定)', lat: (1.15 * scale).toFixed(2) + 's / 8.2ms', rec: '64.0% (漏检高危 ✕)', con: 512, color: '#f59e0b' },
+        a3: { mem: '0.64 GB (恒定)', lat: (1.45 * scale).toFixed(2) + 's / 9.1ms', rec: '38.5% (长文失忆 ✕)', con: 320, color: '#ef4444' },
+        a4: { mem: m4.toFixed(2) + ' GB (-87.2% 🏆)', lat: (1.62 * Math.pow(scale, 1.15)).toFixed(2) + 's / ' + (8.0 + 3.4 * scale).toFixed(1) + 'ms 🏆', rec: '99.1% 🏆', con: Math.max(4, Math.floor(650 / m4)), color: '#10b981' }
+      };
+      const cur = specs[arch];
+      document.getElementById('memOut').textContent = cur.mem;
+      document.getElementById('latOut').textContent = cur.lat;
+      const recEl = document.getElementById('recOut');
+      recEl.textContent = cur.rec;
+      recEl.style.color = cur.color;
+      document.getElementById('conOut').textContent = cur.con + ' 路并发';
+
+      document.getElementById('b1').textContent = m1.toFixed(2) + ' GB ✕';
+      document.getElementById('b4').textContent = m4.toFixed(2) + ' GB 🏆';
+    }
+
+    [archEl, seqEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
