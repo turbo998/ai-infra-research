@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业机密计算大模型推理 (GPU TEE: H200 vs. PPCIE vs. Blackwell TEE-I/O) 损耗与合规计算器 (#469)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-confidential-ai-gpu-tee-h200-blackwell-ppcie-overhead-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-confidential-ai-gpu-tee-h200-blackwell-ppcie-overhead-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-confidential-ai-gpu-tee-h200-blackwell-ppcie-overhead-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-confidential-ai-gpu-tee-h200-blackwell-ppcie-overhead-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🔒 企业机密计算大模型推理 (`GPU TEE: H200 vs. PPCIE vs. Blackwell TEE-I/O`) 损耗与合规沙盘 (#469)</h1>
+    <p class="subtitle">切换机密计算硬件档位与模型参数规模，实时观测加密 PCIe 带宽、端到端吞吐保留率、冷启动模型解密加载耗时与零信任远程证明状态。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 机密计算模式与模型规模设定</h2>
+        <div class="control">
+          <label><span>机密计算架构档位</span></label>
+          <select id="tier">
+            <option value="t1">Tier 1: 普通非机密 GPU + 前置正则脱敏 (无硬件内存加密 ✕)</option>
+            <option value="t2">Tier 2: 未优化多卡 CC 模式 (同步 CPU 跳板缓冲 + 跨 PCIe TP ✕)</option>
+            <option value="t3" selected>Tier 3: 单卡 H200 (141GB) TEE (70B FP8 TP=1 免跨卡 + 异步 DMA) 🏆</option>
+            <option value="t4">Tier 4: 多卡 PPCIE / Blackwell TEE-I/O (线速安全 NVLink) 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>加密模型权重体积 (`Encrypted Weights GB`)</span><strong id="wVal">70 GB (70B FP8)</strong></label>
+          <input type="range" id="weight" min="16" max="685" step="16" value="70" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">有效主机至 GPU 加密带宽</div>
+            <div class="val" id="bwOut">14.8 GB/s</div>
+          </div>
+          <div class="kpi">
+            <div class="label">端到端推理吞吐折损</div>
+            <div class="val" id="penOut">-4.2% (保留 95.8% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">冷启动权重解密加载耗时</div>
+            <div class="val" id="loadOut">4.73 秒</div>
+          </div>
+          <div class="kpi">
+            <div class="label">密码学远程证明 / KMS 锁钥</div>
+            <div class="val" id="attOut">SPDM+NRAS 已启用 ✓</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种架构端到端推理吞吐保留率对比 (%, 越长越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 普通非机密 GPU (宿主机 Root 可窃取明文 ✕)</span><strong>100.0% (不合规 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#94a3b8;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 未优化多卡 CC 模式 (跨 PCIe Bounce Buffer TP)</span><strong>66.0% (掉速 34% ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:66%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 单卡 H200 (141GB) TEE (70B FP8 TP=1 免跨卡) ✓</span><strong>95.8% (仅损耗 4.2% ✓)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:95.8%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 多卡 PPCIE / Blackwell TEE-I/O (线速加密 NVLink) 🏆</span><strong>96.2% (仅损耗 3.8% 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:96.2%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>架构师防坑指南</strong>：在 GPU TEE 机密模式下，严禁开启 L2 CPU DRAM KV Cache Offload，否则数 GB 的 KV 张量往返经过 CPU AES-GCM 跳板缓冲区会瞬间打爆延迟！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tierEl = document.getElementById('tier');
+    const weightEl = document.getElementById('weight');
+
+    function update() {
+      const tier = tierEl.value;
+      const w = parseFloat(weightEl.value);
+      document.getElementById('wVal').textContent = w + ' GB';
+
+      const specs = {
+        t1: { bw: 52.0, pen: '0.0% (无硬件隔离 ✕)', att: '不支持 ✕', color: '#ef4444' },
+        t2: { bw: 5.4, pen: '-34.0% (跨卡阻塞 ✕)', att: 'SPDM+NRAS 已启用 ✓', color: '#f59e0b' },
+        t3: { bw: 14.8, pen: '-4.2% (保留 95.8% 🏆)', att: 'SPDM+NRAS 已启用 ✓', color: '#10b981' },
+        t4: { bw: 49.2, pen: '-3.8% (保留 96.2% 🏆)', att: 'SPDM+TDISP 已启用 🏆', color: '#10b981' }
+      };
+      const cur = specs[tier];
+      const gpus = tier === 't4' ? 8 : 1;
+      const loadSec = (w / gpus) / cur.bw;
+
+      document.getElementById('bwOut').textContent = cur.bw.toFixed(1) + ' GB/s';
+      const penEl = document.getElementById('penOut');
+      penEl.textContent = cur.pen;
+      penEl.style.color = cur.color;
+      document.getElementById('loadOut').textContent = loadSec.toFixed(2) + ' 秒';
+      document.getElementById('attOut').textContent = cur.att;
+    }
+
+    [tierEl, weightEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
