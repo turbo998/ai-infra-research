@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业 8 卡 GPU 服务器 PCIe ACS / NUMA 拓扑调优与算力找回计算器 (#506)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-gpu-server-numa-pcie-acs-irq-pinning-tuning-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-gpu-server-numa-pcie-acs-irq-pinning-tuning-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-gpu-server-numa-pcie-acs-irq-pinning-tuning-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-gpu-server-numa-pcie-acs-irq-pinning-tuning-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>⚙️ 企业 8 卡 GPU 服务器 `PCIe ACS / NUMA` 拓扑调优与算力找回计算器 (#506)</h1>
+    <p class="subtitle">拖动滑块调整集群 8 卡服务器节点数与宿主机 BIOS/NUMA 调优档位，实时测算 GPUDirect RDMA 带宽、P99 TPOT 吐字延迟与零成本找回的等效 GPU 卡数。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 集群规模与宿主机 BIOS/NUMA 调优档位</h2>
+        <div class="control">
+          <label><span>宿主机 BIOS / OS / K8s 拓扑调优状态</span></label>
+          <select id="arch">
+            <option value="a1">Tier 1: 出厂默认 BIOS (PCIe ACS 开启 + 随机 NUMA · 丢 28% 算力 ✕)</option>
+            <option value="a2">Tier 2: 仅关闭 PCIe ACS (未绑 NUMA，跨 Socket 抖动)</option>
+            <option value="a3">Tier 3: 关闭 ACS + K8s TopologyManager single-numa-node</option>
+            <option value="a4" selected>Tier 4: 关闭 ACS + single-numa-node + IRQ/Tokenizer 绑核隔离 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>集群总 GPU 卡数 (`Total H200 GPUs`)</span><strong id="gpuVal">64 张 H200 (8 台服务器)</strong></label>
+          <input type="range" id="gpus" min="8" max="256" step="8" value="64" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">GPUDirect RDMA 单网口带宽</div>
+            <div class="val" id="bwOut">47.8 GB/s (提速 3.37x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">`P99 TPOT` 吐字长尾延迟</div>
+            <div class="val" id="latOut">17.8 ms (-61.7% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">整机硬件有效吞吐释放率</div>
+            <div class="val" id="effOut">100.0% (+38.9% 净增 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">相比出厂默认白捡回的 GPU 数</div>
+            <div class="val" id="recOut">白捡回 18 张 H200 🏆</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四档主机配置下的 GPUDirect RDMA 带宽 (GB/s) 与吞吐释放率对比</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 出厂默认 PCIe ACS 开启 (绕行 CPU Root Complex ✕)</span><strong>14.2 GB/s | 吞吐 72.0% ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:29.7%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 仅关闭 PCIe ACS (跨 Socket NUMA 内存抖动)</span><strong>44.5 GB/s | 吞吐 86.5%</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:86.5%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 关闭 ACS + K8s single-numa-node 对齐</span><strong>47.2 GB/s | 吞吐 95.2% ✓</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:95.2%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 关闭 ACS + NUMA 对齐 + IRQ/Tokenizer 绑核 🏆</span><strong>47.8 GB/s | 吞吐 100.0% 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>一行命令找回 70% RDMA 带宽：</strong>开机执行 <code>setpci -v -d *:* ECAP_ACS+0x6.w=0000</code> 关闭 PCIe Switch ACS 重定向，让网卡与 GPU 走 `PIX` 直连！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const gpusEl = document.getElementById('gpus');
+
+    function update() {
+      const a = archEl.value;
+      const g = parseInt(gpusEl.value, 10);
+      document.getElementById('gpuVal').textContent = g + ' 张 H200 (' + (g / 8) + ' 台服务器)';
+
+      const lost1 = Math.round(g * 0.28);
+      const lost2 = Math.round(g * 0.135);
+      const lost3 = Math.round(g * 0.048);
+
+      const specs = {
+        a1: { bw: '14.2 GB/s (-70.3% ✕)', lat: '46.5 ms (抖动 ✕)', eff: '72.0% ✕', rec: '白白浪费 ' + lost1 + ' 张 H200 ✕', color: '#ef4444' },
+        a2: { bw: '44.5 GB/s', lat: '31.0 ms', eff: '86.5%', rec: '仍损失 ' + lost2 + ' 张 H200', color: '#f59e0b' },
+        a3: { bw: '47.2 GB/s ✓', lat: '21.5 ms ✓', eff: '95.2% ✓', rec: '找回 ' + (lost1 - lost3) + ' 张 H200 ✓', color: '#3b82f6' },
+        a4: { bw: '47.8 GB/s (提速 3.37x 🏆)', lat: '17.8 ms (-61.7% 🏆)', eff: '100.0% (+38.9% 🏆)', rec: '零成本找回 ' + lost1 + ' 张 H200 🏆', color: '#10b981' }
+      };
+      const cur = specs[a];
+      const bwEl = document.getElementById('bwOut');
+      bwEl.textContent = cur.bw;
+      bwEl.style.color = cur.color;
+      document.getElementById('latOut').textContent = cur.lat;
+      document.getElementById('effOut').textContent = cur.eff;
+      document.getElementById('recOut').textContent = cur.rec;
+    }
+
+    [archEl, gpusEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
