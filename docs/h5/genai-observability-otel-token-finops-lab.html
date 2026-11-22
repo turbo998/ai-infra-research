@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型全栈可观测性 (OpenTelemetry GenAI) 与 Token 级 FinOps 分账计算器 (#483)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-genai-observability-opentelemetry-token-finops-telemetry-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-genai-observability-opentelemetry-token-finops-telemetry-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-genai-observability-opentelemetry-token-finops-telemetry-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-genai-observability-opentelemetry-token-finops-telemetry-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🔭 企业大模型全栈可观测性 (`OpenTelemetry GenAI`) 与 Token 级 FinOps 分账沙盘 (#483)</h1>
+    <p class="subtitle">拖动滑块调整月度请求量（百万次）与明文 Prompt 尾部采样比例，实时测算排障 `MTTR`、网关遥测开销、多租户 `WCU` 分账精度与月度监控存储账单。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 遥测架构与月度调用规模设定</h2>
+        <div class="control">
+          <label><span>GenAI 可观测与 FinOps 架构档位</span></label>
+          <select id="stack">
+            <option value="s1">Tier 1: 传统 HTTP APM 监控 (仅记录 HTTP 总耗时 ✕)</option>
+            <option value="s2">Tier 2: 同步 100% 全量上报明文 Prompt 至商业 SaaS APM ✕</option>
+            <option value="s3">Tier 3: 仅采集 Prometheus 引擎聚合指标 (无单请求 Trace)</option>
+            <option value="s4" selected>Tier 4: OTel GenAI 100% 数值 Span + 尾部采样正文 + ClickHouse 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>平台月度总请求次数 (`Monthly Requests M`)</span><strong id="reqVal">100 M (1亿次/月)</strong></label>
+          <input type="range" id="reqs" min="10" max="500" step="10" value="100" />
+        </div>
+        <div class="control">
+          <label><span>异常与抽样明文落盘比例 (`Tail-Sampling %`)</span><strong id="sampVal">5%</strong></label>
+          <input type="range" id="samp" min="1" max="100" step="1" value="5" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">长尾抖动根因定位耗时 (MTTR)</div>
+            <div class="val" id="mttrOut">3.4 分钟 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">网关遥测附加延迟开销</div>
+            <div class="val" id="latOut">0.3 ms (异步非阻塞 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">多租户 WCU 成本分账精度</div>
+            <div class="val" id="accOut">99.6% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">月度可观测与日志存储账单</div>
+            <div class="val" id="billOut">$3,800 / 月 (-94.5% 🏆)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种遥测架构月度可观测账单对比 (1亿次调用 $/mo, 越短越省钱)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 100% 同步上报 32K 明文至商业 SaaS APM (+38.5ms 延迟)</span><strong id="b2">$68,500 / mo ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 传统 HTTP APM (看不清 TTFT/ITL，排障 MTTR 145分钟 ✕)</span><strong id="b1">$4,200 / mo (失明 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:8%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: OTel GenAI 100% 数值 + 5% 尾部采样 + ClickHouse 🏆</span><strong id="b4">$3,800 / mo (MTTR 3.4m 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:6%;background:#10b981;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 仅 Prometheus 引擎聚合直方图 (无租户级精确分账)</span><strong id="b3">$2,900 / mo</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:5%;background:#3b82f6;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>黄金法则</strong>：1 次流式 LLM 请求只发 **唯一 1 条 320B 数值 Span**（含 `queue_wait_ms`, `ttft_ms`, `tpot_ms`, `cached_tokens`, `reasoning_tokens`），严禁每个 Token 发一条 Span！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const stackEl = document.getElementById('stack');
+    const reqsEl = document.getElementById('reqs');
+    const sampEl = document.getElementById('samp');
+
+    function update() {
+      const s = stackEl.value;
+      const reqM = parseInt(reqsEl.value, 10);
+      const sampPct = parseInt(sampEl.value, 10);
+      const scale = reqM / 100;
+
+      document.getElementById('reqVal').textContent = reqM + ' M (' + (reqM / 100).toFixed(1) + '亿次/月)';
+      document.getElementById('sampVal').textContent = sampPct + '%';
+
+      const t4Bill = Math.round((2200 + 320 * sampPct) * scale);
+      const t2Bill = Math.round(68500 * scale);
+
+      const specs = {
+        s1: { mttr: '145.0 分钟 (失明 ✕)', lat: '1.2 ms', acc: '38.0% ✕', bill: '$' + Math.round(4200 * scale).toLocaleString() + '/月', color: '#ef4444' },
+        s2: { mttr: '18.0 分钟', lat: '+38.5 ms (阻塞网关 ✕)', acc: '94.0%', bill: '$' + t2Bill.toLocaleString() + '/月 ✕', color: '#ef4444' },
+        s3: { mttr: '42.0 分钟', lat: '0.4 ms', acc: '62.0%', bill: '$' + Math.round(2900 * scale).toLocaleString() + '/月', color: '#3b82f6' },
+        s4: { mttr: '3.4 分钟 (-97.7% 🏆)', lat: '0.3 ms 🏆', acc: '99.6% 🏆', bill: '$' + t4Bill.toLocaleString() + '/月 🏆', color: '#10b981' }
+      };
+      const cur = specs[s];
+      const mEl = document.getElementById('mttrOut');
+      mEl.textContent = cur.mttr;
+      mEl.style.color = cur.color;
+      document.getElementById('latOut').textContent = cur.lat;
+      document.getElementById('accOut').textContent = cur.acc;
+      document.getElementById('billOut').textContent = cur.bill;
+
+      document.getElementById('b2').textContent = '$' + t2Bill.toLocaleString() + ' / mo ✕';
+      document.getElementById('b4').textContent = '$' + t4Bill.toLocaleString() + ' / mo (MTTR 3.4m 🏆)';
+    }
+
+    [stackEl, reqsEl, sampEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
