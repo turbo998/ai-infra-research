@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业混合云与多云算力弹性溢出 (SkyPilot / Kueue MultiKueue &amp; Egress 防坑) 计算器 (#487)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-hybrid-multicloud-gpu-bursting-skypilot-multikueue-egress-tco-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-hybrid-multicloud-gpu-bursting-skypilot-multikueue-egress-tco-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-hybrid-multicloud-gpu-bursting-skypilot-multikueue-egress-tco-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-hybrid-multicloud-gpu-bursting-skypilot-multikueue-egress-tco-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>☁️ 企业混合云与多云算力弹性溢出 (`SkyPilot / MultiKueue & Egress 防坑`) 沙盘 (#487)</h1>
+    <p class="subtitle">拖动滑块调整全年峰值 GPU 需求与日常 `P80` 基荷占比，实时对比“100% 本地按峰值买卡”、“跨 WAN 拆 PD 传张量”与“P80 本地基荷 + 整包跨云溢出”的年度总 TCO。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 混合云容量水位与溢出模式设定</h2>
+        <div class="control">
+          <label><span>混合云算力弹性架构档位</span></label>
+          <select id="mod">
+            <option value="m1">Tier 1: 100% 本地按峰值买卡 (全年 78% 时间空转折旧 ✕)</option>
+            <option value="m2">Tier 2: 跨广域网硬拆 PD 分离 / 跨网拉存储 (传 KV 张量 ✕)</option>
+            <option value="m3">Tier 3: 单云弹性扩容 + 每次冷启动跨云拉取 685GB 权重</option>
+            <option value="m4" selected>Tier 4: 本地 P80 基荷 + SkyPilot/MultiKueue 整包跨云溢出 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>业务大促/早高峰峰值 GPU 需求 (`Peak GPUs`)</span><strong id="pkVal">128 张 H200</strong></label>
+          <input type="range" id="peak" min="32" max="512" step="32" value="128" />
+        </div>
+        <div class="control">
+          <label><span>本地常驻 P80 基荷配比 (`On-Prem Base %`)</span><strong id="bsVal">37.5% (48 张)</strong></label>
+          <input type="range" id="basePct" min="25" max="75" step="12.5" value="37.5" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">本地自建常驻 + 云端峰值溢出</div>
+            <div class="val" id="splitOut">48 本地 + 80 云溢出</div>
+          </div>
+          <div class="kpi">
+            <div class="label">月度跨云出口流量账单 (Egress)</div>
+            <div class="val" id="egOut">$420 / 月 (仅传文本 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">跨广域网 (WAN) 附加延迟</div>
+            <div class="val" id="wanOut">+14.0 ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">全年综合总 TCO ($/yr)</div>
+            <div class="val" id="tcoOut">$1.185M (-57.1% 🏆)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种容量模式全年综合总 TCO 对比 ($/yr, 越短越省钱)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 100% 本地按峰值买 128 卡 (闲置浪费 $158万/年)</span><strong id="b1">$2,764,800 / yr ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 跨 WAN 硬拆 PD 分离 (月烧 $48,500 出口流量费 ✕)</span><strong id="b2">$2,180,000 / yr ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:78.8%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 单云扩容 + 每次冷启动跨云拉取 685GB 权重</span><strong id="b3">$1,490,000 / yr</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:53.9%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 本地 P80 基荷 + 整包文本溢出 + 同区/R2 预置权重 🏆</span><strong id="b4">$1,185,000 / yr (省 57.1% 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:42.9%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>混合云第一铁律</strong>：`4,096` Token 的 KV Cache (`671 MB`) 是纯文本 JSON (`16 KB`) 的 **41,943 倍**！跨机房/跨云永远只传压缩后的纯文本 JSON，严禁跨广域网传张量！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const modEl = document.getElementById('mod');
+    const peakEl = document.getElementById('peak');
+    const basePctEl = document.getElementById('basePct');
+
+    function update() {
+      const m = modEl.value;
+      const peak = parseInt(peakEl.value, 10);
+      const bp = parseFloat(basePctEl.value) / 100;
+      const scale = peak / 128;
+      const baseGpus = Math.round(peak * bp);
+      const burstGpus = peak - baseGpus;
+
+      document.getElementById('pkVal').textContent = peak + ' 张 H200';
+      document.getElementById('bsVal').textContent = (bp * 100).toFixed(1) + '% (' + baseGpus + ' 张)';
+
+      const specs = {
+        m1: { split: peak + ' 本地 + 0 云溢出', eg: '$0 / 月', wan: '0.0 ms', tco: Math.round(2764800 * scale), color: '#ef4444' },
+        m2: { split: Math.round(peak * 0.5) + ' 本地 + ' + Math.round(peak * 0.5) + ' 跨网PD', eg: '$' + Math.round(48500 * scale).toLocaleString() + ' / 月 ✕', wan: '+940.0 ms ✕', tco: Math.round(2180000 * scale), color: '#ef4444' },
+        m3: { split: baseGpus + ' 本地 + ' + burstGpus + ' 云溢出', eg: '$' + Math.round(14200 * scale).toLocaleString() + ' / 月', wan: '+38.0 ms', tco: Math.round(1490000 * scale), color: '#3b82f6' },
+        m4: { split: baseGpus + ' 本地 + ' + burstGpus + ' 云溢出', eg: '$' + Math.round(420 * scale).toLocaleString() + ' / 月 🏆', wan: '+14.0 ms 🏆', tco: Math.round(1185000 * scale * (bp / 0.375 * 0.6 + 0.4)), color: '#10b981' }
+      };
+      const cur = specs[m];
+      document.getElementById('splitOut').textContent = cur.split;
+      const egEl = document.getElementById('egOut');
+      egEl.textContent = cur.eg;
+      egEl.style.color = cur.color;
+      document.getElementById('wanOut').textContent = cur.wan;
+      document.getElementById('tcoOut').textContent = '$' + (cur.tco / 1e6).toFixed(3) + 'M / yr';
+
+      document.getElementById('b1').textContent = '$' + Math.round(2764800 * scale).toLocaleString() + ' / yr ✕';
+      document.getElementById('b2').textContent = '$' + Math.round(2180000 * scale).toLocaleString() + ' / yr ✕';
+      document.getElementById('b3').textContent = '$' + Math.round(1490000 * scale).toLocaleString() + ' / yr';
+      document.getElementById('b4').textContent = '$' + specs.m4.tco.toLocaleString() + ' / yr 🏆';
+    }
+
+    [modEl, peakEl, basePctEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
