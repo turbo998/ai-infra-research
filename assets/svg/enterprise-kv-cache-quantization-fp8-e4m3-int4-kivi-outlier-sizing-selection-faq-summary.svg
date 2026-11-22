@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业大模型 KV Cache 专项量化与非对称压缩 (FP8 E4M3 vs. INT4 KIVI 非对称量化) 选型 (#489)</text>
+  <text x="28" y="58" class="sub">为什么把 Key 和 Value 都按 Per-Token 压成 INT4 会直接毁掉长文精度 (68.4%)？按通道 Key + 按 Token Value 让并发暴涨 3.57x！</text>
+
+  <!-- Left Panel: Why Key & Value Have Completely Different Outlier Distributions -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 为什么 Key 张量有极端的“固定离群通道”，而 Value 张量却没有？</text>
+
+  <rect x="42" y="120" width="524" height="92" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">⛔ 盲目对称 Per-Token INT4 量化 KV 的崩溃现场 (精度暴跌至 68.4% ✕)</text>
+  <text x="56" y="164" class="mono">• 物理规律: Key 张量经过 RoPE 旋转位置编码后，少数几个特定 Channel</text>
+  <text x="56" y="184" class="mono">  的幅值在所有 Token 上都比普通通道大 20~50 倍！</text>
+  <text x="56" y="202" class="mono">• 若对每个 Token 内部跨所有通道统一做 INT4 缩放，其余 98% 通道全被归零！</text>
+
+  <rect x="42" y="224" width="524" height="106" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="246" class="txt" font-weight="700" fill="#34d399">✅ 架构师双标准：通用主力选 FP8 E4M3 (砍半)；极限长文选 KIVI INT4 (砍 72.5% 🏆)</text>
+  <text x="56" y="268" class="mono">• 1) FP8 E4M3 + Per-Head 缩放因子: 显存立砍 50% (163.8KB/tok)，精度 98.9%；</text>
+  <text x="56" y="288" class="mono">• 2) KIVI 非对称 INT4: Key 按通道 (Per-Channel) 量化、Value 按词 (Per-Token)</text>
+  <text x="56" y="308" class="mono">     量化 + 末尾 128 个新词保持 FP16 滑动残差窗，精度保住 98.4%，并发 3.57x！</text>
+
+  <!-- Right Panel: 4 KV Cache Quantization Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四种 KV Cache 精度格式定量对标 (Llama-3.3-70B · 2x H200)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 未压缩 BF16 / FP16 KV Cache (327.68 KB/tok)</text>
+  <text x="638" y="158" class="mono">• 32K KV重: 10.24 GB | 长文精度: 99.1% | 100G PD搬运: 859ms ✕ | 并发: 14路</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 粗暴对称 Per-Token INT4 KV 量化 (抹平 Key 离群通道)</text>
+  <text x="638" y="214" class="mono">• 32K KV重: 2.69 GB | 长文精度: 68.4% ✕ | 100G PD搬运: 225ms | 并发: 52路</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#34d399">Tier 3: FP8 E4M3 KV + Per-Head 校准缩放因子 (163.84 KB/tok, 生产默认 🏆)</text>
+  <text x="638" y="270" class="mono">• 32K KV重: 5.12 GB ✓ | 长文精度: 98.9% 🏆 | 100G PD搬运: 430ms ✓ | 并发: 28路</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: KIVI 非对称 INT4 (Per-Channel K + Per-Token V + 128残差窗) (长文王牌 🏆)</text>
+  <text x="638" y="326" class="mono">• 32K KV重: 2.82 GB 🏆 | 长文精度: 98.4% 🏆 | 100G PD搬运: 236ms 🏆 | 并发: 50路</text>
+
+  <!-- Bottom Panel: Triple Dividend of KV Quantization -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. KV Cache 量化的“一石三鸟”收益手算公式 (显存容量 × 解码 HBM 带宽 × 跨节点 PD 传输)</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">收益 1: 第一道水位线 (并发容量翻 2x ~ 3.6x)</text>
+  <text x="58" y="464" class="mono">• 2x H200 (282GB) 跑 70B FP8 (72GB 权重)：</text>
+  <text x="58" y="484" class="mono">  扣除 15% 安全水位后可用 KV 池 = 145 GB</text>
+  <text x="58" y="504" class="mono">  - BF16 KV (10.24GB/32K): 仅能跑 14 个并发</text>
+  <text x="58" y="524" class="mono">  - FP8  KV (5.12GB/32K):  翻倍至 28 个并发</text>
+  <text x="58" y="544" class="mono">  - KIVI INT4 (2.82GB/32K): 暴涨至 50 个并发！</text>
+
+  <rect x="420" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="436" y="440" class="txt" font-weight="700" fill="#34d399">收益 2: 第二道水位线 (长文 Decode TPOT 砍半)</text>
+  <text x="436" y="464" class="mono">• 在 32K 上下文 × 28 并发下，每生成一个词</text>
+  <text x="436" y="484" class="mono">  需读取 72GB 权重 + 143GB KV (KV 占读取量 66%！)</text>
+  <text x="436" y="504" class="mono">• 将 KV 压为 FP8/INT4 直接削减一半以上的</text>
+  <text x="436" y="524" class="mono">  HBM 带宽占用，把长文 TPOT 压低 38%~52%！</text>
+
+  <rect x="798" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="814" y="440" class="txt" font-weight="700" fill="#d8b4fe">收益 3: 跨节点 PD 分离 RDMA 带宽立省 50~72%</text>
+  <text x="814" y="464" class="mono">• 在 100G RoCEv2 (11.5 GB/s) 上跨机传 32K KV：</text>
+  <text x="814" y="484" class="mono">  - 传 BF16 KV (10.24 GB): 耗 859ms (阻塞严重)</text>
+  <text x="814" y="504" class="mono">  - 传 FP8  KV (5.12 GB):  耗 430ms</text>
+  <text x="814" y="524" class="mono">  - 传 KIVI INT4 (2.82 GB): 仅 236ms (流水线隐藏</text>
+  <text x="814" y="544" class="mono">    80% 后暴露延迟仅 47ms，100G 也能跑 PD 分离)！</text>
+</svg>

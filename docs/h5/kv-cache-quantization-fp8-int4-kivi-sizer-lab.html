@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型 KV Cache 专项量化 (FP8 E4M3 vs. KIVI INT4 非对称量化) 一石三鸟计算器 (#489)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-kv-cache-quantization-fp8-e4m3-int4-kivi-outlier-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-kv-cache-quantization-fp8-e4m3-int4-kivi-outlier-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-kv-cache-quantization-fp8-e4m3-int4-kivi-outlier-sizing-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-kv-cache-quantization-fp8-e4m3-int4-kivi-outlier-sizing-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🧊 企业大模型 KV Cache 专项量化 (`FP8 E4M3 vs. KIVI INT4 非对称量化`) 沙盘 (#489)</h1>
+    <p class="subtitle">切换 KV Cache 量化格式与上下文长度，实时观测“显存容量、解码 HBM 带宽、跨节点 PD RDMA 传输”一石三鸟收益及长文精度。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. KV Cache 精度格式与上下文设定</h2>
+        <div class="control">
+          <label><span>KV Cache 量化格式档位 (Llama-3.3-70B GQA-8)</span></label>
+          <select id="fmt">
+            <option value="f1">Tier 1: 未压缩 BF16 / FP16 KV Cache (327.68 KB/tok)</option>
+            <option value="f2">Tier 2: 粗暴对称 Per-Token INT4 (抹平 Key 离群通道，精度崩盘 ✕)</option>
+            <option value="f3">Tier 3: FP8 E4M3 + Per-Head 缩放因子 (163.84 KB/tok, 生产默认 🏆)</option>
+            <option value="f4" selected>Tier 4: KIVI 非对称 INT4 (Per-Channel K + Per-Token V + 128残差窗) 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>单会话上下文序列长度 (`Context Length K`)</span><strong id="seqVal">32K Tokens</strong></label>
+          <input type="range" id="seq" min="8" max="128" step="8" value="32" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">单请求 KV 显存体积 (GB)</div>
+            <div class="val" id="gbOut">2.82 GB (-72.5% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">长文大海捞针 / LongBench 精度</div>
+            <div class="val" id="accOut">98.4% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">100G RoCEv2 跨机 PD 传输耗时</div>
+            <div class="val" id="rdmaOut">236.0 ms (暴露仅 47ms 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">2x H200 最大同时在线长会话数</div>
+            <div class="val" id="conOut">50 路并发 (3.57x 🏆)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种格式在 2x H200 上可支撑的 32K 并发会话数对比 (路, 越长越强)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 未压缩 BF16 KV (10.24 GB/req, PD 搬运 859ms)</span><strong id="b1">14 路 ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:27%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 对称 Per-Token INT4 (虽有 52 路，但长文精度跌至 68.4% ✕)</span><strong>52 路 (精度崩盘 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: FP8 E4M3 + Per-Head 缩放 (精度 98.9%, 生产默认)</span><strong id="b3">28 路 (2.0x ✓)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:54%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: KIVI 非对称 INT4 + 128 残差窗 (精度 98.4% 🏆)</span><strong id="b4">50 路 (3.57x 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:96%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>物理本质</strong>：Key 张量经 RoPE 后存在固定离群通道，必须 **按通道 (`Per-Channel`)** 量化；Value 张量分布均匀，必须 **按词 (`Per-Token`)** 量化！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fmtEl = document.getElementById('fmt');
+    const seqEl = document.getElementById('seq');
+
+    function update() {
+      const f = fmtEl.value;
+      const seqK = parseInt(seqEl.value, 10);
+      const scale = seqK / 32;
+
+      document.getElementById('seqVal').textContent = seqK + 'K Tokens';
+
+      const specs = {
+        f1: { gb: 10.24 * scale, acc: '99.1%', rdma: 859.0 * scale, color: '#ef4444' },
+        f2: { gb: 2.69 * scale, acc: '68.4% (离群通道被抹平 ✕)', rdma: 225.0 * scale, color: '#ef4444' },
+        f3: { gb: 5.12 * scale, acc: '98.9% 🏆', rdma: 429.5 * scale, color: '#3b82f6' },
+        f4: { gb: 2.82 * scale, acc: '98.4% 🏆', rdma: 236.0 * scale, color: '#10b981' }
+      };
+      const cur = specs[f];
+      const con = Math.max(1, Math.floor(145 / cur.gb));
+
+      document.getElementById('gbOut').textContent = cur.gb.toFixed(2) + ' GB';
+      const aEl = document.getElementById('accOut');
+      aEl.textContent = cur.acc;
+      aEl.style.color = cur.color;
+      document.getElementById('rdmaOut').textContent = cur.rdma.toFixed(1) + ' ms (暴露 ' + (cur.rdma * 0.2).toFixed(0) + 'ms)';
+      document.getElementById('conOut').textContent = con + ' 路并发';
+
+      document.getElementById('b1').textContent = Math.max(1, Math.floor(145 / (10.24 * scale))) + ' 路 ✕';
+      document.getElementById('b3').textContent = Math.max(1, Math.floor(145 / (5.12 * scale))) + ' 路 ✓';
+      document.getElementById('b4').textContent = Math.max(1, Math.floor(145 / (2.82 * scale))) + ' 路 🏆';
+    }
+
+    [fmtEl, seqEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
