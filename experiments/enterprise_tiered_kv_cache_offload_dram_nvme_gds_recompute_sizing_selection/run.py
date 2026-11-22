@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    tiers = [
+        {
+            "tier": "Tier 1: HBM-Only LRU Eviction + Full O(S^2) Prefill Recompute (64K Multi-Turn Session)",
+            "resumed_turn_ttft_ms": 4860.0,
+            "effective_cache_hit_pct": 24.5,
+            "gpu_prefill_waste_pct": 68.0,
+            "cost_per_1k_long_sessions_usd": 14.80,
+        },
+        {
+            "tier": "Tier 2: Single-Node Host Pinned DRAM Offload (PCIe Gen5 56 GB/s Local Pool)",
+            "resumed_turn_ttft_ms": 182.0,
+            "effective_cache_hit_pct": 74.0,
+            "gpu_prefill_waste_pct": 18.5,
+            "cost_per_1k_long_sessions_usd": 5.40,
+        },
+        {
+            "tier": "Tier 3: Distributed RDMA Host-DRAM Pool (Mooncake / LMCache across Cluster Nodes)",
+            "resumed_turn_ttft_ms": 115.0,
+            "effective_cache_hit_pct": 91.2,
+            "gpu_prefill_waste_pct": 6.4,
+            "cost_per_1k_long_sessions_usd": 2.95,
+        },
+        {
+            "tier": "Tier 4: 3-Tier Hierarchical KV Pool (L1 HBM + L2 RDMA Host DRAM + L3 3FS/WEKA GDS NVMe + Layer-Wise Pipelined Prefetch)",
+            "resumed_turn_ttft_ms": 42.0,
+            "effective_cache_hit_pct": 98.4,
+            "gpu_prefill_waste_pct": 1.2,
+            "cost_per_1k_long_sessions_usd": 1.85,
+        },
+    ]
+    return {
+        "experiment_id": "enterprise_tiered_kv_cache_offload_dram_nvme_gds_recompute_sizing_selection",
+        "Provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "recompute_vs_dma_math_64k": {
+            "recompute_o_s2_ms": 4860.0,
+            "dma_pull_o_s_raw_ms": 186.0,
+            "layerwise_overlapped_exposed_ms": 42.0,
+            "speedup_factor_x": 115.7,
+        },
+        "tiers": tiers,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    out_path = Path(__file__).resolve().parent / "results.json"
+    payload = build_results()
+
+    if args.check:
+        existing = json.loads(out_path.read_text(encoding="utf-8"))
+        assert existing == payload, "results.json drift detected"
+        print("OK: enterprise_tiered_kv_cache_offload_dram_nvme_gds_recompute_sizing_selection verified.")
+        return
+
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()

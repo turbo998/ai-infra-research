@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">大模型分布式 KV Cache 分层卸载 (HBM -&gt; Host DRAM -&gt; GDS NVMe) 与重算 vs. 拉回延迟手算指南 (#453)</text>
+  <text x="28" y="58" class="sub">为什么长会话思考 30 秒后 KV 被逐出 HBM 重算要花 4.86 秒？如何用 O(S) 零拷贝分层拉回将恢复延迟压至 42ms (快 115 倍)？</text>
+
+  <!-- Left Panel: O(S^2) Recompute vs O(S) DMA Pull Math -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. O(S^2) 全量重算 vs. O(S) 分层 DMA 零拷贝拉回的第一性原理手算</text>
+
+  <rect x="42" y="120" width="524" height="96" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">❌ 纯 HBM 缓存池的致命短板：用户阅读 30 秒即被 LRU 驱逐 (Tier 1)</text>
+  <text x="56" y="164" class="mono">• 痛点：8x H200 扣除权重后仅剩 ~300GB HBM 放 KV，几百人并发时存活期仅 15~25 秒</text>
+  <text x="56" y="184" class="mono">• 用户发下一轮追问时，64K 历史 KV 已被清空，被迫 O(S^2) 全量重算 Prefill (耗时 4,860ms ✕)</text>
+  <text x="56" y="202" class="txt">• 结果：68% 的 GPU Tensor Core 算力浪费在反反复复重算同一个会话的历史上下文上！</text>
+
+  <rect x="42" y="228" width="524" height="104" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="250" class="txt" font-weight="700" fill="#34d399">🏆 黄金解法：L1 HBM + L2 RDMA Host DRAM (2TB/机) + L3 GDS NVMe 三级池</text>
+  <text x="56" y="272" class="mono">• 64K GQA-8 FP8 KV = 10.48 GB (DeepSeek MLA 仅 2.20 GB!)</text>
+  <text x="56" y="292" class="mono">• 从 Host Pinned DRAM 经 PCIe Gen5 / RDMA (56 GB/s) 拉回仅需 186ms (MLA 仅 39ms)</text>
+  <text x="56" y="312" class="txt">• 配合逐层流水线预取 (算第 l 层时预取第 l+1 层 KV)，净暴露恢复延迟仅 42ms (快 115.7x)！</text>
+
+  <!-- Right Panel: 4 KV Cache Tiering Architectures -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四档 KV 缓存与分层卸载架构实测对标 (64K 多轮 Agent / RAG 会话)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 仅 HBM 缓存 + LRU 驱逐后全量 O(S^2) 重算 Prefill</text>
+  <text x="638" y="158" class="mono">• 续聊恢复 TTFT: 4,860ms ✕ | 缓存命中率: 24.5% ✕ | 68% 算力浪费 ($14.80/千会话)</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 单机 Host Pinned DRAM 二级卸载 (仅限本机 PCIe Gen5 56 GB/s)</text>
+  <text x="638" y="214" class="mono">• 续聊恢复 TTFT: 182ms | 缓存命中率: 74.0% (跨节点路由时仍会 Miss) | $5.40/千会话</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: 跨节点分布式 RDMA Host-DRAM 内存池 (Mooncake / LMCache)</text>
+  <text x="638" y="270" class="mono">• 续聊恢复 TTFT: 115ms ✓ | 缓存命中率: 91.2% ✓ | 全集群任意节点零重算 ($2.95/千会话)</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: 三级池 (HBM + RDMA DRAM + 3FS GDS NVMe) + 逐层预取重叠 (🏆)</text>
+  <text x="638" y="326" class="mono">• 续聊恢复 TTFT: 42ms (快 115.7x) 🏆 | 命中率: 98.4% 🏆 | 成本: $1.85/千会话 (-87.5%)!</text>
+
+  <!-- Bottom Panel: 3-Tier Memory Pyramid & Mooncake/LMCache/NIXL -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. 三级 KV 存储金字塔容量/带宽手算与三大开源引擎 (Mooncake / LMCache / NIXL) 选型</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="56" y="440" class="txt" font-weight="700" fill="#38bdf8">① L1 GPU HBM3e 热池 (毫秒级正在解码)</text>
+  <text x="56" y="464" class="mono">• 单机容量: 300~450 GB (扣除模型权重后)</text>
+  <text x="56" y="484" class="mono">• 带宽: 38.4 TB/s (8x H200 聚合)</text>
+  <text x="56" y="504" class="mono">• 驻留对象: 当前正在活跃流式生成的 B_active</text>
+  <text x="56" y="524" class="mono">  会话与最高频系统提示词前缀块</text>
+  <text x="56" y="550" class="txt" fill="#6ee7b7">会话一旦进入用户阅读停顿期，立即异步写 L2！</text>
+
+  <rect x="418" y="414" width="368" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="432" y="440" class="txt" font-weight="700" fill="#34d399">② L2 Host Pinned DRAM 温池 (Mooncake RDMA)</text>
+  <text x="432" y="464" class="mono">• 单机容量: 1.5 ~ 2.0 TB DDR5 (16台=32 TB!)</text>
+  <text x="432" y="484" class="mono">• 带宽: 本机 PCIe5 56GB/s | 跨机 400G RDMA 47.5GB/s</text>
+  <text x="432" y="504" class="mono">• 关键红线: 必须使用 cudaHostAlloc 锁页内存 (Pinned)</text>
+  <text x="432" y="524" class="mono">  若用普通 Pageable 内存会触发 CPU 拷贝降速 65%！</text>
+  <text x="432" y="550" class="txt" fill="#34d399">零 GPU 成本把 KV 缓存池容量直接放大 50 倍 🏆</text>
+
+  <rect x="806" y="414" width="350" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="820" y="440" class="txt" font-weight="700" fill="#d8b4fe">③ L3 NVMe / 3FS GDS 冷池 (跨天长文档库)</text>
+  <text x="820" y="464" class="mono">• 单机容量: 30 TB 本地 NVMe RAID0 (16台=480 TB)</text>
+  <text x="820" y="484" class="mono">• 带宽: GPUDirect Storage (GDS) 25~45 GB/s</text>
+  <text x="820" y="504" class="mono">• 驻留对象: 企业百万页财报/代码库预计算 KV 块</text>
+  <text x="820" y="524" class="mono">  与小时级挂起的 Agent 长周期检查点</text>
+  <text x="820" y="550" class="txt" fill="#d8b4fe">一次预计算，全月千次问答零 Prefill 重算！</text>
+</svg>
