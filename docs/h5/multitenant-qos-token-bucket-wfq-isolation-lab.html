@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业多租户大模型平台 QoS 流控与双速 CIR/EIR WCU 令牌桶沙盘 (#493)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-multitenant-qos-token-bucket-wfq-noisy-neighbor-isolation-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-multitenant-qos-token-bucket-wfq-noisy-neighbor-isolation-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-multitenant-qos-token-bucket-wfq-noisy-neighbor-isolation-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-multitenant-qos-token-bucket-wfq-noisy-neighbor-isolation-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🚦 企业多租户大模型平台 QoS 流控与双速 `CIR/EIR` WCU 令牌桶沙盘 (#493)</h1>
+    <p class="subtitle">拖动滑块调整共享集群 GPU 数量与多租户 QoS 流控架构，实时对比突发洪峰下 VIP P99 首字延迟（TTFT）、全集群有效 GPU 利用率与误触发 429 报错率。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 共享集群规模与多租户流控策略选择</h2>
+        <div class="control">
+          <label><span>多租户 QoS 流控与调度架构</span></label>
+          <select id="arch">
+            <option value="a1">Tier 1: 按 RPS 限流 + FIFO 排队 (被 32K 批处理打爆 ✕)</option>
+            <option value="a2">Tier 2: 部门静态硬配额 (禁借用，闲置 53.5% GPU ✕)</option>
+            <option value="a3">Tier 3: 普通原始 TPM 令牌桶 (忽略输出词 4x 耗时 ✕)</option>
+            <option value="a4" selected>Tier 4: 双速 CIR/EIR WCU 令牌桶 + 抢占式 WFQ 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>共享集群总 GPU 卡数 (`Shared H200 GPUs`)</span><strong id="gpuVal">64 张 H200</strong></label>
+          <input type="range" id="gpus" min="16" max="256" step="16" value="64" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">突发洪峰下 VIP `P99 TTFT`</div>
+            <div class="val" id="latOut">325 ms (零干扰 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">全集群平均 GPU 利用率</div>
+            <div class="val" id="utilOut">88.5% (+42.0 pts 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">误触发 `HTTP 429` 限流比例</div>
+            <div class="val" id="errOut">1.9% (-94.4% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">每月避免闲置浪费算力价值</div>
+            <div class="val" id="savOut">$83,500 / 月 🏆</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 突发长文本洪峰下 VIP P99 TTFT 与集群 GPU 利用率对比</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 按 RPS 限流 + FIFO (VIP 被饿死 18,400ms ✕)</span><strong>18,400 ms | 利用率 78.0%</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 部门静态硬配额 (VIP 340ms ✓，但利用率仅 46.5% ✕)</span><strong>340 ms | 利用率 46.5% ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:46.5%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: 普通原始 TPM 令牌桶 (长输出击穿 VIP 2,850ms ✕)</span><strong>2,850 ms | 利用率 74.0%</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:74%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: 双速 CIR/EIR WCU + 抢占式 WFQ (推荐 🏆)</span><strong>325 ms 🏆 | 利用率 88.5% 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:88.5%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>WCU 黄金公式：</strong><code>WCU = 1.0·未命中输入 + 0.1·缓存输入 + 4.0·输出词</code>。绿标 `CIR` 享 P0 绝对优先，黄标 `EIR` 闲时免费借卡、忙时 5ms 腾退！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const gpusEl = document.getElementById('gpus');
+
+    function update() {
+      const a = archEl.value;
+      const g = parseInt(gpusEl.value, 10);
+      const scale = g / 64;
+      document.getElementById('gpuVal').textContent = g + ' 张 H200';
+
+      const specs = {
+        a1: { lat: '18,400 ms (饿死 ✕)', util: '78.0%', err: '18.5%', sav: '浪费 $' + Math.round(64000 * scale).toLocaleString(), color: '#ef4444' },
+        a2: { lat: '340 ms ✓', util: '46.5% (闲置过半 ✕)', err: '34.0% ✕', sav: '浪费 $' + Math.round(92000 * scale).toLocaleString(), color: '#f59e0b' },
+        a3: { lat: '2,850 ms (抖动 ✕)', util: '74.0%', err: '11.2%', sav: '浪费 $' + Math.round(38000 * scale).toLocaleString(), color: '#3b82f6' },
+        a4: { lat: '325 ms (零干扰 🏆)', util: '88.5% (+42.0 pts 🏆)', err: '1.9% (-94.4% 🏆)', sav: '月省 $' + Math.round(83500 * scale).toLocaleString() + ' 🏆', color: '#10b981' }
+      };
+      const cur = specs[a];
+      const lEl = document.getElementById('latOut');
+      lEl.textContent = cur.lat;
+      lEl.style.color = cur.color;
+      document.getElementById('utilOut').textContent = cur.util;
+      document.getElementById('errOut').textContent = cur.err;
+      document.getElementById('savOut').textContent = cur.sav;
+    }
+
+    [archEl, gpusEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
