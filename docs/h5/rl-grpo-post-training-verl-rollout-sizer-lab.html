@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型强化学习后训练 (RL / GRPO: veRL HybridEngine) 采样瓶颈与算卡计算器 (#477)</title>
+  <style>
+    :root { --bg: #0b1120; --panel: #111827; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 24px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: #1e293b; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); }
+    .control { margin-bottom: 14px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: #1e293b; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">⚡ 7 合 1 互动主控室</a>
+      <a href="../components/enterprise-rl-grpo-post-training-verl-hybridengine-rollout-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-rl-grpo-post-training-verl-hybridengine-rollout-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-rl-grpo-post-training-verl-hybridengine-rollout-sizing-selection-cards.html">📊 7-Card 报告</a>
+      <a href="../reports/enterprise-rl-grpo-post-training-verl-hybridengine-rollout-sizing-selection-sizer.html">🧮 Sizer</a>
+    </div>
+
+    <h1>🧠 企业大模型强化学习后训练 (`RL / GRPO: veRL HybridEngine vs. 静态分池`) 沙盘 (#477)</h1>
+    <p class="subtitle">拖动滑块调整每道题的组采样数 (`Group Size G`)、思维链最大长度与后训练框架，实时观测 Rollout 采样耗时占比、权重重分片耗时与每小时完成的 GRPO 迭代步数。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. GRPO 采样参数与框架设定</h2>
+        <div class="control">
+          <label><span>RL / GRPO 后训练架构档位</span></label>
+          <select id="arch">
+            <option value="a1">Tier 1: 传统 4 模型分离池 PPO (Actor/Critic/Ref/RM 分卡 ✕)</option>
+            <option value="a2">Tier 2: 静态分离式 OpenRLHF (32卡 vLLM + 32卡训练)</option>
+            <option value="a3">Tier 3: veRL 3D-HybridEngine 全卡同池复用 (1.8s 重分片)</option>
+            <option value="a4" selected>Tier 4: veRL/slime HybridEngine + FP8 采样 + Partial Rollout 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>每道 Prompt 组内采样条数 (`Group Size G`)</span><strong id="gVal">G = 16 条</strong></label>
+          <input type="range" id="group" min="4" max="32" step="4" value="16" />
+        </div>
+        <div class="control">
+          <label><span>思维链最大生成长度 (`Max CoT Length`)</span><strong id="lenVal">16,384 Tokens</strong></label>
+          <input type="range" id="cot" min="4096" max="32768" step="4096" value="16384" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">Rollout 采样阶段耗时占比</div>
+            <div class="val" id="rollOut">46.5% (已消长尾 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">每步训推权重同步/重分片耗时</div>
+            <div class="val" id="syncOut">1.4 秒 (内存原位 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">64卡集群综合 GPU 算力利用率</div>
+            <div class="val" id="utilOut">91.6% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">每小时完成 GRPO 训练步数</div>
+            <div class="val" id="stepOut">86.4 步 / 小时 (7.85x)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 四种架构 64x H200 每小时完成 GRPO 步数对比 (步/h, 越长越快)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 1: 4模型分离池 PPO (需 Critic 36P 显存, 利用率 24.5%)</span><strong>11.0 步 / 小时 ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:12.7%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 2: 静态分离式 OpenRLHF (训推互等, 利用率 48.0%)</span><strong>28.5 步 / 小时</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:33%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 3: veRL 3D-HybridEngine 同卡复用 (利用率 78.4%)</span><strong>54.0 步 / 小时 ✓</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:62.5%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>Tier 4: veRL + FP8 采样 + Partial Rollout 消长尾 (7.85x 🏆)</span><strong>86.4 步 / 小时 🏆</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#10b981;"></div></div>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;margin-top:12px;">
+          💡 <strong>为什么 GRPO 采样必开 Prefix Caching？</strong> 同一个 Prompt 并发生成 $G=16$ 条思维链时，开启前缀缓存可让 16 条分支共享唯一 1 次 Prompt Prefill！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const groupEl = document.getElementById('group');
+    const cotEl = document.getElementById('cot');
+
+    function update() {
+      const arch = archEl.value;
+      const g = parseInt(groupEl.value, 10);
+      const cot = parseInt(cotEl.value, 10);
+      const scale = (16 / g) * (16384 / cot);
+
+      document.getElementById('gVal').textContent = 'G = ' + g + ' 条';
+      document.getElementById('lenVal').textContent = cot.toLocaleString() + ' Tokens';
+
+      const specs = {
+        a1: { roll: '84.0% (严重木桶阻塞 ✕)', sync: '34.5 秒 ✕', util: '24.5% ✕', steps: (11.0 * scale).toFixed(1), color: '#ef4444' },
+        a2: { roll: '76.0% (静态半卡空等)', sync: '14.2 秒', util: '48.0%', steps: (28.5 * scale).toFixed(1), color: '#f59e0b' },
+        a3: { roll: '64.0% ✓', sync: '1.8 秒 ✓', util: '78.4% ✓', steps: (54.0 * scale).toFixed(1), color: '#3b82f6' },
+        a4: { roll: '46.5% (Partial 消长尾 🏆)', sync: '1.4 秒 (内存原位 🏆)', util: '91.6% 🏆', steps: (86.4 * scale).toFixed(1), color: '#10b981' }
+      };
+      const cur = specs[arch];
+      const rEl = document.getElementById('rollOut');
+      rEl.textContent = cur.roll;
+      rEl.style.color = cur.color;
+      document.getElementById('syncOut').textContent = cur.sync;
+      document.getElementById('utilOut').textContent = cur.util;
+      document.getElementById('stepOut').textContent = cur.steps + ' 步 / 小时';
+    }
+
+    [archEl, groupEl, cotEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h2 { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .mono { font-family: Consolas, monospace; font-size: 11.5px; fill: #6ee7b7; }
+    </style>
+  </defs>
+  <rect width="1200" height="660" class="bg"/>
+  <text x="28" y="36" class="title">企业大模型强化学习后训练 (RL / GRPO: veRL HybridEngine vs. 分离式 OpenRLHF) 选型 (#477)</text>
+  <text x="28" y="58" class="sub">为什么推理训练 (GRPO) 中 78% 的时间其实是在跑推理采样 (Rollout)？同卡 HybridEngine 1.4s 权重重分片 + Partial Rollout 提速 7.85x</text>
+
+  <!-- Left Panel: Why RL Post-Training is 78% Inference Rollout Bound -->
+  <rect x="24" y="76" width="560" height="270" rx="12" class="panel"/>
+  <text x="42" y="104" class="h2">1. 为什么跑 GRPO 强化学习时，64 张 GPU 有 70% 的时间都在空转等最后一条长思考？</text>
+
+  <rect x="42" y="120" width="524" height="92" rx="8" fill="#1e293b" stroke="#ef4444"/>
+  <text x="56" y="142" class="txt" font-weight="700" fill="#fca5a5">⛔ GRPO 的三大算力黑洞 (传统分离池利用率仅 24.5%~48.0% ✕)</text>
+  <text x="56" y="164" class="mono">• 黑洞 1 (采样主导): 每道题需自回归采样 G=16 条 16K 思维链，耗时占 78%！</text>
+  <text x="56" y="184" class="mono">• 黑洞 2 (木桶长尾): 15 条回答 2K 结束，仅 1 条跑到 16K，全群 63 卡干等！</text>
+  <text x="56" y="202" class="mono">• 黑洞 3 (重分片税): 训练态 (FSDP/TP=8) 转推理态 (vLLM TP=2) 传权重耗 14~34s！</text>
+
+  <rect x="42" y="224" width="524" height="106" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="56" y="246" class="txt" font-weight="700" fill="#34d399">✅ 架构师解法：veRL 3D-HybridEngine 同卡复用 + FP8 Rollout + Partial 截断续跑 (🏆)</text>
+  <text x="56" y="268" class="mono">• 1) GRPO 砍掉 Critic 模型 (显存省 40%)，64 卡 100% 先跑 vLLM/SGLang 采样；</text>
+  <text x="56" y="288" class="mono">• 2) 采样完 1.4s 内存原位重分片 (Zero-Redundancy Reshard) 切换为 FSDP 训练；</text>
+  <text x="56" y="308" class="mono">• 3) Partial Rollout: 超长尾样本挂起留入下一 Step 继续生成，消灭木桶空等！</text>
+
+  <!-- Right Panel: 4 RL Post-Training Architecture Tiers -->
+  <rect x="608" y="76" width="568" height="270" rx="12" class="panel"/>
+  <text x="626" y="104" class="h2">2. 四种企业 RL / GRPO 后训练架构定量对标 (64x H200 · 70B 模型)</text>
+
+  <rect x="626" y="120" width="532" height="48" rx="6" fill="#1e293b" stroke="#ef4444"/>
+  <text x="638" y="140" class="txt" font-weight="700" fill="#fca5a5">Tier 1: 传统 4 模型分离池 PPO (Actor/Critic/Ref/RM 物理分卡 + HF Generate)</text>
+  <text x="638" y="158" class="mono">• 权重同步: 34.5s ✕ | 集群利用率: 24.5% ✕ | 训练速度: 11.0 步/小时</text>
+
+  <rect x="626" y="176" width="532" height="48" rx="6" fill="#1e293b" stroke="#f59e0b"/>
+  <text x="638" y="196" class="txt" font-weight="700" fill="#fde68a">Tier 2: 静态分离式 Ray + vLLM 采样池 (32卡) + Megatron 训练池 (32卡)</text>
+  <text x="638" y="214" class="mono">• 权重同步: 14.2s | 集群利用率: 48.0% | 训练速度: 28.5 步/小时</text>
+
+  <rect x="626" y="232" width="532" height="48" rx="6" fill="#1e293b" stroke="#3b82f6"/>
+  <text x="638" y="252" class="txt" font-weight="700" fill="#93c5fd">Tier 3: veRL 3D-HybridEngine 全卡同池复用 (1.8s 原位重分片 + Sleep Mode)</text>
+  <text x="638" y="270" class="mono">• 权重同步: 1.8s ✓ | 集群利用率: 78.4% ✓ | 训练速度: 54.0 步/小时</text>
+
+  <rect x="626" y="288" width="532" height="48" rx="6" fill="#10b981" fill-opacity="0.12" stroke="#10b981"/>
+  <text x="638" y="308" class="txt" font-weight="700" fill="#34d399">Tier 4: veRL / slime HybridEngine + FP8 采样 + Partial Rollout 消长尾 (推荐 🏆)</text>
+  <text x="638" y="326" class="mono">• 权重同步: 1.4s 🏆 | 集群利用率: 91.6% 🏆 | 速度: 86.4 步/小时 (7.85x 🏆)</text>
+
+  <!-- Bottom Panel: PPO vs GRPO Memory Math & Parallelism Mismatch -->
+  <rect x="24" y="366" width="1152" height="270" rx="12" class="panel"/>
+  <text x="42" y="394" class="h2">3. PPO vs. GRPO 显存手算公式与“训练态 vs. 采样态”最佳并行切分表</text>
+
+  <rect x="42" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+  <text x="58" y="440" class="txt" font-weight="700" fill="#38bdf8">公式 1: 为什么 GRPO 比 PPO 省一半显存？</text>
+  <text x="58" y="464" class="mono">• PPO 需同时维护 Actor(16P) + Critic(16P)</text>
+  <text x="58" y="484" class="mono">  + Ref(2P) + RM(2P) = 36P 字节显存！</text>
+  <text x="58" y="506" class="mono">• GRPO 用组内 G=16 条采样均值替代 Critic：</text>
+  <text x="58" y="526" class="mono">  A_i = (r_i - mean(r)) / std(r)</text>
+  <text x="58" y="546" class="mono">  结合代码沙箱规则验证器 (代替 RM)，显存直接</text>
+  <text x="58" y="566" class="mono">  砍半至 18P 字节 (70B 模型省出 1.26 TB HBM)！</text>
+
+  <rect x="420" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#10b981"/>
+  <text x="436" y="440" class="txt" font-weight="700" fill="#34d399">公式 2: 训练态与采样态为什么不能用同一套 TP？</text>
+  <text x="436" y="464" class="mono">• 训练阶段 (反向传播显存大): 需 FSDP ZeRO-3</text>
+  <text x="436" y="484" class="mono">  + TP=4/8 切分梯度与 Adam 优化器状态；</text>
+  <text x="436" y="504" class="mono">• Rollout 采样阶段 (无梯度, 访存受限): 若继续</text>
+  <text x="436" y="524" class="mono">  用 TP=8 跑自回归解码，AllReduce 开销太大！</text>
+  <text x="436" y="544" class="mono">• HybridEngine 在每步采样前 1.4s 重组为</text>
+  <text x="436" y="564" class="mono">  小微 TP=2 × DP=32，采样吞吐直接翻 2.8 倍！</text>
+
+  <rect x="798" y="414" width="356" height="196" rx="8" fill="#1e293b" stroke="#a855f7"/>
+  <text x="814" y="440" class="txt" font-weight="700" fill="#d8b4fe">公式 3: 动态在线 FP8 量化采样 (FP8 Rollout)</text>
+  <text x="814" y="464" class="mono">• 训练主权重保持 BF16/FP32，但在切换进入</text>
+  <text x="814" y="484" class="mono">  vLLM/SGLang 采样瞬间，卡内即时动态量化为</text>
+  <text x="814" y="504" class="mono">  Block-FP8 (W8KV8) 执行 16K 长思维链生成</text>
+  <text x="814" y="526" class="txt" fill="#fde68a">将占总耗时 78% 的 Rollout 阶段直接提速 1.75x，</text>
+  <text x="814" y="546" class="txt" fill="#fde68a">然后再用 BF16 精确算 LogProb 更新梯度！</text>
+</svg>
