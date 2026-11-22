@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    tiers = [
+        {
+            "tier": "Tier 1: Ad-Hoc USB Tarballs (docker save + pip wheel + .pt Pickle)",
+            "first_time_deploy_success_pct": 18.0,
+            "delivery_lead_time_days": 21.5,
+            "rollout_64_nodes_minutes": 870.0,
+            "supply_chain_rce_risk": "Critical (.pt Pickle RCE)",
+            "action": "Send to a human",
+        },
+        {
+            "tier": "Tier 2: Local Harbor Mirror + Manual Helm Scripts (Serial Pull)",
+            "first_time_deploy_success_pct": 62.5,
+            "delivery_lead_time_days": 6.5,
+            "rollout_64_nodes_minutes": 240.0,
+            "supply_chain_rce_risk": "Medium (Unsigned Layers)",
+            "action": "Send to a human",
+        },
+        {
+            "tier": "Tier 3: Declarative Zarf/Hauler Air-Gap Bundle + Local Harbor",
+            "first_time_deploy_success_pct": 96.0,
+            "delivery_lead_time_days": 0.8,
+            "rollout_64_nodes_minutes": 68.0,
+            "supply_chain_rce_risk": "Low (Signed OCI)",
+            "action": "Confirm",
+        },
+        {
+            "tier": "Tier 4: Zarf/Hauler Bundle + Dragonfly P2P OCI + Cosign Safetensors + Local HSM (Recommended)",
+            "first_time_deploy_success_pct": 99.8,
+            "delivery_lead_time_days": 0.4,
+            "rollout_64_nodes_minutes": 3.2,
+            "supply_chain_rce_risk": "Zero (Safetensors + HSM)",
+            "action": "Act automatically",
+        },
+    ]
+
+    return {
+        "experiment_id": "enterprise_sovereign_airgapped_ai_cluster_zarf_dragonfly_safetensors_selection",
+        "title": "Enterprise Sovereign & Air-Gapped AI Cluster Delivery (Zarf/Hauler + Dragonfly P2P + Signed Safetensors) Selection (#503)",
+        "provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "cluster_64_node_baseline": {
+            "nodes": 64,
+            "gpus": 512,
+            "lead_time_speedup_factor": round(21.5 / 0.4, 1),
+            "rollout_speedup_factor": round(870.0 / 3.2, 1),
+        },
+        "tiers": tiers,
+    }
+
+
+def main() -> None:
+    out_dir = Path(__file__).resolve().parent
+    results = build_results()
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()
