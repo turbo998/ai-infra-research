@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    deployment_models = [
+        {
+            "model_id": "overprovisioned_peak_self_hosted_low_util",
+            "name": "Anti-Pattern: Self-Hosted GPU Cluster Sized for Peak at 12% Daily Utilization",
+            "monthly_tokens_billions": 3.0,
+            "avg_cluster_utilization_pct": 12.0,
+            "blended_cost_per_1m_tokens_usd": 2.85,
+            "annual_tco_usd": 102600.0,
+            "p99_429_throttle_rate_pct": 0.0,
+            "action": "Send to a human",
+        },
+        {
+            "model_id": "pure_serverless_paygo_at_high_scale",
+            "name": "Baseline: 100% Serverless PAYGO at High Sustained Volume (60B Tokens/Month)",
+            "monthly_tokens_billions": 60.0,
+            "avg_cluster_utilization_pct": 68.0,
+            "blended_cost_per_1m_tokens_usd": 0.48,
+            "annual_tco_usd": 345600.0,
+            "p99_429_throttle_rate_pct": 6.4,
+            "action": "Send to a human",
+        },
+        {
+            "model_id": "hybrid_base_ptu_plus_paygo_spillover",
+            "name": "Commercial Optimal (22%-55% Util): P65 Base PTU (75% Prefix Discount) + PAYGO Spillover",
+            "monthly_tokens_billions": 60.0,
+            "avg_cluster_utilization_pct": 78.5,
+            "blended_cost_per_1m_tokens_usd": 0.29,
+            "annual_tco_usd": 208800.0,
+            "p99_429_throttle_rate_pct": 0.0,
+            "action": "Act automatically",
+        },
+        {
+            "model_id": "self_hosted_aks_vllmv1_sglang_tidal_hybrid",
+            "name": "High-Scale Optimal (>=55% Util / Sovereign): Self-Hosted AKS/K8s + SGLang/vLLM V1 + Tidal Batch",
+            "monthly_tokens_billions": 60.0,
+            "avg_cluster_utilization_pct": 86.4,
+            "blended_cost_per_1m_tokens_usd": 0.052,
+            "annual_tco_usd": 37440.0,
+            "p99_429_throttle_rate_pct": 0.0,
+            "action": "Act automatically",
+        },
+    ]
+
+    gateway_comparison = [
+        {"gateway": "Envoy AI Gateway / Higress (Rust/C++ Wasm)", "p99_proxy_overhead_ms": 1.2, "max_rps_per_core": 4200},
+        {"gateway": "Azure APIM (Enterprise Hybrid AI Gateway)", "p99_proxy_overhead_ms": 2.4, "max_rps_per_core": 2800},
+        {"gateway": "Kong AI Gateway (Lua/Rust Enterprise)", "p99_proxy_overhead_ms": 1.8, "max_rps_per_core": 3500},
+        {"gateway": "LiteLLM Proxy (Python + Redis Fast-Path)", "p99_proxy_overhead_ms": 4.2, "max_rps_per_core": 950},
+    ]
+
+    return {
+        "experiment_id": "enterprise_paygo_ptu_selfhosted_k8s_tco_ai_gateway_selection",
+        "title": "Enterprise Serverless PAYGO vs. PTU vs. Self-Hosted K8s/AKS TCO Inflection Points & AI Gateway Selection Guide (#512)",
+        "provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "summary_metrics": {
+            "ptu_spillover_saving_vs_pure_paygo_pct": round((1.0 - 0.29 / 0.48) * 100, 1),
+            "self_hosted_cost_reduction_factor_vs_paygo": round(0.48 / 0.052, 2),
+            "ptu_breakeven_utilization_threshold_pct": 22.0,
+            "self_hosted_breakeven_utilization_threshold_pct": 55.0,
+        },
+        "gateway_comparison": gateway_comparison,
+        "deployment_models": deployment_models,
+    }
+
+
+def main() -> None:
+    out_dir = Path(__file__).resolve().parent
+    results = build_results()
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()
