@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#535 里程碑：企业多租户 AI FinOps 成本分摊、WCU 配额门禁与三级平滑降级 交互精读页</title>
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#f8fafc;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:24px}
+.nav{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.nav a{color:#38bdf8;text-decoration:none;font-size:14px;padding:6px 12px;border:1px solid #334155;border-radius:6px;background:#1e293b}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;margin-bottom:20px}
+h1{font-size:24px;margin:0 0 8px;color:#f8fafc}
+h2{font-size:18px;color:#38bdf8;margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.kpi{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px}
+.kpi .val{font-size:26px;font-weight:700;color:#10b981}
+.kpi .lbl{font-size:13px;color:#94a3b8}
+label{display:block;font-size:14px;margin:10px 0 4px;color:#cbd5e1}
+input[type=range],select{width:100%;padding:6px;background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+    <a href="../components/enterprise-milestone-535-ai-finops-chargeback-wcu-quota-downgrade-bible-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-milestone-535-ai-finops-chargeback-wcu-quota-downgrade-bible-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-milestone-535-ai-finops-chargeback-wcu-quota-downgrade-bible-cards.html">🃏 7-Card</a>
+    <a href="../reports/enterprise-milestone-535-ai-finops-chargeback-wcu-quota-downgrade-bible-sizer.html">🧮 Sizer</a>
+  </div>
+  <div class="card">
+    <h1>#535 里程碑：企业多租户 AI FinOps 成本分摊、WCU 加权算力计量与三级预算平滑降级 交互沙盘</h1>
+    <p>验证 WCU = 1.0×In + 4.0×Out + 0.1×Cached 计量公式与 80%/95% 自动降级对月度预算、业务连续性与 GPU 规模的影响。</p>
+    <div class="grid">
+      <div class="kpi"><div class="lbl">单请求折算 WCU 算力单元</div><div class="val" id="k_wcu">2,640 WCU</div></div>
+      <div class="kpi"><div class="lbl">真实成本归因准确度 / 超支率</div><div class="val" id="k_acc">99.6% · 0.0%超支</div></div>
+      <div class="kpi"><div class="lbl">生产业务连续性</div><div class="val" id="k_cont">99.94% (平滑降级)</div></div>
+      <div class="kpi"><div class="lbl">集群 H200 卡数 / 月总支出</div><div class="val" id="k_cost">32 GPUs · $223.5K</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🧮 WCU 加权算力单元与多租户 FinOps 预算计算器</h2>
+    <label>选择企业 AI FinOps 治理方案：</label>
+    <select id="scheme" onchange="calc()">
+      <option value="wcu" selected>方案 C：WCU (1:4:0.1) 加权计量 + 80%/95% 三级预算平滑自动降级 (推荐)</option>
+      <option value="hard429">方案 B：原始 Token 1:1 计数 + 100% 预算硬切 HTTP 429</option>
+      <option value="flat">方案 A：无配额大锅饭共享池 + 月底按人数平摊</option>
+    </select>
+    <label>未命中缓存 Input Tokens：<span id="v_in">1000</span> tokens</label>
+    <input type="range" id="in_tok" min="200" max="10000" step="200" value="1000" oninput="calc()">
+    <label>命中 Prefix Cache Input Tokens (0.1x WCU 权重)：<span id="v_cache">4000</span> tokens</label>
+    <input type="range" id="cache_tok" min="0" max="20000" step="500" value="4000" oninput="calc()">
+    <label>Output Decode Tokens (4.0x WCU 权重)：<span id="v_out">310</span> tokens</label>
+    <input type="range" id="out_tok" min="50" max="2000" step="10" value="310" oninput="calc()">
+  </div>
+</div>
+<script>
+function calc(){
+  const s = document.getElementById('scheme').value;
+  const tin = parseInt(document.getElementById('in_tok').value, 10);
+  const tcache = parseInt(document.getElementById('cache_tok').value, 10);
+  const tout = parseInt(document.getElementById('out_tok').value, 10);
+  document.getElementById('v_in').textContent = tin;
+  document.getElementById('v_cache').textContent = tcache;
+  document.getElementById('v_out').textContent = tout;
+  const wcu = Math.round(tin * 1.0 + tcache * 0.1 + tout * 4.0);
+  const raw = tin + tcache + tout;
+  if(s==='flat'){
+    document.getElementById('k_wcu').textContent = raw.toLocaleString() + ' Raw (无门禁)';
+    document.getElementById('k_acc').textContent = '18.0% · +38.5%超支';
+    document.getElementById('k_cont').textContent = '100% (靠超支买单)';
+    document.getElementById('k_cost').textContent = '64 GPUs · $415.5K/m';
+  } else if(s==='hard429'){
+    document.getElementById('k_wcu').textContent = raw.toLocaleString() + ' Raw (1:1计费)';
+    document.getElementById('k_acc').textContent = '61.5% · 0.0%超支';
+    document.getElementById('k_cont').textContent = '85.2% (14.8%报429)';
+    document.getElementById('k_cost').textContent = '48 GPUs · $300.0K/m';
+  } else {
+    document.getElementById('k_wcu').textContent = wcu.toLocaleString() + ' WCU (省缓存费)';
+    document.getElementById('k_acc').textContent = '99.6% · 0.0%超支';
+    document.getElementById('k_cont').textContent = '99.94% (平滑降级)';
+    document.getElementById('k_cost').textContent = '32 GPUs · $223.5K (-46.2%)';
+  }
+}
+</script>
+</body>
+</html>
