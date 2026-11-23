@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>第 510 篇里程碑：智算网络 NVLink / InfiniBand / RoCEv2 与 algbw/busbw 交互手算沙盘 (#510)</title>
+  <style>
+    :root { --bg: #070b14; --panel: #111827; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 22px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); cursor: pointer; font-weight: 600; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+    h1 { font-size: 23px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); border-left: 3px solid var(--good); padding-left: 10px; }
+    .control { margin-bottom: 12px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; color: #cbd5e1; }
+    input[type="range"], select { width: 100%; padding: 6px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: var(--card); border-radius: 8px; padding: 11px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 18px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula-box { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-top: 10px; }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/06-rdma-roce-nvlink.html">🎓 H5 Academy 第06册</a>
+      <a href="../components/enterprise-milestone-510-nvlink-infiniband-rocev2-gpudirect-busbw-bible-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-milestone-510-nvlink-infiniband-rocev2-gpudirect-busbw-bible-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-milestone-510-nvlink-infiniband-rocev2-gpudirect-busbw-bible-cards.html">🃏 7-Card 报告</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <div data-lang="zh">
+        <h1>🌐 第 510 篇里程碑：智算高速互联网络 (`NVLink` vs. `IB / RoCEv2` · `GPUDirect RDMA` · `algbw/busbw`) 交互沙盘 (#510)</h1>
+        <p class="subtitle">直观对比 `GPUDirect RDMA BAR1 零拷贝 (48.2 GB/s)` vs. `CPU Bounce (11.4 GB/s)`，亲手复算 `NCCL algbw ↔ busbw`、集合通信耗时与 `PFC+ECN+DCQCN` 无损水线。</p>
+      </div>
+      <div data-lang="en">
+        <h1>🌐 Milestone #510: Enterprise AI Fabric (`NVLink` vs. `InfiniBand / RoCEv2`, `GPUDirect RDMA` &amp; `algbw/busbw`) Interactive Lab (#510)</h1>
+        <p class="subtitle">Compare GPUDirect RDMA zero-copy DMA vs. CPU bounce buffer, and hand-calculate NCCL algbw/busbw, collective latency, and lossless ECN/PFC thresholds.</p>
+      </div>
+    </div>
+
+    <!-- SVG Data Path Diagram -->
+    <div class="card" style="margin-bottom: 18px;">
+      <h2>🗺️ 1. `GPUDirect RDMA` BAR1 零拷贝快车道 vs. `CPU Host Bounce` 慢车道路径对比图</h2>
+      <svg viewBox="0 0 1060 205" width="100%" height="auto" style="background:#0b1120;border-radius:10px;border:1px solid #334155;">
+        <rect x="20" y="20" width="495" height="165" rx="10" fill="#111827" stroke="#ef4444" stroke-width="1.5"/>
+        <text x="36" y="46" fill="#f87171" font-size="13.5" font-weight="bold">✕ 慢车道：未开 GPUDirect RDMA / PCIe ACS 开启 (绕行 CPU 内存)</text>
+        <text x="36" y="76" fill="#e2e8f0" font-size="12">GPU HBM ──► PCIe Root Complex ──► Host Pinned DRAM (CPU Bounce)</text>
+        <text x="36" y="100" fill="#e2e8f0" font-size="12">──► UPI/QPI 跨 NUMA ──► ConnectX-7 400G RNIC ──► 交换机</text>
+        <text x="36" y="132" fill="#ef4444" font-size="12.5" font-weight="bold">• 实测 AllReduce busbw 暴跌至 11.4 GB/s (仅发挥 400G 网卡 22.8%！)</text>
+        <text x="36" y="156" fill="#94a3b8" font-size="11.5">• 点对点延迟劣化至 18.5 us，且打满主机内存带宽拖慢 CPU 调度</text>
+
+        <rect x="540" y="20" width="500" height="165" rx="10" fill="#111827" stroke="#10b981" stroke-width="1.5"/>
+        <text x="556" y="46" fill="#34d399" font-size="13.5" font-weight="bold">🏆 快车道：GPUDirect RDMA (nvidia-peermem + PCIe Switch P2P)</text>
+        <text x="556" y="76" fill="#6ee7b7" font-size="12" font-weight="bold">GPU HBM (BAR1) ◄── PCIe Gen5 Switch P2P 直连 ──► ConnectX-7 400G</text>
+        <text x="556" y="100" fill="#e2e8f0" font-size="12">──► Rail Leaf Switch (ECN K_min=200KB + DLB/AR)</text>
+        <text x="556" y="132" fill="#10b981" font-size="12.5" font-weight="bold">• 实测 AllReduce busbw 高达 46.4–48.2 GB/s (提速 4.23 倍 · 96.4% 线速 🏆)</text>
+        <text x="556" y="156" fill="#6ee7b7" font-size="11.5">• 全程零 CPU 拷贝 · 延迟压至 1.5–2.6 us · 配合 SHARP algbw 再增 +42%</text>
+      </svg>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 2. NCCL `algbw ↔ busbw` 与集合通信耗时交互计算器</h2>
+        <div class="control">
+          <label><span>选择智算互联网络类型与调优状态</span></label>
+          <select id="fab">
+            <option value="bounce">反模式 1: 400G RoCEv2 无 GPUDirect (CPU Bounce · busbw 11.4 GB/s ✕)</option>
+            <option value="ecmp">反模式 2: 400G RoCEv2 静态五元组 ECMP (哈希碰撞 · busbw 21.4 GB/s ✕)</option>
+            <option value="roce" selected>方案 A: 400G AI 以太网 RoCEv2 (Rail + ECN/DCQCN + DLB · busbw 46.4 GB/s 🏆)</option>
+            <option value="ib">方案 B: 400G InfiniBand NDR (原生 Credit + AR · busbw 48.2 GB/s 🏆)</option>
+            <option value="ib_sharp">方案 C: 400G InfiniBand NDR + SHARP 网内计算 (algbw 34.8 GB/s 🏆)</option>
+            <option value="nvlink">Scale-Up 基准: 机内 H200 NVLink 4.0 + NVSwitch (busbw 371.0 GB/s)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>集合通信原语 (`Collective Primitive`)</span></label>
+          <select id="coll">
+            <option value="allreduce" selected>AllReduce (busbw = algbw × 2(N-1)/N · TP/FSDP 梯度归约)</option>
+            <option value="alltoall">All-to-All / AllGather / ReduceScatter (busbw = algbw × (N-1)/N · MoE EP)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>参与集合通信的 GPU 总卡数 (`N`)</span><strong id="nVal">64 GPUs</strong></label>
+          <input type="range" id="ngpus" min="8" max="512" step="8" value="64" />
+        </div>
+        <div class="control">
+          <label><span>单次集合通信张量大小 (`Payload MB`)</span><strong id="mbVal">512 MB</strong></label>
+          <input type="range" id="mb" min="64" max="2048" step="64" value="512" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">硬件真实总线带宽 (`NCCL busbw`)</div>
+            <div class="val" id="busOut">46.4 GB/s (92.8% 线速 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">应用有效算法带宽 (`NCCL algbw`)</div>
+            <div class="val" id="algOut">23.6 GB/s</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单次集合通信完成耗时</div>
+            <div class="val" id="timeOut">21.7 ms</div>
+          </div>
+          <div class="kpi">
+            <div class="label">点对点延迟 / 相对网络 CapEx</div>
+            <div class="val" id="metaOut">2.6 us / 省 32.5% CapEx 🏆</div>
+          </div>
+        </div>
+
+        <div class="formula-box" id="traceBox"></div>
+      </div>
+
+      <div class="card">
+        <h2>📊 3. 400G Scale-Out 网络不同配置下的 `AllReduce busbw` 对比</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>1. 400G RoCEv2 无 GPUDirect (CPU Bounce 18.5us ✕)</span><strong>11.4 GB/s (22.8%)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:23.6%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>2. 400G RoCEv2 + GPUDirect (静态五元组 ECMP 碰撞 ✕)</span><strong>21.4 GB/s (42.8%)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:44.4%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>3. 400G AI 以太网 RoCEv2 (Rail + ECN/DCQCN + DLB · 省32.5%成本 🏆)</span><strong>46.4 GB/s (92.8% 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:96.3%;background:#10b981;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>4. 400G InfiniBand NDR (Credit 无损 + AR + SHARP 🏆)</span><strong>48.2 GB/s (96.4% 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#38bdf8;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fabEl = document.getElementById('fab');
+    const collEl = document.getElementById('coll');
+    const nEl = document.getElementById('ngpus');
+    const mbEl = document.getElementById('mb');
+
+    function update() {
+      const f = fabEl.value;
+      const c = collEl.value;
+      const n = parseInt(nEl.value, 10);
+      const mb = parseInt(mbEl.value, 10);
+
+      document.getElementById('nVal').textContent = n + ' GPUs';
+      document.getElementById('mbVal').textContent = mb + ' MB';
+
+      const specs = {
+        bounce: { bus: 11.4, eff: '22.8% ✕', meta: '18.5 us / 配置缺陷 ✕', sharp: 1.0 },
+        ecmp: { bus: 21.4, eff: '42.8% ✕', meta: '6.8 us / 静态ECMP碰撞 ✕', sharp: 1.0 },
+        roce: { bus: 46.4, eff: '92.8% 🏆', meta: '2.6 us / 省 32.5% CapEx 🏆', sharp: 1.0 },
+        ib: { bus: 48.2, eff: '96.4% 🏆', meta: '1.5 us / IB NDR 标杆 ✓', sharp: 1.0 },
+        ib_sharp: { bus: 48.2, eff: '96.4% + SHARP 🏆', meta: '1.5 us / 网内归约 +42% 🏆', sharp: 1.42 },
+        nvlink: { bus: 371.0, eff: '82.4% (NVLink)', meta: '0.8 us / 机内超节点 Scale-Up', sharp: 1.15 }
+      }[f];
+
+      const factor = c === 'allreduce' ? (2.0 * (n - 1)) / n : (n - 1.0) / n;
+      const algbw = (specs.bus / factor) * (c === 'allreduce' ? specs.sharp : 1.0);
+      const timeMs = (mb / 1024.0 / algbw) * 1000.0;
+
+      document.getElementById('busOut').textContent = `${specs.bus.toFixed(1)} GB/s (${specs.eff})`;
+      document.getElementById('algOut').textContent = `${algbw.toFixed(1)} GB/s`;
+      document.getElementById('timeOut').textContent = `${timeMs.toFixed(2)} ms`;
+      document.getElementById('metaOut').textContent = specs.meta;
+
+      document.getElementById('traceBox').innerHTML =
+        `[手算复核 Trace] 换算系数 factor = ${c === 'allreduce' ? `2×(${n}-1)/${n}` : `(${n}-1)/${n}`} = ${factor.toFixed(4)} | ` +
+        `algbw = (busbw ${specs.bus} GB/s ÷ ${factor.toFixed(4)}) × SHARP(${c === 'allreduce' ? specs.sharp : 1.0}) = ${algbw.toFixed(2)} GB/s → 传输 ${mb} MB 耗时 = ${timeMs.toFixed(2)} ms！`;
+    }
+
+    [fabEl, collEl, nEl, mbEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
