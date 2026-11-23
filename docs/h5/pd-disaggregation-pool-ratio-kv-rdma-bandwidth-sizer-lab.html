@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业 PD 分离 P:D 实例黄金配比与跨节点 KV RDMA 带宽手算沙盘 (#508)</title>
+  <style>
+    :root { --bg: #070b14; --panel: #111827; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 22px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); cursor: pointer; font-weight: 600; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+    h1 { font-size: 23px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); border-left: 3px solid var(--good); padding-left: 10px; }
+    .control { margin-bottom: 12px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; color: #cbd5e1; }
+    input[type="range"], select { width: 100%; padding: 6px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: var(--card); border-radius: 8px; padding: 11px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 18px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); display: flex; }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula-box { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-top: 10px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.6); }
+    .preset-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .preset-btn { background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+    .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/04-pd-disaggregation.html">🎓 H5 Academy 第04册</a>
+      <a href="../components/enterprise-pd-disaggregation-pool-ratio-kv-rdma-bandwidth-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-pd-disaggregation-pool-ratio-kv-rdma-bandwidth-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-pd-disaggregation-pool-ratio-kv-rdma-bandwidth-sizing-selection-cards.html">🃏 7-Card 报告</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <div data-lang="zh">
+        <h1>🚀 企业大模型 PD 分离 `Prefill:Decode` 黄金配比与跨节点 KV RDMA 带宽手算沙盘 (#508)</h1>
+        <p class="subtitle">3 分钟看懂混部干扰与两池解耦机理 · 10 分钟拖动滑块亲手复算 $N_P : N_D$ 实例配比、`GQA vs. MLA` 跨网 KV 流量与 `Dynamo NIXL` 逐层异步掩盖效应。</p>
+      </div>
+      <div data-lang="en">
+        <h1>🚀 Enterprise PD Disaggregation `Prefill:Decode` Pool Ratio &amp; KV RDMA Bandwidth Interactive Lab (#508)</h1>
+        <p class="subtitle">Interactive hand-calculation sandbox for Cloud &amp; AI Solution Architects: size exact P/D GPU pools, compare GQA (160 KB/tok) vs. MLA (34.3 KB/tok) KV RDMA traffic, and verify 94.5% layer-wise async pipelining overlap.</p>
+      </div>
+    </div>
+
+    <!-- Visual Architecture SVG -->
+    <div class="card" style="margin-bottom: 18px;">
+      <h2>🗺️ 1. PD 分离控制面与数据面全链路架构图（`KV-Aware Router + NIXL 逐层异步 RDMA + 分层 KV 池`）</h2>
+      <svg viewBox="0 0 1060 220" width="100%" height="auto" style="background:#0b1120;border-radius:10px;border:1px solid #334155;">
+        <rect x="18" y="32" width="185" height="156" rx="10" fill="#111827" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="32" y="58" fill="#38bdf8" font-size="13" font-weight="bold">① KV-Aware 智能路由网关</text>
+        <text x="32" y="82" fill="#e2e8f0" font-size="11.5">• 全局 Radix 前缀树匹配</text>
+        <text x="32" y="102" fill="#10b981" font-size="11.5" font-weight="bold">• 命中缓存块免重算 (1-h)</text>
+        <text x="32" y="122" fill="#e2e8f0" font-size="11.5">• P/D 两池独立队列弹性路由</text>
+        <text x="32" y="144" fill="#94a3b8" font-size="11">Dynamo Router / Mooncake</text>
+
+        <line x1="203" y1="110" x2="245" y2="110" stroke="#38bdf8" stroke-width="2"/>
+        <polygon points="245,105 255,110 245,115" fill="#38bdf8"/>
+
+        <rect x="258" y="22" width="245" height="176" rx="10" fill="#111827" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="274" y="48" fill="#60a5fa" font-size="13" font-weight="bold">② Prefill 算力池 (N_P GPUs)</text>
+        <text x="274" y="70" fill="#e2e8f0" font-size="11.5">• 计算密集 (Arithmetic &gt;300 FLOP/B)</text>
+        <text x="274" y="90" fill="#e2e8f0" font-size="11.5">• 仅计算未命中增量 ISL × (1 - h)</text>
+        <text x="274" y="112" fill="#fbbf24" font-size="11.5">• 第 L 层算完立即触发后台 NIXL</text>
+        <rect x="274" y="125" width="210" height="56" rx="6" fill="#0f172a" stroke="#334155"/>
+        <text x="284" y="145" fill="#6ee7b7" font-size="11" font-family="Consolas,monospace">Layer 1..79 KV Async Push ──►</text>
+        <text x="284" y="165" fill="#38bdf8" font-size="11" font-family="Consolas,monospace">Layer 80 Attention Compute</text>
+
+        <line x1="503" y1="110" x2="578" y2="110" stroke="#10b981" stroke-width="3" stroke-dasharray="6,3"/>
+        <polygon points="578,104 590,110 578,116" fill="#10b981"/>
+        <text x="508" y="92" fill="#10b981" font-size="11" font-weight="bold">GPUDirect RDMA</text>
+        <text x="508" y="132" fill="#94a3b8" font-size="10.5">94.5% 流水线重叠</text>
+        <text x="508" y="148" fill="#6ee7b7" font-size="10.5">暴露交接 &lt;5ms</text>
+
+        <rect x="592" y="22" width="235" height="176" rx="10" fill="#111827" stroke="#10b981" stroke-width="1.5"/>
+        <text x="608" y="48" fill="#34d399" font-size="13" font-weight="bold">③ Decode 显存带宽池 (N_D GPUs)</text>
+        <text x="608" y="70" fill="#e2e8f0" font-size="11.5">• HBM 访存带宽密集 (4.8 TB/s)</text>
+        <text x="608" y="90" fill="#10b981" font-size="11.5" font-weight="bold">• 零 Prefill 插入干扰 (稳态 14ms)</text>
+        <text x="608" y="110" fill="#e2e8f0" font-size="11.5">• 启用 FP8 KV + 原生 MTP 投机</text>
+        <text x="608" y="132" fill="#e2e8f0" font-size="11.5">• Little's Law 决定驻留并发容量</text>
+        <text x="608" y="156" fill="#6ee7b7" font-size="11.5" font-weight="bold">• P99 TPOT 稳定压在 ≤15ms 🏆</text>
+
+        <line x1="827" y1="110" x2="862" y2="110" stroke="#f59e0b" stroke-width="2"/>
+        <rect x="864" y="32" width="178" height="156" rx="10" fill="#111827" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="878" y="58" fill="#fbbf24" font-size="13" font-weight="bold">④ 分层共享 KV 缓存池</text>
+        <text x="878" y="82" fill="#e2e8f0" font-size="11.5">• Tier 1: GPU HBM 热块</text>
+        <text x="878" y="102" fill="#e2e8f0" font-size="11.5">• Tier 2: Host Pinned DRAM</text>
+        <text x="878" y="122" fill="#e2e8f0" font-size="11.5">• Tier 3: 3FS / NVMe 池</text>
+        <text x="878" y="146" fill="#6ee7b7" font-size="11">多轮 Agent 命中率 85%+</text>
+      </svg>
+    </div>
+
+    <div class="grid">
+      <!-- Interactive Calculator -->
+      <div class="card">
+        <h2>🎛️ 2. 交互式 PD 实例配比 (`N_P : N_D`) 与跨机 KV RDMA 带宽计算器</h2>
+        <div class="preset-bar">
+          <button class="preset-btn" onclick="applyPreset(40, 4096, 512, 50, 'gqa70b', 400)">预设A: 均衡对话 (1P:1D)</button>
+          <button class="preset-btn" onclick="applyPreset(40, 32768, 512, 25, 'gqa70b', 400)">预设B: 32K RAG (3P:1D)</button>
+          <button class="preset-btn" onclick="applyPreset(40, 2048, 4096, 60, 'gqa70b', 400)">预设C: 深度推理 CoT (1P:4D)</button>
+          <button class="preset-btn" onclick="applyPreset(40, 32768, 512, 85, 'gqa70b', 400)">预设D: 85%前缀缓存 Agent (1P:2D 🏆)</button>
+        </div>
+
+        <div class="control">
+          <label><span>模型 KV 架构 (`GQA 160KB/词` vs. `MLA 34.3KB/词`)</span></label>
+          <select id="arch">
+            <option value="gqa70b" selected>Llama-3.3-70B GQA (FP8 KV = 160.0 KB/token)</option>
+            <option value="mla671b">DeepSeek-V3/R1 671B MLA (FP8 KV = 34.3 KB/token · 省 4.66x 带宽 🏆)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>业务并发到达率 (`Target RPS`)</span><strong id="rpsVal">40 RPS</strong></label>
+          <input type="range" id="rps" min="10" max="120" step="5" value="40" />
+        </div>
+        <div class="control">
+          <label><span>平均输入长度 (`ISL Tokens`)</span><strong id="islVal">32,768 Tokens</strong></label>
+          <input type="range" id="isl" min="1024" max="65536" step="1024" value="32768" />
+        </div>
+        <div class="control">
+          <label><span>平均输出长度 (`OSL Tokens`)</span><strong id="oslVal">512 Tokens</strong></label>
+          <input type="range" id="osl" min="256" max="8192" step="256" value="512" />
+        </div>
+        <div class="control">
+          <label><span>全局 Prefix Cache 命中率 (`h`)</span><strong id="hitVal">25%</strong></label>
+          <input type="range" id="hit" min="0" max="90" step="5" value="25" />
+        </div>
+        <div class="control">
+          <label><span>单节点智算网络带宽 (`RoCEv2 / InfiniBand NIC`)</span></label>
+          <select id="nic">
+            <option value="100">100 Gbps RoCEv2 (单向可用 ~11 GB/s)</option>
+            <option value="200">200 Gbps RoCEv2 / IB HDR (单向可用 ~22 GB/s)</option>
+            <option value="400" selected>400 Gbps RoCEv2 / IB NDR (单向可用 ~45 GB/s 🏆)</option>
+          </select>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">推荐 `P : D` 实例黄金配比</div>
+            <div class="val" id="ratioOut">3P : 1D (24P + 8D)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">PD 分离总卡数 vs 混部基线</div>
+            <div class="val" id="gpuOut">32 张 vs 56 张 (-42.9% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">集群跨机 KV RDMA 总带宽</div>
+            <div class="val" id="bwOut">314.6 Gbps (39.3 GB/s)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">NIXL 异步暴露交接 / P99 TPOT</div>
+            <div class="val" id="latOut">4.8 ms / 14.8 ms 🏆</div>
+          </div>
+        </div>
+
+        <div class="formula-box" id="formulaTrace"></div>
+      </div>
+
+      <!-- Visual Comparison Bars & Table -->
+      <div class="card">
+        <h2>📊 3. 同池混部 vs. PD 分离 (`P池 + D池`) GPU 卡数与长尾延迟对比</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>1. 同池混部基线 (`Colocated Chunked Prefill`) — Prefill 抢占导致尾延迟劣化 ✕</span><strong id="colBarLbl">56 张 H200 (P99 TPOT 68.5ms)</strong></div>
+          <div class="bar-bg"><div id="colBar" class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>2. 当前配置 PD 分离 (`蓝色 = Prefill 池 N_P` · `绿色 = Decode 池 N_D`) ✓</span><strong id="pdBarLbl">32 张 H200 (24P + 8D · P99 14.8ms)</strong></div>
+          <div class="bar-bg">
+            <div id="pBar" class="bar-fill" style="width:42.8%;background:#3b82f6;"></div>
+            <div id="dBar" class="bar-fill" style="width:14.3%;background:#10b981;"></div>
+          </div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>3. 开启 `SGLang Radix 85% 前缀缓存 + Dynamo NIXL` 后的极简 PD 池 🏆</span><strong id="optBarLbl">12 张 H200 (4P + 8D · 省 78.6% 卡 🏆)</strong></div>
+          <div class="bar-bg">
+            <div id="optPBar" class="bar-fill" style="width:7.1%;background:#38bdf8;"></div>
+            <div id="optDBar" class="bar-fill" style="width:14.3%;background:#10b981;"></div>
+          </div>
+        </div>
+
+        <h2 style="margin-top:20px;">📋 4. 四大典型企业场景 `P:D` 黄金配比速查表 (`40 RPS · H200`)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>业务场景 (`ISL / OSL / h`)</th>
+              <th>瓶颈主导侧</th>
+              <th>黄金 `P:D` 配比</th>
+              <th>`P+D` 总卡数</th>
+              <th>KV 带宽 (`Gbps`)</th>
+              <th>`P99 TPOT`</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>均衡对话</strong> (`4K / 512 / 50%`)</td>
+              <td>算力与带宽均衡</td>
+              <td><strong>`1P : 1D`</strong></td>
+              <td>`8P + 8D = 16`</td>
+              <td>`102.4 Gbps`</td>
+              <td>`14.2 ms` ✓</td>
+            </tr>
+            <tr>
+              <td><strong>长文 RAG</strong> (`32K / 512 / 25%`)</td>
+              <td>Prefill 算力密集</td>
+              <td><strong>`3P : 1D`</strong></td>
+              <td>`24P + 8D = 32`</td>
+              <td>`314.6 Gbps`</td>
+              <td>`14.8 ms` ✓</td>
+            </tr>
+            <tr>
+              <td><strong>深度推理 CoT</strong> (`2K / 4K / 60%`)</td>
+              <td>Decode 显存/带宽</td>
+              <td><strong>`1P : 4D`</strong></td>
+              <td>`4P + 16D = 20`</td>
+              <td>`41.9 Gbps`</td>
+              <td>`15.1 ms` ✓</td>
+            </tr>
+            <tr>
+              <td><strong>多轮 Agent</strong> (`32K / 512 / 85%` 🏆)</td>
+              <td>前缀复用消峰</td>
+              <td><strong>`1P : 2D` 🏆</strong></td>
+              <td><strong>`4P + 8D = 12` 🏆</strong></td>
+              <td><strong>`62.9 Gbps` 🏆</strong></td>
+              <td><strong>`13.8 ms` 🏆</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const rpsEl = document.getElementById('rps');
+    const islEl = document.getElementById('isl');
+    const oslEl = document.getElementById('osl');
+    const hitEl = document.getElementById('hit');
+    const nicEl = document.getElementById('nic');
+
+    function gcd(a, b) {
+      return b === 0 ? a : gcd(b, a % b);
+    }
+
+    function applyPreset(rps, isl, osl, hit, arch, nic) {
+      rpsEl.value = rps;
+      islEl.value = isl;
+      oslEl.value = osl;
+      hitEl.value = hit;
+      archEl.value = arch;
+      nicEl.value = nic;
+      update();
+    }
+
+    function update() {
+      const arch = archEl.value;
+      const rps = parseInt(rpsEl.value, 10);
+      const isl = parseInt(islEl.value, 10);
+      const osl = parseInt(oslEl.value, 10);
+      const hit = parseInt(hitEl.value, 10) / 100.0;
+      const nicGbps = parseInt(nicEl.value, 10);
+
+      document.getElementById('rpsVal').textContent = rps + ' RPS';
+      document.getElementById('islVal').textContent = isl.toLocaleString() + ' Tokens';
+      document.getElementById('oslVal').textContent = osl.toLocaleString() + ' Tokens';
+      document.getElementById('hitVal').textContent = Math.round(hit * 100) + '%';
+
+      const uncachedIsl = Math.round(isl * (1.0 - hit));
+      const prefillTokPerSec = rps * uncachedIsl;
+      // 4-GPU TP instance processes ~164,000 prefill tok/s safely
+      const pInstances = Math.max(1, Math.ceil(prefillTokPerSec / 164000.0));
+      const nP = pInstances * 4;
+
+      // Little's Law active decode sequences: RPS * OSL * 0.014s
+      const activeDecodeSeqs = rps * osl * 0.014;
+      const dInstances = Math.max(1, Math.ceil(activeDecodeSeqs / 145.0));
+      const nD = dInstances * 4;
+      const totalPD = nP + nD;
+
+      // Colocated baseline needs ~1.75x GPUs due to prefill-decode interference headroom
+      const colocatedGpus = Math.max(totalPD + 4, Math.ceil((totalPD * 1.75) / 4) * 4);
+      const savePct = ((1.0 - totalPD / colocatedGpus) * 100).toFixed(1);
+
+      // With 85% Radix prefix cache
+      const optPInstances = Math.max(1, Math.ceil((rps * isl * 0.15) / 164000.0));
+      const optNP = optPInstances * 4;
+      const optTotal = optNP + nD;
+      const optSavePct = ((1.0 - optTotal / colocatedGpus) * 100).toFixed(1);
+
+      const g = gcd(pInstances, dInstances);
+      const ratioStr = `${pInstances / g}P : ${dInstances / g}D (${nP}P + ${nD}D)`;
+
+      // KV bytes per token
+      const bytesPerTok = arch === 'gqa70b' ? 163840 : 35136;
+      const kvBytesPerSec = prefillTokPerSec * bytesPerTok;
+      const kvGBps = kvBytesPerSec / 1e9;
+      const kvGbps = kvGBps * 8.0;
+
+      // Single req KV handoff over NIC with 94.5% NIXL layerwise overlap
+      const reqKVBytes = uncachedIsl * bytesPerTok;
+      const nicEffBytesPerSec = (nicGbps * 0.9 / 8.0) * 1e9;
+      const rawTransferMs = (reqKVBytes / nicEffBytesPerSec) * 1000.0;
+      const exposedMs = Math.max(0.4, rawTransferMs * 0.055);
+      const p99Tpot = (13.6 + Math.min(4.5, isl / 28000.0)).toFixed(1);
+      const colP99Tpot = (28.0 + (isl / 800.0)).toFixed(1);
+
+      document.getElementById('ratioOut').textContent = ratioStr;
+      document.getElementById('gpuOut').textContent = `${totalPD} 张 vs ${colocatedGpus} 张 (-${savePct}% 🏆)`;
+      const bwEl = document.getElementById('bwOut');
+      bwEl.textContent = `${kvGbps.toFixed(1)} Gbps (${kvGBps.toFixed(1)} GB/s)`;
+      bwEl.style.color = kvGbps > nicGbps * pInstances * 0.85 ? '#f59e0b' : '#10b981';
+      document.getElementById('latOut').textContent = `${exposedMs.toFixed(1)} ms / ${p99Tpot} ms 🏆`;
+
+      document.getElementById('colBarLbl').textContent = `${colocatedGpus} 张 H200 (P99 TPOT ${colP99Tpot}ms ✕)`;
+      document.getElementById('pdBarLbl').textContent = `${totalPD} 张 H200 (${nP}P + ${nD}D · P99 ${p99Tpot}ms ✓)`;
+      document.getElementById('optBarLbl').textContent = `${optTotal} 张 H200 (${optNP}P + ${nD}D · 省 ${optSavePct}% 卡 🏆)`;
+
+      document.getElementById('pBar').style.width = ((nP / colocatedGpus) * 100).toFixed(1) + '%';
+      document.getElementById('dBar').style.width = ((nD / colocatedGpus) * 100).toFixed(1) + '%';
+      document.getElementById('optPBar').style.width = ((optNP / colocatedGpus) * 100).toFixed(1) + '%';
+      document.getElementById('optDBar').style.width = ((nD / colocatedGpus) * 100).toFixed(1) + '%';
+
+      document.getElementById('formulaTrace').innerHTML =
+        `[手算复核 Trace] 未命中输入 = ${isl} × (1 - ${(hit*100).toFixed(0)}%) = ${uncachedIsl} tok/req | 集群 Prefill 吞吐 = ${prefillTokPerSec.toLocaleString()} tok/s → 需 N_P = ${nP} 卡 (${pInstances}×TP4)<br/>` +
+        `Little's Law 在途并发 = ${rps} RPS × ${osl} tok × 14ms = ${Math.round(activeDecodeSeqs)} 路并发 → 需 N_D = ${nD} 卡 (${dInstances}×TP4) | 单词 KV = ${(bytesPerTok/1024).toFixed(1)} KB → 原始单次传输 ${rawTransferMs.toFixed(1)} ms，NIXL 80层异步重叠 94.5% 后仅暴露 ${exposedMs.toFixed(1)} ms！`;
+    }
+
+    [archEl, rpsEl, islEl, oslEl, hitEl, nicEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

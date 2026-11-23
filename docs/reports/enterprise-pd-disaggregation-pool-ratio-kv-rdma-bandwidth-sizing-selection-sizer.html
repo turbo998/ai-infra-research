@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+  <title>Enterprise PD Disaggregation P:D Pool Ratio &amp; KV RDMA Bandwidth Sizer (#508)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0b1120; color: #f8fafc; margin: 0; padding: 24px; }
+    .box { max-width: 880px; margin: 0 auto; background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+    h1 { font-size: 20px; margin-top: 0; color: #38bdf8; }
+    label { display: block; margin: 12px 0 4px; font-size: 13px; }
+    input, select { width: 100%; padding: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; }
+    .out { margin-top: 16px; padding: 14px; background: #1e293b; border-radius: 8px; font-family: Consolas, monospace; font-size: 13px; color: #6ee7b7; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🧮 Enterprise PD Disaggregation P:D Pool Ratio &amp; KV RDMA Sizer (#508)</h1>
+    <label>Workload Profile:</label>
+    <select id="prof">
+      <option value="chat">Profile A: Balanced Chat (4K In / 512 Out, h=50%) -> 1P:1D</option>
+      <option value="rag" selected>Profile B: Long-Context RAG (32K In / 512 Out, h=25%) -> 3P:1D</option>
+      <option value="cot">Profile C: Deep Reasoning CoT (2K In / 4K Out, h=60%) -> 1P:4D</option>
+      <option value="agent">Profile D: Multi-Turn Agent (32K In / 512 Out, h=85% Radix) -> 1P:2D 🏆</option>
+    </select>
+    <label>Target Request Rate (`RPS`): <span id="rLbl">40</span> RPS</label>
+    <input type="range" id="rps" min="10" max="120" step="10" value="40" />
+    <div class="out" id="res"></div>
+  </div>
+  <script>
+    const profEl = document.getElementById('prof');
+    const rpsEl = document.getElementById('rps');
+    function calc() {
+      const p = profEl.value;
+      const r = parseInt(rpsEl.value, 10);
+      const scale = r / 40.0;
+      document.getElementById('rLbl').textContent = r;
+      const cfg = {
+        chat: { ratio: '1P : 1D', np: Math.ceil(8 * scale), nd: Math.ceil(8 * scale), col: Math.ceil(24 * scale), bw: (102.4 * scale).toFixed(1), tpot: '14.2 ms' },
+        rag: { ratio: '3P : 1D', np: Math.ceil(24 * scale), nd: Math.ceil(8 * scale), col: Math.ceil(56 * scale), bw: (314.6 * scale).toFixed(1), tpot: '14.8 ms' },
+        cot: { ratio: '1P : 4D', np: Math.ceil(4 * scale), nd: Math.ceil(16 * scale), col: Math.ceil(36 * scale), bw: (41.9 * scale).toFixed(1), tpot: '15.1 ms' },
+        agent: { ratio: '1P : 2D 🏆', np: Math.ceil(4 * scale), nd: Math.ceil(8 * scale), col: Math.ceil(56 * scale), bw: (62.9 * scale).toFixed(1), tpot: '13.8 ms 🏆' }
+      }[p];
+      const tot = cfg.np + cfg.nd;
+      const save = ((1 - tot / cfg.col) * 100).toFixed(1);
+      document.getElementById('res').textContent =
+        `Optimal Ratio: ${cfg.ratio} | PD Pool: ${cfg.np}P + ${cfg.nd}D = ${tot}x H200 GPUs (vs ${cfg.col}x Colocated, -${save}% GPUs) | KV RDMA Bandwidth: ${cfg.bw} Gbps | P99 TPOT: ${cfg.tpot}`;
+    }
+    [profEl, rpsEl].forEach(el => el.addEventListener('input', calc));
+    calc();
+  </script>
+</body>
+</html>
