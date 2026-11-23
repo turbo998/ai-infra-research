@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    strategies = [
+        {
+            "strategy_id": "misaligned_l40s_on_70b_decode",
+            "name": "Anti-Pattern 1: Running 70B Autoregressive Decode on PCIe L40S (GDDR6 864 GB/s, No NVLink)",
+            "hardware_mix": "32x L40S 48GB GDDR6 (PCIe TP=4)",
+            "p99_tpot_ms": 62.0,
+            "sla_goodput_pct": 34.0,
+            "three_year_tco_usd": 1280000.0,
+            "blended_cost_per_1m_tokens_usd": 0.142,
+            "action": "Send to a human",
+        },
+        {
+            "strategy_id": "all_h200_homogeneous_monolith",
+            "name": "Baseline: 100% Homogeneous H200 Cluster for All Tasks (Embedding/OCR + Prefill + Decode)",
+            "hardware_mix": "32x H200 141GB SXM",
+            "p99_tpot_ms": 13.8,
+            "sla_goodput_pct": 98.4,
+            "three_year_tco_usd": 2570000.0,
+            "blended_cost_per_1m_tokens_usd": 0.088,
+            "action": "Confirm",
+        },
+        {
+            "strategy_id": "role_aware_heterogeneous_pd_rocm_cuda_fleet",
+            "name": "Optimal: Role-Aware Heterogeneous Fleet (L40S Prefill/Embed + MI300X/H200 High-BW Decode)",
+            "hardware_mix": "12x L40S (Embed/OCR/Prefill) + 8x MI300X 192G (70B Decode) + 8x H200 (MoE/MTP)",
+            "p99_tpot_ms": 14.2,
+            "sla_goodput_pct": 98.8,
+            "three_year_tco_usd": 1418000.0,
+            "blended_cost_per_1m_tokens_usd": 0.048,
+            "action": "Act automatically",
+        },
+    ]
+
+    sku_profiles = [
+        {"sku": "NVIDIA L40S 48GB GDDR6 (PCIe)", "hbm_gb": 48, "bw_tbps": 0.864, "fp8_tflops": 733, "best_role": "Embedding / Reranker / OCR / Short-Med Prefill"},
+        {"sku": "NVIDIA H200 141GB HBM3e (SXM NVLink)", "hbm_gb": 141, "bw_tbps": 4.8, "fp8_tflops": 1979, "best_role": "Multi-Node MoE (DeepEP) & Low-TPOT Decode"},
+        {"sku": "AMD MI300X 192GB / MI325X 256GB", "hbm_gb": 192, "bw_tbps": 5.3, "fp8_tflops": 2610, "best_role": "Single-Node 70B/405B & Massive-KV Decode Pool"},
+        {"sku": "NVIDIA Blackwell B200 180GB (NVLink 5)", "hbm_gb": 180, "bw_tbps": 8.0, "fp8_tflops": 4500, "best_role": "Ultra-Scale Reasoning CoT & NVFP4 Flagship"},
+    ]
+
+    return {
+        "experiment_id": "enterprise_heterogeneous_gpu_h200_b200_l40s_mi325x_pd_role_sizing_selection",
+        "title": "Enterprise Heterogeneous GPU Fleet Role Assignment (B200 / H200 / L40S / MI300X·MI325X) Across PD Disaggregation & Cascade Tiers (#514)",
+        "provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "summary_metrics": {
+            "three_year_tco_saving_pct_vs_all_h200": round((1.0 - 1418000.0 / 2570000.0) * 100, 1),
+            "decode_tpot_speedup_vs_misaligned_l40s": round(62.0 / 14.2, 2),
+            "token_cost_reduction_pct": round((1.0 - 0.048 / 0.088) * 100, 1),
+        },
+        "sku_profiles": sku_profiles,
+        "strategies": strategies,
+    }
+
+
+def main() -> None:
+    out_dir = Path(__file__).resolve().parent
+    results = build_results()
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()
