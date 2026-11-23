@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业大模型 TP/PP/DP/EP 并行切分与三大加速技术交互手算沙盘 (#509)</title>
+  <style>
+    :root { --bg: #070b14; --panel: #111827; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 22px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); cursor: pointer; font-weight: 600; }
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+    h1 { font-size: 23px; margin: 0 0 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); border-left: 3px solid var(--good); padding-left: 10px; }
+    .control { margin-bottom: 12px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; color: #cbd5e1; }
+    input[type="range"], select { width: 100%; padding: 6px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: var(--card); border-radius: 8px; padding: 11px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 18px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula-box { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.6); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/05-parallelism-acceleration.html">🎓 H5 Academy 第05册</a>
+      <a href="../components/enterprise-llm-parallelism-tp-pp-dp-ep-spec-quant-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-llm-parallelism-tp-pp-dp-ep-spec-quant-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-llm-parallelism-tp-pp-dp-ep-spec-quant-sizing-selection-cards.html">🃏 7-Card 报告</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <div data-lang="zh">
+        <h1>⚡ 企业大模型 `TP × PP × Attention DP × Expert EP` 并行切分与三大加速技术交互沙盘 (#509)</h1>
+        <p class="subtitle">直观对比 `AllReduce (160次/词)` vs. `P2P` vs. `DeepEP All-to-All` 通信代价，手算 `Dense 70B/405B` 与 `DeepSeek 671B MoE` 在 `Block-FP8 + MTP/EAGLE-3` 下的最佳切分组合。</p>
+      </div>
+      <div data-lang="en">
+        <h1>⚡ Enterprise LLM `TP × PP × Attention DP × Expert EP` Parallelism &amp; Acceleration Interactive Sizer (#509)</h1>
+        <p class="subtitle">Compare AllReduce vs. P2P vs. DeepEP All-to-All communication overhead, and hand-calculate optimal serving topologies for Dense 70B/405B and Sparse MoE 671B.</p>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram SVG -->
+    <div class="card" style="margin-bottom: 18px;">
+      <h2>🗺️ 1. Dense (`TP × PP`) vs. Sparse MoE (`Attention DP × Expert EP`) 通信拓扑对比图</h2>
+      <svg viewBox="0 0 1060 210" width="100%" height="auto" style="background:#0b1120;border-radius:10px;border:1px solid #334155;">
+        <!-- Left: Dense TP x PP -->
+        <rect x="20" y="20" width="495" height="170" rx="10" fill="#111827" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="36" y="46" fill="#60a5fa" font-size="13.5" font-weight="bold">A. 稠密大模型 (Dense 70B/405B): 机内 NVLink TP × 跨机 PP</text>
+        <rect x="36" y="62" width="210" height="82" rx="8" fill="#0f172a" stroke="#38bdf8"/>
+        <text x="48" y="84" fill="#38bdf8" font-size="12" font-weight="bold">Node 1 (Layers 1..40 · TP=8)</text>
+        <text x="48" y="104" fill="#e2e8f0" font-size="11">• NVLink 900 GB/s (&lt;1.2us)</text>
+        <text x="48" y="124" fill="#10b981" font-size="11">• 80 次机内 AllReduce = 0.7ms</text>
+        <line x1="246" y1="103" x2="282" y2="103" stroke="#f59e0b" stroke-width="2.5"/>
+        <text x="249" y="92" fill="#fbbf24" font-size="10.5">1× P2P</text>
+        <rect x="284" y="62" width="215" height="82" rx="8" fill="#0f172a" stroke="#38bdf8"/>
+        <text x="296" y="84" fill="#38bdf8" font-size="12" font-weight="bold">Node 2 (Layers 41..80 · TP=8)</text>
+        <text x="296" y="104" fill="#e2e8f0" font-size="11">• 跨机仅传 1 次层间激活张量</text>
+        <text x="296" y="124" fill="#ef4444" font-size="11">• 严禁跨机做 160 次 AllReduce!</text>
+        <text x="36" y="168" fill="#94a3b8" font-size="11.5">✅ 结论：70B 用单机 TP=4×DP=2；405B 用双机 TP=8×PP=2</text>
+
+        <!-- Right: MoE Attention DP x Expert EP -->
+        <rect x="540" y="20" width="500" height="170" rx="10" fill="#111827" stroke="#10b981" stroke-width="1.5"/>
+        <text x="556" y="46" fill="#34d399" font-size="13.5" font-weight="bold">B. 稀疏 MoE (DeepSeek 671B): Attention DP × Expert EP 🏆</text>
+        <rect x="556" y="62" width="215" height="82" rx="8" fill="#0f172a" stroke="#10b981"/>
+        <text x="568" y="84" fill="#10b981" font-size="12" font-weight="bold">Attention 层: DP=16 独立并行</text>
+        <text x="568" y="104" fill="#e2e8f0" font-size="11">• MLA 壓缩 KV 仅 34.3 KB/词</text>
+        <text x="568" y="124" fill="#6ee7b7" font-size="11" font-weight="bold">• 0 次跨卡 Attention 同步！</text>
+        <line x1="771" y1="103" x2="808" y2="103" stroke="#10b981" stroke-width="2.5" stroke-dasharray="4,2"/>
+        <text x="772" y="92" fill="#6ee7b7" font-size="10">DeepEP</text>
+        <rect x="810" y="62" width="215" height="82" rx="8" fill="#0f172a" stroke="#10b981"/>
+        <text x="822" y="84" fill="#10b981" font-size="12" font-weight="bold">MoE 专家层: EP=16 All-to-All</text>
+        <text x="822" y="104" fill="#e2e8f0" font-size="11">• 256 专家分 16 卡 (每卡 16 专家)</text>
+        <text x="822" y="124" fill="#6ee7b7" font-size="11">• IBGDA 网卡直驱 + EPLB 均衡</text>
+        <text x="556" y="168" fill="#6ee7b7" font-size="11.5" font-weight="bold">🏆 结论：较纯跨机 TP=16 单卡吞吐暴涨 5.68 倍 (680 → 3,860 tok/s)！</text>
+      </svg>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 2. 并行切分方案、精度与投机解码交互计算器</h2>
+        <div class="control">
+          <label><span>选择模型与并行切分架构</span></label>
+          <select id="cfg">
+            <option value="bad_moe">反模式: DeepSeek-671B 跨两机纯 TP=16 (122次跨机 AllReduce/词 ✕)</option>
+            <option value="d70">方案 A: Llama-3.3-70B Dense (单机 NVLink TP=4 × DP=2 ✓)</option>
+            <option value="d405">方案 B: Llama-3.1-405B Dense (机内 TP=8 × 跨机 PP=2 ✓)</option>
+            <option value="moe_opt" selected>方案 C: DeepSeek-671B MoE (Attention DP=16 × Expert EP=16 + DeepEP 🏆)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>量化精度方案 (`BF16` vs. `W4A16 AWQ` vs. `Block-FP8`)</span></label>
+          <select id="quant">
+            <option value="bf16">BF16 原生精度 (显存占用 2B/param · 算力基线 1.0x)</option>
+            <option value="w4a16">W4A16 AWQ (仅低并发 Batch≤16 快，高并发反量化受限)</option>
+            <option value="fp8" selected>Block-Scaled FP8 (W8A8 + FP8 KV · 显存减半 + 2x Tensor Core 🏆)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>原生投机解码 (`MTP / EAGLE-3` 单步草稿接受率 $\tau$)</span><strong id="mtpVal">开启 (τ = 2.28x 提速 🏆)</strong></label>
+          <input type="range" id="mtp" min="100" max="260" step="10" value="228" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">每生成 1 词暴露的跨卡通信耗时</div>
+            <div class="val" id="commOut">2.1 ms / token 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">基础 `P99 TPOT` / 叠加 MTP 等效 `TPOT`</div>
+            <div class="val" id="tpotOut">13.2 ms → 5.8 ms 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">单张 H200 有效输出吞吐</div>
+            <div class="val" id="tpsOut">3,860 tok/s (5.68x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">通信原语与拓扑诊断</div>
+            <div class="val" id="primOut">IBGDA All-to-All ✓</div>
+          </div>
+        </div>
+
+        <div class="formula-box" id="traceOut"></div>
+      </div>
+
+      <div class="card">
+        <h2>📊 3. 四种并行拓扑下的单卡输出吞吐 (`tok/s/GPU`, 越长越强)</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>1. 反模式: DeepSeek-671B 跨机纯 TP=16 (通信暴露 21.5ms/词 ✕)</span><strong>680 tok/s/GPU</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:17.6%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>2. Dense 405B: 机内 NVLink TP=8 × 跨机 PP=2 + FP8 ✓</span><strong>1,180 tok/s/GPU</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:30.6%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>3. Dense 70B: 机内 NVLink TP=4 × DP=2 + FP8 + EAGLE-3 ✓</span><strong>3,420 tok/s/GPU</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:88.6%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>4. MoE 671B: Attention DP=16 × Expert EP=16 + DeepEP + MTP 🏆</span><strong>3,860 tok/s/GPU (5.68x 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#10b981;"></div></div>
+        </div>
+
+        <h2 style="margin-top:18px;">📋 4. 加速技术与指标映射速查矩阵</h2>
+        <table>
+          <thead>
+            <tr><th>技术手段</th><th>改善 TTFT</th><th>改善 TPOT</th><th>省 HBM 显存</th><th>通信/算力代价</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>机内 NVLink `TP`</strong></td><td>✅ 强 (`T` 倍算力)</td><td>✅ 强 (`T` 倍带宽)</td><td>✅ 权重分摊 $1/T$</td><td>`2L` 次机内 AllReduce</td></tr>
+            <tr><td><strong>`Attention DP + EP`</strong></td><td>✅ 线性扩吞吐</td><td>✅ 避免碎片化</td><td>✅ 专家分摊 $1/E$</td><td>MoE 层 RDMA All-to-All</td></tr>
+            <tr><td><strong>`Prefix Caching`</strong></td><td>🏆 砍 $(1-h)$ 耗时</td><td>➖ 无直接改变</td><td>⚠️ 需 DRAM 池卸载</td><td>零额外算力开销</td></tr>
+            <tr><td><strong>`MTP / EAGLE-3`</strong></td><td>➖ 无直接改变</td><td>🏆 提速 `2.0–2.4x`</td><td>⚠️ 需 +2%~5% 权重</td><td>借用空闲 Tensor Core</td></tr>
+            <tr><td><strong>`Block-FP8`</strong></td><td>✅ 算力翻倍 `2x`</td><td>✅ 带宽减半 `2x`</td><td>🏆 权重+KV 减半</td><td>校准损精度 `&lt;0.3%`</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const cfgEl = document.getElementById('cfg');
+    const quantEl = document.getElementById('quant');
+    const mtpEl = document.getElementById('mtp');
+
+    function update() {
+      const c = cfgEl.value;
+      const q = quantEl.value;
+      const mtpFactor = parseInt(mtpEl.value, 10) / 100.0;
+      document.getElementById('mtpVal').textContent = mtpFactor > 1.05 ? `开启 (τ = ${mtpFactor.toFixed(2)}x 提速 🏆)` : '关闭 (1.00x 标准自回归)';
+
+      const qScale = q === 'fp8' ? 1.0 : (q === 'w4a16' ? 0.76 : 0.54);
+      const base = {
+        bad_moe: { comm: 21.5, tpot: 44.0, tps: 680, prim: '122× Cross-Node AllReduce ✕', color: '#ef4444' },
+        d70: { comm: 1.4, tpot: 13.8, tps: 3420, prim: 'NVLink AllReduce (TP=4) ✓', color: '#3b82f6' },
+        d405: { comm: 2.8, tpot: 22.4, tps: 1180, prim: 'NVLink TP=8 + 1× P2P ✓', color: '#f59e0b' },
+        moe_opt: { comm: 2.1, tpot: 13.2, tps: 3860, prim: 'IBGDA All-to-All 🏆', color: '#10b981' }
+      }[c];
+
+      const effTpot = (base.tpot / (qScale * 0.4 + 0.6) / mtpFactor).toFixed(1);
+      const effTps = Math.round(base.tps * qScale * (mtpFactor / 2.28));
+
+      const commEl = document.getElementById('commOut');
+      commEl.textContent = base.comm + ' ms / token';
+      commEl.style.color = base.color;
+      document.getElementById('tpotOut').textContent = `${base.tpot.toFixed(1)} ms → ${effTpot} ms`;
+      document.getElementById('tpsOut').textContent = `${effTps.toLocaleString()} tok/s/GPU`;
+      document.getElementById('primOut').textContent = base.prim;
+
+      document.getElementById('traceOut').innerHTML =
+        `[手算复核 Trace] 并行原语: ${base.prim} | 单步跨卡暴露通信 = ${base.comm} ms | 基础单步耗时 = ${base.tpot} ms | 叠加投机解码 (加速比 ${mtpFactor.toFixed(2)}x) 后等效用户感知 TPOT = ${effTpot} ms/tok！`;
+    }
+
+    [cfgEl, quantEl, mtpEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>

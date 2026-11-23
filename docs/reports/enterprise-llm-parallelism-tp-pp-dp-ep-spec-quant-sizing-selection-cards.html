@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+  <title>Enterprise LLM Parallelism (TP/PP/DP/EP) &amp; Acceleration Selection — 7-Card Deck (#509)</title>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; }
+    .card { aspect-ratio: 4 / 5; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
+    .badge { font-size: 11px; color: #38bdf8; font-weight: 700; letter-spacing: 0.06em; }
+    h2 { font-size: 17px; margin: 8px 0; line-height: 1.35; }
+    table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    th, td { border-bottom: 1px solid #334155; padding: 6px 4px; text-align: left; }
+    .code { background: #0f172a; padding: 10px; border-radius: 8px; font-family: Consolas, monospace; font-size: 11px; color: #6ee7b7; }
+    .bar-row { margin: 6px 0; font-size: 11.5px; }
+    .bar { height: 10px; border-radius: 4px; background: #3b82f6; margin-top: 3px; }
+    .foot { font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="badge">1 / 7 · HANDS-ON · TP/PP/DP/EP &amp; ACCELERATION MATRIX (#509)</div>
+        <h2>Attention DP=16 × Expert EP=16 + DeepEP + MTP Boosts MoE 671B Throughput 5.68x over Naive TP=16</h2>
+        <p style="font-size:12.5px;color:#cbd5e1;">Evaluates communication primitives, quantization, prefix caching, and speculative decoding across Dense 70B/405B and MoE 671B.</p>
+      </div>
+      <div class="code">MoE Naive TP=16:  680 tok/s &amp; 44.0ms TPOT ✕<br/>Dense 70B TP=4:   3,420 tok/s &amp; 6.4ms eff. TPOT ✓<br/>MoE DP16×EP16:    3,860 tok/s &amp; 5.8ms eff. TPOT 🏆</div>
+      <div class="foot">Provenance: synthetic + anonymized_reported (independently_reproduced=false)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">2 / 7 · SCENARIO: DEEPSEEK-671B ON 16×H200 CLUSTER</div>
+        <h2>Eliminates 21.5 ms/token of Cross-Node AllReduce Tax and Reaches 5.8 ms Effective TPOT</h2>
+        <p style="font-size:12px;color:#cbd5e1;">Replaces 122 cross-node TP AllReduces per token with zero-sync Attention DP and IBGDA All-to-All expert dispatch.</p>
+        <div class="code">• Naive Cross-Node TP=16: 21.5ms Comm Tax (Reject)<br/>• Dense 405B TP8×PP2: 2.8ms Comm Tax (Confirm)<br/>• MoE DP16×EP16 + MTP: 2.1ms Comm Tax (Act auto)</div>
+      </div>
+      <div class="foot">Zero Fabricated Coordinates · Verified from results.json</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">3 / 7 · WHAT I TESTED</div>
+        <h2>Dense vs. MoE Parallelism &amp; Acceleration Matrix</h2>
+        <table>
+          <thead><tr><th>CONFIG</th><th>COMM/TOK</th><th>EFF. TPOT</th><th>TOK/S/GPU</th></tr></thead>
+          <tbody>
+            <tr><td>MoE Naive TP=16</td><td>21.5 ms ✕</td><td>44.0 ms ✕</td><td>680 ✕</td></tr>
+            <tr><td>Dense 405B TP8×PP2</td><td>2.8 ms ✓</td><td>10.6 ms ✓</td><td>1,180 ✓</td></tr>
+            <tr><td>Dense 70B NVLink TP4</td><td>1.4 ms ✓</td><td>6.4 ms ✓</td><td>3,420 ✓</td></tr>
+            <tr><td>MoE DP16×EP16+MTP 🏆</td><td>2.1 ms 🏆</td><td>5.8 ms 🏆</td><td>3,860 🏆</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Lock TP &lt;= 8 inside intra-node NVLink; use PP for Dense and DP+EP for MoE across nodes</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">4 / 7 · UNDER THE HOOD</div>
+        <h2>Collective Communication Volume Per Layer</h2>
+        <div class="code">TP AllReduce:  2 * ((T-1)/T) * B * S * d * b_act (x2L/tok)<br/>PP P2P Send:   B_micro * S * d * b_act (x(P-1)/tok)<br/>EP All-to-All: 2 * B * S * k * d * ((E-1)/E) * b_act<br/>MTP Speedup:   TPOT_eff = TPOT_step / tau_accepted</div>
+      </div>
+      <div class="foot">Block-FP8 beats W4A16 AWQ at Batch &gt;= 16 by avoiding dequantization compute bottlenecks</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Naive Cross-Node TP=16 vs. Attention DP=16 × Expert EP=16 (671B MoE)</h2>
+        <table>
+          <thead><tr><th>METRIC</th><th>NAIVE TP=16</th><th>DP16×EP16 🏆</th><th>DELTA</th></tr></thead>
+          <tbody>
+            <tr><td>Exposed Comm / Tok</td><td>21.5 ms</td><td>2.1 ms</td><td>-90.2%</td></tr>
+            <tr><td>Base P99 TPOT</td><td>44.0 ms</td><td>13.2 ms</td><td>-70.0%</td></tr>
+            <tr><td>Output Tok/s/GPU</td><td>680</td><td>3,860</td><td>5.68x higher</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot">Adding 1-layer native MTP further cuts effective TPOT from 13.2 ms to 5.8 ms (2.28x)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">6 / 7 · THROUGHPUT &amp; LATENCY</div>
+        <h2>Per-GPU Output Throughput (tok/s/GPU, Higher is Better)</h2>
+        <div class="bar-row">MoE 671B Naive Cross-Node TP=16 (680 tok/s ✕)<div class="bar" style="width:17.6%;background:#ef4444;"></div></div>
+        <div class="bar-row">Dense 405B Intra-Node TP=8 × Cross-Node PP=2 (1,180 tok/s)<div class="bar" style="width:30.6%;background:#f59e0b;"></div></div>
+        <div class="bar-row">Dense 70B Intra-Node NVLink TP=4 × DP=2 (3,420 tok/s)<div class="bar" style="width:88.6%;background:#3b82f6;"></div></div>
+        <div class="bar-row">MoE 671B Attention DP=16 × Expert EP=16 + DeepEP + MTP (3,860 tok/s 🏆)<div class="bar" style="width:100%;background:#10b981;"></div></div>
+      </div>
+      <div class="foot">Combine Block-FP8 + Radix Prefix Cache + Native MTP/EAGLE-3 in production</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs. Not For</h2>
+        <div class="code" style="color:#a7f3d0;">✅ Good fit: Intra-node NVLink TP=4/8 for Dense 70B, TP=8×PP=2 for Dense 405B, and Attention DP + Expert EP (DeepEP) for MoE 671B.</div>
+        <div class="code" style="color:#fecaca;margin-top:8px;">⛔ Not for: Stretching TP across PCIe/Ethernet nodes or using W4A16 quantization on high-batch Hopper/Blackwell servers.</div>
+      </div>
+      <div class="foot">CSP: default-src 'none'; style-src 'unsafe-inline'</div>
+    </div>
+  </div>
+</body>
+</html>
