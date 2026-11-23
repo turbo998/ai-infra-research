@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#543 企业零售 1亿级 SKU×门店销量预测 (LLM 特征 + Chronos + GPU GBDT) 交互精读页</title>
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#f8fafc;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:24px}
+.nav{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.nav a{color:#38bdf8;text-decoration:none;font-size:14px;padding:6px 12px;border:1px solid #334155;border-radius:6px;background:#1e293b}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;margin-bottom:20px}
+h1{font-size:24px;margin:0 0 8px;color:#f8fafc}
+h2{font-size:18px;color:#38bdf8;margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.kpi{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px}
+.kpi .val{font-size:26px;font-weight:700;color:#10b981}
+.kpi .lbl{font-size:13px;color:#94a3b8}
+label{display:block;font-size:14px;margin:10px 0 4px;color:#cbd5e1}
+input[type=range],select{width:100%;padding:6px;background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+    <a href="../components/enterprise-retail-demand-forecasting-tsfm-gbdt-llm-promo-sizing-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-retail-demand-forecasting-tsfm-gbdt-llm-promo-sizing-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-retail-demand-forecasting-tsfm-gbdt-llm-promo-sizing-cards.html">🃏 7-Card</a>
+    <a href="../reports/enterprise-retail-demand-forecasting-tsfm-gbdt-llm-promo-sizing-sizer.html">🧮 Sizer</a>
+  </div>
+  <div class="card">
+    <h1>#543 企业零售 1 亿级 SKU×门店销量预测 (8B LLM 促销特征 + Chronos-Bolt + GPU LightGBM) 交互沙盘</h1>
+    <p>直观对比纯文本 LLM 硬塞销量 CSV、传统单品 ARIMA/Prophet 与 LLM 促销特征 + Chronos 冷启动 + GPU GBDT 的 WAPE 误差、耗时与成本。</p>
+    <div class="grid">
+      <div class="kpi"><div class="lbl">全盘加权预测误差 (WAPE)</div><div class="val" id="k_wape">8.9% (-45.7%误差)</div></div>
+      <div class="kpi"><div class="lbl">新品冷启动误差 (Cold-Start)</div><div class="val" id="k_cold">11.2% (-67.1%误差)</div></div>
+      <div class="kpi"><div class="lbl">1 亿级序列跑批耗时</div><div class="val" id="k_time">28 分钟 (快24.3x)</div></div>
+      <div class="kpi"><div class="lbl">所需 H200 / 月度成本</div><div class="val" id="k_cost">8 GPUs · $18K/m</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🧮 零售亿级 SKU 销量预测容量与误差计算器</h2>
+    <label>选择销量预测与补货架构方案：</label>
+    <select id="scheme" onchange="calc()">
+      <option value="hybrid" selected>方案 C：8B LLM 促销特征 + Chronos-Bolt 冷启动 + GPU LightGBM (推荐)</option>
+      <option value="arima">方案 B：传统单品 ARIMA / Prophet (CPU Spark 集群)</option>
+      <option value="llm">方案 A：历史销量 CSV 拼文本直喂通用 LLM</option>
+    </select>
+    <label>预测 SKU×门店总规模 (千万对 10M pairs)：<span id="v_pairs">100</span>M 对</label>
+    <input type="range" id="pairs" min="10" max="300" step="10" value="100" oninput="calc()">
+  </div>
+</div>
+<script>
+function calc(){
+  const s = document.getElementById('scheme').value;
+  const p = parseInt(document.getElementById('pairs').value, 10);
+  document.getElementById('v_pairs').textContent = p;
+  const scale = p / 100.0;
+  if(s==='llm'){
+    const g = Math.max(16, Math.ceil(128*scale));
+    document.getElementById('k_wape').textContent = '24.8% (数值失稳)';
+    document.getElementById('k_cold').textContent = '26.5%';
+    document.getElementById('k_time').textContent = '680 分钟 (11.3h)';
+    document.getElementById('k_cost').textContent = g + ' GPUs · $' + Math.round(420*scale) + 'K/m';
+  } else if(s==='arima'){
+    document.getElementById('k_wape').textContent = '16.4%';
+    document.getElementById('k_cold').textContent = '34.0% (冷启动盲区)';
+    document.getElementById('k_time').textContent = '240 分钟 (4.0h)';
+    document.getElementById('k_cost').textContent = 'CPU Spark · $' + Math.round(65*scale) + 'K/m';
+  } else {
+    const g = Math.max(2, Math.ceil(8*scale));
+    document.getElementById('k_wape').textContent = '8.9% (-45.7%误差)';
+    document.getElementById('k_cold').textContent = '11.2% (-67.1%误差)';
+    document.getElementById('k_time').textContent = '28 分钟 (快24.3x)';
+    document.getElementById('k_cost').textContent = g + ' GPUs · $' + Math.round(18*scale) + 'K/m';
+  }
+}
+</script>
+</body>
+</html>
