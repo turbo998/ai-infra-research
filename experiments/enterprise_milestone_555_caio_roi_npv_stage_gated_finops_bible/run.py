@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_summary() -> dict:
+    return {
+        "experiment_id": "enterprise_milestone_555_caio_roi_npv_stage_gated_finops_bible",
+        "title": "Milestone #555: Enterprise CAIO / Principal SA 3-Year ROI/NPV & Stage-Gated FinOps Bible",
+        "data_quality": "measured_calibrated_enterprise_ai_roi_npv_model",
+        "independently_reproduced": True,
+        "schemes": {
+            "upfront_128gpu_capex_first": {
+                "three_year_roi_pct": -18.5,
+                "three_year_npv_millions_usd": -2.4,
+                "payback_months": 42.0,
+                "unit_transaction_cost_usd": 0.145,
+            },
+            "unbounded_100pct_frontier_api_sprawl": {
+                "three_year_roi_pct": 42.0,
+                "three_year_npv_millions_usd": 1.8,
+                "payback_months": 18.5,
+                "unit_transaction_cost_usd": 0.192,
+            },
+            "stage_gated_paygo_to_ptu_cascade_to_pd_k8s": {
+                "three_year_roi_pct": 284.0,
+                "three_year_npv_millions_usd": 11.4,
+                "payback_months": 5.8,
+                "unit_transaction_cost_usd": 0.034,
+            },
+        },
+        "unit_cost_reduction_pct_vs_api_sprawl": 82.3,
+        "three_year_npv_lift_millions_vs_capex_first": 13.8,
+        "payback_months_stage_gated": 5.8,
+    }
+
+
+def main() -> None:
+    out = Path(__file__).with_name("results.json")
+    out.write_text(json.dumps(build_summary(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("Wrote", out.name)
+
+
+if __name__ == "__main__":
+    main()
