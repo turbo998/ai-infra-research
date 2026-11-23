@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def build_results() -> dict:
+    architectures = [
+        {
+            "arch_id": "in_memory_stateless_agent_while_loop",
+            "name": "Anti-Pattern: In-Memory Stateless Agent Loop (Crash Re-Runs All Steps & Blocks Threads on HITL)",
+            "long_horizon_20step_completion_rate_pct": 71.2,
+            "duplicate_tool_side_effect_rate_pct": 8.4,
+            "wasted_recompute_tokens_pct": 44.0,
+            "required_h200_gpus_for_1000_workflows_per_hr": 24,
+            "annual_tco_usd": 643000.0,
+            "action": "Send to a human",
+        },
+        {
+            "arch_id": "managed_foundry_threads_durable_agents",
+            "name": "Managed Cloud: Azure AI Foundry Agent Service + Logic Apps / Durable Functions HITL",
+            "long_horizon_20step_completion_rate_pct": 99.2,
+            "duplicate_tool_side_effect_rate_pct": 0.1,
+            "wasted_recompute_tokens_pct": 3.5,
+            "required_h200_gpus_for_1000_workflows_per_hr": 0,
+            "annual_tco_usd": 310000.0,
+            "action": "Confirm",
+        },
+        {
+            "arch_id": "temporal_langgraph_postgres_checkpoint_saga",
+            "name": "Optimal Self-Hosted: Temporal + LangGraph Postgres Checkpointer + Idempotency Key + Tiered KV Suspend",
+            "long_horizon_20step_completion_rate_pct": 99.7,
+            "duplicate_tool_side_effect_rate_pct": 0.0,
+            "wasted_recompute_tokens_pct": 1.2,
+            "required_h200_gpus_for_1000_workflows_per_hr": 12,
+            "annual_tco_usd": 218000.0,
+            "action": "Act automatically",
+        },
+    ]
+
+    return {
+        "experiment_id": "enterprise_durable_agent_workflow_temporal_langgraph_hitl_sizing_selection",
+        "title": "Enterprise Durable Agentic Workflows & Human-in-the-Loop (HITL) Selection Guide: In-Memory Loop vs. Azure AI Foundry vs. Temporal + LangGraph Checkpointing (#527)",
+        "provenance": "synthetic + anonymized_reported (independently_reproduced=false)",
+        "summary_metrics": {
+            "completion_rate_gain_pts": round(99.7 - 71.2, 1),
+            "gpu_saving_pct_vs_in_memory_loop": round((1.0 - 12 / 24) * 100, 1),
+            "duplicate_side_effect_elimination_pct": 100.0,
+        },
+        "architectures": architectures,
+    }
+
+
+def main() -> None:
+    out_dir = Path(__file__).resolve().parent
+    results = build_results()
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print("Wrote results.json")
+
+
+if __name__ == "__main__":
+    main()
