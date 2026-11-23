@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#532 湖仓 5,000万文档批量 AI ETL (Ray Data + vLLM vs Spark UDF) 交互精读页</title>
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#f8fafc;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:24px}
+.nav{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.nav a{color:#38bdf8;text-decoration:none;font-size:14px;padding:6px 12px;border:1px solid #334155;border-radius:6px;background:#1e293b}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;margin-bottom:20px}
+h1{font-size:24px;margin:0 0 8px;color:#f8fafc}
+h2{font-size:18px;color:#38bdf8;margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.kpi{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px}
+.kpi .val{font-size:26px;font-weight:700;color:#10b981}
+.kpi .lbl{font-size:13px;color:#94a3b8}
+label{display:block;font-size:14px;margin:10px 0 4px;color:#cbd5e1}
+input[type=range],select{width:100%;padding:6px;background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+    <a href="../components/enterprise-lakehouse-batch-ai-etl-ray-data-vllm-spark-sizing-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-lakehouse-batch-ai-etl-ray-data-vllm-spark-sizing-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-lakehouse-batch-ai-etl-ray-data-vllm-spark-sizing-cards.html">🃏 7-Card</a>
+    <a href="../reports/enterprise-lakehouse-batch-ai-etl-ray-data-vllm-spark-sizing-sizer.html">🧮 Sizer</a>
+  </div>
+  <div class="card">
+    <h1>#532 企业数据湖仓日均 5,000 万文档批量 AI ETL (Ray Data + vLLM vs. Spark UDF) 交互沙盘</h1>
+    <p>对比 Spark 同步调 HTTP UDF、托管 Fabric AI Functions / Databricks ai_query 与 Ray Data 流式分桶 + 进程内 vLLM FP8 的吞吐、GPU 利用率与千条处理成本。</p>
+    <div class="grid">
+      <div class="kpi"><div class="lbl">系统处理吞吐</div><div class="val" id="k_tps">16,800 docs/s</div></div>
+      <div class="kpi"><div class="lbl">GPU 有效利用率</div><div class="val" id="k_util">94.2%</div></div>
+      <div class="kpi"><div class="lbl">所需 H200 卡数 / 跑批耗时</div><div class="val" id="k_gpu">16 GPUs · 0.83h</div></div>
+      <div class="kpi"><div class="lbl">千条文档成本 ($/1K docs)</div><div class="val" id="k_cost">$0.0284 (-94.3%)</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🧮 湖仓离线批量 AI ETL 算卡与 TCO 交互计算器</h2>
+    <label>选择湖仓批量 ETL 架构方案：</label>
+    <select id="scheme" onchange="calc()">
+      <option value="ray" selected>方案 C：Ray Data 流式反压 + Token 长度分桶 + 进程内 vLLM FP8 (推荐大规模)</option>
+      <option value="sql">方案 B：托管 Fabric AI Functions / Databricks SQL ai_query()</option>
+      <option value="spark">方案 A：Spark Executor mapPartitions 同步调用在线 HTTPS 接口</option>
+    </select>
+    <label>每日待处理文档总量 (百万篇/天 M docs/day)：<span id="v_docs">50</span> M</label>
+    <input type="range" id="docs" min="5" max="200" step="5" value="50" oninput="calc()">
+  </div>
+</div>
+<script>
+function calc(){
+  const s = document.getElementById('scheme').value;
+  const m = parseFloat(document.getElementById('docs').value);
+  document.getElementById('v_docs').textContent = m;
+  const scale = m / 50.0;
+  if(s==='spark'){
+    document.getElementById('k_tps').textContent = '1,250 docs/s';
+    document.getElementById('k_util').textContent = '31.5% (42% 重试损耗)';
+    document.getElementById('k_gpu').textContent = Math.max(8, Math.ceil(128*scale)) + ' GPUs · 11.11h';
+    document.getElementById('k_cost').textContent = '$0.496 / 1K docs';
+  } else if(s==='sql'){
+    document.getElementById('k_tps').textContent = '6,400 docs/s';
+    document.getElementById('k_util').textContent = '74.0% (1.8% 重试)';
+    document.getElementById('k_gpu').textContent = Math.max(4, Math.ceil(48*scale)) + ' GPUs · 2.17h';
+    document.getElementById('k_cost').textContent = '$0.139 / 1K docs';
+  } else {
+    document.getElementById('k_tps').textContent = '16,800 docs/s (13.44x)';
+    document.getElementById('k_util').textContent = '94.2% (0.0% 重试)';
+    document.getElementById('k_gpu').textContent = Math.max(2, Math.ceil(16*scale)) + ' GPUs · 0.83h';
+    document.getElementById('k_cost').textContent = '$0.0284 / 1K (-94.3%)';
+  }
+}
+</script>
+</body>
+</html>
