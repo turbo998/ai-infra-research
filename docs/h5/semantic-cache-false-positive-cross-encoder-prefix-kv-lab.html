@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>企业 AI 网关语义缓存误命中治理与 Prefix KV Cache 双层选型沙盘 (#524)</title>
+  <style>
+    :root { --bg: #070b14; --panel: #111827; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 22px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 18px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); border-left: 3px solid var(--good); padding-left: 10px; }
+    .control { margin-bottom: 12px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: var(--card); border-radius: 8px; padding: 11px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 18px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula-box { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../components/enterprise-semantic-cache-false-positive-cross-encoder-prefix-kv-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-semantic-cache-false-positive-cross-encoder-prefix-kv-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-semantic-cache-false-positive-cross-encoder-prefix-kv-selection-cards.html">🃏 7-Card 报告</a>
+    </div>
+
+    <h1>🛡️ 企业 AI 网关语义缓存误命中治理与 `Prefix KV Cache` 双层选型沙盘 (#524)</h1>
+    <p style="color:#94a3b8;font-size:14px;">消除粗糙余弦相似度 (`0.85`) 导致的 `14.2%` 答非所问串单事故：用 `实体槽位守卫 + Cross-Encoder ≥ 0.96` 配合 `SGLang Radix KV`，将误判压至 `0.08%` 并省 `68.8%` GPU。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 网关缓存策略与并发流量交互计算器</h2>
+        <div class="control">
+          <label><span>选择企业缓存架构方案</span></label>
+          <select id="arch">
+            <option value="naive">反模式: 盲开粗糙余弦 ≥0.85 语义缓存 (14.2% 严重串单错答 ✕)</option>
+            <option value="none">保守基线: 完全关闭一切缓存 (P95 TTFT 920ms · 需 32 张卡 ✕)</option>
+            <option value="dual" selected>最佳: L1 实体守卫+Cross-Encoder ≥0.96 + L2 SGLang Radix KV 🏆</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>平台并发请求吞吐 (`Target RPS`)</span><strong id="rpsVal">60 RPS</strong></label>
+          <input type="range" id="rps" min="15" max="240" step="15" value="60" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">错误串单答非所问率 (`FPR`)</div>
+            <div class="val" id="fprOut">0.08% (降低 177.5x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">`P95 TTFT` 首字响应延迟</div>
+            <div class="val" id="ttftOut">145 ms (提速 6.34x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">支撑流量所需 `H200 GPU`</div>
+            <div class="val" id="gpuOut">10 张 H200 (-68.8% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">年化总成本 (`Annual TCO`)</div>
+            <div class="val" id="tcoOut">$282,000 / 年 (省 $57.5万 🏆)</div>
+          </div>
+        </div>
+        <div class="formula-box" id="traceOut"></div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 三种缓存策略的所需 GPU 卡数与串单错误率对比</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>1. 粗糙余弦 ≥0.85 语义缓存 (误判率高达 14.2% · 生产事故 ✕)</span><strong>12 张 H200 (14.2% 错答 ✕)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:37.5%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>2. 关闭一切缓存全量重算 (P95 TTFT 920ms · 32 GPUs ✕)</span><strong>32 张 H200 ($85.7万/年)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>3. 双层架构: 实体+Cross-Encoder + Radix KV (误判 0.08% 🏆)</span><strong>10 张 H200 (-68.8% · P95 145ms 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:31.25%;background:#10b981;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const archEl = document.getElementById('arch');
+    const rpsEl = document.getElementById('rps');
+    function update() {
+      const a = archEl.value;
+      const r = parseInt(rpsEl.value, 10);
+      const scale = r / 60.0;
+      document.getElementById('rpsVal').textContent = r + ' RPS';
+
+      const cfg = {
+        naive: { fpr: '14.20% (严重跨单号/跨日期错答 ✕)', ttft: '185 ms', gpu: Math.ceil(12 * scale) + ' 张 H200 ✕', tco: '$' + Math.round(338000 * scale).toLocaleString() + '/年', trace: '单纯余弦相似度无法区分数字、年份、否定词与客户单号，造成 14.2% 严重串单' },
+        none: { fpr: '0.00% ✓', ttft: '920 ms ✕', gpu: Math.ceil(32 * scale) + ' 张 H200 ✕', tco: '$' + Math.round(857000 * scale).toLocaleString() + '/年 ✕', trace: '每次重复计算完整系统提示词与 RAG 文档块，算力浪费高达 68.8%' },
+        dual: { fpr: '0.08% (降低 177.5x 🏆)', ttft: '145 ms (快 6.34x 🏆)', gpu: Math.max(4, Math.ceil(10 * scale)) + ' 张 H200 (-68.8% 🏆)', tco: '$' + Math.round(282000 * scale).toLocaleString() + '/年 (-67.1% 🏆)', trace: 'L1 (28.5% 命中): 租户隔离 + 数字/日期槽位一致 + Cross-Encoder≥0.96；L2 (71.5%): SGLang Radix 精确 KV 复用 🏆' }
+      }[a];
+
+      document.getElementById('fprOut').textContent = cfg.fpr;
+      document.getElementById('ttftOut').textContent = cfg.ttft;
+      document.getElementById('gpuOut').textContent = cfg.gpu;
+      document.getElementById('tcoOut').textContent = cfg.tco;
+      document.getElementById('traceOut').textContent = '[双层缓存 Trace] ' + cfg.trace;
+    }
+    [archEl, rpsEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
