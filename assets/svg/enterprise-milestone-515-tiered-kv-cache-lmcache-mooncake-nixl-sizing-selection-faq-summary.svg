@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .card { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 19.5px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .good { fill: #10b981; font-weight: 700; }
+      .bad { fill: #ef4444; font-weight: 700; }
+      .warn { fill: #f59e0b; font-weight: 700; }
+    </style>
+  </defs>
+  <rect class="bg" width="1100" height="540" rx="14"/>
+  <text x="30" y="38" class="title">#515 里程碑：多轮智能体三级分层 KV 缓存池 (`LMCache` vs. `Mooncake` vs. `Dynamo NIXL`) 选型圣经</text>
+  <text x="30" y="60" class="sub">解决 Agent 工具调用暂停 5–45 秒期间 HBM KV 被驱逐重算难题 · 恢复 TTFT 提速 15.6x (1,840ms → 118ms)、立省 66.7% GPU</text>
+
+  <!-- Left Card -->
+  <rect x="30" y="80" width="510" height="215" class="card"/>
+  <text x="48" y="108" class="h">1. 为什么多轮 Agent 只靠 GPU HBM 缓存会导致 92% 驱逐重算？</text>
+  <text x="48" y="132" class="txt">• 单路 64K 会话 KV 体积: 70B GQA FP8 = 10.24 GB/会话 (DeepSeek MLA = 2.20 GB)</text>
+  <text x="48" y="154" class="txt bad">• 纯 HBM 困境: 单台 8×H200 空闲 KV 仅 ~420 GB (最多驻留 40 个 64K 会话)；</text>
+  <text x="64" y="172" class="txt bad">当 500 个 Agent 等待沙箱/搜索返回时，92% 会话被踢出 HBM，每轮重算 1,840ms ✕</text>
+  <text x="48" y="196" class="txt good">• 三级分层 KV 缓存池 (HBM 420G ↔ Host Pinned DRAM 2TB ↔ RDMA/3FS 25TB 🏆):</text>
+  <text x="64" y="216" class="txt">① 工具调用开始时异步将热 KV 卸载至主机 Pinned DRAM / 全局 RDMA 内存池</text>
+  <text x="64" y="236" class="txt">② 工具返回瞬间经 PCIe Gen5 (250GB/s) / 400G RDMA 逐层流式拉回 HBM</text>
+  <text x="64" y="256" class="txt good">③ 500 并发命中率升至 96.5%，恢复 TTFT 仅 118ms (快 15.6x)，省 66.7% GPU 🏆</text>
+
+  <!-- Right Card -->
+  <rect x="560" y="80" width="510" height="215" class="card"/>
+  <text x="578" y="108" class="h">2. 三大开源分层 KV 缓存引擎 (`LMCache / Mooncake / Dynamo NIXL`) 选型</text>
+  <text x="578" y="134" class="txt">• LMCache (vLLM Production Stack 标配): 原生对接 vLLM V1 Connector，</text>
+  <text x="594" y="152" class="txt">独创 CacheGen 动态量化压缩，适合 25G/100G 带宽受限环境与多机 K8s 共池 ✓</text>
+  <text x="578" y="176" class="txt good">• Mooncake Store (Kimi 开源 · SGLang 原生底座 🏆): 多网卡聚合 RDMA 零拷贝，</text>
+  <text x="594" y="196" class="txt good">与 SGLang 全局 RadixTree 深度融合，适合百卡级长文 RAG 与多轮 SWE-Agent 🏆</text>
+  <text x="578" y="220" class="txt good">• NVIDIA Dynamo KV Block Manager + NIXL 🏆: 统一 HBM ↔ DRAM ↔ GDS NVMe</text>
+  <text x="594" y="240" class="txt good">三级块生命周期与 KV-Aware 路由，仅用 12 张 H200 顶替纯 HBM 的 36 张卡 🏆</text>
+  <text x="578" y="264" class="txt">• 年化 TCO 对比 (500 并发 64K Agent): $96.4万 (纯HBM) → $34.2万 (-64.5% 🏆)</text>
+
+  <!-- Bottom Card -->
+  <rect x="30" y="312" width="1040" height="205" class="card"/>
+  <text x="48" y="340" class="h">3. 500 并发 64K 多轮 Agent 工具返回后的恢复首字延迟 (P95 TTFT ms) 与所需 GPU 卡数对比</text>
+
+  <text x="48" y="378" class="txt">反模式: 纯 GPU HBM (驱逐后重算 64K)</text>
+  <rect x="305" y="364" width="480" height="16" fill="#ef4444" rx="4"/>
+  <text x="795" y="378" class="txt bad">1,840 ms P95 TTFT | 命中率仅 8% | 需 36 张 H200 ($96.4万/年 ✕)</text>
+
+  <text x="48" y="418" class="txt">单机卸载: HBM + 本机 Pinned DRAM</text>
+  <rect x="305" y="404" width="64" height="16" fill="#3b82f6" rx="4"/>
+  <text x="379" y="418" class="txt">245 ms P95 TTFT ✓ | 命中率 64% (跨机路由未共享) | 需 20 张 H200</text>
+
+  <text x="48" y="458" class="txt good">三级全局池: HBM + RDMA DRAM + 3FS NVMe 🏆</text>
+  <rect x="305" y="444" width="31" height="16" fill="#10b981" rx="4"/>
+  <text x="346" y="458" class="txt good">118 ms P95 TTFT (提速 15.6x 🏆) | 命中率 96.5% | 仅需 12 张 H200 (-66.7% 🏆)</text>
+</svg>

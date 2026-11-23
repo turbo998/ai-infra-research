@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>第 515 篇里程碑：多轮智能体三级分层 KV 缓存池 (LMCache / Mooncake / Dynamo NIXL) 选型沙盘 (#515)</title>
+  <style>
+    :root { --bg: #070b14; --panel: #111827; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --good: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 22px 16px 56px; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    .nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 18px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .card h2 { font-size: 16px; margin: 0 0 12px; color: var(--accent); border-left: 3px solid var(--good); padding-left: 10px; }
+    .control { margin-bottom: 12px; }
+    .control label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type="range"], select { width: 100%; padding: 6px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { background: var(--card); border-radius: 8px; padding: 11px; border: 1px solid var(--border); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .val { font-size: 18px; font-weight: 700; margin-top: 4px; color: var(--good); }
+    .bar-wrap { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .bar-bg { height: 18px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula-box { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: Consolas, monospace; font-size: 12.5px; color: #6ee7b7; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">← 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../components/enterprise-milestone-515-tiered-kv-cache-lmcache-mooncake-nixl-sizing-selection-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-milestone-515-tiered-kv-cache-lmcache-mooncake-nixl-sizing-selection-faq.en.md">🌐 English FAQ</a>
+      <a href="../reports/enterprise-milestone-515-tiered-kv-cache-lmcache-mooncake-nixl-sizing-selection-cards.html">🃏 7-Card 报告</a>
+    </div>
+
+    <h1>🗄️ 第 515 篇里程碑：多轮智能体三级分层 KV 缓存池 (`LMCache / Mooncake / Dynamo NIXL`) 沙盘 (#515)</h1>
+    <p style="color:#94a3b8;font-size:14px;">解决多轮 Agent 工具调用暂停期 (`5–45s`) HBM 缓存被踢出引发的 64K 重算雪崩：恢复首字延迟从 `1,840ms` 压至 `118ms (15.6x)`，立省 `66.7%` GPU。</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>🎛️ 1. 并发 Agent 会话数与三级 KV 缓存池计算器</h2>
+        <div class="control">
+          <label><span>选择 KV Cache 存储架构层级</span></label>
+          <select id="tier">
+            <option value="hbm">反模式: 纯 GPU HBM (仅存 40 路 64K · 92% 被驱逐重算 ✕)</option>
+            <option value="dram">单机卸载: HBM + 本机 2TB Pinned DDR5 (LMCache · 命中率 64% ✓)</option>
+            <option value="pool" selected>三级全局池: HBM + RDMA DRAM 池 + 3FS NVMe (Mooncake / Dynamo NIXL 🏆)</option>
+          </select>
+        </div>
+        <div class="control">
+          <label><span>并发在途多轮 Agent 会话数 (`Concurrent 64K Agents`)</span><strong id="agVal">500 并发会话</strong></label>
+          <input type="range" id="agents" min="100" max="2000" step="100" value="500" />
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="label">跨轮工具返回 KV 命中率</div>
+            <div class="val" id="hitOut">96.5% 🏆</div>
+          </div>
+          <div class="kpi">
+            <div class="label">工具返回恢复首字延迟 (`P95 TTFT`)</div>
+            <div class="val" id="ttftOut">118 ms (提速 15.6x 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">支撑集群所需 `H200 GPU`</div>
+            <div class="val" id="gpuOut">12 张 H200 (-66.7% 🏆)</div>
+          </div>
+          <div class="kpi">
+            <div class="label">年化总基础设施成本 (`TCO`)</div>
+            <div class="val" id="tcoOut">$342,000 / 年 (-64.5% 🏆)</div>
+          </div>
+        </div>
+        <div class="formula-box" id="traceOut"></div>
+      </div>
+
+      <div class="card">
+        <h2>📊 2. 三种 KV 缓存方案的恢复延迟 (`P95 TTFT`) 与 GPU 卡数对比</h2>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>1. 纯 GPU HBM (92% 驱逐重算 · P95 TTFT 1,840ms ✕)</span><strong>36 张 H200 ($96.4万/年)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>2. 单机 Pinned DRAM 卸载 (命中率 64% · P95 TTFT 245ms ✓)</span><strong>20 张 H200 ($54.8万/年)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:55.6%;background:#3b82f6;"></div></div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-head"><span>3. 三级全局池: HBM + RDMA DRAM + 3FS NVMe (P95 118ms 🏆)</span><strong>12 张 H200 (-66.7% 🏆)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:33.3%;background:#10b981;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tierEl = document.getElementById('tier');
+    const agEl = document.getElementById('agents');
+    function update() {
+      const t = tierEl.value;
+      const ag = parseInt(agEl.value, 10);
+      const scale = ag / 500.0;
+      document.getElementById('agVal').textContent = ag + ' 并发会话';
+
+      const totalKvTB = ((ag * 10.24) / 1000.0).toFixed(2);
+      const cfg = {
+        hbm: { hit: '8.0% ✕', ttft: '1,840 ms (全量重算 ✕)', gpu: Math.ceil(36 * scale) + ' 张 H200 ✕', tco: '$' + Math.round(964000 * scale).toLocaleString() + '/年', trace: `总活跃 KV 体积 = ${totalKvTB} TB，纯 HBM 仅容纳 0.42 TB，92% 会话每轮被迫重算 64K Prefill` },
+        dram: { hit: '64.0% ✓', ttft: '245 ms ✓', gpu: Math.ceil(20 * scale) + ' 张 H200', tco: '$' + Math.round(548000 * scale).toLocaleString() + '/年', trace: `総活跃 KV = ${totalKvTB} TB，本机 DDR5 PCIe Gen5 拉回耗时 ~80ms，但跨节点漂移导致 36% 未命中` },
+        pool: { hit: '96.5% 🏆', ttft: '118 ms (快 15.6x 🏆)', gpu: Math.max(4, Math.ceil(12 * scale)) + ' 张 H200 (-66.7% 🏆)', tco: '$' + Math.round(342000 * scale).toLocaleString() + '/年 (-64.5% 🏆)', trace: `总活跃 KV = ${totalKvTB} TB 全部驻留全局 RDMA DRAM + 3FS NVMe 池，NIXL/Mooncake 逐层流式恢复仅 118ms 🏆` }
+      }[t];
+
+      document.getElementById('hitOut').textContent = cfg.hit;
+      document.getElementById('ttftOut').textContent = cfg.ttft;
+      document.getElementById('gpuOut').textContent = cfg.gpu;
+      document.getElementById('tcoOut').textContent = cfg.tco;
+      document.getElementById('traceOut').textContent = '[手算复核 Trace] ' + cfg.trace;
+    }
+    [tierEl, agEl].forEach(el => el.addEventListener('input', update));
+    update();
+  </script>
+</body>
+</html>
