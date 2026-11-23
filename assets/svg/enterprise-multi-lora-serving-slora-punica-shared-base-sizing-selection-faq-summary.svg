@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .card { fill: #111827; stroke: #334155; stroke-width: 1.5; rx: 12; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 19.5px; font-weight: 700; fill: #f8fafc; }
+      .sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      .h { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #38bdf8; }
+      .txt { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; fill: #e2e8f0; }
+      .good { fill: #10b981; font-weight: 700; }
+      .bad { fill: #ef4444; font-weight: 700; }
+      .warn { fill: #f59e0b; font-weight: 700; }
+    </style>
+  </defs>
+  <rect class="bg" width="1100" height="540" rx="14"/>
+  <text x="30" y="38" class="title">#517 企业百部门微调模型共池服务 (`Multi-LoRA Serving · S-LoRA / Punica`) 显存手算与选型指南</text>
+  <text x="30" y="60" class="sub">终结“一业务微调一独立 70B 实例”的 128 卡显存灾难 · 64 个 LoRA 共享 1 份基础权重仅需 8 张 H200 (立省 93.8% GPU)</text>
+
+  <!-- Left Card -->
+  <rect x="30" y="80" width="510" height="215" class="card"/>
+  <text x="48" y="108" class="h">1. 为什么“合并 LoRA 权重独立部署”会让企业破产？Multi-LoRA 如何解耦？</text>
+  <text x="48" y="132" class="txt bad">• 传统合并部署灾难 (W = W_0 + B×A): 64 个业务线各自合并出 64 份 70GB</text>
+  <text x="64" y="150" class="txt bad">完整模型，光装权重就需 4,480 GB 显存 → 被迫常驻 128 张 H200 ($343万/年 ✕)</text>
+  <text x="48" y="174" class="txt good">• Multi-LoRA 动态共池机理 (vLLM `--enable-lora` / SGLang `S-LoRA` 🏆):</text>
+  <text x="64" y="194" class="txt">① 显存解耦: 全集群仅常驻 1 份冻结的 70B FP8 基础权重 (70GB/实例)，</text>
+  <text x="64" y="214" class="txt">单个 Rank=32 LoRA 适配器仅占 420 MB (基础权重的 0.6%！)</text>
+  <text x="64" y="234" class="txt">② 混合批处理 (`y = W_0 x + B_i(A_i x)`): 同一 Batch 内 64 个不同部门请求</text>
+  <text x="64" y="254" class="txt good">共享 99% 基础矩阵乘算力 + 分页 LoRA 显存池，仅需 8 张 H200 (-93.8% 🏆)</text>
+
+  <!-- Right Card -->
+  <rect x="560" y="80" width="510" height="215" class="card"/>
+  <text x="578" y="108" class="h">2. 承载 64 个垂直微调模型的三套生产部署方案对比 (40 RPS 总流量)</text>
+  <text x="578" y="134" class="txt bad">• 方案 1 (一业务一独立合并实例 · 64 Pods): 需 128 张 H200 ✕</text>
+  <text x="594" y="152" class="txt bad">年化成本高达 $343.0 万，长尾冷门部门 GPU 91% 时间空转！</text>
+  <text x="578" y="178" class="txt warn">• 方案 2 (共享底座 + 按需从磁盘/S3 同步加载 LoRA): 虽仅需 8 张 H200，</text>
+  <text x="594" y="198" class="txt warn">但每次切换适配器阻塞 1,320ms，导致 P99 TTFT 飙至 1,650ms ✕</text>
+  <text x="578" y="224" class="txt good">• 方案 3 (vLLM / SGLang S-LoRA 共享底座 + HBM/Pinned-DRAM 预热池 🏆):</text>
+  <text x="594" y="246" class="txt good">- 32 个热 LoRA 常驻 HBM (13.4GB) + 32 个温 LoRA 驻留 Pinned DRAM (2.8ms 换入)</text>
+  <text x="594" y="268" class="txt good">- 仅需 8 张 H200 (年省 $321.6万 / -93.8% 🏆) · P99 TTFT 355ms · TPOT 14.9ms 🏆</text>
+
+  <!-- Bottom Card -->
+  <rect x="30" y="312" width="1040" height="205" class="card"/>
+  <text x="48" y="340" class="h">3. 支撑 64 个业务微调模型所需的 H200 GPU 卡数与年化 TCO 对比 (越短越省)</text>
+
+  <text x="48" y="378" class="txt">方案 1: 合并权重独立实例 (64 Pods)</text>
+  <rect x="305" y="364" width="500" height="16" fill="#ef4444" rx="4"/>
+  <text x="815" y="378" class="txt bad">128 张 H200 ($343.0万/年 · 权重显存重复膨胀 64 倍 ✕)</text>
+
+  <text x="48" y="418" class="txt">方案 2: 磁盘同步换入 LoRA</text>
+  <rect x="305" y="404" width="31" height="16" fill="#f59e0b" rx="4"/>
+  <text x="346" y="418" class="txt warn">8 张 H200 | 但每次切模型阻塞 1.32s → P99 TTFT 1,650 ms ✕</text>
+
+  <text x="48" y="458" class="txt good">方案 3: vLLM/SGLang S-LoRA 共池 🏆</text>
+  <rect x="305" y="444" width="31" height="16" fill="#10b981" rx="4"/>
+  <text x="346" y="458" class="txt good">仅需 8 张 H200 (立省 93.8% 卡 / 年省 $321.6万 🏆) | P99 TTFT 355ms · TPOT 14.9ms 🏆</text>
+</svg>
