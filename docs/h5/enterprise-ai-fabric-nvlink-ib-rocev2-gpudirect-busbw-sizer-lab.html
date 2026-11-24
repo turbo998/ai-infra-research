@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#565 智算高速互联网络：Scale-Up (NVLink) vs. Scale-Out (IB/RoCEv2)、GPUDirect 与 busbw 交互精读页</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 16px 56px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--good);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #0284c7, #10b981);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    .subtitle { color: #cbd5e1; font-size: 14px; margin: 0; }
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .kpi-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kpi-box .lbl { font-size: 12px; color: var(--muted); }
+    .kpi-box .val { font-size: 20px; font-weight: 800; color: var(--good); margin-top: 4px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16.5px;
+      margin: 0 0 12px;
+      color: var(--accent);
+      border-left: 3px solid var(--good);
+      padding-left: 10px;
+    }
+    .control { margin-bottom: 11px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input[type="range"], select {
+      width: 100%;
+      padding: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .bar-row { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+    .bar-bg { height: 20px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      color: #6ee7b7;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.7); }
+    svg { width: 100%; height: auto; display: block; border-radius: 8px; background: #0b1120; border: 1px solid var(--border); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/06-rdma-roce-nvlink.html">🎓 H5 Academy 第06册</a>
+      <a href="../components/enterprise-ai-fabric-nvlink-ib-rocev2-gpudirect-busbw-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-ai-fabric-nvlink-ib-rocev2-gpudirect-busbw-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-ai-fabric-nvlink-ib-rocev2-gpudirect-busbw-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-ai-fabric-nvlink-ib-rocev2-gpudirect-busbw-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#565 · PILLAR 2 · NVLINK / INFINIBAND / ROCEV2 &amp; BUSBW SIZER LAB</span>
+      <div data-lang="zh">
+        <h1>🌐 智算高速互联网络：Scale-Up (NVLink/NVSwitch) vs. Scale-Out (IB/RoCEv2)、GPUDirect RDMA 零拷贝与 `algbw/busbw` 交互精读页</h1>
+        <p class="subtitle">3 分钟看懂 GPUDirect RDMA BAR1 零拷贝路径、ECN 早于 PFC 防死锁水线与 Rail-Optimized + PXN 拓扑；10 分钟亲手换算 nccl-tests `algbw` 与 `busbw` 验收红线。</p>
+      </div>
+      <div data-lang="en">
+        <h1>🌐 Enterprise AI High-Speed Fabric: Scale-Up (NVLink) vs. Scale-Out (IB/RoCEv2), GPUDirect RDMA &amp; `algbw/busbw` Interactive Lab</h1>
+        <p class="subtitle">Visualize GPUDirect RDMA PCIe Switch zero-copy paths, ECN/PFC/DCQCN lossless buffer watermarks, Rail-Optimized topologies, and interactively compute NCCL `algbw` to `busbw` efficiency.</p>
+      </div>
+      <div class="kpi-strip">
+        <div class="kpi-box"><div class="lbl">400G RoCEv2 实测总线带宽 (busbw)</div><div class="val">47.6 GB/s (95.2% 线速)</div></div>
+        <div class="kpi-box"><div class="lbl">GPUDirect RDMA 零拷贝提速比</div><div class="val">4.25x (47.6 vs 11.2 GB/s)</div></div>
+        <div class="kpi-box"><div class="lbl">GPU-to-GPU RDMA 端到端延迟</div><div class="val">2.4 μs (较 TCP 快 19.4x)</div></div>
+        <div class="kpi-box"><div class="lbl">Rail 拓扑节省网络 CapEx</div><div class="val">-34.5% ($3,150 vs $4,810/卡)</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left: SVG GPUDirect RDMA Path & ECN/PFC Buffer Watermark Diagram -->
+      <div class="card">
+        <h2 data-lang="zh">📐 图解 1：GPUDirect RDMA 零拷贝路径 vs. CPU Bounce 降速陷阱 &amp; ECN/PFC 水线</h2>
+        <h2 data-lang="en">📐 Visual 1: GPUDirect RDMA Zero-Copy Data Path &amp; ECN/PFC Buffer Watermarks</h2>
+        <svg viewBox="0 0 600 325" aria-label="GPUDirect RDMA Zero Copy and ECN PFC Watermarks">
+          <rect width="600" height="325" fill="#0b1120"/>
+          <text x="16" y="24" fill="#38bdf8" font-size="12.5" font-weight="bold">① PCIe 拓扑对比：为什么必须加载 nvidia-peermem 并关闭 PCIe ACS？</text>
+          <!-- Bad Path -->
+          <rect x="16" y="34" width="568" height="54" rx="6" fill="#450a0a" stroke="#ef4444"/>
+          <text x="26" y="54" fill="#fca5a5" font-size="11.5" font-weight="bold">❌ 未开 GPUDirect / 未关 ACS：GPU HBM → CPU Root Complex → Host DRAM → 400G NIC</text>
+          <text x="26" y="74" fill="#fecaca" font-size="11">两次 PCIe 拷贝 + CPU 内存控制器瓶颈 → 400G 网卡 (50 GB/s) 实测跌至 11.2~14.2 GB/s (掉速 75%!) </text>
+
+          <!-- Good Path -->
+          <rect x="16" y="96" width="568" height="60" rx="6" fill="#064e3b" stroke="#10b981"/>
+          <text x="26" y="116" fill="#ecfdf5" font-size="11.5" font-weight="bold">🏆 GPUDirect RDMA (PIX 同 PCIe Switch 直通)：GPU HBM BAR1 ↔ PCIe Gen5 Switch ↔ 400G NIC</text>
+          <text x="26" y="138" fill="#a7f3d0" font-size="11">绕过 CPU 与系统内存，零拷贝 DMA 直传 → 实测 busbw 高达 47.6 GB/s (95.2% 线速 · 延迟 2.4 μs)</text>
+
+          <!-- Bottom Half: Switch Buffer Watermarks -->
+          <line x1="16" y1="170" x2="584" y2="170" stroke="#1e293b" stroke-width="1.5"/>
+          <text x="16" y="192" fill="#fbbf24" font-size="12.5" font-weight="bold">② 交换机队列三级流控水线（铁律：ECN 必须大幅早于 PFC 触发！）</text>
+
+          <!-- Buffer Bar -->
+          <rect x="24" y="206" width="552" height="42" rx="6" fill="#1e293b" stroke="#475569"/>
+          <!-- Green Normal Zone -->
+          <rect x="24" y="206" width="140" height="42" rx="6" fill="#10b981"/>
+          <text x="38" y="231" fill="#064e3b" font-size="11" font-weight="bold">正常转发区 (&lt;150KB)</text>
+          <!-- Amber ECN Zone -->
+          <rect x="164" y="206" width="210" height="42" fill="#f59e0b"/>
+          <text x="176" y="225" fill="#451a03" font-size="11" font-weight="bold">ECN 概率标记区 (150KB~800KB)</text>
+          <text x="176" y="241" fill="#451a03" font-size="10">回传 CNP 让源端平滑降速 (化解 99% 拥塞)</text>
+          <!-- Red PFC Zone -->
+          <rect x="374" y="206" width="120" height="42" fill="#ef4444"/>
+          <text x="382" y="225" fill="#fff" font-size="11" font-weight="bold">PFC XOFF (1.2MB)</text>
+          <text x="382" y="241" fill="#fecaca" font-size="10">紧急暂停 + 200ms 看门狗</text>
+          <!-- Headroom -->
+          <rect x="494" y="206" width="82" height="42" fill="#334155"/>
+          <text x="502" y="231" fill="#cbd5e1" font-size="10.5">飞行 Headroom</text>
+
+          <text x="24" y="274" fill="#cbd5e1" font-size="11.5">• Rail-Optimized + NCCL PXN：跨轨流量先经机内 900GB/s NVLink 换轨，90%+ 跨机流量在单台 Leaf 内一跳直达！</text>
+          <text x="24" y="298" fill="#6ee7b7" font-size="11.5" font-weight="bold">• 动态负载均衡 (DLB / Spectrum-X Packet Spraying)：彻底打破静态 5 元组 ECMP 哈希极化，链路利用率 &gt;95%。</text>
+        </svg>
+
+        <h2 style="margin-top:16px;" data-lang="zh">📊 图解 2：四种互联网络实测单通道有效带宽 (`busbw GB/s`) 与效率对比</h2>
+        <h2 style="margin-top:16px;" data-lang="en">📊 Visual 2: Effective Bus Bandwidth (`busbw`) &amp; Line-Rate Efficiency Comparison</h2>
+        <div class="bar-row">
+          <div class="bar-head"><span>❌ 未调优 400G 云以太网 (无 GPUDirect + 静态 ECMP · 线速 50 GB/s)</span><strong style="color:#f87171;">11.2 GB/s (22.4% 线速 · 严重失速)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:22.4%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 调优 400G AI 以太网 RoCEv2 (GPUDirect + Rail PXN + ECN/DLB)</span><strong style="color:#34d399;">47.6 GB/s (95.2% 线速 · 省 34.5% CapEx)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:95.2%;background:#10b981;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>⚡ 400G InfiniBand NDR (原生 Credit 无损 + SHARPv3 网内归约)</span><strong style="color:#38bdf8;">48.4 GB/s (96.8% 线速 · 万卡训练首选)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:96.8%;background:#0284c7;"></div></div>
+        </div>
+      </div>
+
+      <!-- Right: Interactive NCCL algbw/busbw & Fabric Sizer -->
+      <div class="card">
+        <h2 data-lang="zh">🧮 交互式计算器：`nccl-tests` (`algbw` ↔ `busbw`) 验收换算与集群网络 TCO 沙盘</h2>
+        <h2 data-lang="en">🧮 Interactive Sizer: `nccl-tests` (`algbw` ↔ `busbw`) Calculator &amp; Fabric CapEx Sizer</h2>
+
+        <div class="control">
+          <label><span>1. 集合通信原语 (`Collective Operation`)</span></label>
+          <select id="collOp" onchange="calcNet()">
+            <option value="allreduce" selected>AllReduce (TP / DP 梯度规约 · 修正因子 = 2(N-1)/N)</option>
+            <option value="alltoall">All-to-All / AllGather / ReduceScatter (MoE EP / FSDP · 修正因子 = (N-1)/N)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>2. 互联硬件档位 (`Interconnect Tier & Line Rate`)</span></label>
+          <select id="nicTier" onchange="calcNet()">
+            <option value="400g_roce" selected>400GbE AI Ethernet RoCEv2 (单口线速 50.0 GB/s · CapEx $3,150/GPU)</option>
+            <option value="400g_ib">400G InfiniBand NDR (单口线速 50.0 GB/s · CapEx $4,810/GPU)</option>
+            <option value="800g_xdr">800G IB XDR / 800GbE RoCEv2 (单口线速 100.0 GB/s · CapEx $6,200/GPU)</option>
+            <option value="nvlink4">Hopper NVLink 4.0 机内 (单向线速 450.0 GB/s · 机内 Scale-Up)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>3. 参与集合通信的 GPU 总卡数 (`N GPUs`)</span><strong id="nGpuLbl">64 GPUs</strong></label>
+          <input type="range" id="nGpuIn" min="8" max="512" step="8" value="64" oninput="calcNet()" />
+        </div>
+
+        <div class="control">
+          <label><span>4. 实测算法带宽 (`Measured algbw GB/s`)</span><strong id="algLbl">24.2 GB/s</strong></label>
+          <input type="range" id="algIn" min="5" max="240" step="0.5" value="24.2" oninput="calcNet()" />
+        </div>
+
+        <div class="control">
+          <label><span>5. 主机与交换机调优状态 (`Host & Switch Tuning Preset`)</span></label>
+          <select id="tunePreset" onchange="applyPreset()">
+            <option value="custom" selected>自定义滑块值 (Manual Slider Input)</option>
+            <option value="tuned_400g">一键载入：调优后 400G GPUDirect + Rail PXN + ECN/DLB (algbw=24.2 GB/s)</option>
+            <option value="untuned_400g">一键载入：未关 PCIe ACS / 无 GPUDirect 故障态 (algbw=5.7 GB/s)</option>
+          </select>
+        </div>
+
+        <div class="kpi-strip" style="margin-top:10px;">
+          <div class="kpi-box">
+            <div class="lbl">集合通信换算系数 (`Factor`)</div>
+            <div class="val" id="outFactor">1.969x</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">换算后总线带宽 (`busbw`)</div>
+            <div class="val" id="outBusbw">47.6 GB/s</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">物理线速达成率 (`Efficiency %`)</div>
+            <div class="val" id="outEff">95.3% (验收优秀 ✓)</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">全集群网络硬件 CapEx</div>
+            <div class="val" id="outCapex">$201.6K (省 $106K)</div>
+          </div>
+        </div>
+
+        <div class="formula" id="netFormula"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Card: Scale-Up vs Scale-Out Master Reference Table -->
+    <div class="card">
+      <h2 data-lang="zh">⚖️ Scale-Up (NVLink) vs. Scale-Out (InfiniBand vs. RoCEv2) 架构师全参数速查表</h2>
+      <h2 data-lang="en">⚖️ Scale-Up vs. Scale-Out Interconnect Specifications &amp; SA Selection Matrix</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>互联技术</th>
+            <th>单卡单向/双向线速</th>
+            <th>端到端延迟</th>
+            <th>无损流控与防拥塞机制</th>
+            <th>承载的并行原语与 SA 选型边界</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>NVLink 4.0 / 5.0 (NVSwitch / NVL72)</strong></td>
+            <td><code>450–900 GB/s</code> 单向<br/>(<code>900–1800 GB/s</code> 双向)</td>
+            <td><strong><code>0.7–1.2 μs</code></strong></td>
+            <td>NVSwitch 硬件信用流控 + <code>NVLS</code> 硬件规约</td>
+            <td><strong>唯一允许运行 <code>TP (张量并行)</code> 的超低延迟域</strong>（机内 8 卡或 NVL72 机柜内）</td>
+          </tr>
+          <tr>
+            <td><strong>InfiniBand NDR (400G) / XDR (800G)</strong></td>
+            <td><code>50 GB/s</code> / <code>100 GB/s</code> 单向</td>
+            <td><strong><code>1.3–1.8 μs</code></strong></td>
+            <td>物理链路层原生 Credit-Based 无损 + 自适应路由 (AR) + <code>SHARPv3</code></td>
+            <td><strong><code>&gt;= 1,024 GPU</code> 大规模同步预训练与重度跨机 MoE <code>All-to-All</code> 首选</strong></td>
+          </tr>
+          <tr>
+            <td><strong>AI Ethernet RoCEv2 (400G / 800G)</strong></td>
+            <td><code>50 GB/s</code> / <code>100 GB/s</code> 单向</td>
+            <td><strong><code>2.2–3.2 μs</code></strong></td>
+            <td><code>ECN 早标记 + DCQCN + PFC + 200ms 看门狗 + DLB/逐包喷洒</code></td>
+            <td><strong><code>&lt;= 512~1024 GPU</code> 后训练、PD 分离 KV 传输与云原生推理共池高性价比首选</strong></td>
+          </tr>
+          <tr>
+            <td><strong>PCIe Gen5 x16 (主机通道)</strong></td>
+            <td><code>64 GB/s</code> 单向 (<code>128 GB/s</code> 双向)</td>
+            <td><code>~3.5 μs</code></td>
+            <td>PCIe 事务层 Credit (必须关 <code>ACS</code> 保 P2P)</td>
+            <td>负责 GPU ↔ 同 Switch 400G 网卡 <code>GPUDirect RDMA</code> 直通，以及 GPU ↔ Host Pinned DRAM KV 卸载</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function applyPreset() {
+      const p = document.getElementById('tunePreset').value;
+      if (p === 'tuned_400g') {
+        document.getElementById('nicTier').value = '400g_roce';
+        document.getElementById('algIn').value = 24.2;
+      } else if (p === 'untuned_400g') {
+        document.getElementById('nicTier').value = '400g_roce';
+        document.getElementById('algIn').value = 5.7;
+      }
+      calcNet();
+    }
+
+    function calcNet() {
+      const op = document.getElementById('collOp').value;
+      const tier = document.getElementById('nicTier').value;
+      const n = parseInt(document.getElementById('nGpuIn').value, 10);
+      const alg = parseFloat(document.getElementById('algIn').value);
+
+      document.getElementById('nGpuLbl').textContent = n + ' GPUs';
+      document.getElementById('algLbl').textContent = alg.toFixed(1) + ' GB/s';
+
+      const factor = op === 'allreduce' ? (2.0 * (n - 1)) / n : (1.0 * (n - 1)) / n;
+      const busbw = alg * factor;
+      const lineRate = tier === 'nvlink4' ? 450.0 : (tier === '800g_xdr' ? 100.0 : 50.0);
+      const effPct = (busbw / lineRate) * 100.0;
+
+      const unitCost = tier === '400g_roce' ? 3150 : (tier === '400g_ib' ? 4810 : (tier === '800g_xdr' ? 6200 : 2800));
+      const totalCapexK = (n * unitCost) / 1000.0;
+      const ibCapexK = (n * 4810) / 1000.0;
+
+      document.getElementById('outFactor').textContent = factor.toFixed(3) + 'x';
+      document.getElementById('outBusbw').textContent = busbw.toFixed(1) + ' GB/s';
+      document.getElementById('outEff').textContent = effPct.toFixed(1) + '% ' + (effPct >= 88 ? '(验收优秀 ✓)' : (effPct < 35 ? '(GPUDirect失效 ✕)' : '(偏低需调优 ⚠️)'));
+      document.getElementById('outCapex').textContent = '$' + totalCapexK.toFixed(1) + 'K' + (tier === '400g_roce' ? ' (较IB省$' + (ibCapexK - totalCapexK).toFixed(1) + 'K)' : '');
+
+      const diag = effPct < 35
+        ? '⛔ 严重告警：当前线速达成率仅 ' + effPct.toFixed(1) + '% (<35%)，典型症状为未加载 nvidia-peermem 或未关闭主板 PCIe ACS 重定向，导致 RDMA 退化走 CPU 内存拷贝！'
+        : (effPct < 88
+          ? '⚠️ 调优建议：当前线速达成率 ' + effPct.toFixed(1) + '% 未达 90% 验收线，请检查 NCCL_PXN_DISABLE=0、ECN 水线 (150KB/800KB) 与交换机 DLB 动态负载均衡。'
+          : '✅ 验收通过：实测 busbw 达物理线速的 ' + effPct.toFixed(1) + '% (>=90%)，GPUDirect RDMA BAR1 零拷贝与无损流控工作在最优状态！');
+
+      document.getElementById('netFormula').textContent =
+        '【nccl-tests 手算复核】\n' +
+        '1. 换算公式：busbw = algbw × ' + (op === 'allreduce' ? '2(N-1)/N' : '(N-1)/N') + ' = ' + alg.toFixed(1) + ' × ' + factor.toFixed(4) + ' = ' + busbw.toFixed(2) + ' GB/s\n' +
+        '2. 单通道物理线速 = ' + lineRate.toFixed(1) + ' GB/s | 线速效率 = ' + busbw.toFixed(2) + ' / ' + lineRate.toFixed(1) + ' = ' + effPct.toFixed(1) + '%\n' +
+        '3. ' + diag;
+    }
+    calcNet();
+  </script>
+</body>
+</html>
