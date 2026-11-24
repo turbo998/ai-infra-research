@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#563 PD 分离架构、跨节点 KV Cache RDMA 带宽手算与 Dynamo / Mooncake / vLLM / SGLang 交互精读页</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 16px 56px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--good);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #0284c7, #10b981);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    .subtitle { color: #cbd5e1; font-size: 14px; margin: 0; }
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .kpi-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kpi-box .lbl { font-size: 12px; color: var(--muted); }
+    .kpi-box .val { font-size: 20px; font-weight: 800; color: var(--good); margin-top: 4px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16.5px;
+      margin: 0 0 12px;
+      color: var(--accent);
+      border-left: 3px solid var(--good);
+      padding-left: 10px;
+    }
+    .control { margin-bottom: 11px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input[type="range"], select {
+      width: 100%;
+      padding: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .bar-row { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+    .bar-bg { height: 20px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      color: #6ee7b7;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.7); }
+    svg { width: 100%; height: auto; display: block; border-radius: 8px; background: #0b1120; border: 1px solid var(--border); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/04-pd-disaggregation.html">🎓 H5 Academy 第04册</a>
+      <a href="../components/enterprise-pd-disaggregation-kv-rdma-dynamo-mooncake-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-pd-disaggregation-kv-rdma-dynamo-mooncake-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-pd-disaggregation-kv-rdma-dynamo-mooncake-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-pd-disaggregation-kv-rdma-dynamo-mooncake-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#563 · PILLAR 1 · PD DISAGGREGATION &amp; KV RDMA SIZER LAB</span>
+      <div data-lang="zh">
+        <h1>🚀 企业大模型 PD 分离架构、跨节点 KV Cache RDMA 带宽手算与四大推理栈（Dynamo / Mooncake / vLLM / SGLang）交互精读页</h1>
+        <p class="subtitle">3 分钟看懂为什么同卡混部（含 Chunked Prefill）在长上下文下仍会卡顿；10 分钟通过滑块亲手算清 GQA-8 vs. MLA 跨节点 KV 传输带宽、逐层异步重叠率与最优 P:D 实例配比。</p>
+      </div>
+      <div data-lang="en">
+        <h1>🚀 Enterprise PD Disaggregation, Cross-Node KV Cache RDMA Bandwidth Sizer &amp; Four-Stack (Dynamo / Mooncake / vLLM / SGLang) Interactive Lab</h1>
+        <p class="subtitle">Understand Prefill (Compute-Bound) vs. Decode (HBM-Bandwidth-Bound) interference via Roofline diagrams, and interactively size GQA-8 vs. MLA KV RDMA bandwidth and optimal P:D GPU ratios.</p>
+      </div>
+      <div class="kpi-strip">
+        <div class="kpi-box"><div class="lbl">流式吐字延迟 (P99 TPOT / ITL)</div><div class="val" id="topTpot">13.4 ms (提速 5.10x)</div></div>
+        <div class="kpi-box"><div class="lbl">SLA 达标有效吞吐率 (Goodput %)</div><div class="val" id="topGoodput">99.3% (+41.1 pts)</div></div>
+        <div class="kpi-box"><div class="lbl">跨节点 KV 暴露传输耗时</div><div class="val" id="topKvMs">1.0 ms (掩盖 94.2%)</div></div>
+        <div class="kpi-box"><div class="lbl">所需 H200 总卡数 &amp; $/1M 成本</div><div class="val" id="topFleet">16 GPUs (8P+8D) · $0.112</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left: SVG Architecture & Roofline Diagram -->
+      <div class="card">
+        <h2 data-lang="zh">📐 图解 1：为什么同卡混部必然卡顿？Roofline 屋顶图与逐层异步 KV 流水线</h2>
+        <h2 data-lang="en">📐 Visual 1: Why Colocated Serving Stutters — Roofline &amp; Layer-wise Async KV Pipeline</h2>
+        <svg viewBox="0 0 600 330" aria-label="PD Disaggregation Roofline and Layerwise KV Pipeline">
+          <rect width="600" height="330" fill="#0b1120"/>
+          <!-- Top Half: Roofline Conflict -->
+          <text x="16" y="24" fill="#38bdf8" font-size="12.5" font-weight="bold">① Roofline 第一性原理：Decode (访存带宽受限) vs. Prefill (Tensor Core 算力受限)</text>
+          <line x1="48" y1="145" x2="570" y2="145" stroke="#475569" stroke-width="1.5"/>
+          <line x1="48" y1="145" x2="48" y2="38" stroke="#475569" stroke-width="1.5"/>
+          <polyline points="48,145 230,52 555,52" fill="none" stroke="#38bdf8" stroke-width="3"/>
+          <line x1="230" y1="52" x2="230" y2="145" stroke="#fbbf24" stroke-dasharray="4 3" stroke-width="1.5"/>
+          <text x="175" y="46" fill="#fbbf24" font-size="10.5" font-weight="bold">H200 屋脊拐点 ≈ 412 FLOPs/B</text>
+          <circle cx="115" cy="110" r="6" fill="#10b981"/>
+          <text x="62" y="98" fill="#6ee7b7" font-size="11" font-weight="bold">Decode 池 (AI ≈ B=32~64)</text>
+          <text x="62" y="132" fill="#94a3b8" font-size="10">需独占 4.8 TB/s HBM 带宽跑 CUDA Graph</text>
+          <circle cx="430" cy="52" r="6" fill="#f59e0b"/>
+          <text x="320" y="74" fill="#fde68a" font-size="11" font-weight="bold">Prefill 池 (AI ≈ 2,048~4,096)</text>
+          <text x="320" y="92" fill="#fca5a5" font-size="10">若同卡混部，长 Prefill 瞬间挤占 Decode 达 30~220ms!</text>
+
+          <!-- Bottom Half: Layer-wise Async RDMA Overlap -->
+          <line x1="16" y1="166" x2="584" y2="166" stroke="#1e293b" stroke-width="1.5"/>
+          <text x="16" y="188" fill="#34d399" font-size="12.5" font-weight="bold">② 逐层异步 GPUDirect RDMA 传输 (Dynamo NIXL / Mooncake 掩盖 94.2% 网络耗时)</text>
+          <!-- Prefill Compute Bars -->
+          <text x="18" y="216" fill="#cbd5e1" font-size="11">Prefill 计算 (L1..L80):</text>
+          <rect x="145" y="202" width="75" height="20" rx="4" fill="#0284c7"/>
+          <text x="155" y="216" fill="#fff" font-size="10">Layer 1..20</text>
+          <rect x="224" y="202" width="75" height="20" rx="4" fill="#0284c7"/>
+          <text x="232" y="216" fill="#fff" font-size="10">Layer 21..40</text>
+          <rect x="303" y="202" width="75" height="20" rx="4" fill="#0284c7"/>
+          <text x="311" y="216" fill="#fff" font-size="10">Layer 41..60</text>
+          <rect x="382" y="202" width="75" height="20" rx="4" fill="#0284c7"/>
+          <text x="390" y="216" fill="#fff" font-size="10">Layer 61..80</text>
+
+          <!-- RDMA Async DMA Bars -->
+          <text x="18" y="248" fill="#6ee7b7" font-size="11">RDMA 异步发 KV:</text>
+          <rect x="160" y="234" width="75" height="20" rx="4" fill="#10b981"/>
+          <text x="170" y="248" fill="#064e3b" font-size="10" font-weight="bold">DMA L1..20</text>
+          <rect x="239" y="234" width="75" height="20" rx="4" fill="#10b981"/>
+          <text x="247" y="248" fill="#064e3b" font-size="10" font-weight="bold">DMA L21..40</text>
+          <rect x="318" y="234" width="75" height="20" rx="4" fill="#10b981"/>
+          <text x="326" y="248" fill="#064e3b" font-size="10" font-weight="bold">DMA L41..60</text>
+          <rect x="397" y="234" width="72" height="20" rx="4" fill="#10b981"/>
+          <text x="404" y="248" fill="#064e3b" font-size="10" font-weight="bold">DMA L61..80</text>
+
+          <!-- Exposed tail -->
+          <rect x="458" y="200" width="14" height="58" fill="rgba(251, 191, 36, 0.28)" stroke="#fbbf24"/>
+          <text x="478" y="224" fill="#fbbf24" font-size="11" font-weight="bold">仅暴露 ~1.0 ms!</text>
+          <text x="478" y="242" fill="#94a3b8" font-size="10">(串行阻塞需 17.1 ms)</text>
+
+          <!-- Decode Pool Start -->
+          <text x="18" y="284" fill="#38bdf8" font-size="11">Decode 池无缝接管:</text>
+          <rect x="474" y="270" width="104" height="22" rx="4" fill="#8b5cf6"/>
+          <text x="482" y="285" fill="#fff" font-size="10.5" font-weight="bold">Decode Token 2..N</text>
+          <text x="145" y="314" fill="#94a3b8" font-size="11">💡 关键红线：必须加载 nvidia-peermem 启用 GPUDirect RDMA 零拷贝，严禁退化至 TCP 主机内存拷贝！</text>
+        </svg>
+
+        <h2 style="margin-top:16px;" data-lang="zh">📊 图解 2：三种架构在 `30 QPS · 16K In` 下的 P99 吐字延迟与达标 Goodput 对比</h2>
+        <h2 style="margin-top:16px;" data-lang="en">📊 Visual 2: P99 TPOT Latency &amp; SLA-Compliant Goodput Across 3 Architectures</h2>
+        <div class="bar-row">
+          <div class="bar-head"><span>❌ 方案 A：传统同池混部 (Continuous Batching · 32x H200)</span><strong style="color:#f87171;">P99 TPOT: 68.4 ms · Goodput: 58.2%</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:58.2%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>⚠️ 方案 B：同池混部 + Chunked Prefill (chunk=2048 · 24x H200)</span><strong style="color:#fbbf24;">P99 TPOT: 29.6 ms · Goodput: 81.5%</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:81.5%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 方案 C：PD 分离 + 逐层异步 400G RDMA (8P+8D = 16x H200)</span><strong style="color:#34d399;">P99 TPOT: 13.4 ms · Goodput: 99.3% (-50% GPUs)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:99.3%;background:#10b981;"></div></div>
+        </div>
+      </div>
+
+      <!-- Right: Live Interactive Calculator -->
+      <div class="card">
+        <h2 data-lang="zh">🧮 交互式计算器：跨节点 KV Cache 传输带宽、暴露耗时与最优 `P:D` 算卡沙盘</h2>
+        <h2 data-lang="en">🧮 Interactive Sizer: Cross-Node KV Cache RDMA Bandwidth &amp; Optimal `P:D` Pool Calculator</h2>
+
+        <div class="control">
+          <label><span>1. 模型架构与 KV 精度 (`Model & KV Precision`)</span></label>
+          <select id="modelSel" onchange="recalc()">
+            <option value="gqa_fp8" selected>Llama-3.3-70B (GQA-8 · FP8 KV = 163.84 KB/Tok) · 企业生产标配</option>
+            <option value="gqa_bf16">Llama-3.3-70B (GQA-8 · BF16 KV = 327.68 KB/Tok) · 未量化 KV</option>
+            <option value="mla_fp8">DeepSeek-V3/R1 671B (MLA · FP8 KV = 35.14 KB/Tok · 省 4.66x 带宽!)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>2. 集群峰值请求率 (`Peak QPS`)</span><strong id="qpsLbl">30 QPS</strong></label>
+          <input type="range" id="qpsIn" min="5" max="100" step="5" value="30" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>3. 平均输入上下文长度 (`ISL / Prompt Tokens`)</span><strong id="islLbl">16,384 Tokens</strong></label>
+          <input type="range" id="islIn" min="1024" max="65536" step="1024" value="16384" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>4. 平均生成输出长度 (`OSL / Output Tokens`)</span><strong id="oslLbl">512 Tokens</strong></label>
+          <input type="range" id="oslIn" min="128" max="4096" step="128" value="512" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>5. KV 感知路由前缀缓存命中率 (`Prefix Cache Hit %`)</span><strong id="cacheLbl">70%</strong></label>
+          <input type="range" id="cacheIn" min="0" max="90" step="10" value="70" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>6. 跨节点互联网络规格 (`Inter-Node Interconnect`)</span></label>
+          <select id="netSel" onchange="recalc()">
+            <option value="400g_rdma" selected>400GbE RoCEv2 / IB NDR GPUDirect RDMA (实测 47.0 GB/s)</option>
+            <option value="200g_rdma">200GbE RoCEv2 / IB HDR GPUDirect RDMA (实测 23.5 GB/s)</option>
+            <option value="100g_rdma">100GbE RoCEv2 GPUDirect RDMA (实测 11.5 GB/s)</option>
+            <option value="25g_tcp">⚠️ 普通 25GbE TCP 以太网无 RDMA (实测 2.2 GB/s · 走 CPU 拷贝)</option>
+          </select>
+        </div>
+
+        <div class="kpi-strip" style="margin-top:10px;">
+          <div class="kpi-box">
+            <div class="lbl">单请求增量 KV 体积 (扣除缓存)</div>
+            <div class="val" id="outKvVol">0.81 GB / req</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">单请求 KV 传输 (串行 vs 逐层异步)</div>
+            <div class="val" id="outKvLat">17.1ms → 1.0ms</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">集群总 KV 传输带宽需求</div>
+            <div class="val" id="outBw">24.2 GB/s (193 Gbps)</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">推荐 H200 配比 (`P池 : D池`)</div>
+            <div class="val" id="outPdRatio">8P : 8D (共 16 卡)</div>
+          </div>
+        </div>
+
+        <div class="formula" id="calcFormula"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Card: 4-Engine Comparison & Checklist -->
+    <div class="card">
+      <h2 data-lang="zh">⚖️ 四大开源与企业级 PD 分离推理底座横向选型矩阵（`NVIDIA Dynamo` vs. `Mooncake` vs. `SGLang` vs. `vLLM V1`）</h2>
+      <h2 data-lang="en">⚖️ Four Production PD-Disaggregated Serving Stacks Comparison Matrix</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>技术栈 (Stack)</th>
+            <th>跨节点 KV 传输引擎</th>
+            <th>核心架构杀手锏</th>
+            <th>最佳适用业务场景 (SA 选型结论)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>NVIDIA Dynamo + NIXL</strong></td>
+            <td><code>NIXL</code> (NVLink / GPUDirect RDMA / DRAM / GDS 统一零拷贝抽象)</td>
+            <td>全局 KV-Aware 智能路由 + 根据队列水位动态将 Worker 在 Prefill 与 Decode 间秒级弹性变身</td>
+            <td><strong>大规模 H200 / B200 / GB200 NVL72 企业智算中心标准控制面首选</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Mooncake (Kimi / 开源)</strong></td>
+            <td><code>Mooncake Transfer Engine</code> (多网卡聚合 RDMA 拓扑感知直传)</td>
+            <td>将全集群服务器空闲 <strong>Host Pinned DRAM 聚合成 TB 级分布式 L2 KV 缓存池</strong>，具备毫秒级防过载早拒</td>
+            <td><strong>超长多轮 Agent、32K–128K RAG 与跨节点 TB 级前缀共享池首选</strong></td>
+          </tr>
+          <tr>
+            <td><strong>SGLang PD Disaggregation</strong></td>
+            <td>逐层非阻塞 RDMA + <code>Mooncake / NVSHMEM / DeepEP</code></td>
+            <td>原生 <code>RadixAttention</code> 前缀树 + 零开销 <code>XGrammar</code> + <code>DeepEP</code> 异步通信与原生 <code>MTP</code> 投机解码</td>
+            <td><strong>DeepSeek-V3/R1 671B 满血版 MoE（Attention DP + Expert EP）与极致低延迟首选</strong></td>
+          </tr>
+          <tr>
+            <td><strong>vLLM V1 + LMCache</strong></td>
+            <td>标准化 <code>KVConnector</code> API + <code>LMCache / PyNcclPipe</code></td>
+            <td>支持 100+ 主流开源模型与多芯片异构后端，Zero-CPU-Overhead V1 调度器与 K8s 生态最成熟</td>
+            <td><strong>企业多模型通用推理平台、存量 K8s/KServe 平滑升级首选</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function recalc() {
+      const m = document.getElementById('modelSel').value;
+      const qps = parseInt(document.getElementById('qpsIn').value, 10);
+      const isl = parseInt(document.getElementById('islIn').value, 10);
+      const osl = parseInt(document.getElementById('oslIn').value, 10);
+      const cachePct = parseInt(document.getElementById('cacheIn').value, 10);
+      const net = document.getElementById('netSel').value;
+
+      document.getElementById('qpsLbl').textContent = qps + ' QPS';
+      document.getElementById('islLbl').textContent = isl.toLocaleString() + ' Tokens';
+      document.getElementById('oslLbl').textContent = osl.toLocaleString() + ' Tokens';
+      document.getElementById('cacheLbl').textContent = cachePct + '%';
+
+      const kbPerTok = m === 'mla_fp8' ? 35.136 : (m === 'gqa_bf16' ? 327.68 : 163.84);
+      const layers = m === 'mla_fp8' ? 61 : 80;
+      const fullKvGb = (isl * kbPerTok) / 1e6;
+      const deltaKvGb = fullKvGb * (1 - cachePct / 100.0);
+
+      const netBw = net === '400g_rdma' ? 47.0 : (net === '200g_rdma' ? 23.5 : (net === '100g_rdma' ? 11.5 : 2.2));
+      const serialMs = (deltaKvGb / netBw) * 1000.0;
+      const exposedMs = net === '25g_tcp' ? serialMs : Math.max(0.4, serialMs * 0.058);
+      const clusterBwGbs = qps * deltaKvGb;
+      const clusterGbps = clusterBwGbs * 8.0;
+
+      // Estimate Prefill GPUs and Decode GPUs (in 4-GPU or 2-GPU increments)
+      const effInTps = qps * isl * (1 - (cachePct * 0.85) / 100.0);
+      const rawP = Math.max(2, Math.ceil(effInTps / 21000));
+      const pGpus = Math.ceil(rawP / 2) * 2;
+
+      const bActive = Math.ceil(qps * (0.45 + (osl * 0.0135)));
+      const totalKvMemGb = bActive * ((isl * 0.55 + osl) * kbPerTok / 1e6);
+      const rawD = Math.max(4, Math.ceil((totalKvMemGb + 140) / 85), Math.ceil(bActive / 22));
+      const dGpus = Math.ceil(rawD / 2) * 2;
+      const totalPdGpus = pGpus + dGpus;
+      const colocatedGpus = Math.ceil(totalPdGpus * 1.75 / 4) * 4;
+
+      document.getElementById('outKvVol').textContent = deltaKvGb.toFixed(2) + ' GB (全量 ' + fullKvGb.toFixed(2) + ' GB)';
+      document.getElementById('outKvLat').textContent = serialMs.toFixed(1) + 'ms → ' + exposedMs.toFixed(1) + 'ms';
+      document.getElementById('outBw').textContent = clusterBwGbs.toFixed(1) + ' GB/s (' + Math.round(clusterGbps) + ' Gbps)';
+      document.getElementById('outPdRatio').textContent = pGpus + 'P : ' + dGpus + 'D (共 ' + totalPdGpus + ' 卡)';
+
+      const verdict = (net === '25g_tcp')
+        ? '⛔ 架构红线警告：当前为无 RDMA 的 25GbE TCP 网络，单请求 KV 传输需 ' + serialMs.toFixed(0) + ' ms，严禁跨机 PD 分离！请保持同机 Chunked Prefill 混部。'
+        : (isl < 2048
+          ? '⚖️ 架构建议：当前输入较短 (ISL < 2K)，同池 Chunked Prefill 已足够，无需拆分 PD。'
+          : '✅ 强烈推荐开启 PD 分离：逐层异步 RDMA 将 KV 传输隐藏至 ' + exposedMs.toFixed(1) + ' ms，配 ' + pGpus + 'P:' + dGpus + 'D 共 ' + totalPdGpus + ' 张 H200（比混部 ' + colocatedGpus + ' 张省卡 ' + Math.round((1 - totalPdGpus / colocatedGpus) * 100) + '%）！');
+
+      document.getElementById('calcFormula').textContent =
+        '【手算公式复核】\n' +
+        '1. 单 Token KV = ' + kbPerTok.toFixed(2) + ' KB/Tok (' + layers + ' 层) | 单请求全量 KV = ' + isl + ' × ' + kbPerTok.toFixed(2) + ' KB = ' + fullKvGb.toFixed(2) + ' GB\n' +
+        '2. 扣除 ' + cachePct + '% Prefix Cache 后增量传输 KV = ' + deltaKvGb.toFixed(2) + ' GB/req | 集群总 KV 带宽 = ' + qps + ' QPS × ' + deltaKvGb.toFixed(2) + ' GB = ' + clusterBwGbs.toFixed(2) + ' GB/s\n' +
+        '3. ' + verdict;
+    }
+    recalc();
+  </script>
+</body>
+</html>
