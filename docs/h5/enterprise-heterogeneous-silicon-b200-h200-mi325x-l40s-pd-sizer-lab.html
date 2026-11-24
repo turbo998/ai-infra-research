@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#568 企业多代异构 GPU 底座 (B200/H200/H100/L40S/MI325X) 三道水位线对标与异构 PD 编排交互精读页</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 16px 56px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--accent);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #0284c7, #10b981);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    .subtitle { color: #cbd5e1; font-size: 14px; margin: 0; }
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .kpi-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kpi-box .lbl { font-size: 12px; color: var(--muted); }
+    .kpi-box .val { font-size: 20px; font-weight: 800; color: var(--good); margin-top: 4px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16.5px;
+      margin: 0 0 12px;
+      color: var(--accent);
+      border-left: 3px solid var(--good);
+      padding-left: 10px;
+    }
+    .control { margin-bottom: 11px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input[type="range"], select {
+      width: 100%;
+      padding: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .bar-row { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+    .bar-bg { height: 20px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      color: #6ee7b7;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.7); }
+    svg { width: 100%; height: auto; display: block; border-radius: 8px; background: #0b1120; border: 1px solid var(--border); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/03-gpu-sizing.html">🎓 H5 Academy 第03册</a>
+      <a href="../components/enterprise-heterogeneous-silicon-b200-h200-mi325x-l40s-pd-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-heterogeneous-silicon-b200-h200-mi325x-l40s-pd-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-heterogeneous-silicon-b200-h200-mi325x-l40s-pd-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-heterogeneous-silicon-b200-h200-mi325x-l40s-pd-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#568 · CROSS-PILLAR SYNTHESIS · HETEROGENEOUS SILICON &amp; PD ROLE ORCHESTRATION LAB</span>
+      <div data-lang="zh">
+        <h1>🧩 企业多代异构 GPU 底座（B200 / H200 / H100 / L40S / MI325X）三道水位线对标与异构 PD 分离派工交互精读页</h1>
+        <p class="subtitle">直观揭秘为什么 H100 与 H200 在 Prefill 上算力 1:1 打平、而在 Decode 上 H200/MI325X/B200 凭借超高 HBM3e 带宽与容量碾压胜出；实时测算异构 PD 编排如何省下 38.8% 成本。</p>
+      </div>
+      <div data-lang="en">
+        <h1>🧩 Enterprise Heterogeneous AI Accelerator Fleet (B200 / H200 / H100 / L40S / MI325X) 3-Watermark &amp; PD Role Sizer Lab</h1>
+        <p class="subtitle">Match hardware Roofline DNA to PD Disaggregation roles: pair compute-dense H100 Prefill nodes with bandwidth-rich H200/MI325X/B200 Decode nodes and L40S Tier-1 workers.</p>
+      </div>
+      <div class="kpi-strip">
+        <div class="kpi-box"><div class="lbl">异构 PD 编排流式延迟 (P99 TPOT)</div><div class="val">11.8 ms (较 L40S 快 4.77x)</div></div>
+        <div class="kpi-box"><div class="lbl">双 SLA 达标有效吞吐率 (Goodput)</div><div class="val">99.4% (+67.4 pts)</div></div>
+        <div class="kpi-box"><div class="lbl">H200 vs H100 单卡 Decode 增益</div><div class="val">1.58x (1,820 vs 1,150 tok/s)</div></div>
+        <div class="kpi-box"><div class="lbl">达标百万 Token 成本 ($/1M)</div><div class="val">$0.082 / 1M (再省 38.8%)</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left: SVG 5-Silicon Bandwidth/Capacity Comparison & Role Dispatch -->
+      <div class="card">
+        <h2 data-lang="zh">📐 图解 1：五大加速卡 HBM 带宽 vs. 显存容量矩阵与异构 PD 黄金派工</h2>
+        <h2 data-lang="en">📐 Visual 1: 5-Silicon HBM Bandwidth vs. Capacity &amp; Heterogeneous PD Dispatch</h2>
+        <svg viewBox="0 0 600 320" aria-label="Five Accelerator Hardware DNA and Heterogeneous PD Role Assignment">
+          <rect width="600" height="320" fill="#0b1120"/>
+          <text x="16" y="24" fill="#38bdf8" font-size="12.5" font-weight="bold">① 五大加速卡显存带宽 (TB/s · 决定 TPOT) 与单卡显存 (GB · 决定并发 KV)</text>
+
+          <!-- B200 -->
+          <text x="18" y="52" fill="#34d399" font-size="11" font-weight="bold">B200 (180~192G):</text>
+          <rect x="145" y="38" width="360" height="18" rx="4" fill="#10b981"/>
+          <text x="512" y="52" fill="#6ee7b7" font-size="11" font-weight="bold">8.0 TB/s (6.4ms)</text>
+
+          <!-- MI325X -->
+          <text x="18" y="78" fill="#38bdf8" font-size="11" font-weight="bold">MI325X (256G):</text>
+          <rect x="145" y="64" width="270" height="18" rx="4" fill="#0284c7"/>
+          <text x="422" y="78" fill="#38bdf8" font-size="11" font-weight="bold">6.0 TB/s (10.8ms)</text>
+
+          <!-- H200 -->
+          <text x="18" y="104" fill="#6ee7b7" font-size="11" font-weight="bold">H200 (141G):</text>
+          <rect x="145" y="90" width="216" height="18" rx="4" fill="#059669"/>
+          <text x="368" y="104" fill="#a7f3d0" font-size="11" font-weight="bold">4.8 TB/s (11.8ms)</text>
+
+          <!-- H100 -->
+          <text x="18" y="130" fill="#fbbf24" font-size="11" font-weight="bold">H100 (80G):</text>
+          <rect x="145" y="116" width="151" height="18" rx="4" fill="#f59e0b"/>
+          <text x="304" y="130" fill="#fde68a" font-size="11">3.35 TB/s (与H200同算力 → 最佳Prefill卡!)</text>
+
+          <!-- L40S -->
+          <text x="18" y="156" fill="#fca5a5" font-size="11" font-weight="bold">L40S (48G GDDR6):</text>
+          <rect x="145" y="142" width="39" height="18" rx="4" fill="#ef4444"/>
+          <text x="192" y="156" fill="#f87171" font-size="11" font-weight="bold">0.86 TB/s + 无 NVLink (70B TPOT=56.3ms ✕)</text>
+
+          <!-- Bottom Half: Heterogeneous PD Flow -->
+          <line x1="16" y1="174" x2="584" y2="174" stroke="#1e293b" stroke-width="1.5"/>
+          <text x="16" y="196" fill="#6ee7b7" font-size="12.5" font-weight="bold">② 异构 PD 编排流水线：为什么 H100 做 Prefill + H200/MI325X 做 Decode 最省钱？</text>
+          <rect x="18" y="210" width="166" height="92" rx="8" fill="#1e293b" stroke="#fbbf24"/>
+          <text x="28" y="230" fill="#fbbf24" font-size="11.5" font-weight="bold">1. L40S 前置分流池</text>
+          <text x="28" y="249" fill="#cbd5e1" font-size="10.5">• Embedding / Reranker</text>
+          <text x="28" y="266" fill="#cbd5e1" font-size="10.5">• MinerU 文档版面解析</text>
+          <text x="28" y="283" fill="#fde68a" font-size="10.5">• 8B FP8 简单问答拦截</text>
+
+          <rect x="204" y="210" width="176" height="92" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+          <text x="214" y="230" fill="#38bdf8" font-size="11.5" font-weight="bold">2. H100 Prefill 算力池</text>
+          <text x="214" y="249" fill="#cbd5e1" font-size="10.5">• 1,979 TFLOPS FP8 满算力</text>
+          <text x="214" y="266" fill="#cbd5e1" font-size="10.5">• 算完即发 KV，不占显存</text>
+          <text x="214" y="283" fill="#38bdf8" font-size="10.5">• 卡时单价较 H200 省 28%!</text>
+
+          <rect x="400" y="210" width="184" height="92" rx="8" fill="#064e3b" stroke="#10b981"/>
+          <text x="410" y="230" fill="#ecfdf5" font-size="11.5" font-weight="bold">3. H200 / MI325X Decode 池</text>
+          <text x="410" y="249" fill="#a7f3d0" font-size="10.5">• 4.8~6.0 TB/s HBM3e 带宽</text>
+          <text x="410" y="266" fill="#a7f3d0" font-size="10.5">• 141~256GB 存百路长 KV</text>
+          <text x="410" y="283" fill="#ffffff" font-size="10.5" font-weight="bold">• TPOT 11.8ms · $0.082/1M</text>
+        </svg>
+
+        <h2 style="margin-top:16px;" data-lang="zh">📊 图解 2：三种集群硬件编排方案的 SLA Goodput 与有效成本对比</h2>
+        <h2 style="margin-top:16px;" data-lang="en">📊 Visual 2: SLA Goodput % &amp; Effective Cost Across 3 Fleet Assignments</h2>
+        <div class="bar-row">
+          <div class="bar-head"><span>❌ 方案 A：误用 L40S (TP=4 PCIe) 跑 70B 在线服务 (TPOT 56.3ms)</span><strong style="color:#f87171;">Goodput: 32.0% · $0.340 / 1M</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:32.0%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>⚠️ 方案 B：全量同构 H200 同池混部 (Prefill 阶段浪费大显存溢价)</span><strong style="color:#fbbf24;">Goodput: 91.2% · $0.134 / 1M</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:91.2%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 方案 C：异构 PD 编排 (H100 Prefill + H200/MI325X Decode)</span><strong style="color:#34d399;">Goodput: 99.4% · $0.082 / 1M (省38.8%)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:99.4%;background:#10b981;"></div></div>
+        </div>
+      </div>
+
+      <!-- Right: Interactive Heterogeneous GPU Sizer -->
+      <div class="card">
+        <h2 data-lang="zh">🧮 交互式计算器：五款 GPU 三道水位线实测对比与异构 PD 配比沙盘</h2>
+        <h2 data-lang="en">🧮 Interactive Sizer: 5-Accelerator Three-Watermark &amp; Heterogeneous PD Sizer</h2>
+
+        <div class="control">
+          <label><span>1. 选择 Decode 池加速卡型号 (`Decode Pool Accelerator SKU`)</span></label>
+          <select id="decGpu" onchange="calcHet()">
+            <option value="h200" selected>NVIDIA H200 SXM (141GB HBM3e · 4.8 TB/s · NVLink 900GB/s)</option>
+            <option value="b200">NVIDIA B200 SXM (180GB HBM3e · 8.0 TB/s · NVLink 1800GB/s)</option>
+            <option value="mi325x">AMD Instinct MI325X (256GB HBM3e · 6.0 TB/s · 896GB/s IF)</option>
+            <option value="h100">NVIDIA H100 SXM (80GB HBM3 · 3.35 TB/s · NVLink 900GB/s)</option>
+            <option value="l40s">⚠️ NVIDIA L40S PCIe (48GB GDDR6 · 864 GB/s · 无 NVLink)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>2. 选择 Prefill 池加速卡型号 (`Prefill Pool Accelerator SKU`)</span></label>
+          <select id="preGpu" onchange="calcHet()">
+            <option value="h100" selected>🏆 NVIDIA H100 SXM 80GB (与 H200 同享 1979 TFLOPS FP8，单价省 28%)</option>
+            <option value="h200">NVIDIA H200 SXM 141GB (同构部署)</option>
+            <option value="b200">NVIDIA B200 SXM (4500 TFLOPS FP8 超高算力密度)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>3. 业务峰值请求率 (`Peak QPS`)</span><strong id="hetQpsLbl">30 QPS</strong></label>
+          <input type="range" id="hetQpsIn" min="10" max="100" step="5" value="30" oninput="calcHet()" />
+        </div>
+
+        <div class="control">
+          <label><span>4. 平均上下文长度 (`ISL + OSL Tokens`)</span><strong id="hetSeqLbl">12,288 Tokens</strong></label>
+          <input type="range" id="hetSeqIn" min="2048" max="32768" step="2048" value="12288" oninput="calcHet()" />
+        </div>
+
+        <div class="kpi-strip" style="margin-top:10px;">
+          <div class="kpi-box">
+            <div class="lbl">所选 Decode 卡 `P99 TPOT`</div>
+            <div class="val" id="hetTpot">11.8 ms (达标 ✓)</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">单套 TP=4 副本可用 KV 显存</div>
+            <div class="val" id="hetKvMem">410 GB (208 路会话)</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">异构 PD 推荐卡数 (`P池 + D池`)</div>
+            <div class="val" id="hetFleet">6x H100 + 8x H200</div>
+          </div>
+          <div class="kpi-box">
+            <div class="lbl">有效每百万 Token 成本 (`$/1M`)</div>
+            <div class="val" id="hetCost">$0.082 / 1M (省38.8%)</div>
+          </div>
+        </div>
+
+        <div class="formula" id="hetFormula"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function calcHet() {
+      const dec = document.getElementById('decGpu').value;
+      const pre = document.getElementById('preGpu').value;
+      const qps = parseInt(document.getElementById('hetQpsIn').value, 10);
+      const seq = parseInt(document.getElementById('hetSeqIn').value, 10);
+
+      document.getElementById('hetQpsLbl').textContent = qps + ' QPS';
+      document.getElementById('hetSeqLbl').textContent = seq.toLocaleString() + ' Tokens';
+
+      const specs = {
+        b200:   { name: 'B200',   hbm: 180, bw: 8.0,  tpot: 6.4,  tps: 3420, costFactor: 1.38 },
+        mi325x: { name: 'MI325X', hbm: 256, bw: 6.0,  tpot: 10.8, tps: 1980, costFactor: 0.92 },
+        h200:   { name: 'H200',   hbm: 141, bw: 4.8,  tpot: 11.8, tps: 1820, costFactor: 1.00 },
+        h100:   { name: 'H100',   hbm: 80,  bw: 3.35, tpot: 16.5, tps: 1150, costFactor: 0.72 },
+        l40s:   { name: 'L40S',   hbm: 48,  bw: 0.86, tpot: 56.3, tps: 390,  costFactor: 0.38 }
+      };
+
+      const dSpec = specs[dec];
+      const pSpec = specs[pre];
+      const tp4TotalHbm = dSpec.hbm * 4 * 0.85;
+      const availKvGb = Math.max(24, Math.round(tp4TotalHbm - 70));
+      const kvPerReqGb = (seq * 163.84) / 1e6;
+      const maxSessionsPerTp4 = Math.floor(availKvGb / kvPerReqGb);
+
+      const pGpus = Math.max(4, Math.ceil((qps * (seq / 12288.0)) / (pre === 'b200' ? 11.0 : 5.2)) * 2);
+      const dGpus = Math.max(4, Math.ceil((qps * (seq / 12288.0)) / (dSpec.tps / 450.0)) * 4);
+      const unitCost = dec === 'l40s' ? 0.340 : ((pGpus * pSpec.costFactor + dGpus * dSpec.costFactor) / (qps * 4.8)).toFixed(3);
+
+      document.getElementById('hetTpot').textContent = dSpec.tpot.toFixed(1) + ' ms ' + (dSpec.tpot <= 18 ? '(达标 ✓)' : '(超时违约 ✕)');
+      document.getElementById('hetKvMem').textContent = availKvGb + ' GB (' + maxSessionsPerTp4 + ' 路会话)';
+      document.getElementById('hetFleet').textContent = pGpus + 'x ' + pSpec.name + ' + ' + dGpus + 'x ' + dSpec.name;
+      document.getElementById('hetCost').textContent = '$' + unitCost + ' / 1M';
+
+      const msg = dec === 'l40s'
+        ? '⛔ 架构红线拦截：L40S 仅有 864 GB/s GDDR6 带宽且无 NVLink，跑 70B TP=4 时 P99 TPOT 恶化至 56.3 ms！请将 L40S 改为前置 Embedding/OCR/8B 池，70B Decode 改用 H200/MI325X/B200。'
+        : '✅ 异构 PD 最优匹配：Prefill 池采用 ' + pGpus + ' 张 ' + pSpec.name + ' 压榨 Tensor Core 算力，Decode 池采用 ' + dGpus + ' 张 ' + dSpec.name + ' (' + dSpec.bw + ' TB/s HBM 带宽 + 单副本 ' + availKvGb + ' GB 可用 KV 显存)，P99 TPOT 稳定在 ' + dSpec.tpot + ' ms！';
+
+      document.getElementById('hetFormula').textContent =
+        '【异构算力三道水位线复核】\n' +
+        '1. Decode 池 (' + dSpec.name + ' TP=4)：4卡安全显存 = ' + Math.round(tp4TotalHbm) + ' GB | 扣除 70B FP8 权重后可用 KV 池 = ' + availKvGb + ' GB (可容纳 ' + maxSessionsPerTp4 + ' 路 ' + seq + '-Token 并发会话)\n' +
+        '2. 第二道水位线 (HBM 带宽 = ' + dSpec.bw + ' TB/s)：单步吐字延迟 P99 TPOT = ' + dSpec.tpot + ' ms | 单卡有效吞吐 = ' + dSpec.tps + ' tok/s\n' +
+        '3. ' + msg;
+    }
+    calcHet();
+  </script>
+</body>
+</html>
