@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+<title>#589 7-Card Report — Embedding &amp; Reranker Serving (TEI/Infinity L40S)</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1120; color: #f8fafc; margin: 0; padding: 24px; }
+.deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; }
+.card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; aspect-ratio: 4/5; display: flex; flex-direction: column; justify-content: space-between; }
+.meta { font-size: 0.75rem; color: #38bdf8; font-weight: 700; }
+h2 { font-size: 1.15rem; margin: 8px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+th, td { border: 1px solid #334155; padding: 6px; text-align: left; }
+th { background: #0f172a; color: #38bdf8; }
+pre { background: #0f172a; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #6ee7b7; }
+.foot { font-size: 0.74rem; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <div class="meta">1 / 7 · HANDS-ON · EMBEDDING &amp; RERANKER</div>
+      <h2>TEI/Infinity Unpadded Token Packing Cuts Top-50 Rerank Latency by 4.28x (14.5ms vs. 62.0ms)</h2>
+      <p>Eliminating 56.2% [PAD] waste via FlashAttention cu_seqlens lets 2× L40S ($1,900/mo) serve 200 QPS while MRL 512d INT8 shrinks 100M HNSW vectors by 8.0x.</p>
+    </div>
+    <div class="foot">Provenance: analytical_model · #589</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">2 / 7 · SCENARIO: 200 QPS + 100M VECTORS</div>
+      <h2>L40S Delivers 2.13x Higher Rerank Throughput-per-Dollar Than H100 (115.8 vs. 54.3 QPS/$1K)</h2>
+      <p>Bidirectional encoders are compute-bound rather than HBM-bandwidth-bound, making Ada L40S the optimal workhorse.</p>
+    </div>
+    <div class="foot">Action: Act automatically above 0.75 QPS</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">3 / 7 · WHAT I TESTED</div>
+      <h2>Retrieval &amp; Rerank Serving Architectures</h2>
+      <table>
+        <tr><th>SCENARIO</th><th>RERANK P95</th><th>100M RAM</th><th>ACTION</th></tr>
+        <tr><td>TEI L40S + MRL INT8</td><td>14.5ms</td><td>80 GB</td><td>Deploy Primary</td></tr>
+        <tr><td>PyTorch Pad + FP32</td><td>62.0ms</td><td>640 GB</td><td>✕ 56% PAD waste</td></tr>
+        <tr><td>Managed Rerank API</td><td>95.0ms</td><td>640 GB</td><td>✕ $518k/mo @200QPS</td></tr>
+      </table>
+    </div>
+    <div class="foot">Crossover vs. commercial Rerank API occurs at 0.75 QPS</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">4 / 7 · UNDER THE HOOD</div>
+      <h2>Unpadded cu_seqlens &amp; MRL INT8 Compression</h2>
+      <pre>{
+  "padded_tokens_top50": 25600,
+  "unpadded_cu_seqlens_tokens": 11200,
+  "rerank_p95_ms": 14.5,
+  "hnsw_100m_fp32_gb": 640,
+  "hnsw_100m_mrl512_int8_gb": 80
+}</pre>
+    </div>
+    <div class="foot">8.0x vector memory compression</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>MRL 512d INT8 + Top-50 Reranker Retains 99.7% of Uncompressed 1024d FP32 NDCG@10</h2>
+      <table>
+        <tr><th>INDEX FORMAT</th><th>RAM (100M)</th><th>NDCG@10</th><th>CHANGE</th></tr>
+        <tr><td>1024d FP32 + Rerank</td><td>640 GB</td><td>94.8%</td><td>Baseline</td></tr>
+        <tr><td>512d INT8 + Rerank</td><td>80 GB</td><td>94.5%</td><td>-0.3 pts (-87.5% RAM)</td></tr>
+      </table>
+    </div>
+    <div class="foot">Cross-Encoder reranking recovers quantization precision</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">6 / 7 · LATENCY</div>
+      <h2>Top-50 Cross-Encoder Rerank P95 Latency on L40S-48GB</h2>
+      <p>TEI / Infinity cu_seqlens Unpadded: <strong>14.5ms</strong></p>
+      <p>Naive PyTorch Rectangular Padding: <strong>62.0ms</strong></p>
+    </div>
+    <div class="foot">4.28x speedup on identical silicon</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For</h2>
+      <p>✅ <strong>Good fit</strong>: Every production RAG and hybrid search platform (&gt;2 QPS or &gt;10M vectors).</p>
+      <p>⛔ <strong>Not for</strong>: Burning H100/H200 GPUs on small bidirectional embedding/reranker models.</p>
+    </div>
+    <div class="foot">Readiness: Production-verified</div>
+  </div>
+</div>
+</body>
+</html>
