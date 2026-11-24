@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#571 企业多租户 RAG 与 Agent 平台：ACL 前置过滤、双层防串单缓存与 Envoy GIE KV 路由交互精读页</title>
+  <style>
+    :root { --bg:#070b14; --panel:#111827; --card:#1e293b; --border:#334155; --text:#f8fafc; --muted:#94a3b8; --accent:#38bdf8; --good:#10b981; --warn:#f59e0b; --bad:#ef4444; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+    .container { max-width:1280px; margin:0 auto; padding:20px 16px 56px; }
+    .nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; align-items:center; }
+    .nav a, .nav button { color:var(--accent); text-decoration:none; font-size:13px; padding:6px 12px; border:1px solid var(--border); border-radius:8px; background:var(--card); cursor:pointer; font-weight:600; }
+    .hero { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); border:1px solid var(--border); border-left:5px solid var(--good); border-radius:14px; padding:22px; margin-bottom:20px; }
+    .badge { display:inline-block; background:linear-gradient(135deg,#0284c7,#10b981); color:#fff; font-size:11.5px; font-weight:800; padding:3px 10px; border-radius:999px; margin-bottom:8px; }
+    h1 { font-size:22px; margin:4px 0 8px; }
+    .subtitle { color:#cbd5e1; font-size:14px; margin:0; }
+    .kpi-strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:16px; }
+    .kpi-box { background:#0f172a; border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+    .kpi-box .lbl { font-size:12px; color:var(--muted); }
+    .kpi-box .val { font-size:20px; font-weight:800; color:var(--good); margin-top:4px; }
+    .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(460px,1fr)); gap:18px; margin-bottom:20px; }
+    @media (max-width:600px) { .grid-2 { grid-template-columns:1fr; } }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:18px; }
+    .card h2 { font-size:16.5px; margin:0 0 12px; color:var(--accent); border-left:3px solid var(--good); padding-left:10px; }
+    .control { margin-bottom:11px; }
+    .control label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; color:#cbd5e1; }
+    input[type="range"], select { width:100%; padding:6px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; }
+    .bar-row { margin:10px 0; }
+    .bar-head { display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
+    .bar-bg { height:20px; background:var(--card); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+    .bar-fill { height:100%; transition:width 0.25s; }
+    .formula { background:#0f172a; border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:12px; font-family:Consolas,Monaco,monospace; font-size:12.5px; color:#6ee7b7; margin-top:10px; white-space:pre-wrap; }
+    svg { width:100%; height:auto; display:block; border-radius:8px; background:#0b1120; border:1px solid var(--border); }
+    [data-lang="en"] { display:none; }
+    body.en [data-lang="zh"] { display:none; }
+    body.en [data-lang="en"] { display:block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../components/enterprise-multitenant-rag-acl-semantic-prefix-kv-gateway-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-multitenant-rag-acl-semantic-prefix-kv-gateway-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-multitenant-rag-acl-semantic-prefix-kv-gateway-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-multitenant-rag-acl-semantic-prefix-kv-gateway-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#571 · MULTI-TENANT RAG &amp; AGENT CACHING · ACL PRE-FILTER &amp; ENVOY GIE LAB</span>
+      <div data-lang="zh">
+        <h1>🛡️ 企业多租户 RAG 与 Agent 推理平台：ACL 前置权限过滤、防串单语义缓存与 Envoy GIE 前缀 KV 路由交互精读页</h1>
+        <p class="subtitle">破解 Post-Filter 零召回饥饿与裸开余弦语义缓存 11.8% 张冠李戴事故，通过 Pre-Filter Bitmap + 实体强校验 L1 + Envoy GIE L2 Prefix KV 将 P95 TTFT 压至 210ms 并省 62.5% GPU。</p>
+      </div>
+      <div data-lang="en">
+        <h1>🛡️ Enterprise Multi-Tenant RAG &amp; Agent Platform: Pre-Filter ACL, Entity-Verified Semantic Cache &amp; Envoy GIE KV Routing Lab</h1>
+        <p class="subtitle">Eliminate Post-Filter zero-result starvation and 11.8% semantic cache collisions while lifting Prefix KV Cache hit rate to 91.5% and saving 62.5% GPUs.</p>
+      </div>
+      <div class="kpi-strip">
+        <div class="kpi-box"><div class="lbl">小权限租户召回率 (Recall@10)</div><div class="val">96.4% (较后置过滤+55.2pts)</div></div>
+        <div class="kpi-box"><div class="lbl">语义缓存串单率 (False Positive)</div><div class="val">0.02% (较裸开降 590x)</div></div>
+        <div class="kpi-box"><div class="lbl">引擎 Prefix KV 命中率 &amp; TTFT</div><div class="val">91.5% · 210 ms (快 6.9x)</div></div>
+        <div class="kpi-box"><div class="lbl">所需 H200 总卡数 &amp; $/1M 成本</div><div class="val">12 GPUs (-62.5%) · $0.068</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>📐 图解 1：Pre-Filter ACL 位图过滤 + L1/L2 双层防串单缓存流水线</h2>
+        <svg viewBox="0 0 600 280" aria-label="Multi-Tenant Pre-Filter ACL and Two-Layer Caching Pipeline">
+          <rect width="600" height="280" fill="#0b1120"/>
+          <rect x="16" y="16" width="568" height="74" rx="8" fill="#450a0a" stroke="#ef4444"/>
+          <text x="28" y="38" fill="#fca5a5" font-size="12" font-weight="bold">❌ 两大常见生产事故：① Post-Filter 零召回 + ② 裸开余弦语义缓存张冠李戴</text>
+          <text x="28" y="58" fill="#fecaca" font-size="11">• 后置过滤：全库搜 Top-20 后剔除 98% 无权限切片 → 剩余 0 条有效上下文 (Recall 41.2%)</text>
+          <text x="28" y="76" fill="#fecaca" font-size="11">• 裸语义缓存：“2025年报销标准”与“2026年报销标准”余弦达 0.962 → 11.8% 答非所问/跨租户泄密!</text>
+
+          <rect x="16" y="104" width="274" height="160" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+          <text x="28" y="126" fill="#38bdf8" font-size="12" font-weight="bold">✅ 第一步：L1 租户隔离+实体校验缓存</text>
+          <text x="28" y="148" fill="#cbd5e1" font-size="11">• Key 前缀绑定 Tenant_ID + ACL_Bitmap</text>
+          <text x="28" y="168" fill="#cbd5e1" font-size="11">• 正则/GLiNER 强校验数字/日期/单号一致</text>
+          <text x="28" y="188" fill="#cbd5e1" font-size="11">• Cross-Encoder &gt;= 0.96 才放行</text>
+          <text x="28" y="212" fill="#6ee7b7" font-size="11" font-weight="bold">• 拦截 24% 高频单轮 FAQ (12ms 零GPU)</text>
+          <text x="28" y="232" fill="#fde68a" font-size="11">• 误命中率压至 0.02%!</text>
+
+          <rect x="306" y="104" width="278" height="160" rx="8" fill="#064e3b" stroke="#10b981"/>
+          <text x="318" y="126" fill="#ecfdf5" font-size="12" font-weight="bold">🏆 第二步：Pre-Filter RAG + L2 GIE 路由</text>
+          <text x="318" y="148" fill="#a7f3d0" font-size="11">• 向量库先求 ACL 位图交集再搜 Top-20</text>
+          <text x="318" y="168" fill="#a7f3d0" font-size="11">• Envoy GIE 按文档块前缀哈希粘性派单</text>
+          <text x="318" y="188" fill="#ffffff" font-size="11">• vLLM/SGLang 复用 91.5% Prefix KV</text>
+          <text x="318" y="212" fill="#6ee7b7" font-size="11" font-weight="bold">• P95 TTFT 仅 210ms · Recall 96.4%</text>
+          <text x="318" y="232" fill="#fde68a" font-size="11">• 12 张 H200 顶替 32 张 (-62.5%)</text>
+        </svg>
+
+        <h2 style="margin-top:16px;">📊 图解 2：三种架构的底层 Prefix KV 缓存命中率与所需 GPU 对比</h2>
+        <div class="bar-row">
+          <div class="bar-head"><span>❌ 方案 A：Post-Filter + 无缓存 + L7 轮询网关 (32x H200)</span><strong style="color:#f87171;">KV 命中: 18.0% · TTFT 1,450ms</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:18.0%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>⚠️ 方案 B：裸开余弦语义缓存 + L7 轮询 (11.8% 串单事故 · 20x H200)</span><strong style="color:#fbbf24;">KV 命中: 22.5% · 串单率 11.8% ✕</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:22.5%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 方案 C：Pre-Filter + 实体校验 L1 + Envoy GIE L2 (12x H200)</span><strong style="color:#34d399;">KV 命中: 91.5% · TTFT 210ms (-62.5%卡)</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:91.5%;background:#10b981;"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🧮 交互式计算器：多租户 RAG 召回率、双层缓存命中与 GPU 算卡沙盘</h2>
+        <div class="control">
+          <label><span>1. 平台峰值请求率 (`Peak QPS`)</span><strong id="ragQpsLbl">40 QPS</strong></label>
+          <input type="range" id="ragQpsIn" min="10" max="120" step="5" value="40" oninput="calcRag()" />
+        </div>
+        <div class="control">
+          <label><span>2. 租户可见文档权限占比 (`Tenant ACL Document Share %`)</span><strong id="aclPctLbl">2% (部门级私密文档)</strong></label>
+          <input type="range" id="aclPctIn" min="1" max="50" step="1" value="2" oninput="calcRag()" />
+        </div>
+        <div class="control">
+          <label><span>3. 缓存与网关路由策略 (`Caching & Gateway Architecture`)</span></label>
+          <select id="ragModeSel" onchange="calcRag()">
+            <option value="opt" selected>🏆 Pre-Filter ACL + 实体校验 L1 语义缓存 + Envoy GIE L2 Prefix KV</option>
+            <option value="naive_sem">⚠️ 裸开余弦语义缓存 (cos&gt;0.90) + 普通轮询网关</option>
+            <option value="post_rr">❌ Post-Filter 后置权限过滤 + 无缓存 + 普通轮询网关</option>
+          </select>
+        </div>
+
+        <div class="kpi-strip" style="margin-top:10px;">
+          <div class="kpi-box"><div class="lbl">权限过滤后有效 `Recall@10`</div><div class="val" id="ragRecall">96.4% ✓</div></div>
+          <div class="kpi-box"><div class="lbl">语义串单 / 误命中率</div><div class="val" id="ragFp">0.02% (安全 ✓)</div></div>
+          <div class="kpi-box"><div class="lbl">首字延迟 `P95 TTFT`</div><div class="val" id="ragTtft">210 ms</div></div>
+          <div class="kpi-box"><div class="lbl">所需 H200 &amp; $/1M 成本</div><div class="val" id="ragGpus">12 GPUs · $0.068</div></div>
+        </div>
+
+        <div class="formula" id="ragFormula"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function calcRag() {
+      const qps = parseInt(document.getElementById('ragQpsIn').value, 10);
+      const acl = parseInt(document.getElementById('aclPctIn').value, 10);
+      const m = document.getElementById('ragModeSel').value;
+
+      document.getElementById('ragQpsLbl').textContent = qps + ' QPS';
+      document.getElementById('aclPctLbl').textContent = acl + '%';
+
+      const scale = qps / 40.0;
+      if (m === 'post_rr') {
+        const rec = Math.min(91.0, 32.0 + acl * 4.6).toFixed(1);
+        const g = Math.ceil(32 * scale / 4) * 4;
+        document.getElementById('ragRecall').textContent = rec + '% (饥饿 ✕)';
+        document.getElementById('ragFp').textContent = '0.00%';
+        document.getElementById('ragTtft').textContent = '1,450 ms ✕';
+        document.getElementById('ragGpus').textContent = g + ' GPUs · $0.240';
+      } else if (m === 'naive_sem') {
+        const g = Math.ceil(20 * scale / 4) * 4;
+        document.getElementById('ragRecall').textContent = '78.5% ⚠️';
+        document.getElementById('ragFp').textContent = '11.80% (严重串单 ✕)';
+        document.getElementById('ragTtft').textContent = '640 ms';
+        document.getElementById('ragGpus').textContent = g + ' GPUs · $0.145';
+      } else {
+        const g = Math.max(4, Math.ceil(12 * scale / 4) * 4);
+        document.getElementById('ragRecall').textContent = '96.4% ✓';
+        document.getElementById('ragFp').textContent = '0.02% (安全 ✓)';
+        document.getElementById('ragTtft').textContent = '210 ms (快6.9x)';
+        document.getElementById('ragGpus').textContent = g + ' GPUs · $0.068';
+      }
+
+      document.getElementById('ragFormula').textContent =
+        '【多租户 RAG 与双层缓存手算复核】\n' +
+        '• 当租户可见文档占比仅 ' + acl + '% 时，Post-Filter Top-20 命中合法文档期望数仅 ' + (20 * acl / 100.0).toFixed(1) + ' 条；Pre-Filter Bitmap 图内过滤保障 100% 满额召回 (Recall@10 = 96.4%)\n' +
+        '• L1 实体校验语义缓存拦截 24% 单轮 FAQ + L2 Envoy GIE 前缀哈希路由复用 91.5% Prefix KV → P95 TTFT 压至 210 ms，立省 62.5% GPU！';
+    }
+    calcRag();
+  </script>
+</body>
+</html>
