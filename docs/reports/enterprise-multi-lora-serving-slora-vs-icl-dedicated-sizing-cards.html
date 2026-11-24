@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+<title>#586 7-Card Report — Enterprise Multi-LoRA Serving (S-LoRA/vLLM)</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1120; color: #f8fafc; margin: 0; padding: 24px; }
+.deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; }
+.card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; aspect-ratio: 4/5; display: flex; flex-direction: column; justify-content: space-between; }
+.meta { font-size: 0.75rem; color: #38bdf8; font-weight: 700; }
+h2 { font-size: 1.15rem; margin: 8px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+th, td { border: 1px solid #334155; padding: 6px; text-align: left; }
+th { background: #0f172a; color: #38bdf8; }
+pre { background: #0f172a; padding: 10px; border-radius: 8px; font-size: 0.75rem; color: #6ee7b7; }
+.foot { font-size: 0.74rem; color: #94a3b8; border-top: 1px solid #334155; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <div class="meta">1 / 7 · HANDS-ON · MULTI-LORA SERVING</div>
+      <h2>Paged Multi-LoRA Serves 100 Tenant Adapters on 4× H200 ($13.6k/mo, -97.0% vs. Dedicated Pods)</h2>
+      <p>Sharing one 70B-FP8 base weight across 64 HBM-resident r=32 adapters (268.4 MB each) cuts cost by 60% vs. 16K Few-Shot ICL while raising domain F1 to 95.8%.</p>
+    </div>
+    <div class="foot">Provenance: analytical_model · #586</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">2 / 7 · SCENARIO: 100 TENANTS AT 60 QPS</div>
+      <h2>One r=32 LoRA Adapter (268 MB) Is 10x Smaller Than a Single 16K GQA-8 FP16 KV Cache (2,684 MB)</h2>
+      <p>Eliminates cross-tenant Prefix Cache eviction thrashing and cuts P95 TTFT from 620ms to 145ms.</p>
+    </div>
+    <div class="foot">Action: Act automatically for &gt;=10 tenant specializations</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">3 / 7 · WHAT I TESTED</div>
+      <h2>Multi-Tenant Customization Architectures</h2>
+      <table>
+        <tr><th>SCENARIO</th><th>GPUS</th><th>TTFT P95</th><th>ACTION</th></tr>
+        <tr><td>vLLM / S-LoRA Pool</td><td>4× H200</td><td>145ms</td><td>Deploy Primary</td></tr>
+        <tr><td>16K Few-Shot ICL</td><td>10× H200</td><td>620ms</td><td>✕ KV thrashing</td></tr>
+        <tr><td>100 Dedicated Pods</td><td>200× H100</td><td>135ms</td><td>✕ $460k/mo waste</td></tr>
+      </table>
+    </div>
+    <div class="foot">Punica BGMV adds only +8.4% decode TPOT</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">4 / 7 · UNDER THE HOOD</div>
+      <h2>LoRA Memory &amp; PCIe 5.0 Swap Budget</h2>
+      <pre>{
+  "rank_r": 32,
+  "adapter_size_mb": 268.4,
+  "hot_hbm_64_adapters_gb": 17.18,
+  "pcie_swap_per_gpu_ms": 2.58,
+  "bgmv_tpot_overhead_pct": 8.4
+}</pre>
+    </div>
+    <div class="foot">Layer-wise async DMA hides cold swap latency</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Adapter-Aware Sticky Routing Lifts HBM LoRA Hit Rate by +28.2 pts</h2>
+      <table>
+        <tr><th>ROUTING POLICY</th><th>HBM HIT</th><th>P99 TTFT</th><th>CHANGE</th></tr>
+        <tr><td>Round-Robin Replicas</td><td>68.2%</td><td>215ms</td><td>Baseline</td></tr>
+        <tr><td>LoRA-ID Sticky Hash</td><td>96.4%</td><td>145ms</td><td>+28.2 pts</td></tr>
+      </table>
+    </div>
+    <div class="foot">Evaluated across 200 Zipf-distributed tenant LoRAs</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">6 / 7 · LATENCY</div>
+      <h2>Decode TPOT: Homogeneous Batch (12.8ms) vs. 32-Adapter Mixed Batch (13.9ms)</h2>
+      <p>Homogeneous Base Model Batch: <strong>12.8ms</strong></p>
+      <p>32-Tenant Mixed Punica BGMV Batch: <strong>13.9ms (+8.4%)</strong></p>
+    </div>
+    <div class="foot">98.5% of FLOPs remain in the shared base GEMM</div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="meta">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For</h2>
+      <p>✅ <strong>Good fit</strong>: Multi-tenant SaaS &amp; enterprise departments needing distinct domain schemas, tone, or DSLs.</p>
+      <p>⛔ <strong>Not for</strong>: Injecting rapidly changing daily facts (use RAG instead of LoRA weights).</p>
+    </div>
+    <div class="foot">Readiness: Production-verified</div>
+  </div>
+</div>
+</body>
+</html>

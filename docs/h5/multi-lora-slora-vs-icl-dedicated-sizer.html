@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<title>#586 企业级多租户 Multi-LoRA (S-LoRA/vLLM) vs. 16K ICL 容量与成本沙盘</title>
+<style>
+:root { --bg: #0b1120; --panel: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --blue: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; }
+header { background: #0f172a; border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+h1 { font-size: 1.48rem; color: var(--blue); margin-bottom: 6px; }
+.sub { color: var(--muted); font-size: 0.92rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.card h2 { font-size: 1.12rem; color: var(--green); margin-bottom: 14px; }
+.control { margin-bottom: 14px; }
+.control label { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px; }
+input[type=range], select { width: 100%; padding: 6px; background: #0f172a; color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+.kpi { background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+.kpi .val { font-size: 1.25rem; font-weight: 700; color: var(--blue); }
+.kpi .lbl { font-size: 0.78rem; color: var(--muted); }
+.bar-row { margin-bottom: 10px; }
+.bar-label { display: flex; justify-content: space-between; font-size: 0.84rem; margin-bottom: 3px; }
+.bar-bg { background: #0f172a; height: 22px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.bar-fill { height: 100%; transition: width 0.25s; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 10px; }
+th, td { border: 1px solid var(--border); padding: 9px 10px; text-align: left; }
+th { background: #0f172a; color: var(--blue); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>#586 企业级多租户 Multi-LoRA (S-LoRA / vLLM) vs. 16K Few-Shot ICL vs. 独立实例容量沙盘</h1>
+    <div class="sub">Cloud &amp; AI Solution Architect 交互精读页 · 实时测算单个 LoRA 显存体积、HBM 热池槽位占用、PCIe 换入延迟与三方案 TCO 拐点</div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>1. 租户规模与 LoRA 秩参数设置</h2>
+      <div class="control">
+        <label><span>定制租户/子域适配器总数 (Total Tenant LoRAs)</span><strong id="tenantsVal">100 个租户</strong></label>
+        <input type="range" id="tenants" min="10" max="500" step="10" value="100">
+      </div>
+      <div class="control">
+        <label><span>全平台汇总峰值吞吐 (Aggregate Peak QPS)</span><strong id="qpsVal">60 QPS</strong></label>
+        <input type="range" id="qps" min="10" max="300" step="10" value="60">
+      </div>
+      <div class="control">
+        <label><span>LoRA Rank 秩大小 (Rank r on 70B Base)</span></label>
+        <select id="rank">
+          <option value="16">r = 16 (单适配器 134.2 MB · 极速轻量)</option>
+          <option value="32" selected>r = 32 (单适配器 268.4 MB · 生产黄金标准)</option>
+          <option value="64">r = 64 (单适配器 536.9 MB · 重度领域迁移)</option>
+        </select>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="val" id="loraMbOut">268.4 MB</div><div class="lbl">单个 LoRA 权重体积</div></div>
+        <div class="kpi"><div class="val" id="gpuOut">4× H200 ($13.6k)</div><div class="lbl">Multi-LoRA 所需集群</div></div>
+        <div class="kpi"><div class="val" id="saveOut">97.0% / 60.0%</div><div class="lbl">相比独立实例 / ICL 节省</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. 三种定制化架构月度成本对比</h2>
+      <div class="bar-row">
+        <div class="bar-label"><span>A. 独立微调实例 (每租户独占 2× H100)</span><strong id="cDedTxt">$460,000 / 月</strong></div>
+        <div class="bar-bg"><div class="bar-fill" id="cDedBar" style="width:100%;background:#ef4444;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>B. 共享底座 + 16K Few-Shot ICL (KV 缓存抖动)</span><strong id="cIclTxt">$34,000 / 月</strong></div>
+        <div class="bar-bg"><div class="bar-fill" id="cIclBar" style="width:18%;background:#f59e0b;"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>C. 共享底座 + vLLM / S-LoRA 动态混部</span><strong id="cLoraTxt">$13,600 / 月</strong></div>
+        <div class="bar-bg"><div class="bar-fill" id="cLoraBar" style="width:6%;background:#10b981;"></div></div>
+      </div>
+      <p style="font-size:0.84rem;color:var(--muted);margin-top:12px;" id="memNote">HBM 常驻 64 个活跃 LoRA 仅占 17.18 GB (单卡 8.59 GB @ TP=2)，Pinned DRAM 换入耗时 2.6ms。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. 为什么常驻 LoRA 权重比缓存 16K 少样本 Prompt 更省显存？</h2>
+    <table>
+      <thead>
+        <tr><th>对比项 (Llama-3.3-70B / Qwen2.5-72B)</th><th>16K Few-Shot ICL (GQA-8 FP16 KV)</th><th>r=32 动态 Multi-LoRA (FP16)</th><th>架构师结论</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>单租户常驻 HBM 显存占用</strong></td>
+          <td>2,684.4 MB (FP16) / 1,342.2 MB (FP8)</td>
+          <td><strong>268.4 MB</strong></td>
+          <td>LoRA 权重比单条 16K KV 缓存小 <strong>5–10 倍</strong></td>
+        </tr>
+        <tr>
+          <td><strong>单次请求新增 Prefill 算力</strong></td>
+          <td>缓存未命中时需重算 16,384 tokens (620ms)</td>
+          <td><strong>仅算 512 tokens 用户指令 (145ms)</strong></td>
+          <td>彻底消除跨租户长前缀驱逐重算风暴</td>
+        </tr>
+        <tr>
+          <td><strong>Decode 阶段 TPOT 影响</strong></td>
+          <td>读取庞大 16K KV Cache 抢占 HBM 带宽</td>
+          <td><strong>Punica BGMV 核函数仅增 +8.4% TPOT</strong></td>
+          <td>底座 98.5% 算力仍按大 Batch 合并执行</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function update() {
+  const tenants = parseInt(document.getElementById('tenants').value, 10);
+  const qps = parseInt(document.getElementById('qps').value, 10);
+  const rank = parseInt(document.getElementById('rank').value, 10);
+
+  document.getElementById('tenantsVal').textContent = tenants + ' 个租户';
+  document.getElementById('qpsVal').textContent = qps + ' QPS';
+
+  const loraMb = (2 * 80 * 7 * 8192 * rank * 2) / (1024 * 1024);
+  const hotCount = Math.min(tenants, 64);
+  const hotGb = (hotCount * loraMb) / 1024;
+  const swapMs = (loraMb / 2) / 52.0;
+
+  const loraGpus = Math.max(2, Math.ceil(qps / 30.0) * 2);
+  const iclGpus = Math.max(4, Math.ceil(qps / 12.0) * 2);
+  const dedGpus = tenants * 2;
+
+  const loraCost = loraGpus * 3400;
+  const iclCost = iclGpus * 3400;
+  const dedCost = dedGpus * 2300;
+
+  document.getElementById('loraMbOut').textContent = loraMb.toFixed(1) + ' MB';
+  document.getElementById('gpuOut').textContent = `${loraGpus}× H200 ($${(loraCost/1000).toFixed(1)}k)`;
+  document.getElementById('saveOut').textContent = `${((1 - loraCost/dedCost)*100).toFixed(1)}% / ${((1 - loraCost/iclCost)*100).toFixed(1)}%`;
+
+  document.getElementById('cDedTxt').textContent = '$' + dedCost.toLocaleString() + ' / 月 (' + dedGpus + '× H100)';
+  document.getElementById('cIclTxt').textContent = '$' + iclCost.toLocaleString() + ' / 月 (' + iclGpus + '× H200)';
+  document.getElementById('cLoraTxt').textContent = '$' + loraCost.toLocaleString() + ' / 月 (' + loraGpus + '× H200)';
+
+  document.getElementById('cIclBar').style.width = Math.min(100, Math.max(8, iclCost / dedCost * 100)) + '%';
+  document.getElementById('cLoraBar').style.width = Math.min(100, Math.max(4, loraCost / dedCost * 100)) + '%';
+  document.getElementById('memNote').textContent = `HBM 常驻 ${hotCount} 个活跃 LoRA 仅占 ${hotGb.toFixed(2)} GB (单卡 ${(hotGb/2).toFixed(2)} GB @ TP=2)，Pinned DRAM 按层换入耗时 ${swapMs.toFixed(1)}ms。`;
+}
+['tenants', 'qps', 'rank'].forEach(id => document.getElementById(id).addEventListener('input', update));
+update();
+</script>
+</body>
+</html>
