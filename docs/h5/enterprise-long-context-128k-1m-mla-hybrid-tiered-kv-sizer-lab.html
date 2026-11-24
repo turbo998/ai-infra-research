@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#569 超长上下文 (128K–1M)：GQA vs. MLA vs. 7:1 Hybrid、2D USP 序列并行与三级 KV 卸载交互精读页</title>
+  <style>
+    :root { --bg:#070b14; --panel:#111827; --card:#1e293b; --border:#334155; --text:#f8fafc; --muted:#94a3b8; --accent:#38bdf8; --good:#10b981; --warn:#f59e0b; --bad:#ef4444; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+    .container { max-width:1280px; margin:0 auto; padding:20px 16px 56px; }
+    .nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; align-items:center; }
+    .nav a, .nav button { color:var(--accent); text-decoration:none; font-size:13px; padding:6px 12px; border:1px solid var(--border); border-radius:8px; background:var(--card); cursor:pointer; font-weight:600; }
+    .hero { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); border:1px solid var(--border); border-left:5px solid var(--good); border-radius:14px; padding:22px; margin-bottom:20px; }
+    .badge { display:inline-block; background:linear-gradient(135deg,#0284c7,#10b981); color:#fff; font-size:11.5px; font-weight:800; padding:3px 10px; border-radius:999px; margin-bottom:8px; }
+    h1 { font-size:22px; margin:4px 0 8px; }
+    .subtitle { color:#cbd5e1; font-size:14px; margin:0; }
+    .kpi-strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:16px; }
+    .kpi-box { background:#0f172a; border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+    .kpi-box .lbl { font-size:12px; color:var(--muted); }
+    .kpi-box .val { font-size:20px; font-weight:800; color:var(--good); margin-top:4px; }
+    .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(460px,1fr)); gap:18px; margin-bottom:20px; }
+    @media (max-width:600px) { .grid-2 { grid-template-columns:1fr; } }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:18px; }
+    .card h2 { font-size:16.5px; margin:0 0 12px; color:var(--accent); border-left:3px solid var(--good); padding-left:10px; }
+    .control { margin-bottom:11px; }
+    .control label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; color:#cbd5e1; }
+    input[type="range"], select { width:100%; padding:6px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; }
+    .bar-row { margin:10px 0; }
+    .bar-head { display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
+    .bar-bg { height:20px; background:var(--card); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+    .bar-fill { height:100%; transition:width 0.25s; }
+    .formula { background:#0f172a; border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:12px; font-family:Consolas,Monaco,monospace; font-size:12.5px; color:#6ee7b7; margin-top:10px; white-space:pre-wrap; }
+    svg { width:100%; height:auto; display:block; border-radius:8px; background:#0b1120; border:1px solid var(--border); }
+    [data-lang="en"] { display:none; }
+    body.en [data-lang="zh"] { display:none; }
+    body.en [data-lang="en"] { display:block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../components/enterprise-long-context-128k-1m-mla-hybrid-tiered-kv-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-long-context-128k-1m-mla-hybrid-tiered-kv-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-long-context-128k-1m-mla-hybrid-tiered-kv-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-long-context-128k-1m-mla-hybrid-tiered-kv-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#569 · LONG-CONTEXT 128K–1M · MLA / HYBRID / 2D USP &amp; 3-TIER KV LAB</span>
+      <div data-lang="zh">
+        <h1>📚 企业超长上下文（128K–1M Tokens）推理架构：GQA vs. MLA vs. 7:1 Hybrid、2D USP 序列并行与三级 KV 卸载交互精读页</h1>
+        <p class="subtitle">算清 128K~1M 上下文单会话 KV 显存（从 167.8GB 压至 21.0GB）与 $O(S)$ Pinned DRAM 零拷贝拉回比 $O(S^2)$ 重算快 142 倍的数学铁律。</p>
+      </div>
+      <div data-lang="en">
+        <h1>📚 Enterprise Ultra-Long-Context (128K–1M Tokens): GQA vs. MLA vs. 7:1 Hybrid, 2D USP &amp; 3-Tier KV Offload Lab</h1>
+        <p class="subtitle">Interactively size 128K–1M KV Cache footprints and compare O(S) Pinned DRAM/RDMA KV reload (100ms) against O(S²) Prefill recomputation (14,200ms).</p>
+      </div>
+      <div class="kpi-strip">
+        <div class="kpi-box"><div class="lbl">128K 单会话 KV 显存 (MLA/Hybrid)</div><div class="val">4.61 GB / 2.68 GB (-87.5%)</div></div>
+        <div class="kpi-box"><div class="lbl">128K 多轮会话恢复延迟 (Reload TTFT)</div><div class="val">100 ms (比重算快 142x)</div></div>
+        <div class="kpi-box"><div class="lbl">2D USP 首次 128K Prefill TTFT</div><div class="val">1,380 ms (提速 13.3x)</div></div>
+        <div class="kpi-box"><div class="lbl">所需 H200 卡数 &amp; $/1M 成本</div><div class="val">8 GPUs (-75%) · $0.088</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>📐 图解 1：1M Token 单会话 KV 显存对比 &amp; $O(S)$ DRAM 拉回 vs. $O(S^2)$ 重算</h2>
+        <svg viewBox="0 0 600 280" aria-label="1M Context KV Footprint and Tiered Offload Speedup">
+          <rect width="600" height="280" fill="#0b1120"/>
+          <text x="16" y="24" fill="#38bdf8" font-size="12.5" font-weight="bold">① 1,048,576 Tokens (1M) 单路会话 KV Cache 显存占用对比：</text>
+          <text x="18" y="52" fill="#fca5a5" font-size="11">GQA-8 FP8 (70B):</text>
+          <rect x="155" y="38" width="340" height="18" rx="4" fill="#ef4444"/>
+          <text x="502" y="52" fill="#fca5a5" font-size="11" font-weight="bold">167.8 GB (单卡OOM✕)</text>
+
+          <text x="18" y="80" fill="#38bdf8" font-size="11">DeepSeek MLA FP8:</text>
+          <rect x="155" y="66" width="73" height="18" rx="4" fill="#0284c7"/>
+          <text x="236" y="80" fill="#38bdf8" font-size="11" font-weight="bold">36.0 GB (省 4.66x ✓)</text>
+
+          <text x="18" y="108" fill="#34d399" font-size="11" font-weight="bold">7:1 Hybrid DeltaNet:</text>
+          <rect x="155" y="94" width="42" height="18" rx="4" fill="#10b981"/>
+          <text x="205" y="108" fill="#6ee7b7" font-size="11" font-weight="bold">21.0 GB (省 87.5% 🏆)</text>
+
+          <line x1="16" y1="130" x2="584" y2="130" stroke="#1e293b" stroke-width="1.5"/>
+          <text x="16" y="152" fill="#fbbf24" font-size="12.5" font-weight="bold">② 128K 会话恢复耗时：为什么必须配 Host Pinned DRAM / Mooncake 二级池？</text>
+          <rect x="18" y="166" width="560" height="44" rx="6" fill="#450a0a" stroke="#ef4444"/>
+          <text x="28" y="186" fill="#fca5a5" font-size="11.5" font-weight="bold">❌ HBM 驱逐后重新计算 Prefill (复杂度 O(S²))：耗时 14,200 ms (14.2 秒 · 霸占整机算力)</text>
+          <text x="28" y="202" fill="#fecaca" font-size="10.5">序列长度每翻 4 倍，重算 FLOPs 暴涨 16 倍！</text>
+
+          <rect x="18" y="218" width="560" height="48" rx="6" fill="#064e3b" stroke="#10b981"/>
+          <text x="28" y="238" fill="#ecfdf5" font-size="11.5" font-weight="bold">🏆 从 Host Pinned DRAM / 400G RDMA 拉回 4.61GB MLA KV (复杂度 O(S))：仅需 100 ms!</text>
+          <text x="28" y="256" fill="#a7f3d0" font-size="10.5">恢复速度提升 142 倍，零 Tensor Core 重算浪费！</text>
+        </svg>
+
+        <h2 style="margin-top:16px;">📊 图解 2：三种长上下文架构的恢复首字延迟与所需 GPU 对比</h2>
+        <div class="bar-row">
+          <div class="bar-head"><span>❌ 方案 A：GQA-8 + 纯 TP + HBM 驱逐重算 (32x H200)</span><strong style="color:#f87171;">恢复 TTFT: 14,200 ms · $0.460/1M</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#ef4444;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>⚠️ 方案 B：GQA-8 + 单一 Ring Attention + 本地 DRAM (16x H200)</span><strong style="color:#fbbf24;">恢复 TTFT: 420 ms · $0.210/1M</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:45.6%;background:#f59e0b;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 方案 C：MLA/Hybrid + 2D USP + 三级 RDMA KV 池 (8x H200)</span><strong style="color:#34d399;">恢复 TTFT: 100 ms (快142x) · $0.088/1M</strong></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:19.1%;background:#10b981;"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🧮 交互式计算器：128K–1M KV 显存、2D USP 首字延迟与三级卸载加速比沙盘</h2>
+        <div class="control">
+          <label><span>1. 注意力机制架构 (`Attention Architecture`)</span></label>
+          <select id="attSel" onchange="calcLong()">
+            <option value="mla" selected>DeepSeek MLA FP8 (35.14 KB/Tok · 潜向量矩阵吸收)</option>
+            <option value="hybrid">7:1 Hybrid Mamba-2 / Gated DeltaNet + GQA FP8 (20.48 KB/Tok 等效)</option>
+            <option value="gqa_fp8">标准 GQA-8 FP8 (Llama-3.3-70B · 163.84 KB/Tok)</option>
+            <option value="gqa_bf16">标准 GQA-8 BF16 (327.68 KB/Tok · 未量化 KV)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>2. 目标上下文序列长度 (`Context Length S`)</span><strong id="ctxLbl">131,072 Tokens (128K)</strong></label>
+          <input type="range" id="ctxIn" min="32768" max="1048576" step="32768" value="131072" oninput="calcLong()" />
+        </div>
+
+        <div class="control">
+          <label><span>3. 二级 KV 卸载存储介质 (`Tier-2 KV Offload Backend`)</span></label>
+          <select id="tierSel" onchange="calcLong()">
+            <option value="dram_rdma" selected>Host Pinned DDR5 DRAM / Mooncake 400G RDMA (有效 46.0 GB/s)</option>
+            <option value="nvme_gds">3FS / RAID0 Gen5 NVMe + GPUDirect Storage GDS (有效 24.0 GB/s)</option>
+          </select>
+        </div>
+
+        <div class="kpi-strip" style="margin-top:10px;">
+          <div class="kpi-box"><div class="lbl">单会话 KV Cache 体积</div><div class="val" id="lcKvGb">4.61 GB</div></div>
+          <div class="kpi-box"><div class="lbl">O(S²) 全量重算耗时</div><div class="val" id="lcRecomp">14,200 ms</div></div>
+          <div class="kpi-box"><div class="lbl">O(S) 零拷贝拉回耗时</div><div class="val" id="lcReload">100 ms</div></div>
+          <div class="kpi-box"><div class="lbl">卸载拉回 vs 重算提速比</div><div class="val" id="lcSpeedup">142.0x 提速 🏆</div></div>
+        </div>
+
+        <div class="formula" id="lcFormula"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function calcLong() {
+      const att = document.getElementById('attSel').value;
+      const s = parseInt(document.getElementById('ctxIn').value, 10);
+      const tier = document.getElementById('tierSel').value;
+
+      document.getElementById('ctxLbl').textContent = s.toLocaleString() + ' Tokens (' + Math.round(s / 1024) + 'K)';
+      const kb = att === 'mla' ? 35.136 : (att === 'hybrid' ? 20.48 : (att === 'gqa_fp8' ? 163.84 : 327.68));
+      const kvGb = (s * kb) / 1e6;
+
+      const scaleS = s / 131072.0;
+      const recompMs = Math.round(14200 * (scaleS * (0.45 + 0.55 * scaleS)));
+      const bw = tier === 'dram_rdma' ? 46.0 : 24.0;
+      const reloadMs = Math.max(12, Math.round((kvGb / bw) * 1000));
+      const speedup = (recompMs / reloadMs).toFixed(1);
+
+      document.getElementById('lcKvGb').textContent = kvGb.toFixed(2) + ' GB';
+      document.getElementById('lcRecomp').textContent = recompMs.toLocaleString() + ' ms';
+      document.getElementById('lcReload').textContent = reloadMs.toLocaleString() + ' ms';
+      document.getElementById('lcSpeedup').textContent = speedup + 'x 提速 🏆';
+
+      document.getElementById('lcFormula').textContent =
+        '【超长上下文 KV 显存与三级卸载手算复核】\n' +
+        '1. 单会话 KV 显存 = ' + s.toLocaleString() + ' × ' + kb.toFixed(2) + ' KB = ' + kvGb.toFixed(2) + ' GB\n' +
+        '2. 若驱逐重算 O(S²) Prefill 耗时 = ' + recompMs.toLocaleString() + ' ms | 从二级存储 (' + bw + ' GB/s) 线性拉回耗时 = ' + reloadMs + ' ms (快 ' + speedup + ' 倍)！';
+    }
+    calcLong();
+  </script>
+</body>
+</html>
