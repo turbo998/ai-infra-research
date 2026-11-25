@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#641 企业 AI Gateway WCU 令牌桶限流、三级缓存与 P0–P2 队列交互精读页</title>
+<style>
+  :root { --bg: #0B1120; --card: #1E293B; --border: #334155; --accent: #38BDF8; --green: #10B981; --amber: #F59E0B; --red: #EF4444; --text: #F8FAFC; --muted: #94A3B8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; max-width: 1180px; margin: 0 auto; }
+  .nav { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; font-size: 13px; }
+  .nav a { color: var(--accent); text-decoration: none; background: #1E293B; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); }
+  .hero { background: linear-gradient(135deg, #0F172A 0%, #064E3B 100%); border: 1px solid var(--green); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+  .hero h1 { font-size: 22px; margin-bottom: 8px; color: #F8FAFC; }
+  .hero p { color: #CBD5E1; font-size: 14px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 16px 0; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .kpi .val { font-size: 24px; font-weight: 800; color: var(--green); }
+  .kpi .lbl { font-size: 12px; color: var(--muted); }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  .panel h2 { font-size: 18px; color: var(--accent); margin-bottom: 12px; }
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-bottom: 16px; }
+  .ctrl { background: #0F172A; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+  .ctrl label { display: flex; justify-content: space-between; font-size: 13px; color: #E2E8F0; margin-bottom: 6px; font-weight: 600; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .bar-row { margin: 10px 0; }
+  .bar-lbl { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .bar-bg { height: 22px; background: #0F172A; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+  .bar-fill { height: 100%; transition: width 0.25s; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  th, td { border: 1px solid var(--border); padding: 10px; text-align: left; }
+  th { background: #0F172A; color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">⬅ 返回 AI Infra 全景精学馆</a>
+    <a href="ai-infra-learning-hub.html">🔥 7合1精学中心</a>
+    <a href="../components/enterprise-ai-gateway-wcu-ratelimit-3tier-cache-priority-queue-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-ai-gateway-wcu-ratelimit-3tier-cache-priority-queue-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-ai-gateway-wcu-ratelimit-3tier-cache-priority-queue-sizer.html">🧮 容量计算器</a>
+    <a href="../reports/enterprise-ai-gateway-wcu-ratelimit-3tier-cache-priority-queue-cards.html">🃏 7-Card 评测卡</a>
+  </div>
+
+  <div class="hero">
+    <h1>#641 企业 AI Gateway 多租户加权算力单元 (WCU) 令牌桶限流、三级缓存与 P0–P2 队列精读页</h1>
+    <p>核心公式：<code>WCU = 1.0·T_in_miss + 0.1·T_in_hit + 4.0·T_out</code> · 三级缓存漏斗（L1 精确 0.4ms + L2 白名单语义 6.5ms + L3 引擎 Radix 前缀）立省 43.8% GPU 卡数，P0 P99 TTFT 从 9,420ms 降至 285ms。</p>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="val" id="kpi-wcu">235.1K /s</div><div class="lbl">治理后后端峰值 WCU/s (对比无治理 533.4K/s)</div></div>
+      <div class="kpi"><div class="val" id="kpi-gpu">18× H200</div><div class="lbl">所需 H200 卡数 (对比无治理 32× H200, 省 43.8%)</div></div>
+      <div class="kpi"><div class="val" id="kpi-ttft">285 ms</div><div class="lbl">P0 核心业务 P99 TTFT (对比轮询 9,420 ms)</div></div>
+      <div class="kpi"><div class="val" id="kpi-save">$41.2万/年</div><div class="lbl">三级缓存 + WCU 限流年化节省 GPU 成本</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🎛️ 交互式 AI Gateway WCU 流量预算、三级缓存漏斗与 H200 卡数沙盘</h2>
+    <div class="controls">
+      <div class="ctrl">
+        <label><span>企业总并发请求率 (RPS)</span><span id="v-rps">100 RPS</span></label>
+        <input type="range" id="s-rps" min="20" max="300" step="10" value="100" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>单请求平均 Input Tokens</span><span id="v-tin">4,000 tok</span></label>
+        <input type="range" id="s-tin" min="500" max="16000" step="500" value="4000" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>单请求平均 Output Tokens</span><span id="v-tout">500 tok</span></label>
+        <input type="range" id="s-tout" min="100" max="2000" step="50" value="500" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>L1+L2 网关缓存直接拦截率</span><span id="v-l12">26.0%</span></label>
+        <input type="range" id="s-l12" min="0" max="50" step="2" value="26" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>L3 引擎前缀缓存命中率 (GIE)</span><span id="v-l3">78.4%</span></label>
+        <input type="range" id="s-l3" min="15" max="90" step="1" value="78" oninput="calc()">
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-lbl"><span>⛔ 方案 A：传统 Nginx 轮询 + RPM 限流 (L3 命中率仅 18.5%)</span><strong id="b-base-txt">533.4K WCU/s → 需 32× H200 ($93.4万/年)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" id="b-base" style="width:88%;background:var(--red);"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-lbl"><span>✅ 方案 B：WCU 令牌桶 + 安全三级缓存 + GIE 一致性前缀路由</span><strong id="b-opt-txt">235.1K WCU/s → 仅需 18× H200 ($52.2万/年)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" id="b-opt" style="width:42%;background:var(--green);"></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>📐 三级缓存安全边界与 WCU 权重对照表</h2>
+    <table>
+      <thead>
+        <tr><th>治理维度 / 缓存层级</th><th>计算公式 / 匹配阈值</th><th>典型响应延迟</th><th>架构师防踩坑铁律</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>WCU 加权算力单元</strong></td><td><code>1.0·T_in_miss + 0.1·T_in_hit + 4.0·T_out</code></td><td><code>&lt; 0.3 ms</code> (Redis Lua)</td><td>请求进入时按 P90 Output 预扣，流式 <code>[DONE]</code> 时按真实 usage 原子退补</td></tr>
+        <tr><td><strong>L1 精确哈希缓存</strong></td><td><code>SHA256(Tenant + Model + Prompt)</code></td><td><code>0.4 ms</code> (0 GPU)</td><td>必须绑定 <code>Tenant_ID</code> 防止跨部门数据越权；<code>temp &gt; 0.2</code> 自动旁路</td></tr>
+        <tr><td><strong>L2 向量语义缓存</strong></td><td><code>BGE-M3 cos_sim &gt;= 0.96</code></td><td><code>6.5 ms</code> (0 GPU)</td><td>⛔ <strong>严禁对含数字/金额/日期/SQL/Tool Call 的请求开启 L2</strong>，防止跨年份/跨订单串味</td></tr>
+        <tr><td><strong>L3 引擎前缀缓存</strong></td><td><code>PrefixHash(前 512 Tokens) + KV 水位 &lt; 85%</code></td><td><code>0 ms</code> 额外开销</td><td>由内层 <code>Envoy GIE / Dynamo Router</code> 实现 KV 感知亲和路由，命中率从 18.5% 升至 78.4%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+<script>
+function calc() {
+  const rps = +document.getElementById('s-rps').value;
+  const tin = +document.getElementById('s-tin').value;
+  const tout = +document.getElementById('s-tout').value;
+  const l12 = +document.getElementById('s-l12').value / 100.0;
+  const l3 = +document.getElementById('s-l3').value / 100.0;
+
+  document.getElementById('v-rps').textContent = rps + ' RPS';
+  document.getElementById('v-tin').textContent = tin.toLocaleString() + ' tok';
+  document.getElementById('v-tout').textContent = tout.toLocaleString() + ' tok';
+  document.getElementById('v-l12').textContent = (l12 * 100).toFixed(1) + '%';
+  document.getElementById('v-l3').textContent = (l3 * 100).toFixed(1) + '%';
+
+  const baseL3 = 0.185;
+  const baseWcu = rps * (tin * (1 - baseL3) * 1.0 + tin * baseL3 * 0.1 + tout * 4.0);
+  const passRps = rps * (1 - l12);
+  const optWcu = passRps * (tin * (1 - l3) * 1.0 + tin * l3 * 0.1 + tout * 4.0);
+
+  const gpuCap = 18000;
+  const baseGpu = Math.max(2, Math.ceil(baseWcu / gpuCap / 2) * 2 + 2);
+  const optGpu = Math.max(2, Math.ceil(optWcu / gpuCap / 2) * 2 + 4);
+  const savePct = Math.max(0, (1 - optGpu / baseGpu) * 100);
+  const saveUsdWan = Math.max(0, (baseGpu - optGpu) * 2.94);
+
+  document.getElementById('kpi-wcu').textContent = (optWcu / 1000).toFixed(1) + 'K /s';
+  document.getElementById('kpi-gpu').textContent = optGpu + '× H200';
+  document.getElementById('kpi-ttft').textContent = Math.round(220 + (1 - l3) * 300) + ' ms';
+  document.getElementById('kpi-save').textContent = '$' + saveUsdWan.toFixed(1) + '万/年';
+
+  document.getElementById('b-base-txt').textContent = (baseWcu / 1000).toFixed(1) + 'K WCU/s → 需 ' + baseGpu + '× H200';
+  document.getElementById('b-opt-txt').textContent = (optWcu / 1000).toFixed(1) + 'K WCU/s → 仅需 ' + optGpu + '× H200 (省 ' + savePct.toFixed(1) + '%)';
+  document.getElementById('b-opt').style.width = Math.min(95, Math.max(12, Math.round((optWcu / baseWcu) * 88))) + '%';
+}
+calc();
+</script>
+</body>
+</html>

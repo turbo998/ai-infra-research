@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#641 企业 AI Gateway WCU 令牌桶与三级缓存容量计算器 (Sizer)</title>
+<style>
+  body { background:#0F172A; color:#F8FAFC; font-family:system-ui,sans-serif; padding:24px; max-width:960px; margin:0 auto; }
+  .card { background:#1E293B; border:1px solid #334155; border-radius:14px; padding:20px; margin-bottom:16px; }
+  h1 { font-size:20px; color:#38BDF8; margin-top:0; }
+  label { display:flex; justify-content:space-between; font-size:13px; margin:10px 0 4px; }
+  input[type=range] { width:100%; accent-color:#10B981; }
+  .res { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; }
+  .box { background:#0F172A; border:1px solid #334155; border-radius:10px; padding:12px; text-align:center; }
+  .val { font-size:22px; font-weight:800; color:#10B981; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🧮 #641 企业 AI Gateway WCU 令牌桶限流与三级缓存容量计算器</h1>
+    <label><span>峰值请求速率 (RPS)</span><span id="l-rps">100 RPS</span></label>
+    <input type="range" id="r-rps" min="20" max="300" step="10" value="100" oninput="run()">
+    <label><span>L1+L2 网关缓存拦截率 (%)</span><span id="l-c12">26%</span></label>
+    <input type="range" id="r-c12" min="0" max="50" step="2" value="26" oninput="run()">
+    <label><span>L3 引擎前缀缓存命中率 (%)</span><span id="l-c3">78%</span></label>
+    <input type="range" id="r-c3" min="15" max="90" step="1" value="78" oninput="run()">
+    <div class="res">
+      <div class="box"><div class="val" id="o-wcu">235.1K</div><div>治理后峰值 WCU/s</div></div>
+      <div class="box"><div class="val" id="o-gpu">18× H200</div><div>推荐 H200 卡数</div></div>
+      <div class="box"><div class="val" id="o-save">-43.8%</div><div>相比轮询节省卡数</div></div>
+    </div>
+  </div>
+<script>
+function run() {
+  const rps = +document.getElementById('r-rps').value;
+  const c12 = +document.getElementById('r-c12').value / 100;
+  const c3 = +document.getElementById('r-c3').value / 100;
+  document.getElementById('l-rps').textContent = rps + ' RPS';
+  document.getElementById('l-c12').textContent = Math.round(c12*100) + '%';
+  document.getElementById('l-c3').textContent = Math.round(c3*100) + '%';
+  const baseWcu = rps * (4000 * (1 - 0.185) + 4000 * 0.185 * 0.1 + 500 * 4.0);
+  const optWcu = rps * (1 - c12) * (4000 * (1 - c3) + 4000 * c3 * 0.1 + 500 * 4.0);
+  const baseGpu = Math.max(4, Math.ceil(baseWcu / 18000 / 2) * 2 + 2);
+  const optGpu = Math.max(4, Math.ceil(optWcu / 18000 / 2) * 2 + 4);
+  document.getElementById('o-wcu').textContent = (optWcu / 1000).toFixed(1) + 'K';
+  document.getElementById('o-gpu').textContent = optGpu + '× H200';
+  document.getElementById('o-save').textContent = '-' + ((1 - optGpu / baseGpu) * 100).toFixed(1) + '%';
+}
+run();
+</script>
+</body>
+</html>

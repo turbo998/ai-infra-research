@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <rect width="1200" height="630" fill="#0F172A" rx="16"/>
+  <rect x="24" y="20" width="1152" height="72" rx="12" fill="#1E293B" stroke="#334155"/>
+  <text x="44" y="50" fill="#38BDF8" font-size="19" font-weight="700">#641 企业 AI Gateway 多租户加权算力单元 (WCU) 令牌桶限流、三级缓存与 P0–P2 优先级队列架构图</text>
+  <text x="44" y="74" fill="#94A3B8" font-size="13">Enterprise AI Gateway Governance: WCU = 1.0·T_in_miss + 0.1·T_in_hit + 4.0·T_out · 3-Tier Cache (L1 Exact / L2 Semantic / L3 Radix) · P0/P1/P2 Queue</text>
+
+  <!-- Left: Why Naive RPM/Unweighted TPM Fails vs WCU Token Bucket -->
+  <rect x="24" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#F59E0B" stroke-width="1.5"/>
+  <text x="42" y="136" fill="#FDE68A" font-size="15" font-weight="700">① 为什么按 RPM 或无权重 TPM 限流必然打崩集群？</text>
+  <rect x="40" y="150" width="333" height="104" rx="8" fill="#450A0A" stroke="#EF4444"/>
+  <text x="52" y="172" fill="#FCA5A5" font-size="13" font-weight="700">⛔ 反模式：按 RPM 或 `Input+Output` 等权 TPM 限流</text>
+  <text x="52" y="194" fill="#F1F5F9" font-size="12">· 租户 C 发起 `10 QPS × 64K Input + 8K Output` 批处理</text>
+  <text x="52" y="214" fill="#CBD5E1" font-size="12">· `1` 个 Output Token 消耗的 HBM 带宽时长 ≈ `4.0×` Input</text>
+  <text x="52" y="234" fill="#FCA5A5" font-size="12" font-weight="700">· 结果：核心客服 P0 租户被排队挤爆，P99 TTFT 飙至 9.4s！</text>
+
+  <rect x="40" y="266" width="333" height="114" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="52" y="288" fill="#6EE7B7" font-size="13" font-weight="700">✅ 正解：加权算力单元 (WCU) 双阶段预扣/结算令牌桶</text>
+  <text x="52" y="310" fill="#F8FAFC" font-size="12" font-weight="700">WCU = 1.0·T_in_miss + 0.1·T_in_hit + 4.0·T_out</text>
+  <text x="52" y="330" fill="#D1FAE5" font-size="12">· 请求进入时：按 `T_in + 4·E[T_out]` 预扣 Lua 令牌桶</text>
+  <text x="52" y="350" fill="#D1FAE5" font-size="12">· SSE 结束时：按引擎返回的 `prompt_tokens_details`</text>
+  <text x="52" y="368" fill="#6EE7B7" font-size="12" font-weight="700">  自动多退少补 (`Cached Input` 享 9 折 `0.1x` 扣减)！</text>
+
+  <rect x="40" y="392" width="333" height="86" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="52" y="414" fill="#38BDF8" font-size="13" font-weight="700">📊 P0 / P1 / P2 三级服务等级队列 (QoS Shedding)</text>
+  <text x="52" y="434" fill="#E2E8F0" font-size="12">· P0 (实时语音/Copilot): 保底 50% WCU + 满载抢占</text>
+  <text x="52" y="452" fill="#E2E8F0" font-size="12">· P1 (在线对话): 35% WCU + 超阈值触发动态借调</text>
+  <text x="52" y="468" fill="#6EE7B7" font-size="12" font-weight="700">· P2 (离线报表/Agent): Decode KV &gt; 80% 时自动挂起让路</text>
+
+  <!-- Center: 3-Tier Cache Funnel -->
+  <rect x="407" y="108" width="386" height="385" rx="12" fill="#1E293B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="425" y="136" fill="#6EE7B7" font-size="15" font-weight="700">② AI Gateway 三级缓存漏斗 (拦截 41.2% 后端算力)</text>
+
+  <rect x="423" y="150" width="354" height="92" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="435" y="172" fill="#38BDF8" font-size="13" font-weight="700">L1 精确哈希缓存 (Redis SHA-256 · 命中率 ~14.5%)</text>
+  <text x="435" y="192" fill="#F1F5F9" font-size="12">· 键：`SHA256(TenantID + Model + Temp=0 + NormPrompt)`</text>
+  <text x="435" y="212" fill="#CBD5E1" font-size="12">· 延迟：`0.4 ms` 直接返回完整 JSON/SSE，消耗 `0 GPU`</text>
+  <text x="435" y="230" fill="#6EE7B7" font-size="12" font-weight="700">· 适用：高频 FAQ、固定商机摘要、自动化回归评测查询</text>
+
+  <rect x="423" y="254" width="354" height="106" rx="8" fill="#0F172A" stroke="#A78BFA"/>
+  <text x="435" y="276" fill="#C4B5FD" font-size="13" font-weight="700">L2 向量语义缓存 (BGE-M3 + HNSW · 命中率 ~18.0%)</text>
+  <text x="435" y="296" fill="#F1F5F9" font-size="12">· 仅对只读知识库问答启用 (`cos_sim &gt;= 0.96` + 租户强隔离)</text>
+  <text x="435" y="316" fill="#CBD5E1" font-size="12">· 延迟：`6.5 ms` (CPU/MIG 嵌入 + 检索)，省去 100% LLM 推理</text>
+  <text x="435" y="334" fill="#FCA5A5" font-size="12" font-weight="700">· ⛔ 红线：严禁对含数字/日期/金额/Tool Call 的请求开 L2！</text>
+  <text x="435" y="350" fill="#94A3B8" font-size="11">  (“查 2025 Q1 财报” 与 “查 2026 Q1 财报” 向量相似度高达 0.974！)</text>
+
+  <rect x="423" y="372" width="354" height="106" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="435" y="394" fill="#6EE7B7" font-size="13" font-weight="700">L3 引擎级前缀缓存 (Radix Tree KV · 复用 68% Prompt)</text>
+  <text x="435" y="414" fill="#F1F5F9" font-size="12">· 网关基于 `PrefixHash(前 512 Tokens)` 做一致性哈希路由</text>
+  <text x="435" y="434" fill="#D1FAE5" font-size="12">· 共享 System Prompt / 少样本示例 / 多轮对话历史零重算</text>
+  <text x="435" y="452" fill="#6EE7B7" font-size="12" font-weight="700">· 综合算力减负：L1+L2+L3 合力省下 41.2% 集群 GPU 卡数！</text>
+  <text x="435" y="468" fill="#A7F3D0" font-size="11">  (100 RPS 企业流量从需 32 张 H200 降至仅需 18 张 H200)</text>
+
+  <!-- Right: Benchmark & GPU Fleet Saving -->
+  <rect x="811" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#38BDF8" stroke-width="1.5"/>
+  <text x="829" y="136" fill="#38BDF8" font-size="15" font-weight="700">③ 100 RPS 混合多租户网关治理对比实测</text>
+
+  <rect x="827" y="150" width="333" height="102" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="839" y="172" fill="#FCA5A5" font-size="13" font-weight="700">方案 A：普通 Nginx 轮询 + RPM 限流 (32× H200)</text>
+  <text x="839" y="192" fill="#E2E8F0" font-size="12">· P0 核心租户 P99 TTFT: `9,420 ms` (被批处理长请求阻塞)</text>
+  <text x="839" y="212" fill="#E2E8F0" font-size="12">· 引擎 KV 前缀命中率: `18.5%` (Round-Robin 打散前缀)</text>
+  <text x="839" y="232" fill="#FCA5A5" font-size="12" font-weight="700">· P0 SLA 达标率 (Goodput): 仅 `54.2%` | 需 `32× H200`</text>
+
+  <rect x="827" y="264" width="333" height="114" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="839" y="286" fill="#6EE7B7" font-size="13" font-weight="700">方案 B：WCU 令牌桶 + 三级缓存 + P0–P2 队列 (18× H200)</text>
+  <text x="839" y="308" fill="#F8FAFC" font-size="12">· P0 核心租户 P99 TTFT: `285 ms` (`-97.0%` 延迟削峰)</text>
+  <text x="839" y="328" fill="#D1FAE5" font-size="12">· L1 (`14.5%`) + L2 (`11.5%`) + L3 前缀复用 (`78.4%`)</text>
+  <text x="839" y="348" fill="#6EE7B7" font-size="12" font-weight="700">· P0 SLA 达标率 (Goodput): `99.6%` | 仅需 `18× H200`</text>
+  <text x="839" y="366" fill="#A7F3D0" font-size="12" font-weight="700">· 硬件与云账单立省 `43.8%` (年省 `$41.2万` GPU 成本)！</text>
+
+  <rect x="827" y="390" width="333" height="88" rx="8" fill="#0F172A" stroke="#334155"/>
+  <text x="839" y="412" fill="#FDE68A" font-size="13" font-weight="700">🎯 SA 网关选型金律</text>
+  <text x="839" y="432" fill="#E2E8F0" font-size="12">· 外部治理与云/自建混排：`Azure APIM / Kong + LiteLLM`</text>
+  <text x="839" y="450" fill="#E2E8F0" font-size="12">· K8s 内部引擎 KV 感知调度：`Envoy Gateway GIE / Dynamo`</text>
+  <text x="839" y="468" fill="#38BDF8" font-size="12" font-weight="700">· 双层协同：L7 管 WCU 与 L1/L2，GIE 管 L3 KV 亲和路由</text>
+
+  <!-- Bottom Banner -->
+  <rect x="24" y="508" width="1152" height="100" rx="12" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="44" y="536" fill="#6EE7B7" font-size="16" font-weight="700">🔑 AI Solution Architect 多租户网关容量与限流设计铁律</text>
+  <text x="44" y="562" fill="#F8FAFC" font-size="13">1. 废除 RPM 限流：统一以 WCU = 1.0·T_in_miss + 0.1·T_in_hit + 4.0·T_out 作为多租户配额与内部 FinOps 成本分摊的唯一货币；</text>
+  <text x="44" y="586" fill="#CBD5E1" font-size="13">2. 严控 L2 语义缓存边界：只对无参数静态 FAQ 开 L2 (cos &gt;= 0.96)，把重心放在 L1 精确哈希与 L3 一致性前缀路由 (省下 43.8% 集群卡数)。</text>
+</svg>

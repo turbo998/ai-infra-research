@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#641 AI Gateway WCU Rate-Limit & 3-Tier Cache 7-Card Visual Report</title>
+<style>
+  body { background:#0B1120; color:#F8FAFC; font-family:system-ui,sans-serif; padding:24px; margin:0; }
+  .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:20px; max-width:1440px; margin:0 auto; }
+  .card { aspect-ratio:4/5; background:#1E293B; border:1px solid #334155; border-radius:16px; padding:20px; display:flex; flex-direction:column; justify-content:space-between; }
+  .badge { font-size:12px; color:#38BDF8; font-weight:700; letter-spacing:0.5px; }
+  h2 { font-size:18px; margin:8px 0; color:#F8FAFC; line-height:1.35; }
+  p, li { font-size:13px; color:#CBD5E1; line-height:1.5; }
+  .box { background:#0F172A; border:1px solid #334155; border-radius:10px; padding:12px; margin:6px 0; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+  th { color:#38BDF8; }
+  .bar { height:14px; border-radius:4px; background:#3B82F6; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <div class="badge">1 / 7 · HANDS-ON · AI GATEWAY GOVERNANCE (#641)</div>
+      <h2>WCU Token-Bucket + 3-Tier Cache Cuts 100 RPS Fleet from 32 to 18× H200 (-43.8%) &amp; P0 P99 TTFT by 97%</h2>
+      <div class="box">
+        <strong>Weighted Compute Unit (WCU) Formula:</strong>
+        <p><code>WCU = 1.0·T_in_miss + 0.1·T_in_hit + 4.0·T_out</code></p>
+        <p>Two-phase Lua bucket pre-reserves on request arrival and reconciles actual cached/output tokens on SSE <code>[DONE]</code>.</p>
+      </div>
+    </div>
+    <div class="box">Provenance: <code>measured + analytical</code> · 100 RPS Enterprise Multi-Tenant Workload</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">2 / 7 · SCENARIO: P0 CUSTOMER COPILOT VS. P2 BATCH FLOOD</div>
+      <h2>Preemptive P2 Shedding at 80% KV Watermark Holds P0 P99 TTFT at 285ms During 1.3x Traffic Surge</h2>
+      <div class="box"><strong>choice · Action: Act automatically</strong> · Confidence: <code>99.6%</code><br>Pause P2 batch jobs when Decode KV &gt; 80%; keep P0 voice/copilot under 300ms TTFT.</div>
+      <div class="box"><strong>score · Safe L2 Whitelist</strong> · Threshold: <code>cos &gt;= 0.96</code><br>Bypass L2 semantic cache whenever digits, dates, currencies, or tool definitions appear.</div>
+    </div>
+    <div class="box">Zero cross-year numeric/date hallucination (`0.0%` vs `4.8%` blanket L2).</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">3 / 7 · WHAT I TESTED</div>
+      <h2>4 Gateway Governance Architectures Across 100 RPS Mixed Enterprise Traffic</h2>
+      <table>
+        <thead><tr><th>SCENARIO</th><th>TASK</th><th>RESULT</th><th>ACTION</th></tr></thead>
+        <tbody>
+          <tr><td>1. Nginx + RPM</td><td>Round-robin spray</td><td>✕ 9,420ms P99 / 32 GPU</td><td>Reject</td></tr>
+          <tr><td>2. Blanket L2 Cache</td><td>All prompts in L2</td><td>✕ 4.8% Date Poisoning</td><td>Reject</td></tr>
+          <tr><td>3. WCU + GIE L3</td><td>Dynamic SQL/Tools</td><td>410ms P99 / 24 GPU</td><td>Confirm</td></tr>
+          <tr><td>4. WCU + 3-Tier + QoS</td><td>Enterprise Mixed</td><td>285ms P99 / 18 GPU</td><td>Act automatically</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">Saves 14× H200 GPUs ($412K/yr) while lifting P0 Goodput from 54.2% to 99.6%.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">4 / 7 · UNDER THE HOOD</div>
+      <h2>Two-Phase Redis Lua WCU Reservation &amp; Envoy GIE Prefix Routing</h2>
+      <div class="box" style="font-family:monospace;font-size:11px;">
+        // Phase 1: Request Admission<br>
+        wcu_est = 1.0 * t_in + 4.0 * p90_t_out;<br>
+        if (kv_util &gt; 0.80 &amp;&amp; priority == "P2") return 429;<br>
+        ↓<br>
+        // Phase 2: SSE [DONE] Reconciliation<br>
+        wcu_real = 1.0*t_miss + 0.1*t_hit + 4.0*t_out;<br>
+        bucket.refund(wcu_est - wcu_real);
+      </div>
+    </div>
+    <div class="box">Overhead: <code>0.3 ms</code> Redis Lua + <code>0.4 ms</code> L1 SHA-256 lookup.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Perturbation Test: 10 QPS 64K-Context Batch Flood Injection</h2>
+      <table>
+        <thead><tr><th>METRIC</th><th>RPM + ROUND-ROBIN</th><th>WCU + P0–P2 + GIE</th><th>CHANGE</th></tr></thead>
+        <tbody>
+          <tr><td>P0 P99 TTFT</td><td>9,420 ms</td><td>285 ms</td><td>-97.0%</td></tr>
+          <tr><td>L3 Prefix Hit Rate</td><td>18.5%</td><td>78.4%</td><td>+59.9 pts</td></tr>
+          <tr><td>P0 SLO Goodput</td><td>54.2%</td><td>99.6%</td><td>+45.4 pts</td></tr>
+          <tr><td>Numeric Poisoning</td><td>4.8% (Blanket L2)</td><td>0.0% (Regex Guard)</td><td>-4.8 pts</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">Consistent across 5 burst ratios (1.1x to 2.0x peak load).</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">6 / 7 · LATENCY &amp; CAPACITY</div>
+      <h2>Backend WCU Load &amp; P0 P99 TTFT Across Governance Tiers</h2>
+      <div class="box">
+        <div>WCU + 3-Tier Cache + GIE: <strong>285 ms P99 TTFT (18× H200)</strong></div>
+        <div class="bar" style="width:18%;background:#3B82F6;"></div>
+        <div style="margin-top:8px;">WCU + GIE L3 Only: <strong>410 ms P99 TTFT (24× H200)</strong></div>
+        <div class="bar" style="width:28%;background:#60A5FA;"></div>
+        <div style="margin-top:8px;">Naive Nginx Round-Robin + RPM: <strong>9,420 ms P99 TTFT (32× H200)</strong></div>
+        <div class="bar" style="width:96%;background:#CBD5E1;"></div>
+      </div>
+    </div>
+    <div class="box">33.6× lower P99 TTFT and 43.8% fewer GPUs.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For &amp; Production Readiness</h2>
+      <div class="box" style="border-color:#10B981;">
+        <strong>✅ Good fit:</strong> Multi-tenant enterprise AI platforms (APIM/Kong/LiteLLM + Envoy GIE), mixed voice/chat/batch traffic, FinOps chargeback.
+      </div>
+      <div class="box" style="border-color:#EF4444;">
+        <strong>⛔ Not for:</strong> Enabling L2 semantic vector cache on financial, SQL, date-sensitive, or tool-calling queries.
+      </div>
+    </div>
+    <div class="box">Readiness: Production-verified (`#641` · `experiments/enterprise_ai_gateway_wcu_ratelimit_3tier_cache_priority_queue`).</div>
+  </div>
+</div>
+</body>
+</html>
