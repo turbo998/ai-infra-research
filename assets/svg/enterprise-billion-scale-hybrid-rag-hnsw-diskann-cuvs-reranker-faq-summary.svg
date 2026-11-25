@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <rect width="1200" height="630" fill="#0F172A" rx="16"/>
+  <rect x="24" y="20" width="1152" height="72" rx="12" fill="#1E293B" stroke="#334155"/>
+  <text x="44" y="50" fill="#38BDF8" font-size="19" font-weight="700">#646 企业十亿级混合 RAG 检索引擎 (HNSW 全内存 vs. DiskANN NVMe vs. cuVS CAGRA) 与两阶段 Rerank 容量指南</text>
+  <text x="44" y="74" fill="#94A3B8" font-size="13">Billion-Vector RAG Sizing: FP32 HNSW (4.92 TB RAM) vs. DiskANN + PQ (192 GB RAM, -96.1%) vs. cuVS CAGRA + BGE-Reranker FP8 (18.4ms)</text>
+
+  <!-- Left: Billion-Vector RAM Explosion & Formula -->
+  <rect x="24" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#F59E0B" stroke-width="1.5"/>
+  <text x="42" y="136" fill="#FDE68A" font-size="15" font-weight="700">① 十亿级向量 (1B × 1024维) 内存水位手算公式</text>
+
+  <rect x="40" y="150" width="333" height="106" rx="8" fill="#450A0A" stroke="#EF4444"/>
+  <text x="52" y="172" fill="#FCA5A5" font-size="13" font-weight="700">⛔ 反模式：直接上 FP32 HNSW 全内存索引 (M=32)</text>
+  <text x="52" y="194" fill="#F1F5F9" font-size="12">· 原始向量内存：`10^9 × 1024 × 4B = 4,096 GB`</text>
+  <text x="52" y="214" fill="#CBD5E1" font-size="12">· HNSW 邻接图指针开销：`10^9 × 2 × 32 × 4B = 256 GB`</text>
+  <text x="52" y="234" fill="#FCA5A5" font-size="12" font-weight="700">· 加上 1.13x 引擎碎片预留 = 需 `4,920 GB (4.92 TB)` 内存！</text>
+
+  <rect x="40" y="268" width="333" height="210" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="52" y="290" fill="#6EE7B7" font-size="13" font-weight="700">✅ 架构师三级量化与存储下沉公式</text>
+  <text x="52" y="312" fill="#F8FAFC" font-size="12" font-weight="700">M_ram = N · (d · b_quant + G_graph) × 1.13</text>
+  <text x="52" y="334" fill="#38BDF8" font-size="12">· 档位 1 (SQ8 标量量化 HNSW): `1024×1B + 256B` → **`1,446 GB`**</text>
+  <text x="52" y="354" fill="#A78BFA" font-size="12">· 档位 2 (Binary/RaBitQ 1-bit + 内存重排): → **`412 GB`**</text>
+  <text x="52" y="374" fill="#6EE7B7" font-size="12" font-weight="700">· 档位 3 (DiskANN Vamana + PQ64 驻内存 + 全精度落 NVMe)：</text>
+  <text x="52" y="394" fill="#D1FAE5" font-size="12">  内存仅存 `64B PQ 压缩码 + 轻量导航点` = **`192 GB RAM`**！</text>
+  <text x="52" y="414" fill="#D1FAE5" font-size="12">  全精度向量与 Vamana 邻接表存 `4.6 TB PCIe Gen5 NVMe`</text>
+  <text x="52" y="434" fill="#6EE7B7" font-size="12" font-weight="700">  → 内存成本直降 96.1% ($4.2万/月 → $2,800/月)！</text>
+  <text x="52" y="456" fill="#94A3B8" font-size="11">  (单次检索仅需 3~4 跳 4KB NVMe 随机读，P95 延迟仅 11.5 ms)</text>
+
+  <!-- Center: Two-Stage Hybrid Retrieval + Cross-Encoder Rerank -->
+  <rect x="407" y="108" width="386" height="385" rx="12" fill="#1E293B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="425" y="136" fill="#6EE7B7" font-size="15" font-weight="700">② 企业 RAG 黄金流水线：混合召回 + Cross-Encoder 重排</text>
+
+  <rect x="423" y="150" width="354" height="106" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="435" y="172" fill="#38BDF8" font-size="13" font-weight="700">Stage 1: 双路混合召回 (Dense 向量 + BM25 稀疏词频)</text>
+  <text x="435" y="192" fill="#F1F5F9" font-size="12">· 为什么纯向量不够？向量搜不准精确零件号 (`SKU-9981-B`)！</text>
+  <text x="435" y="212" fill="#CBD5E1" font-size="12">· Dense (`Top-100`) + BM25/SPLADE (`Top-100`) 并行检索 (`6.4 ms`)</text>
+  <text x="435" y="232" fill="#6EE7B7" font-size="12" font-weight="700">· RRF (倒数秩融合, k=60) 去重合并出 `Top-50` 候选块 (`0.2 ms`)</text>
+
+  <rect x="423" y="268" width="354" height="114" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="435" y="290" fill="#6EE7B7" font-size="13" font-weight="700">Stage 2: GPU Cross-Encoder 精排 (Top-50 → Top-5)</text>
+  <text x="435" y="310" fill="#F8FAFC" font-size="12">· 模型：`BGE-Reranker-v2-m3 (568M) FP8` (TensorRT 加速)</text>
+  <text x="435" y="330" fill="#D1FAE5" font-size="12">· 耗时：单次 `50 × 512 tok` Cross-Attention 仅需 **`11.8 ms`**</text>
+  <text x="435" y="350" fill="#6EE7B7" font-size="12" font-weight="700">· 核心收益：① NDCG@5 召回精度从 `74.2%` 跃升至 `93.8%`；</text>
+  <text x="435" y="368" fill="#A7F3D0" font-size="11">  ② 喂给 70B LLM 的 Prompt 从 Top-25 (12.8K) 缩减至 Top-5 (2.5K)，</text>
+
+  <rect x="423" y="394" width="354" height="84" rx="8" fill="#0F172A" stroke="#A78BFA"/>
+  <text x="435" y="416" fill="#C4B5FD" font-size="13" font-weight="700">💡 以小博大：2 张 L40S Reranker 省下 12 张 H200 LLM 卡！</text>
+  <text x="435" y="436" fill="#E2E8F0" font-size="12">· 砍掉 80% 冗余 RAG 噪音块后，下游 70B LLM Prefill 算力</text>
+  <text x="435" y="456" fill="#6EE7B7" font-size="12" font-weight="700">  立省 74% (LLM TTFT 从 680ms 降至 185ms，净省 $16.8万/年)！</text>
+
+  <!-- Right: HNSW vs DiskANN vs cuVS CAGRA Matrix -->
+  <rect x="811" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#38BDF8" stroke-width="1.5"/>
+  <text x="829" y="136" fill="#38BDF8" font-size="15" font-weight="700">③ 三大向量索引架构横向实测 (10亿向量 · 500 QPS)</text>
+
+  <rect x="827" y="150" width="333" height="96" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="839" y="172" fill="#FCA5A5" font-size="13" font-weight="700">1. 全内存 HNSW (FP32 / SQ8 · Milvus/Qdrant)</text>
+  <text x="839" y="192" fill="#E2E8F0" font-size="12">· 内存需求：`4,920 GB` (FP32) / `1,446 GB` (SQ8)</text>
+  <text x="839" y="212" fill="#E2E8F0" font-size="12">· 检索延迟：`P95 = 3.8 ms` | 召回率 Recall@10: `96.5%`</text>
+  <text x="839" y="232" fill="#FCA5A5" font-size="12">· 局限：十亿级内存机器极贵 ($1.8万~$4.2万/月)，建索引慢 (14h)</text>
+
+  <rect x="827" y="258" width="333" height="104" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="839" y="280" fill="#6EE7B7" font-size="13" font-weight="700">2. DiskANN NVMe 图索引 (PQ64 驻内存 + SSD 落盘)</text>
+  <text x="839" y="300" fill="#F8FAFC" font-size="12">· 内存需求：仅 **`192 GB RAM`** (`-96.1%`) + `4.6 TB NVMe`</text>
+  <text x="839" y="320" fill="#D1FAE5" font-size="12">· 检索延迟：`P95 = 11.5 ms` | 召回率 Recall@10: `95.8%`</text>
+  <text x="839" y="340" fill="#6EE7B7" font-size="12" font-weight="700">· 优势：单台 256GB 内存 + 2×3.84TB NVMe 服务器即可扛下 10 亿向量！</text>
+
+  <rect x="827" y="374" width="333" height="104" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="839" y="396" fill="#38BDF8" font-size="13" font-weight="700">3. NVIDIA cuVS CAGRA (GPU 原生图索引 + VPQ)</text>
+  <text x="839" y="416" fill="#E2E8F0" font-size="12">· 硬件：`4× H200 / 8× L40S` | 建索引速度：**快 `12.5 倍` (1.1h)**</text>
+  <text x="839" y="436" fill="#E2E8F0" font-size="12">· 高并发吞吐：单卡吞吐高达 `18,000 QPS` (`P95 = 1.9 ms`)</text>
+  <text x="839" y="456" fill="#38BDF8" font-size="12" font-weight="700">· 适用：高频实时推荐、每秒万级写入重构与超低延迟检索</text>
+
+  <!-- Bottom Banner -->
+  <rect x="24" y="508" width="1152" height="100" rx="12" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="44" y="536" fill="#6EE7B7" font-size="16" font-weight="700">🔑 AI Solution Architect 企业级 RAG 容量与架构设计铁律</text>
+  <text x="44" y="562" fill="#F8FAFC" font-size="13">1. 向量规模 &lt; 5,000 万用 SQ8 HNSW；&gt; 1 亿向量果断切 DiskANN NVMe (省 96% 内存)；&gt; 2,000 QPS 或高频重建用 cuVS CAGRA；</text>
+  <text x="44" y="586" fill="#CBD5E1" font-size="13">2. 必配“Dense + BM25 RRF (Top-50) → FP8 Reranker (Top-5)”：多花 11.8ms 重排，既提 19.6 pts 准确率，又省下 74% 下游 LLM Prefill 算力。</text>
+</svg>
