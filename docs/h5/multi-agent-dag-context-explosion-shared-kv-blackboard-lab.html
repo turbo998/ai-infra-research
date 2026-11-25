@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#652 企业多智能体工作流 (Multi-Agent DAG) 上下文爆炸治理与共享 KV 交互精读页</title>
+<style>
+  :root { --bg:#0B1120; --card:#1E293B; --border:#334155; --accent:#38BDF8; --green:#10B981; --amber:#F59E0B; --red:#EF4444; --text:#F8FAFC; --muted:#94A3B8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:20px; max-width:1180px; margin:0 auto; }
+  .nav { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; font-size:13px; }
+  .nav a { color:var(--accent); text-decoration:none; background:#1E293B; padding:6px 12px; border-radius:8px; border:1px solid var(--border); }
+  .hero { background:linear-gradient(135deg,#0F172A 0%,#064E3B 100%); border:1px solid var(--green); border-radius:14px; padding:22px; margin-bottom:20px; }
+  .hero h1 { font-size:22px; margin-bottom:8px; }
+  .hero p { color:#CBD5E1; font-size:14px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:16px 0; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+  .kpi .val { font-size:24px; font-weight:800; color:var(--green); }
+  .kpi .lbl { font-size:12px; color:var(--muted); }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:20px; }
+  .panel h2 { font-size:18px; color:var(--accent); margin-bottom:12px; }
+  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; }
+  .ctrl { background:#0F172A; padding:12px; border-radius:10px; border:1px solid var(--border); }
+  .ctrl label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; font-weight:600; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .bar-row { margin:10px 0; }
+  .bar-lbl { display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .bar-bg { height:22px; background:#0F172A; border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+  .bar-fill { height:100%; transition:width 0.25s; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">⬅ 返回 AI Infra 全景精学馆</a>
+    <a href="ai-infra-learning-hub.html">🔥 7合1精学中心</a>
+    <a href="../components/enterprise-multi-agent-dag-context-explosion-shared-kv-blackboard-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-multi-agent-dag-context-explosion-shared-kv-blackboard-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-multi-agent-dag-context-explosion-shared-kv-blackboard-sizer.html">🧮 容量计算器</a>
+    <a href="../reports/enterprise-multi-agent-dag-context-explosion-shared-kv-blackboard-cards.html">🃏 7-Card 评测卡</a>
+  </div>
+
+  <div class="hero">
+    <h1>#652 企业多智能体工作流 (Multi-Agent DAG) 二次方上下文爆炸治理与共享 KV 精读页</h1>
+    <p>核心突破：通过 <code>Role-at-Tail (角色指令后置)</code> + <code>Redis 结构化黑板 (&lt;=512 tok/hop)</code> + <code>3 层并行 DAG</code>，将 6 步工作流未缓存 Token 从 <code>130.2K</code> 砍至 <code>18.2K (-86.0%)</code>，端到端耗时从 <code>18.4s</code> 压至 <code>4.6s (-75.0%)</code>，单任务成本降低 <code>82.9%</code>。</p>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="val" id="kpi-tok">18.2K tok</div><div class="lbl">单工作流未缓存 Token (对比全量广播 130.2K)</div></div>
+      <div class="kpi"><div class="val" id="kpi-lat">4.6 秒</div><div class="lbl">3 层并行 DAG 端到端耗时 (对比串行 18.4 秒)</div></div>
+      <div class="kpi"><div class="val" id="kpi-hit">91.5%</div><div class="lbl">Role-at-Tail 跨 Agent 共享 KV 命中率</div></div>
+      <div class="kpi"><div class="val" id="kpi-cost">$0.014 / 任务</div><div class="lbl">单工作流总成本 (对比默认拼法 $0.082, 省 82.9%)</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🎛️ 交互式多智能体协作步数 (K)、工具返回载荷与 O(K²) 爆炸抑制沙盘</h2>
+    <div class="controls">
+      <div class="ctrl">
+        <label><span>工作流串联子 Agent 步数 (K)</span><span id="v-k">6 步</span></label>
+        <input type="range" id="s-k" min="3" max="12" step="1" value="6" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>每步原始工具返回长度 (ΔC)</span><span id="v-c">6,000 tok</span></label>
+        <input type="range" id="s-c" min="2000" max="16000" step="1000" value="6000" oninput="calc()">
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-lbl"><span>⛔ 默认群聊全量广播 + 头部换 System Prompt (O(K²) 爆炸)</span><strong id="b-bad-txt">148.0K 总 Token · 18.4s E2EL ($0.082/任务)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:94%;background:var(--red);"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-lbl"><span>✅ 结构化黑板 (&lt;=512 tok) + Role-at-Tail 共享 KV + 并行 DAG</span><strong id="b-opt-txt">18.2K 未命中 Token · 4.6s E2EL ($0.014/任务 · 省 82.9%)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" id="b-opt" style="width:16%;background:var(--green);"></div></div>
+    </div>
+  </div>
+
+<script>
+function calc() {
+  const k = +document.getElementById('s-k').value;
+  const c = +document.getElementById('s-c').value;
+
+  document.getElementById('v-k').textContent = k + ' 步';
+  document.getElementById('v-c').textContent = c.toLocaleString() + ' tok';
+
+  const sBase = 3666;
+  const sumFactor = k * (k + 1) / 2;
+  const badTotal = Math.round(k * sBase + sumFactor * c);
+  const badUncached = Math.round(badTotal * 0.88);
+  const optUncached = Math.round(11000 + k * 1200);
+  const badLat = (badUncached / 7078).toFixed(1);
+  const optLat = (2.2 + k * 0.4).toFixed(1);
+
+  document.getElementById('kpi-tok').textContent = (optUncached / 1000).toFixed(1) + 'K tok';
+  document.getElementById('kpi-lat').textContent = optLat + ' 秒';
+  document.getElementById('b-bad-txt').textContent = (badTotal/1000).toFixed(1) + 'K 总 Token · ' + badLat + 's E2EL';
+  document.getElementById('b-opt-txt').textContent = (optUncached/1000).toFixed(1) + 'K 未命中 Token · ' + optLat + 's E2EL (省 ' + ((1 - optUncached/badUncached)*100).toFixed(1) + '% 算力)';
+  document.getElementById('b-opt').style.width = Math.min(90, Math.max(10, Math.round((optUncached / badUncached) * 94))) + '%';
+}
+calc();
+</script>
+</body>
+</html>
