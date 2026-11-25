@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <rect width="1200" height="630" fill="#0F172A" rx="16"/>
+  <rect x="24" y="20" width="1152" height="72" rx="12" fill="#1E293B" stroke="#334155"/>
+  <text x="44" y="50" fill="#38BDF8" font-size="19" font-weight="700">#648 企业每晚十亿词元 (1B Tokens / T+1) 离线批处理推理：字典序前缀重排、长度分桶与云 Batch API TCO 对比</text>
+  <text x="44" y="74" fill="#94A3B8" font-size="13">1B-Token Nightly Batch Sizer: Cloud 50%-Off Batch API ($0.20/1M) vs. Prefix-Sorted + Length-Bucketed Offline Engine (3.02x TPS, $0.024/1M)</text>
+
+  <!-- Left: Why Online SLA Constraints Waste 67% Offline Throughput -->
+  <rect x="24" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#F59E0B" stroke-width="1.5"/>
+  <text x="42" y="136" fill="#FDE68A" font-size="15" font-weight="700">① 为什么直接调在线 HTTP 接口跑夜间批处理极慢？</text>
+
+  <rect x="40" y="150" width="333" height="114" rx="8" fill="#450A0A" stroke="#EF4444"/>
+  <text x="52" y="172" fill="#FCA5A5" font-size="13" font-weight="700">⛔ 反模式：随机顺序 + 限制在线 Batch B&lt;=32 跑离线任务</text>
+  <text x="52" y="194" fill="#F1F5F9" font-size="12">· 在线服务为保 `TPOT &lt;= 15ms`，被迫将并发压在 `B=32`</text>
+  <text x="52" y="214" fill="#CBD5E1" font-size="12">· 25 万条工单/文档随机乱序发送，不同模板交替冲刷 HBM</text>
+  <text x="52" y="234" fill="#FCA5A5" font-size="12" font-weight="700">· 结果：前缀缓存命中率跌至 21%，单台 8×H200 吞吐仅 `5,600 tok/s`</text>
+  <text x="52" y="252" fill="#FCA5A5" font-size="11">  (跑完 10 亿 Tokens 需配 52 张 H200，大半夜算力严重浪费！)</text>
+
+  <rect x="40" y="276" width="333" height="202" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="52" y="298" fill="#6EE7B7" font-size="13" font-weight="700">✅ 离线引擎三大吞吐倍增器 (单机 5,600 → 16,900 tok/s)</text>
+  <text x="52" y="320" fill="#F8FAFC" font-size="12">1. 解除 TPOT 枷锁推高并发 (`B = 256~512`)：</text>
+  <text x="52" y="338" fill="#D1FAE5" font-size="11">   离线 T+1 不关心单请求 45ms TPOT，推入计算受限饱和区 (`+1.82x`)</text>
+  <text x="52" y="360" fill="#F8FAFC" font-size="12">2. 全局字典序前缀重排 (`Lexicographical Prefix Sort`)：</text>
+  <text x="52" y="378" fill="#D1FAE5" font-size="11">   按 `(SystemPrompt_ID, Doc_ID, Question_ID)` 排序后再喂入引擎，</text>
+  <text x="52" y="396" fill="#6EE7B7" font-size="11" font-weight="700">   使 L3 Radix 前缀命中率从 `21.0%` 飙升至 **`89.5%`**！</text>
+  <text x="52" y="418" fill="#F8FAFC" font-size="12">3. 输入/输出长度分桶 (`Length Bucketing`)：</text>
+  <text x="52" y="436" fill="#D1FAE5" font-size="11">   避免 16K 长文档与 256 短工单同 Batch 造成 KV 碎片空洞 (`+1.22x`)</text>
+  <text x="52" y="458" fill="#6EE7B7" font-size="12" font-weight="700">🎯 综合提速 `3.02 倍`：仅需 `16 张 H200` 在 6.5 小时内跑完 10 亿词！</text>
+
+  <!-- Center: Prefix Sorting & Length Bucketing Pipeline -->
+  <rect x="407" y="108" width="386" height="385" rx="12" fill="#1E293B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="425" y="136" fill="#6EE7B7" font-size="15" font-weight="700">② 十亿词元 T+1 批处理流水线与断点续跑架构</text>
+
+  <rect x="423" y="150" width="354" height="152" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="435" y="172" fill="#38BDF8" font-size="13" font-weight="700">Step 1: Parquet 分片读取与多级前缀聚类排序 (CPU 4min)</text>
+  <text x="435" y="194" fill="#F1F5F9" font-size="12">· 原始作业：`250,000` 条任务 (`3,500 In + 500 Out = 10^9 Tokens`)</text>
+  <text x="435" y="214" fill="#CBD5E1" font-size="12">· 同一份 3,000-Token 合同被连续抽取 12 个不同合规字段：</text>
+  <text x="435" y="234" fill="#6EE7B7" font-size="12" font-weight="700">  排序后第 1 条任务做 1 次 Prefill，紧随其后的 11 条任务</text>
+  <text x="435" y="254" fill="#6EE7B7" font-size="12" font-weight="700">  100% 命中 HBM 缓存，还没被 LRU 淘汰就已被彻底消费完！</text>
+  <text x="435" y="276" fill="#94A3B8" font-size="11">  (无需跨机 KV 传输，单机 HBM 内即可达成 89.5% 极限命中率)</text>
+
+  <rect x="423" y="314" width="354" height="164" rx="8" fill="#0F172A" stroke="#10B981"/>
+  <text x="435" y="336" fill="#6EE7B7" font-size="13" font-weight="700">Step 2: DP=2 × TP=4 离线引擎 + 每 1,000 条 Parquet 微提交</text>
+  <text x="435" y="358" fill="#F8FAFC" font-size="12">· 拓扑：无需跨机 TP/PD 分离！每 `4 张 H200` 跑 1 个独立实例</text>
+  <text x="435" y="378" fill="#CBD5E1" font-size="12">  (`16 张 H200 = 4 个完全解耦的 DP 副本`，零跨节点通信开销)</text>
+  <text x="435" y="398" fill="#FDE68A" font-size="12" font-weight="700">· 幂等断点续跑 (Idempotent Micro-Batch Checkpointing)：</text>
+  <text x="435" y="418" fill="#D1FAE5" font-size="12">  每跑完 `1,000` 条记录 (`~2.4 分钟`) 立即刷盘 `part-xxxx.parquet`</text>
+  <text x="435" y="438" fill="#D1FAE5" font-size="12">  并记录 `request_uuid` 位图；即便夜间 Spot 实例被抢占或被</text>
+  <text x="435" y="458" fill="#6EE7B7" font-size="11" font-weight="700">  P0 在线突发流量抢占，最多只重算最后 2.4 分钟 (`&lt;0.6%` 损耗)！</text>
+
+  <!-- Right: Cloud Batch API vs Self-Hosted Offline vs Tidal Backfill -->
+  <rect x="811" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#38BDF8" stroke-width="1.5"/>
+  <text x="829" y="136" fill="#38BDF8" font-size="15" font-weight="700">③ 每晚 10 亿 Tokens 四大执行方案 TCO 对决</text>
+
+  <rect x="827" y="150" width="333" height="74" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="839" y="170" fill="#FCA5A5" font-size="13" font-weight="700">1. 公有云实时 PAYGO API ($0.40 / 1M Tokens)</text>
+  <text x="839" y="190" fill="#E2E8F0" font-size="12">· 单晚账单: `$400 / 晚` | 年化账单: **`$146,000 / 年`**</text>
+  <text x="839" y="208" fill="#FCA5A5" font-size="11">· 评价：最贵，且易触发云厂商租户级 TPM 限流报错</text>
+
+  <rect x="827" y="234" width="333" height="74" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="839" y="254" fill="#FDE68A" font-size="13" font-weight="700">2. 公有云 24h 异步 Batch API (5 折 · $0.20 / 1M)</text>
+  <text x="839" y="274" fill="#E2E8F0" font-size="12">· 单晚账单: `$200 / 晚` | 年化账单: **`$73,000 / 年`**</text>
+  <text x="839" y="292" fill="#FDE68A" font-size="11">· 评价：仅承诺 24h 内返回，无法保证次日早 8:00 准时出报表！</text>
+
+  <rect x="827" y="318" width="333" height="74" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="839" y="338" fill="#38BDF8" font-size="13" font-weight="700">3. 自建乱序在线模式硬跑 (52× H200 · $0.145 / 1M)</text>
+  <text x="839" y="358" fill="#E2E8F0" font-size="12">· 吞吐仅 `5,600 tok/s/机` | 需专买离线卡，年化 `$52,900/年`</text>
+  <text x="839" y="376" fill="#38BDF8" font-size="11">· 评价：未做前缀排序与大 Batch，浪费 67% 硬件潜能</text>
+
+  <rect x="827" y="402" width="333" height="80" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="839" y="422" fill="#6EE7B7" font-size="13" font-weight="700">4. 前缀重排离线引擎 + 夜间借用在线推理卡 (16× H200)</text>
+  <text x="839" y="442" fill="#F8FAFC" font-size="12">· 吞吐 **`16,900 tok/s/机 (3.02x)`** | `6.5 小时` 准时跑完 10 亿词</text>
+  <text x="839" y="460" fill="#6EE7B7" font-size="12" font-weight="700">· 边际电费+折旧仅 **`$0.024 / 1M Tokens` (年省 `$13.7万 / -88%`)**</text>
+
+  <!-- Bottom Banner -->
+  <rect x="24" y="508" width="1152" height="100" rx="12" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="44" y="536" fill="#6EE7B7" font-size="16" font-weight="700">🔑 AI Solution Architect 十亿级离线批处理容量与调度铁律</text>
+  <text x="44" y="562" fill="#F8FAFC" font-size="13">1. 先排序再推理 (`ORDER BY system_prompt_hash, doc_hash, len_bucket`)：仅靠 4 分钟 CPU 字典序预排序即可白拿 89.5% HBM 前缀命中率与 3.02x 吞吐；</text>
+  <text x="44" y="586" fill="#CBD5E1" font-size="13">2. 夜间借用日间在线推理集群 (`00:00–06:30`) 跑大 Batch (`B=256`) 离线作业：既保证早 8:00 100% 准时交付 T+1 报表，又把单百万词成本压至 $0.024。</text>
+</svg>

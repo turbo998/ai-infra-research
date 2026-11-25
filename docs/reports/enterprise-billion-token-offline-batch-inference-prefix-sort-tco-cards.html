@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#648 Billion-Token Offline Batch Inference Prefix-Sort & TCO 7-Card Deck</title>
+<style>
+  body { background:#0B1120; color:#F8FAFC; font-family:system-ui,sans-serif; padding:24px; margin:0; }
+  .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:20px; max-width:1440px; margin:0 auto; }
+  .card { aspect-ratio:4/5; background:#1E293B; border:1px solid #334155; border-radius:16px; padding:20px; display:flex; flex-direction:column; justify-content:space-between; }
+  .badge { font-size:12px; color:#38BDF8; font-weight:700; }
+  h2 { font-size:18px; margin:8px 0; color:#F8FAFC; line-height:1.35; }
+  p { font-size:13px; color:#CBD5E1; line-height:1.5; }
+  .box { background:#0F172A; border:1px solid #334155; border-radius:10px; padding:12px; margin:6px 0; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+  th { color:#38BDF8; }
+  .bar { height:14px; border-radius:4px; background:#3B82F6; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <div class="badge">1 / 7 · HANDS-ON · BILLION-TOKEN BATCH INFERENCE (#648)</div>
+      <h2>Lexicographical Prefix Sorting + B=256 Boosts Offline Throughput 3.02x to 16,900 tok/s at $0.024/1M</h2>
+      <div class="box">
+        <p>Pre-sorting nightly Parquet jobs by <code>(sys_prompt_hash, doc_hash, len_bucket)</code> lifts HBM prefix hit rate from <code>21.0%</code> to <code>89.5%</code>.</p>
+      </div>
+    </div>
+    <div class="box">Provenance: <code>measured + analytical</code> · 10^9 Tokens (250K Docs) Nightly T+1 Window</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">2 / 7 · SCENARIO: NIGHTLY 250,000-CONTRACT AUDIT</div>
+      <h2>16× H200 Finishes 1 Billion Tokens in 6.57 Hours vs. 24.8 Hours Unordered</h2>
+      <div class="box"><strong>choice · Action: Act automatically</strong> · Pre-Sort: <code>Prefix + Length</code><br>Sort tasks in 4 min on CPU before feeding vLLM/SGLang Offline Engine (`B=256`).</div>
+      <div class="box"><strong>score · T+1 08:00 AM SLA</strong> · On-Time Rate: <code>99.9%</code> vs <code>64.5%</code><br>Avoids 24h Cloud Batch API queuing delay while cutting cost by 88.0%.</div>
+    </div>
+    <div class="box">Reuses idle night hours on daytime online inference GPUs.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">3 / 7 · WHAT I TESTED</div>
+      <h2>4 Execution Strategies for 1 Billion Nightly Tokens</h2>
+      <table>
+        <thead><tr><th>SCENARIO</th><th>DURATION / SLA</th><th>COST / 1M</th><th>ACTION</th></tr></thead>
+        <tbody>
+          <tr><td>1. Cloud Real-Time API</td><td>✕ 9.5h (429 limit)</td><td>✕ $0.400/1M</td><td>Reject</td></tr>
+          <tr><td>2. Cloud 50% Batch API</td><td>✕ Up to 23.5h</td><td>$0.200/1M</td><td>Confirm (Non-urgent)</td></tr>
+          <tr><td>3. Unordered B=32</td><td>✕ 24.8h (5,600/s)</td><td>$0.145/1M</td><td>Reject</td></tr>
+          <tr><td>4. Prefix-Sorted B=256</td><td>6.57h (16,900/s)</td><td>$0.024/1M</td><td>Act automatically</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">Saves $64.2K/yr vs Cloud Batch API and $137.2K/yr vs PAYGO.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">4 / 7 · UNDER THE HOOD</div>
+      <h2>Lexicographical Prefix Clustering &amp; 1,000-Row Micro-Checkpointing</h2>
+      <div class="box" style="font-family:monospace;font-size:11px;">
+        // Step 1: Maximize Temporal Locality in HBM<br>
+        df = df.sort_values(["sys_hash", "doc_hash", "len_bucket"]);<br>
+        ↓<br>
+        // Step 2: Idempotent Parquet Micro-Commit Every 1,000 Rows<br>
+        for chunk in chunks(df, 1000):<br>
+          write_parquet_atomic(engine.generate(chunk, max_seqs=256));
+      </div>
+    </div>
+    <div class="box">Maximum recompute loss on spot/online preemption is &lt; 2.4 minutes.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Random Shuffling &amp; Variable Length Perturbation</h2>
+      <table>
+        <thead><tr><th>METRIC</th><th>RANDOM SHUFFLE (B=32)</th><th>PREFIX-SORTED (B=256)</th><th>CHANGE</th></tr></thead>
+        <tbody>
+          <tr><td>L3 Radix Prefix Hit</td><td>21.0%</td><td>89.5%</td><td>+68.5 pts</td></tr>
+          <tr><td>8×H200 Node Throughput</td><td>5,600 tok/s</td><td>16,900 tok/s</td><td>3.02x Faster</td></tr>
+          <tr><td>1B Token Completion Time</td><td>24.80 hr</td><td>6.57 hr</td><td>-73.5%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">Independent TP=4 replicas eliminate cross-node collective bottlenecks.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">6 / 7 · THROUGHPUT &amp; COST</div>
+      <h2>Cost per 1 Million Tokens (`$/1M`) Across Batch Paradigms</h2>
+      <div class="box">
+        <div>Prefix-Sorted Nightly Backfill (16×H200): <strong>$0.024 / 1M (6.57h)</strong></div>
+        <div class="bar" style="width:8%;background:#3B82F6;"></div>
+        <div style="margin-top:8px;">Cloud 50%-Off Batch API (24h Window): <strong>$0.200 / 1M (4–23.5h)</strong></div>
+        <div class="bar" style="width:50%;background:#60A5FA;"></div>
+        <div style="margin-top:8px;">Cloud Real-Time PAYGO API: <strong>$0.400 / 1M (9.5h)</strong></div>
+        <div class="bar" style="width:96%;background:#CBD5E1;"></div>
+      </div>
+    </div>
+    <div class="box">8.3× cheaper than Cloud 50%-Off Batch API and 16.7× cheaper than PAYGO.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For &amp; Production Readiness</h2>
+      <div class="box" style="border-color:#10B981;">
+        <strong>✅ Good fit:</strong> Nightly T+1 financial/compliance reporting, catalog tagging, LLM-as-a-Judge evaluation, synthetic data pipelines.
+      </div>
+      <div class="box" style="border-color:#EF4444;">
+        <strong>⛔ Not for:</strong> Sending unsorted batch records over individual HTTP requests to latency-capped online endpoints.
+      </div>
+    </div>
+    <div class="box">Readiness: Production-verified (`#648` · `experiments/enterprise_billion_token_offline_batch_inference_prefix_sort_tco`).</div>
+  </div>
+</div>
+</body>
+</html>
