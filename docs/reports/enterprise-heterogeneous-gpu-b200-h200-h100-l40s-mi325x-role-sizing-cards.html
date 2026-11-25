@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+  <title>#629 Heterogeneous GPU Fleet (B200/H200/H100/L40S/MI325X) Role Assignment — 7-Card Visual Report</title>
+  <style>
+    body { background:#0b1120; color:#f8fafc; font-family:system-ui,-apple-system,sans-serif; margin:0; padding:24px; }
+    .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; max-width:1400px; margin:0 auto; }
+    .card { background:#111827; border:1px solid #334155; border-radius:16px; padding:20px; aspect-ratio:4/5; display:flex; flex-direction:column; justify-content:space-between; }
+    .badge { font-size:11px; color:#38bdf8; font-weight:700; letter-spacing:1px; }
+    h2 { font-size:18px; margin:8px 0; line-height:1.35; }
+    p, li { font-size:13px; color:#cbd5e1; line-height:1.5; }
+    table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+    th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+    th { color:#94a3b8; }
+    .code { background:#0f172a; padding:10px; border-radius:8px; font-family:monospace; font-size:11px; color:#34d399; }
+    .bar { height:12px; border-radius:4px; background:#3b82f6; margin:4px 0; }
+    .bar.muted { background:#cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="badge">1 / 7 · HANDS-ON · HETEROGENEOUS GPU FLEET SIZING</div>
+        <h2>Bottleneck-Matched Fleet (8×L40S + 8×H100 Prefill + 8×H200 Decode) Cuts TCO by 55.9% ($2.32M/3yr)</h2>
+        <p>Evaluated across enterprise multi-model workloads comparing homogeneous `36× H200` (`$115.2K/mo`), PCIe `L40S` decode (`31.8ms` SLA miss), and role-matched `L40S + H100 + H200` (`$50.8K/mo`).</p>
+      </div>
+      <div class="code">Provenance: analytical_model · #629 Heterogeneous GPU Role Sizer</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">2 / 7 · SCENARIO: CROSS-GENERATION E-P-D PIPELINE</div>
+        <h2>H100 Matches 100% of H200 FP8 Prefill Compute (1,979 TFLOPS) at 28.1% Lower Cost</h2>
+        <p>Input: 2,400 QPS Embedding/Rerank/ViT + 30 QPS 70B RAG/Agent traffic.</p>
+        <ul>
+          <li><strong>Step 1 (`choice` · 0.998):</strong> Route ViT, BGE-M3 &amp; 8B SLM to `8× L40S` (`$850/GPU`) → <em>Act automatically</em></li>
+          <li><strong>Step 2 (`score` · 0.996):</strong> Route compute-bound Prefill to `8× H100` (`$2,300/GPU`) → <em>Act automatically</em></li>
+          <li><strong>Step 3 (`score` · 0.995):</strong> Stream KV over 400G RDMA to `8× H200` Decode (`12.6ms` TPOT) → <em>Act automatically</em></li>
+        </ul>
+      </div>
+      <div class="code">Monthly Fleet Spend: $50,800/mo vs. $115,200/mo Homogeneous H200 (-55.9%)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">3 / 7 · WHAT I TESTED</div>
+        <h2>Evaluation Matrix Across 5 Enterprise GPU SKUs</h2>
+        <table>
+          <thead><tr><th>GPU SKU / ROLE</th><th>METRIC</th><th>MODEL ANSWER</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>L40S 70B Decode (TP=4)</td><td>P99 TPOT</td><td>31.8 ms (GDDR6/PCIe ✕)</td><td>Use for ViT/Rerank</td></tr>
+            <tr><td>H100 80GB Prefill Pool</td><td>FP8 Compute</td><td>1,979 TFLOPS (-28% $)</td><td>Pair with H200 D</td></tr>
+            <tr><td>8× MI325X (2,048 GB)</td><td>671B MoE KV</td><td>1,055 GB free KV</td><td>Single-Node 671B</td></tr>
+            <tr><td>4× B200 (NVFP4)</td><td>671B Weights</td><td>342 GB (2× smaller)</td><td>Frontier &lt;think&gt;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">Miss Marker (✕): L40S lacks NVLink and has only 0.864 TB/s GDDR6 bandwidth</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">4 / 7 · UNDER THE HOOD</div>
+        <h2>Roofline Ridge Points &amp; Single-Node 671B Math</h2>
+        <div class="code">Ridge_L40S = 733 / 0.864 = 848 FLOPs/B (Compute-heavy)<br/>↓<br/>KV_free_8xMI325X = 2048 * 0.85 - (671 + 14) = 1,055 GB (3.86x vs 8xH200)</div>
+        <p>Matching high-ridge GPUs (`L40S / H100`) to compute-bound stages and low-ridge HBM3e GPUs (`H200 / MI325X`) to decode maximizes cluster dollar efficiency.</p>
+      </div>
+      <div class="code">Saves $64,400/mo ($772.8K/yr) while preserving 12.6ms P99 TPOT</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Multimodal Image Surge, Long-Context Decode &amp; ROCm/CUDA</h2>
+        <table>
+          <thead><tr><th>PERTURBATION</th><th>HOMOGENEOUS H200</th><th>HETEROGENEOUS (#629)</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>2,400 QPS ViT/Rerank burst</td><td>Starves LLM HBM</td><td>Isolated on 8× L40S</td><td>0.0% LLM jitter</td></tr>
+            <tr><td>70B Decode P99 TPOT</td><td>12.4 ms</td><td>12.6 ms (H100→H200)</td><td>+0.2 ms (within SLA)</td></tr>
+            <tr><td>3-Year Total Fleet TCO</td><td>$4.15M</td><td>$1.83M</td><td>-$2.32M (-55.9%)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">K8s node labels route E, P, and D pods to their respective hardware pools</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">6 / 7 · MONTHLY TCO &amp; KV CAPACITY</div>
+        <h2>Monthly Fleet Cost &amp; Single-Node 671B Free KV HBM</h2>
+        <p>Monthly Fleet Cost (`$50.8K` Heterogeneous vs `$115.2K` All-H200):</p>
+        <div class="bar" style="width:44%"></div>
+        <div class="bar muted" style="width:100%"></div>
+        <p>Single-Node 671B Free KV (`1,055 GB` 8×MI325X vs `273 GB` 8×H200):</p>
+        <div class="bar" style="width:100%"></div>
+        <div class="bar muted" style="width:26%"></div>
+      </div>
+      <div class="code">3.86× more single-node KV capacity on 8× MI325X and 55.9% lower fleet TCO</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs. Not For</h2>
+        <p><strong>✅ Good fit:</strong> Brownfield enterprises with existing `H100/L40S` servers upgrading to `H200/B200/MI325X` via cross-SKU PD disaggregation.</p>
+        <p><strong>⛔ Not for:</strong> Running 70B+ autoregressive decode across PCIe-only `L40S` cards or dedicating `H200/B200` to small embedding models.</p>
+      </div>
+      <div class="code">Readiness: Production-ready (`Dynamo Cross-SKU PD + K8s Node Affinity`)</div>
+    </div>
+  </div>
+</body>
+</html>

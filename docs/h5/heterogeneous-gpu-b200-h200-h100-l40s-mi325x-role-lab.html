@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#629 企业异构 GPU 集群 (B200 / H200 / H100 / L40S / MI325X) 三道水位线对口编排与跨代 PD 分离交互精读页</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 16px 56px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-left: 5px solid #8b5cf6;
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #0284c7, #10b981, #8b5cf6);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    .subtitle { color: #cbd5e1; font-size: 14px; margin: 0; }
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .kpi-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kpi-box .lbl { font-size: 12px; color: var(--muted); }
+    .kpi-box .val { font-size: 19px; font-weight: 800; color: var(--good); margin-top: 4px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16.5px;
+      margin: 0 0 12px;
+      color: var(--accent);
+      border-left: 3px solid var(--good);
+      padding-left: 10px;
+    }
+    .control { margin-bottom: 11px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input[type="range"], select {
+      width: 100%;
+      padding: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .bar-row { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+    .bar-bg { height: 20px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      color: #6ee7b7;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.7); }
+    svg { width: 100%; height: auto; display: block; border-radius: 8px; background: #0b1120; border: 1px solid var(--border); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/03-gpu-sizing.html">🎓 H5 Academy 第03册</a>
+      <a href="../components/enterprise-heterogeneous-gpu-b200-h200-h100-l40s-mi325x-role-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-heterogeneous-gpu-b200-h200-h100-l40s-mi325x-role-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-heterogeneous-gpu-b200-h200-h100-l40s-mi325x-role-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-heterogeneous-gpu-b200-h200-h100-l40s-mi325x-role-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#629 · PILLAR 1 &amp; 3: HETEROGENEOUS GPU FLEET ROLE ASSIGNMENT &amp; CROSS-SKU PD LAB</span>
+      <div data-lang="zh">
+        <h1>企业异构 GPU 集群 (`B200 / H200 / H100 / L40S / MI325X`) 三道水位线对口编排与跨代 PD 分离沙盘</h1>
+        <p class="subtitle">揭秘为什么 H100 跑 Prefill 的算力与 H200 100% 相同却便宜 28%，为什么单机 8×MI325X (2,048GB) 能免跨网装下 671B MoE 并剩 1,055GB 放 KV，以及如何用异构编排立省 55.9% TCO。</p>
+      </div>
+      <div data-lang="en">
+        <h1>Enterprise Heterogeneous GPU Fleet (`B200 / H200 / H100 / L40S / MI325X`) Role Assignment &amp; Cross-SKU PD Lab</h1>
+        <p class="subtitle">Match L40S to Embedding/ViT, H100 to Compute-Bound Prefill, H200/MI325X to Bandwidth-Bound Decode, and B200 to NVFP4 Reasoning — cutting 3-year TCO by 55.9%.</p>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-box">
+          <div class="lbl">异构集群月度租金节省</div>
+          <div class="val">-55.9% ($50.8K vs $115.2K)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">跨代 PD (H100 P → H200 D) TPOT</div>
+          <div class="val">12.6 ms (与全 H200 持平)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">单机 8×MI325X 装 671B 剩余 KV</div>
+          <div class="val">1,055 GB (H200 的 3.86x)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">三年累计净省算力开支</div>
+          <div class="val">净省 $231.8万 / 3年</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SVG Diagram: 5-GPU Watermark Bar Comparison & Cross-SKU E-P-D Pipeline -->
+    <div class="card">
+      <h2>🖼️ 图解异构编排黄金定律：① 五款 GPU 显存与带宽标尺  ×  ② 跨代 `E-P-D` (`L40S ViT → H100 Prefill → H200 Decode`) 流水线</h2>
+      <svg viewBox="0 0 1100 290" aria-label="5-GPU Hardware Comparison and Cross-SKU E-P-D Pipeline">
+        <!-- Left: 5-GPU HBM Capacity & Bandwidth Comparison -->
+        <rect x="16" y="14" width="520" height="262" rx="10" fill="#0f172a" stroke="#334155"/>
+        <text x="32" y="38" fill="#38bdf8" font-size="14" font-weight="800">① 五款主流 GPU 显存容量 (GB) 与带宽 (TB/s) 物理差异</text>
+
+        <text x="32" y="70" fill="#cbd5e1" font-size="11.5" font-weight="700">L40S (PCIe)</text>
+        <rect x="135" y="56" width="75" height="18" rx="4" fill="#ef4444"/>
+        <text x="218" y="70" fill="#fca5a5" font-size="11">48 GB GDDR6 · 0.86 TB/s (无 NVLink · 禁跑 70B Decode)</text>
+
+        <text x="32" y="110" fill="#cbd5e1" font-size="11.5" font-weight="700">H100 (SXM)</text>
+        <rect x="135" y="96" width="125" height="18" rx="4" fill="#10b981"/>
+        <text x="268" y="110" fill="#6ee7b7" font-size="11">80 GB HBM3 · 3.35 TB/s · 1,979 TFLOPS (Prefill 甜点)</text>
+
+        <text x="32" y="150" fill="#cbd5e1" font-size="11.5" font-weight="700">H200 (SXM)</text>
+        <rect x="135" y="136" width="220" height="18" rx="4" fill="#06b6d4"/>
+        <text x="363" y="150" fill="#67e8f9" font-size="11">141 GB HBM3e · 4.80 TB/s (Decode 主力)</text>
+
+        <text x="32" y="190" fill="#cbd5e1" font-size="11.5" font-weight="700">B200 (SXM)</text>
+        <rect x="135" y="176" width="280" height="18" rx="4" fill="#a855f7"/>
+        <text x="423" y="190" fill="#e9d5ff" font-size="11">180 GB · 8.0 TB/s · NVFP4</text>
+
+        <text x="32" y="230" fill="#cbd5e1" font-size="11.5" font-weight="700">MI325X (OAM)</text>
+        <rect x="135" y="216" width="380" height="18" rx="4" fill="#f59e0b"/>
+        <text x="200" y="256" fill="#fcd34d" font-size="11.5" font-weight="700">★ MI325X 单卡 256 GB (6.0 TB/s) ➔ 单机 2,048 GB 免跨网装 671B！</text>
+
+        <!-- Right: Cross-SKU E-P-D Pipeline -->
+        <rect x="552" y="14" width="532" height="262" rx="10" fill="#0f172a" stroke="#10b981"/>
+        <text x="570" y="38" fill="#34d399" font-size="14" font-weight="800">② 跨代异构三池流水线 (E-P-D Disaggregation)：好钢用在刀刃上</text>
+
+        <rect x="570" y="54" width="496" height="62" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="584" y="76" fill="#38bdf8" font-size="12.5" font-weight="700">Pool E (Encode / Satellite): 8× L40S PCIe ($850/卡 = $6,800/月)</text>
+        <text x="584" y="96" fill="#cbd5e1" font-size="11.5">跑 ViT 图像编码、BGE-M3 向量检索/Reranker、Whisper 语音与 8B 护栏 (省下 12 张 H200)</text>
+
+        <rect x="570" y="126" width="496" height="62" rx="8" fill="#1e293b" stroke="#10b981"/>
+        <text x="584" y="148" fill="#34d399" font-size="12.5" font-weight="700">Pool P (Prefill Compute): 8× H100 SXM ($2,300/卡 = $18,400/月)</text>
+        <text x="584" y="168" fill="#cbd5e1" font-size="11.5">FP8 算力 (1,979 TFLOPS) 与 H200 完全相同！专跑长文 Prefill 并经 400G RDMA 推 KV</text>
+
+        <rect x="570" y="198" width="496" height="64" rx="8" fill="#1e293b" stroke="#a855f7"/>
+        <text x="584" y="220" fill="#c084fc" font-size="12.5" font-weight="700">Pool D (Decode Bandwidth): 8× H200 141GB ($3,200/卡 = $25,600/月)</text>
+        <text x="584" y="242" fill="#6ee7b7" font-size="11.5" font-weight="700">4.8 TB/s HBM3e 专职承接流式 Decode (TPOT 12.6ms) ➔ 总月费仅 $50.8K (省 55.9%)！</text>
+      </svg>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left: Interactive Heterogeneous Fleet Sizer -->
+      <div class="card">
+        <h2>🧮 交互式异构 GPU 集群角色分配与三年 TCO 计算器</h2>
+
+        <div class="control">
+          <label><span>检索/重排/视觉/小模型卫星负载规模 (Auxiliary QPS)</span><strong id="auxLbl">2,400 QPS (需 8×L40S)</strong></label>
+          <input type="range" id="auxRange" min="600" max="6000" step="300" value="2400" oninput="calcHet()" />
+        </div>
+
+        <div class="control">
+          <label><span>主大模型在线推理流量 (70B/235B Peak QPS)</span><strong id="llmLbl">30 QPS (8P + 8D)</strong></label>
+          <input type="range" id="llmRange" min="10" max="90" step="5" value="30" oninput="calcHet()" />
+        </div>
+
+        <div class="control">
+          <label><span>集群硬件采购/编排策略对比</span></label>
+          <select id="hetStratSel" onchange="calcHet()">
+            <option value="hetero" selected>🏆 黄金异构对口：L40S 跑卫星 + H100 跑 Prefill + H200 跑 Decode</option>
+            <option value="all_h200">❌ 同构一刀切：全买顶配 H200 混跑所有大小模型</option>
+            <option value="all_l40s">⚠️ 廉价一刀切：全用 L40S PCIe 硬跑 70B Decode (SLA 违约)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>671B 满血 MoE 节点选型试算 (Single-Node vs Multi-Node)</span></label>
+          <select id="moeSkuSel" onchange="calcHet()">
+            <option value="mi325x" selected>1 台 8× AMD MI325X (2,048GB HBM3e · 装完 685GB 剩 1,055GB KV)</option>
+            <option value="h200_2n">2 台 16× NVIDIA H200 (2,256GB HBM3e · 跨机 DeepEP + MTP)</option>
+            <option value="b200_fp4">1 台 4× NVIDIA B200 (720GB HBM3e · 硬件 NVFP4 权重减半至 342GB)</option>
+          </select>
+        </div>
+
+        <div class="formula" id="hetFormula"></div>
+      </div>
+
+      <!-- Right: Dynamic Visual Bars -->
+      <div class="card">
+        <h2>📊 实时对比：月度租金、三年总 TCO 与 `70B Decode P99 TPOT`</h2>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>❌ 同构全 H200 方案月度算力账单</span><strong id="homoCostOut" style="color:var(--bad)">$115,200 / 月 (36×H200)</strong></div>
+          <div class="bar-bg"><div id="homoCostBar" class="bar-fill" style="width:100%; background:var(--bad);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 异构瓶颈对口方案 (`L40S + H100 P + H200 D`) 月度账单</span><strong id="hetCostOut" style="color:var(--good)">$50,800 / 月 (立省 55.9%)</strong></div>
+          <div class="bar-bg"><div id="hetCostBar" class="bar-fill" style="width:44%; background:var(--good);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>主模型 `70B FP8` 流式吐字延迟 (`P99 TPOT` · 红线 ≤18ms)</span><strong id="hetTpotOut" style="color:var(--good)">12.6 ms (丝滑达标 ✓)</strong></div>
+          <div class="bar-bg"><div id="hetTpotBar" class="bar-fill" style="width:36%; background:var(--good);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>三年期累计净节省预算 (`3-Year Net Savings`)</span><strong id="yr3SaveOut" style="color:var(--good)">净省 $2,318,400 / 3年</strong></div>
+          <div class="bar-bg"><div id="yr3SaveBar" class="bar-fill" style="width:85%; background:linear-gradient(90deg, #0284c7, #10b981);"></div></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>硬件型号</th>
+              <th>单卡显存 / 带宽</th>
+              <th>671B MoE 部署方式与剩余 KV 显存</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>H100 80GB</strong></td>
+              <td><code>80 GB · 3.35 TB/s</code></td>
+              <td>单机 640GB 装不下 685GB 权重，需 <code>16卡 (2机)</code></td>
+            </tr>
+            <tr>
+              <td><strong>H200 141GB</strong></td>
+              <td><code>141 GB · 4.80 TB/s</code></td>
+              <td>单机 8卡剩 <code>273 GB</code> KV；高吞吐推荐 <code>16卡 DP×EP</code></td>
+            </tr>
+            <tr>
+              <td><strong>MI325X 256GB</strong> 🏆</td>
+              <td><code>256 GB · 6.00 TB/s</code></td>
+              <td><strong>单机 8卡 (2,048GB) 免跨网装下，净剩 <code>1,055 GB</code> KV！</strong></td>
+            </tr>
+            <tr>
+              <td><strong>B200 180GB</strong> 🏆</td>
+              <td><code>180 GB · 8.00 TB/s</code></td>
+              <td><strong>开启硬件 <code>NVFP4</code> (342GB)，仅需 <code>4张 B200</code> 即可跑！</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function calcHet() {
+      const auxQps = parseInt(document.getElementById('auxRange').value, 10);
+      const llmQps = parseInt(document.getElementById('llmRange').value, 10);
+      const strat = document.getElementById('hetStratSel').value;
+      const moeSku = document.getElementById('moeSkuSel').value;
+
+      const nL40s = Math.max(2, Math.ceil((auxQps / 300.0) / 2.0) * 2);
+      const nPrefillH100 = Math.max(4, Math.ceil((llmQps / 30.0) * 8 / 4.0) * 4);
+      const nDecodeH200 = Math.max(4, Math.ceil((llmQps / 30.0) * 8 / 4.0) * 4);
+
+      document.getElementById('auxLbl').textContent = auxQps.toLocaleString() + ' QPS (配 ' + nL40s + '×L40S)';
+      document.getElementById('llmLbl').textContent = llmQps + ' QPS (' + nPrefillH100 + 'P + ' + nDecodeH200 + 'D)';
+
+      const homoH200Count = Math.round(nL40s * 1.5) + nPrefillH100 + nDecodeH200 + 8;
+      const homoCost = homoH200Count * 3200;
+      const hetCost = nL40s * 850 + nPrefillH100 * 2300 + nDecodeH200 * 3200;
+      const savePct = ((1.0 - hetCost / homoCost) * 100.0).toFixed(1);
+      const yr3Save = (homoCost - hetCost) * 36;
+
+      const tpotMs = strat === 'all_l40s' ? 31.8 : 12.6;
+
+      document.getElementById('homoCostOut').textContent = '$' + homoCost.toLocaleString() + ' / 月 (' + homoH200Count + '×H200)';
+      document.getElementById('hetCostOut').textContent = '$' + hetCost.toLocaleString() + ' / 月 (省 ' + savePct + '%)';
+      document.getElementById('hetCostBar').style.width = Math.round((hetCost / homoCost) * 100) + '%';
+
+      document.getElementById('hetTpotOut').textContent = tpotMs.toFixed(1) + ' ms ' + (tpotMs <= 18 ? '(达标 ✓)' : '(GDDR6/PCIe 严重违约 ✕)');
+      document.getElementById('hetTpotOut').style.color = tpotMs <= 18 ? 'var(--good)' : 'var(--bad)';
+      document.getElementById('hetTpotBar').style.width = Math.min(100, Math.round(tpotMs * 2.8)) + '%';
+      document.getElementById('hetTpotBar').style.background = tpotMs <= 18 ? 'var(--good)' : 'var(--bad)';
+
+      document.getElementById('yr3SaveOut').textContent = '净省 $' + yr3Save.toLocaleString() + ' / 3年';
+
+      const moeNote = moeSku === 'mi325x'
+        ? '单台 8×MI325X (2,048GB, $23.6K/月) 装完 685GB 权重净剩 1,055GB 放 KV，零跨机通信！'
+        : (moeSku === 'b200_fp4'
+          ? '4×B200 (720GB, $19.2K/月) 启用硬件 NVFP4 将 671B 缩至 342GB，TPOT 压至 7.8ms！'
+          : '2台 16×H200 ($51.2K/月) 采用 Attention DP=16 × Expert EP=16 + DeepEP 承载高吞吐生产！');
+
+      document.getElementById('hetFormula').textContent =
+        '【异构集群配卡清单】 ' + nL40s + '×L40S ($' + (nL40s * 850).toLocaleString() + ') + ' + nPrefillH100 + '×H100 Prefill ($' + (nPrefillH100 * 2300).toLocaleString() + ') + ' + nDecodeH200 + '×H200 Decode ($' + (nDecodeH200 * 3200).toLocaleString() + ') = $' + hetCost.toLocaleString() + '/月\n' +
+        '【对比全 H200 方案】 36×H200 需 $' + homoCost.toLocaleString() + '/月 ➔ 异构对口每月净省 $' + (homoCost - hetCost).toLocaleString() + ' (-' + savePct + '%，3年省 $' + yr3Save.toLocaleString() + ')\n' +
+        '【671B MoE 底座核算】 ' + moeNote;
+    }
+    calcHet();
+  </script>
+</body>
+</html>
