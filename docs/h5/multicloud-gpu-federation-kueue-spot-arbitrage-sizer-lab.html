@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#662 企业多云与混合算力联邦调度 (Kueue MultiKueue) 与 Spot 竞价套利交互精读页</title>
+<style>
+  :root { --bg:#0B1120; --card:#1E293B; --border:#334155; --accent:#38BDF8; --green:#10B981; --amber:#F59E0B; --red:#EF4444; --text:#F8FAFC; --muted:#94A3B8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:20px; max-width:1180px; margin:0 auto; }
+  .nav { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; font-size:13px; }
+  .nav a { color:var(--accent); text-decoration:none; background:#1E293B; padding:6px 12px; border-radius:8px; border:1px solid var(--border); }
+  .hero { background:linear-gradient(135deg,#0F172A 0%,#064E3B 100%); border:1px solid var(--green); border-radius:14px; padding:22px; margin-bottom:20px; }
+  .hero h1 { font-size:22px; margin-bottom:8px; }
+  .hero p { color:#CBD5E1; font-size:14px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:16px 0; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+  .kpi .val { font-size:24px; font-weight:800; color:var(--green); }
+  .kpi .lbl { font-size:12px; color:var(--muted); }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:20px; }
+  .panel h2 { font-size:18px; color:var(--accent); margin-bottom:12px; }
+  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; }
+  .ctrl { background:#0F172A; padding:12px; border-radius:10px; border:1px solid var(--border); }
+  .ctrl label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; font-weight:600; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .bar-row { margin:10px 0; }
+  .bar-lbl { display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .bar-bg { height:22px; background:#0F172A; border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+  .bar-fill { height:100%; transition:width 0.25s; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">⬅ 返回 AI Infra 全景精学馆</a>
+    <a href="ai-infra-learning-hub.html">🔥 7合1精学中心</a>
+    <a href="../components/enterprise-multicloud-gpu-federation-kueue-spot-arbitrage-sizer-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-multicloud-gpu-federation-kueue-spot-arbitrage-sizer-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-multicloud-gpu-federation-kueue-spot-arbitrage-sizer.html">🧮 容量计算器</a>
+    <a href="../reports/enterprise-multicloud-gpu-federation-kueue-spot-arbitrage-sizer-cards.html">🃏 7-Card 评测卡</a>
+  </div>
+
+  <div class="hero">
+    <h1>#662 企业多云与混合算力联邦调度 (Kueue MultiKueue)：65% 折扣 Spot 套利与 15 秒优雅排空精读页</h1>
+    <p>核心突破：将无状态 <code>Prefill 扩容池 / 批处理 / RL 采样</code> 放在跨三区 <code>3.5 折 Spot GPU ($1.12/h)</code> 上，有状态 <code>Decode 池</code> 锁在保底节点；收到 30s 抢占预告后 <code>0.6s</code> 排空在途 Prefill、<code>14.2s</code> 跨区拉起替补节点，实现 <code>0%</code> 在线丢单与 <code>-54.7%</code> 综合算力降本。</p>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="val" id="kpi-rate">$1.45 / GPU·h</div><div class="lbl">混合 Spot 综合单卡时薪 (对比按需 $3.20/h)</div></div>
+      <div class="kpi"><div class="val" id="kpi-save">省 $193.5万/年</div><div class="lbl">128 卡弹性池每年净省云账单 (-54.7%)</div></div>
+      <div class="kpi"><div class="val" id="kpi-avail">99.92%</div><div class="lbl">跨三区 MultiKueue 联邦扩容可用率</div></div>
+      <div class="kpi"><div class="val" id="kpi-swap">14.2s &lt; 30s</div><div class="lbl">替补节点就绪耗时跑赢 30s 强杀倒计时</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🎛️ 交互式云端弹性 GPU 规模、Spot 负载占比与年化套利节省计算器</h2>
+    <div class="controls">
+      <div class="ctrl">
+        <label><span>云端弹性 GPU 集群规模</span><span id="v-gpus">128× H200</span></label>
+        <input type="range" id="s-gpus" min="32" max="512" step="32" value="128" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>无状态 Prefill/批处理走 Spot 比例</span><span id="v-sp">84%</span></label>
+        <input type="range" id="s-sp" min="30" max="90" step="2" value="84" oninput="calc()">
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-lbl"><span>⛔ 单可用区 100% On-Demand 按需实例 ($3.20 / GPU·h)</span><strong id="b-od-txt">$294,912 / 月 ($353.9万 / 年)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:94%;background:var(--red);"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-lbl"><span>✅ MultiKueue 跨三区 Spot (Prefill/批处理) + 保底 Decode</span><strong id="b-sp-txt">$133,632 / 月 ($160.4万 / 年 · 省 54.7%)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" id="b-sp" style="width:43%;background:var(--green);"></div></div>
+    </div>
+  </div>
+
+<script>
+function calc() {
+  const gpus = +document.getElementById('s-gpus').value;
+  const spRatio = +document.getElementById('s-sp').value / 100.0;
+
+  document.getElementById('v-gpus').textContent = gpus + '× H200';
+  document.getElementById('v-sp').textContent = Math.round(spRatio * 100) + '%';
+
+  const odRate = 3.20;
+  const spotRate = 1.12;
+  const effRate = spRatio * spotRate + (1.0 - spRatio) * odRate;
+  const odMo = Math.round(gpus * 720 * odRate);
+  const optMo = Math.round(gpus * 720 * effRate);
+  const saveYrWan = ((odMo - optMo) * 12 / 10000).toFixed(1);
+
+  document.getElementById('kpi-rate').textContent = '$' + effRate.toFixed(2) + ' / GPU·h';
+  document.getElementById('kpi-save').textContent = '省 $' + saveYrWan + '万/年';
+  document.getElementById('b-od-txt').textContent = '$' + odMo.toLocaleString() + ' / 月';
+  document.getElementById('b-sp-txt').textContent = '$' + optMo.toLocaleString() + ' / 月 (省 ' + ((1 - effRate/odRate)*100).toFixed(1) + '%)';
+  document.getElementById('b-sp').style.width = Math.round((effRate / odRate) * 94) + '%';
+}
+calc();
+</script>
+</body>
+</html>
