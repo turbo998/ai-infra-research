@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#649 智算以太网 RDMA 三代演进 (RoCEv2 ECMP vs. Spectrum-X vs. UEC) 交互精读页</title>
+<style>
+  :root { --bg:#0B1120; --card:#1E293B; --border:#334155; --accent:#38BDF8; --green:#10B981; --amber:#F59E0B; --red:#EF4444; --text:#F8FAFC; --muted:#94A3B8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:20px; max-width:1180px; margin:0 auto; }
+  .nav { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; font-size:13px; }
+  .nav a { color:var(--accent); text-decoration:none; background:#1E293B; padding:6px 12px; border-radius:8px; border:1px solid var(--border); }
+  .hero { background:linear-gradient(135deg,#0F172A 0%,#064E3B 100%); border:1px solid var(--green); border-radius:14px; padding:22px; margin-bottom:20px; }
+  .hero h1 { font-size:22px; margin-bottom:8px; }
+  .hero p { color:#CBD5E1; font-size:14px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:16px 0; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+  .kpi .val { font-size:24px; font-weight:800; color:var(--green); }
+  .kpi .lbl { font-size:12px; color:var(--muted); }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:20px; }
+  .panel h2 { font-size:18px; color:var(--accent); margin-bottom:12px; }
+  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; }
+  .ctrl { background:#0F172A; padding:12px; border-radius:10px; border:1px solid var(--border); }
+  .ctrl label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; font-weight:600; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .bar-row { margin:10px 0; }
+  .bar-lbl { display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .bar-bg { height:22px; background:#0F172A; border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+  .bar-fill { height:100%; transition:width 0.25s; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">⬅ 返回 AI Infra 全景精学馆</a>
+    <a href="ai-infra-learning-hub.html">🔥 7合1精学中心</a>
+    <a href="../components/enterprise-ai-ethernet-rocev2-ecmp-vs-spectrumx-ar-vs-uec-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-ai-ethernet-rocev2-ecmp-vs-spectrumx-ar-vs-uec-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-ai-ethernet-rocev2-ecmp-vs-spectrumx-ar-vs-uec-sizer.html">🧮 容量计算器</a>
+    <a href="../reports/enterprise-ai-ethernet-rocev2-ecmp-vs-spectrumx-ar-vs-uec-cards.html">🃏 7-Card 评测卡</a>
+  </div>
+
+  <div class="hero">
+    <h1>#649 智算以太网 RDMA 三代演进：传统 RoCEv2 (ECMP) vs. Spectrum-X (AR+DDP) vs. UEC 超以太网精读页</h1>
+    <p>核心突破：传统五元组 ECMP 在多租户象流下因哈希碰撞使 <code>busbw</code> 跌至 <code>215 GB/s (53.8%)</code>；存量集群开 <code>NCCL_IB_QPS_PER_CONNECTION=4</code> 可救回至 <code>318 GB/s</code>；新一代 <code>Spectrum-X (AR+DDP)</code> 与 <code>UEC (Packet Spraying)</code> 彻底消灭碰撞，跑出 <code>382 GB/s (95.5% 线速)</code>。</p>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="val" id="kpi-spx">382 GB/s</div><div class="lbl">Spectrum-X 有效 busbw (95.5% 线速 · 提速 1.78x)</div></div>
+      <div class="kpi"><div class="val" id="kpi-uec">376 GB/s</div><div class="lbl">UEC 超以太网包喷洒有效 busbw (94.0% 线速)</div></div>
+      <div class="kpi"><div class="val" id="kpi-qps">318 GB/s</div><div class="lbl">存量 RoCEv2 开启 Multi-QP=4 调优后 busbw</div></div>
+      <div class="kpi"><div class="val" id="kpi-lat">2.1 ms</div><div class="lbl">PD 分离 KV 突发 P99 延迟 (对比默认 ECMP 14.8ms)</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🎛️ 交互式智算以太网单卡速率、QP 拆分数与三代架构有效 busbw 沙盘</h2>
+    <div class="controls">
+      <div class="ctrl">
+        <label><span>单网卡物理速率 (NIC Speed)</span><span id="v-spd">400 Gbps</span></label>
+        <input type="range" id="s-spd" min="200" max="800" step="200" value="400" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>存量 RoCEv2 单连接拆分 QP 数</span><span id="v-qp">4 QPs</span></label>
+        <input type="range" id="s-qp" min="1" max="8" step="1" value="4" oninput="calc()">
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-lbl"><span>⛔ Gen 1：默认五元组 ECMP RoCEv2 (QP=1 · 象流碰撞 46%)</span><strong id="b-ecmp-txt">215 GB/s (53.8% 线速 · P99 14.8ms)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:54%;background:var(--red);"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-lbl"><span>🔧 Gen 1+：调优版 RoCEv2 (Multi-QP 拆流 + NIC OOO)</span><strong id="b-tune-txt">318 GB/s (79.5% 线速 · P99 4.6ms)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" id="b-tune" style="width:80%;background:var(--amber);"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-lbl"><span>✅ Gen 2/3：Spectrum-X (AR+DDP) / UEC 逐包喷洒</span><strong id="b-spx-txt">382 GB/s (95.5% 线速 · P99 2.1ms)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:96%;background:var(--green);"></div></div>
+    </div>
+  </div>
+
+<script>
+function calc() {
+  const spd = +document.getElementById('s-spd').value;
+  const qp = +document.getElementById('s-qp').value;
+
+  document.getElementById('v-spd').textContent = spd + ' Gbps';
+  document.getElementById('v-qp').textContent = qp + ' QPs';
+
+  const lineGBs = spd; // 8 NICs * (spd/8 GB/s) = spd GB/s per 8-GPU node
+  const ecmp = Math.round(lineGBs * 0.538);
+  const tuneRatio = Math.min(0.84, 0.538 + (1 - Math.pow(0.5, qp - 1)) * 0.295);
+  const tune = Math.round(lineGBs * tuneRatio);
+  const spx = Math.round(lineGBs * 0.955);
+  const uec = Math.round(lineGBs * 0.940);
+
+  document.getElementById('kpi-spx').textContent = spx + ' GB/s';
+  document.getElementById('kpi-uec').textContent = uec + ' GB/s';
+  document.getElementById('kpi-qps').textContent = tune + ' GB/s';
+
+  document.getElementById('b-ecmp-txt').textContent = ecmp + ' GB/s (53.8% 线速 · P99 14.8ms)';
+  document.getElementById('b-tune-txt').textContent = tune + ' GB/s (' + (tuneRatio*100).toFixed(1) + '% 线速 · QP=' + qp + ')';
+  document.getElementById('b-spx-txt').textContent = spx + ' GB/s (95.5% 线速 · P99 2.1ms)';
+  document.getElementById('b-tune').style.width = Math.round(tuneRatio * 100) + '%';
+}
+calc();
+</script>
+</body>
+</html>
