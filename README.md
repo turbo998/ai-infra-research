@@ -1,8 +1,8 @@
 # 云与 AI 基础设施解决方案架构师（SA）实战选型知识库 (`ai-infra-research`)
 
-> **Language / 语言**: **简体中文** | [English](./README.en.md) · [全部 634 篇双语总目录](./docs/full-catalog-zh.md) · [🎓 AI Infra 全景精学馆 H5 (`docs/h5/index.html`)](./docs/h5/index.html) · [📚 6 册推理与智算网络 H5 Academy](./docs/h5-academy/index.html) · [🔥 7合1全景精学中心 H5](./docs/h5/ai-infra-learning-hub.html) · [L0–L9 全栈分层地图](./docs/stack-map.md) · [SA 能力进阶路线](./docs/learning/roadmap.md) · [交互式容量与 TCO 工作台](./docs/reports/ai-infra-architect-workbench.html)
+> **Language / 语言**: **简体中文** | [English](./README.en.md) · [全部 635 篇双语总目录](./docs/full-catalog-zh.md) · [🎓 AI Infra 全景精学馆 H5 (`docs/h5/index.html`)](./docs/h5/index.html) · [📚 6 册推理与智算网络 H5 Academy](./docs/h5-academy/index.html) · [🔥 7合1全景精学中心 H5](./docs/h5/ai-infra-learning-hub.html) · [L0–L9 全栈分层地图](./docs/stack-map.md) · [SA 能力进阶路线](./docs/learning/roadmap.md) · [交互式容量与 TCO 工作台](./docs/reports/ai-infra-architect-workbench.html)
 
-面向 **Cloud & AI Infrastructure Solution Architect（云与 AI 基础设施解决方案架构师）** 的中英双语架构选型、容量规划与 TCO 决策知识库。仓库摒弃脱离业务的晦涩低层源码碎片与跨学科算例，聚焦架构师在企业智算中心建设、公有云/混合云选型与大模型生产落地中最常面对的 **8 大核心架构决策域**，提供 **634 篇双语深度选型指南（`#001–#632` + 2 篇旗舰架构报告）、1257 套自包含交互式容量计算器（Sizer）与 7-Card 4:5 视觉评测报告、245 套交互式 H5 精读页（`docs/h5/` & `docs/h5-academy/`），以及 640 套可一键复核的 Python 定量模型**。
+面向 **Cloud & AI Infrastructure Solution Architect（云与 AI 基础设施解决方案架构师）** 的中英双语架构选型、容量规划与 TCO 决策知识库。仓库摒弃脱离业务的晦涩低层源码碎片与跨学科算例，聚焦架构师在企业智算中心建设、公有云/混合云选型与大模型生产落地中最常面对的 **8 大核心架构决策域**，提供 **635 篇双语深度选型指南（`#001–#633` + 2 篇旗舰架构报告）、1259 套自包含交互式容量计算器（Sizer）与 7-Card 4:5 视觉评测报告、246 套交互式 H5 精读页（`docs/h5/` & `docs/h5-academy/`），以及 641 套可一键复核的 Python 定量模型**。
 
 ---
 
