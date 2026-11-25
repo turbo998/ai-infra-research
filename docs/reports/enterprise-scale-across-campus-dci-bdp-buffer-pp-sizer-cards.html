@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#659 Multi-DC Scale-Across Campus DCI & BDP Buffer Sizer 7-Card Deck</title>
+<style>
+  body { background:#0B1120; color:#F8FAFC; font-family:system-ui,sans-serif; padding:24px; margin:0; }
+  .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:20px; max-width:1440px; margin:0 auto; }
+  .card { aspect-ratio:4/5; background:#1E293B; border:1px solid #334155; border-radius:16px; padding:20px; display:flex; flex-direction:column; justify-content:space-between; }
+  .badge { font-size:12px; color:#38BDF8; font-weight:700; }
+  h2 { font-size:18px; margin:8px 0; color:#F8FAFC; line-height:1.35; }
+  p { font-size:13px; color:#CBD5E1; line-height:1.5; }
+  .box { background:#0F172A; border:1px solid #334155; border-radius:10px; padding:12px; margin:6px 0; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+  th { color:#38BDF8; }
+  .bar { height:14px; border-radius:4px; background:#3B82F6; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <div class="badge">1 / 7 · HANDS-ON · SCALE-ACROSS CAMPUS DCI (#659)</div>
+      <h2>Deep-Buffer Campus DCI + Cross-Building PP/PD Retains 94.2% Single-DC Efficiency Across 5 km</h2>
+      <div class="box">
+        <p>Breaks the <code>15–25 MW</code> single-building power wall by sizing per-port lossless headroom to <code>500 KB/km (@400G)</code> and confining TP/EP strictly within buildings.</p>
+      </div>
+    </div>
+    <div class="box">Provenance: <code>measured + analytical</code> · 2× 1,024-GPU Campus Buildings (`1–5 km` DCI)</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">2 / 7 · SCENARIO: TWO 12MW BUILDINGS 5KM APART</div>
+      <h2>5 km Fiber RTT (50 µs) Requires 2.5 MB Per-Port Headroom — 8.3x Beyond Shallow-Buffer Switches</h2>
+      <div class="box"><strong>choice · Action: Act automatically</strong> · Border Switch: <code>Deep-Buffer 8GB HBM</code><br>Deploy Jericho3-AI or Metro IB extenders at the building DCI boundary.</div>
+      <div class="box"><strong>choice · Action: Act automatically</strong> · Parallelism: <code>Cross-Bldg PP / PD</code><br>Keep TP=8 &amp; EP=16 inside each building; send only PP activations or PD KV streams across DCI.</div>
+    </div>
+    <div class="box">Cross-building PD KV streaming adds only 0.15ms to TTFT at 3–5 km.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">3 / 7 · WHAT I TESTED</div>
+      <h2>4 Multi-Building Interconnect Configurations</h2>
+      <table>
+        <thead><tr><th>SCENARIO</th><th>HEADROOM / PORT</th><th>EFFICIENCY</th><th>ACTION</th></tr></thead>
+        <tbody>
+          <tr><td>1. Single Building (&lt;100m)</td><td>50 KB</td><td>100.0% (Base)</td><td>Confirm</td></tr>
+          <tr><td>2. 5km Shallow-Buf + EP</td><td>✕ 300 KB (Overflow)</td><td>✕ 18.5% Stall</td><td>Reject</td></tr>
+          <tr><td>3. 5km Deep-Buf + PP/PD</td><td>2,500 KB (HBM)</td><td>94.2%</td><td>Act automatically</td></tr>
+          <tr><td>4. 30km ZR DWDM + DiLoCo</td><td>15,000 KB</td><td>89.5%</td><td>Confirm (Metro)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">4:1 DCI bandwidth oversubscription cuts cross-campus fiber cost by 75%.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">4 / 7 · UNDER THE HOOD</div>
+      <h2>Bandwidth-Delay Product (`BDP`) Headroom &amp; Topology Affinity</h2>
+      <div class="box" style="font-family:monospace;font-size:11px;">
+        // Speed of Light in SMF-28 Fiber: 5.0 us/km one-way<br>
+        rtt_us = 2 * 5.0 * dist_km; // 10.0 us/km<br>
+        pfc_headroom_kb = rtt_us * (port_gbps / 8.0);<br>
+        // @ 400G, 5km: 50us * 50 MB/s = 2,500 KB per port!
+      </div>
+    </div>
+    <div class="box">Kueue TAS pins TP/EP within building domains and places PP cuts on DCI links.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Cross-Building Parallelism Sensitivity (`5 km` Campus Link)</h2>
+      <table>
+        <thead><tr><th>PARALLELISM ACROSS DCI</th><th>SYNC CALLS / STEP</th><th>CLUSTER EFFICIENCY</th><th>VERDICT</th></tr></thead>
+        <tbody>
+          <tr><td>Cross-Building TP / EP</td><td>120–160 / token</td><td>28.0% (-72.0%)</td><td>Strictly Forbidden</td></tr>
+          <tr><td>Cross-Building Zero-Bubble PP</td><td>1 per micro-batch</td><td>94.2% (-5.8%)</td><td>Recommended</td></tr>
+          <tr><td>Cross-Building PD KV Stream</td><td>Layer-pipelined</td><td>96.8% (+0.2ms TTFT)</td><td>Recommended</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">Unlocks 2,048–4,096 GPU scaling across legacy 12MW data center buildings.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">6 / 7 · CLUSTER EFFICIENCY</div>
+      <h2>`2,048-GPU` Dual-Building Scaling Efficiency Across `5 km`</h2>
+      <div class="box">
+        <div>Cross-Building PD Disaggregation (`H100 P → H200 D`): <strong>96.8%</strong></div>
+        <div class="bar" style="width:96.8%;background:#10B981;"></div>
+        <div style="margin-top:8px;">Deep-Buffer DCI + Cross-Building PP + Hierarchical DP: <strong>94.2%</strong></div>
+        <div class="bar" style="width:94.2%;background:#3B82F6;"></div>
+        <div style="margin-top:8px;">Naive Shallow-Buffer Switch + Cross-Building EP: <strong>18.5%</strong></div>
+        <div class="bar" style="width:18.5%;background:#CBD5E1;"></div>
+      </div>
+    </div>
+    <div class="box">5.09× higher multi-building throughput than naive flat RoCEv2 extension.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For &amp; Production Readiness</h2>
+      <div class="box" style="border-color:#10B981;">
+        <strong>✅ Good fit:</strong> Campus multi-building GPU expansion (1–5 km), heterogeneous H100+H200 cross-building PD pools, and metro dual-AZ training.
+      </div>
+      <div class="box" style="border-color:#EF4444;">
+        <strong>⛔ Not for:</strong> Extending standard shallow-buffer PFC over &gt;600m fiber or spanning TP/EP across data center buildings.
+      </div>
+    </div>
+    <div class="box">Readiness: Production-verified (`#659` · `experiments/enterprise_scale_across_campus_dci_bdp_buffer_pp_sizer`).</div>
+  </div>
+</div>
+</body>
+</html>
