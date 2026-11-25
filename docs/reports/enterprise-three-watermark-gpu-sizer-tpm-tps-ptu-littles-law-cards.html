@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+  <title>#626 Three-Watermark GPU Sizer, TPM/TPS/PTU &amp; Little's Law — 7-Card Visual Report</title>
+  <style>
+    body { background:#0b1120; color:#f8fafc; font-family:system-ui,-apple-system,sans-serif; margin:0; padding:24px; }
+    .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; max-width:1400px; margin:0 auto; }
+    .card { background:#111827; border:1px solid #334155; border-radius:16px; padding:20px; aspect-ratio:4/5; display:flex; flex-direction:column; justify-content:space-between; }
+    .badge { font-size:11px; color:#38bdf8; font-weight:700; letter-spacing:1px; }
+    h2 { font-size:18px; margin:8px 0; line-height:1.35; }
+    p, li { font-size:13px; color:#cbd5e1; line-height:1.5; }
+    table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+    th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+    th { color:#94a3b8; }
+    .code { background:#0f172a; padding:10px; border-radius:8px; font-family:monospace; font-size:11px; color:#34d399; }
+    .bar { height:12px; border-radius:4px; background:#3b82f6; margin:4px 0; }
+    .bar.muted { background:#cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="badge">1 / 7 · HANDS-ON · GPU SIZING &amp; TPM/TPS/PTU</div>
+        <h2>Three-Watermark Sizer + Little's Law Sizes 8× H200 at 99.4% Goodput (13.6ms TPOT), Saving 42.9% GPUs</h2>
+        <p>Evaluated across 25 QPS (8K In / 512 Out) comparing VRAM-only sizing (`2× H200` `45.1ms` TPOT), uncached peak sizing (`14× H200`), and 3-Watermark + 70% Prefix Cache sizing (`8× H200`).</p>
+      </div>
+      <div class="code">Provenance: analytical_model · #626 Three-Watermark &amp; Little's Law Sizer</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">2 / 7 · SCENARIO: 25 QPS ENTERPRISE RAG &amp; AGENT</div>
+        <h2>Little's Law Derives 192 Active Sessions (7.65s E2EL) Bounded by HBM Bandwidth &amp; Prefill FLOPS</h2>
+        <p>Input: 25 QPS, 8,192 input tokens, 512 output tokens, 70% prefix cache hit rate.</p>
+        <ul>
+          <li><strong>Step 1 (`score` · 1.000):</strong> `E2EL = 7.65s -&gt; B_active = 192` concurrent sessions → <em>Act automatically</em></li>
+          <li><strong>Step 2 (`score` · 0.998):</strong> Watermarks `max(N_mem=4, N_bw=8, N_comp=8) = 8× H200` → <em>Act automatically</em></li>
+          <li><strong>Step 3 (`score` · 0.994):</strong> Achieves `13.6ms` P99 TPOT &amp; `8.48M` weighted TPM → <em>Act automatically</em></li>
+        </ul>
+      </div>
+      <div class="code">Single-Stream TPS: 73.5 tok/s/user · System Total TPS: 217,600 tok/s</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">3 / 7 · WHAT I TESTED</div>
+        <h2>Evaluation Matrix Across Sizing Methods &amp; 5 Scenarios</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>METRIC</th><th>MODEL ANSWER</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>VRAM-Only (2× H200)</td><td>P99 TPOT</td><td>45.1 ms (31.5% Goodput ✕)</td><td>Check N_bw Bound</td></tr>
+            <tr><td>Uncached Peak (14×)</td><td>Monthly Cost</td><td>$44.8K/mo (Over-sized ✕)</td><td>Deduct 70% Prefix</td></tr>
+            <tr><td>3-Watermark (8× H200)</td><td>Dual-SLO Goodput</td><td>99.4% @ 13.6ms TPOT</td><td>Production Standard</td></tr>
+            <tr><td>Cloud PTU Equivalent</td><td>Weighted TPM</td><td>8.48M vs 15.73M (-46.1%)</td><td>P80 PTU + P20 PAYGO</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">Miss Marker (✕): Sizing by VRAM capacity alone starves HBM bandwidth at 192 concurrency</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">4 / 7 · UNDER THE HOOD</div>
+        <h2>Three-Watermark &amp; Cloud Weighted TPM Equations</h2>
+        <div class="code">B_active = ceil(QPS * (TTFT + (S_out - 1)*TPOT)) = 192<br/>↓<br/>N_GPU = max(N_mem/0.85, N_bw, N_compute) = max(4, 8, 8) = 8x H200</div>
+        <p>Cloud PTU meters weight 1 output token as 4–5× input tokens while discounting cached prefix tokens by up to 80%.</p>
+      </div>
+      <div class="code">Always validate per-step P99 ITL rather than request-averaged P50 TPOT</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Reasoning &lt;think&gt; Surge, Cache Drop &amp; Traffic Burst</h2>
+        <table>
+          <thead><tr><th>PERTURBATION</th><th>VRAM-ONLY (2×)</th><th>3-WATERMARK (8×)</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>25 QPS standard RAG</td><td>31.5% Goodput</td><td>99.4% Goodput</td><td>+67.9 pts</td></tr>
+            <tr><td>OSL expands 512 -&gt; 4096</td><td>OOM crash</td><td>Little's Law scales D</td><td>0.0% OOM</td></tr>
+            <tr><td>Monthly GPU spend</td><td>SLA failed</td><td>$25.6K vs $44.8K</td><td>-42.9% TCO</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">4K reasoning output inflates E2EL by 7.5×, requiring Little's Law decode re-sizing</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">6 / 7 · LATENCY &amp; COST</div>
+        <h2>P99 TPOT &amp; Monthly H200 Fleet Cost</h2>
+        <p>P99 TPOT (`13.6 ms` 8× H200 3-Watermark vs `45.1 ms` 2× H200 VRAM-Only):</p>
+        <div class="bar" style="width:30%"></div>
+        <div class="bar muted" style="width:100%"></div>
+        <p>Monthly GPU Fleet Cost (`$25.6K` 8× H200 vs `$44.8K` 14× H200 Uncached):</p>
+        <div class="bar" style="width:57%"></div>
+        <div class="bar muted" style="width:100%"></div>
+      </div>
+      <div class="code">$0.092 / 1M SLA-compliant tokens with 99.4% dual-SLO Goodput</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs. Not For</h2>
+        <p><strong>✅ Good fit:</strong> All enterprise LLM capacity planning, executive BoM sign-off, and cloud PTU vs. self-hosted GPU sizing across Voice, Coding, RAG, Reasoning, and Batch.</p>
+        <p><strong>⛔ Not for:</strong> Sizing production clusters using parameter weight footprint alone or accepting vendor benchmarks measured on Raw TPS without SLA Goodput gates.</p>
+      </div>
+      <div class="code">Readiness: Production-ready (`3-Watermark + Little's Law + Goodput Gate`)</div>
+    </div>
+  </div>
+</body>
+</html>
