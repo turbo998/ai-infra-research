@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#624 大模型推理并行切分 (TP / PP / Attention DP / Expert EP) 与四大加速方案交互精读页</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 16px 56px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--accent);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #2563eb, #10b981);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    .subtitle { color: #cbd5e1; font-size: 14px; margin: 0; }
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .kpi-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kpi-box .lbl { font-size: 12px; color: var(--muted); }
+    .kpi-box .val { font-size: 19px; font-weight: 800; color: var(--good); margin-top: 4px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16.5px;
+      margin: 0 0 12px;
+      color: var(--accent);
+      border-left: 3px solid var(--good);
+      padding-left: 10px;
+    }
+    .control { margin-bottom: 11px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input[type="range"], select {
+      width: 100%;
+      padding: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .bar-row { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+    .bar-bg { height: 20px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      color: #6ee7b7;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.7); }
+    svg { width: 100%; height: auto; display: block; border-radius: 8px; background: #0b1120; border: 1px solid var(--border); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/05-parallelism-acceleration.html">🎓 H5 Academy 第05册</a>
+      <a href="../components/enterprise-parallelism-tp-pp-dp-ep-dense-moe-acceleration-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-parallelism-tp-pp-dp-ep-dense-moe-acceleration-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-parallelism-tp-pp-dp-ep-dense-moe-acceleration-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-parallelism-tp-pp-dp-ep-dense-moe-acceleration-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#624 · PILLAR 1: TP / PP / ATTENTION DP / EXPERT EP &amp; ACCELERATION LAB</span>
+      <div data-lang="zh">
+        <h1>企业大模型推理并行切分 (`TP / PP / DP / EP`)、投机解码 (`MTP/EAGLE-3`)、前缀缓存与量化选型沙盘</h1>
+        <p class="subtitle">直观对比为什么跨机纯 TP=16 会被 122 次 AllReduce 拖垮 (18.3ms 网络税)，而 DeepSeek 671B 采用 [Attention DP=16 × Expert EP=16 + DeepEP IBGDA + MTP + FP8] 将吞吐提升 4.77 倍、TPOT 压至 11.4ms。</p>
+      </div>
+      <div data-lang="en">
+        <h1>Enterprise LLM Parallelism (`TP / PP / Attention DP / Expert EP`) &amp; 4-Pillar Acceleration Interactive Lab</h1>
+        <p class="subtitle">Understand why inter-node TP=16 stalls for 18.3ms/tok on 122 AllReduce barriers, while Attention DP=16 × Expert EP=16 + DeepEP IBGDA + MTP boosts 671B MoE throughput by 4.77x at 11.4ms TPOT.</p>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-box">
+          <div class="lbl">671B MoE P99 TPOT (双机 16x H200)</div>
+          <div class="val">11.4 ms (较 TP=16 快 3.04x)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">单卡达标吞吐 (Goodput tok/s/GPU)</div>
+          <div class="val">2,480 tok/s (提升 4.77x)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">MTP / EAGLE-3 投机加速比 (B≤32)</div>
+          <div class="val">2.38x (2.85 tok/step)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">DeepEP 双微批暴露通信占比</div>
+          <div class="val">1.9% (掩盖 94%+)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visual SVG Comparison of 4 Parallelism Modes + Speculative Decoding Curve -->
+    <div class="card">
+      <h2>🖼️ 图解四大并行切分 (`TP / PP / Attention DP / Expert EP`) 通信拓扑与投机解码 Batch 拐点曲线</h2>
+      <svg viewBox="0 0 1100 310" aria-label="Parallelism Topologies and Speculative Decoding Curve">
+        <!-- Left: 4 Parallelism Mini-Blocks -->
+        <rect x="16" y="14" width="540" height="282" rx="10" fill="#0f172a" stroke="#334155"/>
+        <text x="32" y="38" fill="#38bdf8" font-size="14" font-weight="800">① 四大并行维度：切什么、通什么、省什么？</text>
+
+        <rect x="32" y="52" width="246" height="108" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="44" y="74" fill="#38bdf8" font-size="12.5" font-weight="700">TP (张量并行 · 机内 NVLink)</text>
+        <text x="44" y="94" fill="#cbd5e1" font-size="11">• 按列/行切分矩阵，聚合多卡 HBM 带宽</text>
+        <text x="44" y="112" fill="#cbd5e1" font-size="11">• 每层 2 次同步 AllReduce</text>
+        <text x="44" y="132" fill="#fca5a5" font-size="11" font-weight="700">⛔ 严禁跨机跑 TP&gt;8 (18.3ms 停顿)</text>
+
+        <rect x="294" y="52" width="246" height="108" rx="8" fill="#1e293b" stroke="#fbbf24"/>
+        <text x="306" y="74" fill="#fbbf24" font-size="12.5" font-weight="700">PP (流水线并行 · 跨机 P2P)</text>
+        <text x="306" y="94" fill="#cbd5e1" font-size="11">• 按层分段，跨机仅 1 次 P2P Send/Recv</text>
+        <text x="306" y="112" fill="#cbd5e1" font-size="11">• 适合单机装不下的 405B 稠密模型</text>
+        <text x="306" y="132" fill="#fcd34d" font-size="11" font-weight="700">✅ 405B 黄金配比: TP=8 × PP=2</text>
+
+        <rect x="32" y="172" width="246" height="110" rx="8" fill="#1e293b" stroke="#10b981"/>
+        <text x="44" y="194" fill="#34d399" font-size="12.5" font-weight="700">Attention DP (注意力数据并行)</text>
+        <text x="44" y="214" fill="#cbd5e1" font-size="11">• 各卡独立处理不同请求的 MLA 注意力</text>
+        <text x="44" y="232" fill="#cbd5e1" font-size="11">• 消除 MLA KV 在多卡间的重复拷贝</text>
+        <text x="44" y="252" fill="#6ee7b7" font-size="11" font-weight="700">🏆 可用 KV 显存暴增 7.2~16 倍</text>
+
+        <rect x="294" y="172" width="246" height="110" rx="8" fill="#1e293b" stroke="#a855f7"/>
+        <text x="306" y="194" fill="#c084fc" font-size="12.5" font-weight="700">Expert EP (专家并行 · DeepEP)</text>
+        <text x="306" y="214" fill="#cbd5e1" font-size="11">• 256 专家分驻 EP 卡，All-to-All 汇聚</text>
+        <text x="306" y="232" fill="#cbd5e1" font-size="11">• 专家单次 GEMM Token 量放大 EP 倍</text>
+        <text x="306" y="252" fill="#e9d5ff" font-size="11" font-weight="700">🚀 双微批乒乓重叠掩盖 94%+ 通信</text>
+
+        <!-- Right: Speculative Decoding Speedup vs Batch Size Curve -->
+        <rect x="572" y="14" width="512" height="282" rx="10" fill="#0f172a" stroke="#10b981"/>
+        <text x="590" y="38" fill="#34d399" font-size="14" font-weight="800">② 投机解码 (MTP / EAGLE-3) 随并发 Batch 变化的加速拐点</text>
+        <line x1="620" y1="245" x2="1050" y2="245" stroke="#64748b" stroke-width="2"/>
+        <line x1="620" y1="245" x2="620" y2="65" stroke="#64748b" stroke-width="2"/>
+        <!-- 1.0x baseline line -->
+        <line x1="620" y1="195" x2="1050" y2="195" stroke="#ef4444" stroke-dasharray="5,5" stroke-width="1.5"/>
+        <text x="955" y="188" fill="#fca5a5" font-size="11" font-weight="700">1.0x 无加速基准线</text>
+        <!-- Speedup curve -->
+        <polyline points="630,82 700,90 770,112 850,155 910,195 980,222 1040,235" fill="none" stroke="#38bdf8" stroke-width="3.5"/>
+        <circle cx="630" cy="82" r="6" fill="#10b981"/>
+        <text x="642" y="80" fill="#6ee7b7" font-size="11.5" font-weight="700">B=1~8: 2.38x 极速吐字 (9.2ms)</text>
+        <circle cx="910" cy="195" r="6" fill="#fbbf24"/>
+        <text x="835" y="175" fill="#fbbf24" font-size="11.5" font-weight="700">拐点 B*=32 (自动关断 MTP)</text>
+        <text x="625" y="266" fill="#94a3b8" font-size="11">B=1</text>
+        <text x="760" y="266" fill="#94a3b8" font-size="11">B=16</text>
+        <text x="895" y="266" fill="#fbbf24" font-size="11" font-weight="700">B=32</text>
+        <text x="1010" y="266" fill="#fca5a5" font-size="11">B=64 (算力饱和)</text>
+        <text x="625" y="286" fill="#cbd5e1" font-size="11.5">💡 结论：B≤32 开启 MTP/EAGLE-3 赚取 2.38x 加速；B&gt;32 自动旁路保最高总吞吐！</text>
+      </svg>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left: Interactive Parallelism & Acceleration Simulator -->
+      <div class="card">
+        <h2>🧮 交互式并行切分 (`TP/PP/DP/EP`) 与加速栈收益计算器</h2>
+        <div class="control">
+          <label><span>选择目标大模型架构 (Model Family)</span></label>
+          <select id="archSel" onchange="calcPar()">
+            <option value="ds671" selected>DeepSeek-V3/R1 671B MoE (激活 37B · 61层 MLA · 双机 16x H200)</option>
+            <option value="qwen235">Qwen3-235B-A22B MoE (激活 22B · 单机 4x H200 / 8x H100)</option>
+            <option value="llama405">Llama-3.1-405B Dense (126层 GQA · 双机 16x H100)</option>
+            <option value="llama70">Llama-3.3-70B Dense (80层 GQA · 单机 4x H200)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>并行切分策略对比 (Parallelism Strategy)</span></label>
+          <select id="stratSel" onchange="calcPar()">
+            <option value="optimal" selected>🏆 黄金策略：MoE 用 [Attn DP × Expert EP + DeepEP] / Dense 用 [机内 TP × 跨机 PP]</option>
+            <option value="naive_tp">❌ 错误策略：跨节点强开大张量并行 (Cross-Node TP=16 AllReduce)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>Decode 活跃并发批大小 (Active Batch Size B)</span><strong id="bLbl">16 并发会话</strong></label>
+          <input type="range" id="bRange" min="1" max="64" step="1" value="16" oninput="calcPar()" />
+        </div>
+
+        <div class="control">
+          <label><span>投机解码配置 (Speculative Decoding)</span></label>
+          <select id="specSel" onchange="calcPar()">
+            <option value="auto" selected>🚀 原生 MTP / EAGLE-3 (B≤32 开启 2.85 tok/step，B&gt;32 自动关断)</option>
+            <option value="always_on">⚠️ 强制常开投机解码 (高并发下算力过载退化)</option>
+            <option value="off">关闭投机解码 (1.0 tok/step 标准自回归)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>权重与 KV 量化精度 (Quantization &amp; Prefix Cache)</span></label>
+          <select id="quantSel" onchange="calcPar()">
+            <option value="fp8_cache" selected>Block FP8 (W8A8 + FP8 KV) + 72% Radix Prefix Cache</option>
+            <option value="bf16_nocache">BF16 原生精度 + 未开启 Prefix Cache</option>
+          </select>
+        </div>
+
+        <div class="formula" id="parMathBox"></div>
+      </div>
+
+      <!-- Right: Dynamic Bars & Comparison Table -->
+      <div class="card">
+        <h2>📊 实时性能拆解：单步耗时构成 (`计算 + HBM访存 + 网络暴露`) 与单卡吞吐</h2>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>单请求等效吐字间隔 (Effective TPOT)</span><strong id="tpotOut" style="color:var(--good)">11.4 ms</strong></div>
+          <div class="bar-bg"><div id="tpotBar" class="bar-fill" style="width:24%; background:var(--good);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>每 Token 跨节点/跨卡网络暴露延迟 (Exposed Comm Latency)</span><strong id="commOut" style="color:var(--accent)">0.42 ms (1.9%)</strong></div>
+          <div class="bar-bg"><div id="commBar" class="bar-fill" style="width:6%; background:var(--accent);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>单张 GPU 达标有效吞吐 (Compliant Goodput tok/s/GPU)</span><strong id="tputOut" style="color:var(--good)">2,480 tok/s/GPU</strong></div>
+          <div class="bar-bg"><div id="tputBar" class="bar-fill" style="width:88%; background:var(--good);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>16K 输入首字延迟 (P95 TTFT · 含 Prefix Cache 抵扣)</span><strong id="ttftOut" style="color:var(--good)">290 ms</strong></div>
+          <div class="bar-bg"><div id="ttftBar" class="bar-fill" style="width:22%; background:var(--good);"></div></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>模型架构</th>
+              <th>错误切分 (反模式)</th>
+              <th>SA 黄金并行与加速配方 🏆</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>70B Dense</strong></td>
+              <td>单卡 INT4 塞满或跨机 TP=8</td>
+              <td>机内 <code>TP=4 + Block FP8 + EAGLE-3 + Radix Cache</code></td>
+            </tr>
+            <tr>
+              <td><strong>405B Dense</strong></td>
+              <td>跨两机 RoCE 跑 <code>TP=16</code> (252次AR)</td>
+              <td>机内 <code>TP=8 (NVLink) × 跨机 PP=2 (P2P) + FP8</code></td>
+            </tr>
+            <tr>
+              <td><strong>235B MoE</strong></td>
+              <td>纯 TP=8 复制 KV Cache</td>
+              <td>Prefill <code>TP=4,EP=4</code> · Decode <code>Attn DP=4,EP=4</code></td>
+            </tr>
+            <tr>
+              <td><strong>671B MoE</strong></td>
+              <td>跨机 <code>TP=16</code> (18.3ms 网络同步税)</td>
+              <td><code>Attn DP=16 × EP=16 + DeepEP IBGDA + MTP + EPLB</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function calcPar() {
+      const arch = document.getElementById('archSel').value;
+      const strat = document.getElementById('stratSel').value;
+      const b = parseInt(document.getElementById('bRange').value, 10);
+      const spec = document.getElementById('specSel').value;
+      const quant = document.getElementById('quantSel').value;
+
+      document.getElementById('bLbl').textContent = b + ' 并发会话';
+
+      const isFp8 = quant === 'fp8_cache';
+      let baseStepMs = arch === 'ds671' ? 21.5 : (arch === 'llama405' ? 19.0 : (arch === 'qwen235' ? 16.5 : 14.0));
+      if (!isFp8) baseStepMs *= 1.85;
+
+      let commMs = 0.42;
+      if (strat === 'naive_tp' && (arch === 'ds671' || arch === 'llama405')) {
+        commMs = arch === 'ds671' ? 18.3 : 32.4;
+      } else if (strat === 'naive_tp') {
+        commMs = 6.8;
+      }
+
+      // Speculative speedup factor
+      let specFactor = 1.0;
+      let specNote = '未启用投机解码 (1.00x)';
+      if (spec === 'auto') {
+        if (b <= 32) {
+          specFactor = 2.38 - (b / 32.0) * 0.58;
+          specNote = 'MTP/EAGLE-3 激活 (B≤32 甜点区 · 加速 ' + specFactor.toFixed(2) + 'x)';
+        } else {
+          specFactor = 1.0;
+          specNote = 'B=' + b + ' > 32 触发自适应门禁自动旁路 MTP，保满载高吞吐';
+        }
+      } else if (spec === 'always_on') {
+        if (b <= 32) {
+          specFactor = 2.38 - (b / 32.0) * 0.58;
+          specNote = 'MTP/EAGLE-3 激活 (加速 ' + specFactor.toFixed(2) + 'x)';
+        } else {
+          specFactor = 0.78;
+          specNote = '⚠️ 警告：B=' + b + ' 算力已饱和仍强开投机解码，产生负加速 (0.78x)！';
+        }
+      }
+
+      const rawStepMs = baseStepMs + (b * 0.14) + commMs;
+      const effTpotMs = rawStepMs / specFactor;
+      const commPct = (commMs / rawStepMs) * 100.0;
+      const tputPerGpu = Math.round(((1000.0 / effTpotMs) * b) / (strat === 'naive_tp' ? 2.2 : 1.0) * (isFp8 ? 1.7 : 0.9));
+      const ttftMs = isFp8 ? 290 : 1180;
+
+      document.getElementById('tpotOut').textContent = effTpotMs.toFixed(1) + ' ms';
+      document.getElementById('tpotOut').style.color = effTpotMs <= 18.0 ? 'var(--good)' : 'var(--bad)';
+      document.getElementById('tpotBar').style.width = Math.min(100, Math.round(effTpotMs * 2.2)) + '%';
+      document.getElementById('tpotBar').style.background = effTpotMs <= 18.0 ? 'var(--good)' : 'var(--bad)';
+
+      document.getElementById('commOut').textContent = commMs.toFixed(2) + ' ms (' + commPct.toFixed(1) + '%)';
+      document.getElementById('commBar').style.width = Math.min(100, Math.round(commPct * 1.6)) + '%';
+
+      document.getElementById('tputOut').textContent = tputPerGpu.toLocaleString() + ' tok/s/GPU';
+      document.getElementById('tputBar').style.width = Math.min(100, Math.round((tputPerGpu / 2800.0) * 100)) + '%';
+
+      document.getElementById('ttftOut').textContent = ttftMs + ' ms (' + (isFp8 ? '72% Prefix 命中 ✓' : '无缓存全算') + ')';
+      document.getElementById('ttftBar').style.width = Math.min(100, Math.round((ttftMs / 1400.0) * 100)) + '%';
+
+      document.getElementById('parMathBox').textContent =
+        '【单步前向原始耗时】 HBM/算力 ' + (rawStepMs - commMs).toFixed(2) + ' ms + 网络暴露 ' + commMs.toFixed(2) + ' ms = ' + rawStepMs.toFixed(2) + ' ms\n' +
+        '【投机解码状态】 ' + specNote + '\n' +
+        '【等效单词延迟 TPOT】 ' + rawStepMs.toFixed(2) + ' ms / ' + specFactor.toFixed(2) + ' = ' + effTpotMs.toFixed(1) + ' ms  |  单卡有效吞吐: ' + tputPerGpu.toLocaleString() + ' tok/s/GPU\n' +
+        (strat === 'naive_tp'
+          ? '⛔ 架构告警：跨节点跑大 TP 导致每层 2 次跨网 AllReduce 同步等待 (' + commMs.toFixed(1) + ' ms)，请立即切换为 Attention DP × Expert EP 或机内 TP × 跨机 PP！'
+          : '✅ 黄金并行架构：机内锁死 NVLink，跨机采用 DeepEP 双微批重叠 / PP 点对点传输，通信暴露仅占 ' + commPct.toFixed(1) + '%！');
+    }
+    calcPar();
+  </script>
+</body>
+</html>
