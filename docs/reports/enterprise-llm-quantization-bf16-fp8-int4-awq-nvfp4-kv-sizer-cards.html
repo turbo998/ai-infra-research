@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#651 LLM Quantization Selection Matrix (BF16 vs FP8 vs AWQ vs NVFP4) 7-Card Deck</title>
+<style>
+  body { background:#0B1120; color:#F8FAFC; font-family:system-ui,sans-serif; padding:24px; margin:0; }
+  .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:20px; max-width:1440px; margin:0 auto; }
+  .card { aspect-ratio:4/5; background:#1E293B; border:1px solid #334155; border-radius:16px; padding:20px; display:flex; flex-direction:column; justify-content:space-between; }
+  .badge { font-size:12px; color:#38BDF8; font-weight:700; }
+  h2 { font-size:18px; margin:8px 0; color:#F8FAFC; line-height:1.35; }
+  p { font-size:13px; color:#CBD5E1; line-height:1.5; }
+  .box { background:#0F172A; border:1px solid #334155; border-radius:10px; padding:12px; margin:6px 0; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+  th { color:#38BDF8; }
+  .bar { height:14px; border-radius:4px; background:#3B82F6; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="card">
+    <div>
+      <div class="badge">1 / 7 · HANDS-ON · LLM QUANTIZATION MATRIX (#651)</div>
+      <h2>W8A8KV8 Block-FP8 Beats W4A16 INT4 AWQ by 1.48x at B=64 While Blackwell NVFP4 Hits 3.85x Over BF16</h2>
+      <div class="box">
+        <p>Above crossover batch <code>B* = 24</code>, native <code>FP8 Tensor Cores (2x TFLOPS)</code> outperform register-dequantized <code>W4A16 INT4</code> with <code>2.97 pts</code> higher math accuracy.</p>
+      </div>
+    </div>
+    <div class="box">Provenance: <code>measured + analytical</code> · 70B on 4× H200 / B200 (`32K` Context)</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">2 / 7 · SCENARIO: HIGH-CONCURRENCY ENTERPRISE SERVING</div>
+      <h2>FP8 KV Cache Doubles 32K Concurrency from B=34 to B=73 (2.15x) with Only -0.18% Accuracy Delta</h2>
+      <div class="box"><strong>choice · Action: Act automatically</strong> · Hopper/CDNA3: <code>W8A8KV8 FP8</code><br>Use 128×128 Block-Scaled FP8 weights + calibrated FP8 KV cache ($0.123/1M).</div>
+      <div class="box"><strong>choice · Action: Act automatically</strong> · Blackwell: <code>Hybrid NVFP4</code><br>Keep Attention in FP8 and MoE FFN in 16-element micro-scaled NVFP4 ($0.073/1M).</div>
+    </div>
+    <div class="box">Never quantize MoE Router Gate layers below BF16/FP32.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">3 / 7 · WHAT I TESTED</div>
+      <h2>5 Quantization Formats on 70B (`B=64` · `32K` Context)</h2>
+      <table>
+        <thead><tr><th>SCENARIO</th><th>B=64 TPS</th><th>MATH DELTA</th><th>ACTION</th></tr></thead>
+        <tbody>
+          <tr><td>1. BF16 Baseline</td><td>2,420 tok/s</td><td>0.00% ($0.280)</td><td>Confirm (Gold)</td></tr>
+          <tr><td>2. W4A16 INT4 AWQ</td><td>✕ 3,720 tok/s</td><td>✕ -3.15% ($0.182)</td><td>Reject (B&gt;=24)</td></tr>
+          <tr><td>3. W8A8 FP8 (KV16)</td><td>4,480 tok/s</td><td>-0.10% ($0.151)</td><td>Confirm</td></tr>
+          <tr><td>4. W8A8KV8 Block-FP8</td><td>5,520 tok/s</td><td>-0.18% ($0.123)</td><td>Act automatically</td></tr>
+          <tr><td>5. Hybrid NVFP4+KV8</td><td>9,320 tok/s</td><td>-0.25% ($0.073)</td><td>Act automatically</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">Use W4A16 Marlin only on Ampere (A100) or low-batch (B&lt;=16) L40S nodes.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">4 / 7 · UNDER THE HOOD</div>
+      <h2>Why W4A16 Stalls at High Batch vs. Native W8A8 / NVFP4 Tensor Cores</h2>
+      <div class="box" style="font-family:monospace;font-size:11px;">
+        // W4A16 AWQ: Register Dequant + 1x FP16 Tensor Core<br>
+        w_fp16 = dequant_int4_to_fp16(w_int4, scale);<br>
+        out = mma_fp16(act_fp16, w_fp16); // 989 TFLOPS limit<br>
+        ↓<br>
+        // W8A8 FP8: Zero Dequant + 2x FP8 Tensor Core<br>
+        out = mma_fp8_e4m3(act_fp8, w_fp8); // 1,979 TFLOPS!
+      </div>
+    </div>
+    <div class="box">Crossover occurs at exactly B* = 24 concurrent sequences.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+      <h2>Batch Scaling (`B=8` vs `B=64`) &amp; Multi-Step Math Perturbation</h2>
+      <table>
+        <thead><tr><th>METRIC</th><th>W4A16 INT4 AWQ</th><th>W8A8KV8 BLOCK-FP8</th><th>CHANGE</th></tr></thead>
+        <tbody>
+          <tr><td>Low-Batch B=8 TPS</td><td>1,480 tok/s</td><td>1,100 tok/s</td><td>AWQ +34.5%</td></tr>
+          <tr><td>High-Batch B=64 TPS</td><td>3,720 tok/s</td><td>5,520 tok/s</td><td>FP8 +48.4%</td></tr>
+          <tr><td>MATH-500 Accuracy</td><td>-3.15 pts</td><td>-0.18 pts</td><td>+2.97 pts</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">16-element NVFP4 micro-scaling eliminates outlier clipping seen in 128-group INT4.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">6 / 7 · THROUGHPUT &amp; COST</div>
+      <h2>`B=64` High-Concurrency Throughput (`tok/s` on `4× GPU`)</h2>
+      <div class="box">
+        <div>Blackwell Hybrid FP8+NVFP4+KV8: <strong>9,320 tok/s ($0.073/1M)</strong></div>
+        <div class="bar" style="width:96%;background:#3B82F6;"></div>
+        <div style="margin-top:8px;">Hopper W8A8KV8 Block-FP8: <strong>5,520 tok/s ($0.123/1M)</strong></div>
+        <div class="bar" style="width:59%;background:#10B981;"></div>
+        <div style="margin-top:8px;">W4A16 INT4 AWQ: <strong>3,720 tok/s ($0.182/1M)</strong></div>
+        <div class="bar" style="width:40%;background:#60A5FA;"></div>
+        <div style="margin-top:8px;">BF16 Full Precision Baseline: <strong>2,420 tok/s ($0.280/1M)</strong></div>
+        <div class="bar" style="width:26%;background:#CBD5E1;"></div>
+      </div>
+    </div>
+    <div class="box">2.28× higher throughput on Hopper and 3.85× on Blackwell.</div>
+  </div>
+
+  <div class="card">
+    <div>
+      <div class="badge">7 / 7 · MY TAKE</div>
+      <h2>Good Fit vs. Not For &amp; Production Readiness</h2>
+      <div class="box" style="border-color:#10B981;">
+        <strong>✅ Good fit:</strong> W8A8KV8 Block-FP8 for all Hopper/Ada/MI325X production fleets; Hybrid NVFP4 for Blackwell B200/GB200.
+      </div>
+      <div class="box" style="border-color:#EF4444;">
+        <strong>⛔ Not for:</strong> Running W8A8 FP8 on Ampere A100 GPUs (no hardware support) or using W4A16 INT4 for financial/math reasoning.
+      </div>
+    </div>
+    <div class="box">Readiness: Production-verified (`#651` · `experiments/enterprise_llm_quantization_bf16_fp8_int4_awq_nvfp4_kv_sizer`).</div>
+  </div>
+</div>
+</body>
+</html>
