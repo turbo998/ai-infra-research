@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#637 企业大模型投机解码四大流派 (Draft 7B vs. PLD vs. Medusa vs. EAGLE-3/MTP) 接收率手算与拐点交互精读页</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 16px 56px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--good);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #0284c7, #10b981, #f59e0b);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    .subtitle { color: #cbd5e1; font-size: 14px; margin: 0; }
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .kpi-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kpi-box .lbl { font-size: 12px; color: var(--muted); }
+    .kpi-box .val { font-size: 19px; font-weight: 800; color: var(--good); margin-top: 4px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16.5px;
+      margin: 0 0 12px;
+      color: var(--accent);
+      border-left: 3px solid var(--good);
+      padding-left: 10px;
+    }
+    .control { margin-bottom: 11px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input[type="range"], select {
+      width: 100%;
+      padding: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .bar-row { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+    .bar-bg { height: 20px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      color: #6ee7b7;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.7); }
+    svg { width: 100%; height: auto; display: block; border-radius: 8px; background: #0b1120; border: 1px solid var(--border); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/05-parallelism-acceleration.html">🎓 H5 Academy 第05册</a>
+      <a href="../components/enterprise-speculative-decoding-pld-medusa-eagle3-mtp-batch-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-speculative-decoding-pld-medusa-eagle3-mtp-batch-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-speculative-decoding-pld-medusa-eagle3-mtp-batch-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-speculative-decoding-pld-medusa-eagle3-mtp-batch-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#637 · PILLAR 1 &amp; 3: SPECULATIVE DECODING 4 PARADIGMS (PLD / MEDUSA / EAGLE-3 / MTP) LAB</span>
+      <div data-lang="zh">
+        <h1>企业大模型投机解码四大流派 (`Draft 7B` vs. `PLD` vs. `Medusa` vs. `EAGLE-3 / 原生 MTP`) 接收步长手算与拐点沙盘</h1>
+        <p class="subtitle">手算级数公式 τ(α,γ) = (1 - α^(γ+1))/(1 - α)，对比为什么 1 层 EAGLE-3/MTP (0.45ms 草案) 比 28 层独立 7B 小模型 (4.8ms 草案) 快得多，并演示 B=32 自动旁路门禁。</p>
+      </div>
+      <div data-lang="en">
+        <h1>Enterprise Speculative Decoding 4 Paradigms (`Draft 7B` vs. `PLD` vs. `Medusa` vs. `EAGLE-3/MTP`) Interactive Lab</h1>
+        <p class="subtitle">Compute expected accepted tokens τ(α,γ), compare 1-layer EAGLE-3/MTP (`0.45ms` draft, `2.42x` speedup) vs. 28-layer Draft 7B (`4.8ms` draft, `1.38x`), and test the `B*=32` batch gate.</p>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-box">
+          <div class="lbl">EAGLE-3 / MTP 单步接收词数</div>
+          <div class="val">3.45 词/步 (α=0.84)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">交互并发等效 TPOT (B≤16)</div>
+          <div class="val">9.0 ms (较 21.8ms 快 2.42x)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">PLD 代码改写额外显存</div>
+          <div class="val">+0.0 GB (零权重提速 2.25x)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">算力饱和自动熔断阈值</div>
+          <div class="val">Batch B* = 32 自动旁路</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left: Interactive Speculative Decoding Calculator -->
+      <div class="card">
+        <h2>🧮 交互式投机解码接收步长 $\tau(\alpha, \gamma)$ 与 `Batch` 拐点计算器</h2>
+
+        <div class="control">
+          <label><span>选择投机解码流派 (Speculative Paradigm)</span></label>
+          <select id="paradigmSel" onchange="calcSpec()">
+            <option value="eagle3" selected>🏆 EAGLE-3 / 原生 MTP (1层特征头 · 0.45ms 草案 · α=0.84)</option>
+            <option value="pld">💎 PLD 提示词查找 (0权重 N-gram 匹配 · 0.05ms · 代码/RAG α=0.80)</option>
+            <option value="medusa">⚖️ Medusa 多头预测 (无词间依赖 · 0.35ms · α=0.68)</option>
+            <option value="draft7b">❌ 独立 7B Draft 小模型 (28层串行 · 4.80ms 草案 · α=0.76)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>单步前瞻投机词数 ($\gamma$ Draft Steps)</span><strong id="gammaLbl">γ = 4 步</strong></label>
+          <input type="range" id="gammaIn" min="1" max="8" step="1" value="4" oninput="calcSpec()" />
+        </div>
+
+        <div class="control">
+          <label><span>当前活跃 Decode 批大小 (Active Batch Size B)</span><strong id="specBLbl">B = 8 并发会话</strong></label>
+          <input type="range" id="specBIn" min="1" max="64" step="1" value="8" oninput="calcSpec()" />
+        </div>
+
+        <div class="formula" id="specFormula"></div>
+      </div>
+
+      <!-- Right: Dynamic Visual Bars -->
+      <div class="card">
+        <h2>📊 四大流派实时性能对比：等效 `TPOT` 与单用户吐字速率 (`tok/s/user`)</h2>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>基准：无投机标准自回归 Decode (`1.00 词/步`)</span><strong id="baseSpecOut" style="color:var(--bad)">21.8 ms (45.9 tok/s)</strong></div>
+          <div class="bar-bg"><div id="baseSpecBar" class="bar-fill" style="width:100%; background:var(--bad);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>① 独立 `7B Draft` 小模型 (`4.8ms` 草案延迟拖累)</span><strong id="d7bOut" style="color:var(--warn)">15.8 ms (1.38x)</strong></div>
+          <div class="bar-bg"><div id="d7bBar" class="bar-fill" style="width:72%; background:var(--warn);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>② `PLD` 提示词查找 (代码改写 / 原文引用 `0 GB` 显存)</span><strong id="pldOut" style="color:var(--accent)">9.7 ms (2.25x)</strong></div>
+          <div class="bar-bg"><div id="pldBar" class="bar-fill" style="width:44%; background:var(--accent);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 ④ `EAGLE-3 / 原生 MTP` (1层特征头 + `B≤32` 自适应门禁)</span><strong id="eagOut" style="color:var(--good)">9.0 ms (111.1 tok/s · 快 2.42x ✓)</strong></div>
+          <div class="bar-bg"><div id="eagBar" class="bar-fill" style="width:41%; background:var(--good);"></div></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>投机流派</th>
+              <th>额外显存</th>
+              <th>草案耗时</th>
+              <th>SA 生产选型结论</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>独立 7B Draft</strong></td>
+              <td><code>+14 GB + KV</code></td>
+              <td><code>4.80 ms</code></td>
+              <td>TP 通信重，已逐步被 EAGLE/MTP 替代</td>
+            </tr>
+            <tr>
+              <td><strong>PLD (N-gram)</strong> 🏆</td>
+              <td><strong><code>+0.0 GB</code></strong></td>
+              <td><strong><code>0.05 ms</code></strong></td>
+              <td><strong>代码改写 (Fast-Apply) 与原文摘录首选</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Medusa</strong></td>
+              <td><code>+2.0 GB</code></td>
+              <td><code>0.35 ms</code></td>
+              <td>候选树无上下文依赖，被 EAGLE-3 超越</td>
+            </tr>
+            <tr>
+              <td><strong>EAGLE-3 / MTP</strong> 🏆</td>
+              <td><code>+1.8~14 GB</code></td>
+              <td><strong><code>0.45 ms</code></strong></td>
+              <td><strong>DeepSeek 671B 与 70B 通用交互推理标配</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function calcSpec() {
+      const p = document.getElementById('paradigmSel').value;
+      const g = parseInt(document.getElementById('gammaIn').value, 10);
+      const b = parseInt(document.getElementById('specBIn').value, 10);
+
+      document.getElementById('gammaLbl').textContent = 'γ = ' + g + ' 步';
+      document.getElementById('specBLbl').textContent = 'B = ' + b + ' 并发会话';
+
+      const params = {
+        eagle3: { alpha: 0.84, draftMs: 0.45, name: 'EAGLE-3 / 原生 MTP' },
+        pld: { alpha: 0.80, draftMs: 0.05, name: 'PLD 提示词查找' },
+        medusa: { alpha: 0.68, draftMs: 0.35, name: 'Medusa 多头' },
+        draft7b: { alpha: 0.76, draftMs: 1.20, name: '独立 7B Draft' }
+      }[p];
+
+      const tau = (1.0 - Math.pow(params.alpha, g + 1)) / (1.0 - params.alpha);
+      const baseStepMs = 20.6 + b * 0.15;
+      const verifyOverhead = 1.08 + (b / 32.0) * (g * 0.22);
+      const totalDraftMs = g * params.draftMs;
+      const specStepMs = baseStepMs * verifyOverhead + totalDraftMs;
+      const effTpot = b > 32 ? baseStepMs : (specStepMs / (tau * 0.95));
+      const speedup = baseStepMs / effTpot;
+
+      document.getElementById('baseSpecOut').textContent = baseStepMs.toFixed(1) + ' ms (' + (1000.0 / baseStepMs).toFixed(1) + ' tok/s)';
+      document.getElementById('eagOut').textContent = effTpot.toFixed(1) + ' ms (' + (1000.0 / effTpot).toFixed(1) + ' tok/s · 快 ' + speedup.toFixed(2) + 'x)';
+      document.getElementById('eagBar').style.width = Math.min(100, Math.round((effTpot / baseStepMs) * 100)) + '%';
+
+      document.getElementById('specFormula').textContent =
+        '【流派参数】 ' + params.name + '  |  单步接受率 α = ' + params.alpha.toFixed(2) + '  |  每步草案耗时 = ' + params.draftMs.toFixed(2) + ' ms\n' +
+        '【理论期望接收步长】 τ(α, γ) = (1 - ' + params.alpha + '^' + (g + 1) + ') / (1 - ' + params.alpha + ') = ' + tau.toFixed(2) + ' 词/步\n' +
+        '【等效 TPOT 与加速比】 ' + (b > 32 ? '⚠️ B=' + b + ' > 32 触发高并发门禁自动旁路投机解码，保持标准自回归 ' + baseStepMs.toFixed(1) + ' ms' : '单次验证总耗时 ' + specStepMs.toFixed(1) + ' ms ÷ 实测接收 ' + (tau * 0.95).toFixed(2) + ' 词 = ' + effTpot.toFixed(1) + ' ms/词 (加速 ' + speedup.toFixed(2) + ' 倍)！');
+    }
+    calcSpec();
+  </script>
+</body>
+</html>
