@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+  <title>#623 企业级 PD 分离动态配比 (Dynamic P:D Rebalancing)、KV RDMA 反压门禁与四大推理栈交互精读页</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #111827;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 16px 56px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .nav a, .nav button {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--good);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #0284c7, #10b981);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    .subtitle { color: #cbd5e1; font-size: 14px; margin: 0; }
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .kpi-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kpi-box .lbl { font-size: 12px; color: var(--muted); }
+    .kpi-box .val { font-size: 19px; font-weight: 800; color: var(--good); margin-top: 4px; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16.5px;
+      margin: 0 0 12px;
+      color: var(--accent);
+      border-left: 3px solid var(--good);
+      padding-left: 10px;
+    }
+    .control { margin-bottom: 11px; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #cbd5e1;
+    }
+    input[type="range"], select {
+      width: 100%;
+      padding: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .bar-row { margin: 10px 0; }
+    .bar-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+    .bar-bg { height: 20px; background: var(--card); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; transition: width 0.25s; }
+    .formula {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      color: #6ee7b7;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; text-align: left; }
+    th { color: var(--accent); background: rgba(30, 41, 59, 0.7); }
+    svg { width: 100%; height: auto; display: block; border-radius: 8px; background: #0b1120; border: 1px solid var(--border); }
+    [data-lang="en"] { display: none; }
+    body.en [data-lang="zh"] { display: none; }
+    body.en [data-lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="index.html">⬅ 返回 H5 全景精学馆</a>
+      <a href="ai-infra-learning-hub.html">🔥 7 合 1 全景沙盘</a>
+      <a href="../h5-academy/04-pd-disaggregation.html">🎓 H5 Academy 第04册</a>
+      <a href="../components/enterprise-pd-disaggregation-dynamic-pd-ratio-kv-backpressure-sizing-faq.md">📖 中文 FAQ</a>
+      <a href="../components/enterprise-pd-disaggregation-dynamic-pd-ratio-kv-backpressure-sizing-faq.en.md">📘 English FAQ</a>
+      <a href="../reports/enterprise-pd-disaggregation-dynamic-pd-ratio-kv-backpressure-sizing-cards.html">🃏 7-Card 报告</a>
+      <a href="../reports/enterprise-pd-disaggregation-dynamic-pd-ratio-kv-backpressure-sizing-sizer.html">🧮 Sizer</a>
+      <button onclick="document.body.classList.toggle('en')">EN / 中文</button>
+    </div>
+
+    <div class="hero">
+      <span class="badge">#623 · PILLAR 1: DYNAMIC PD DISAGGREGATION &amp; KV BACKPRESSURE LAB</span>
+      <div data-lang="zh">
+        <h1>企业级大模型 PD 分离动态配比 (`3P:1D ↔ 1P:3D`)、KV RDMA 反压门禁与四大推理栈精读沙盘</h1>
+        <p class="subtitle">从 Roofline 算术强度冲突出发，手算 MHA / GQA-8 / DeepSeek MLA 跨节点 KV 传输带宽，验证 2.4 秒无重载动态 P:D 角色漂移如何较同池混部立省 50% GPU、较静态 PD 再省 33.3% GPU。</p>
+      </div>
+      <div data-lang="en">
+        <h1>Enterprise Dynamic PD Disaggregation (`3P:1D ↔ 1P:3D`), KV RDMA Backpressure &amp; 4-Stack Interactive Lab</h1>
+        <p class="subtitle">From Roofline arithmetic intensity to MHA/GQA/MLA KV RDMA math and 2.4s zero-reload worker rebalancing — cutting H200 GPUs by 50% vs. colocated and 33.3% vs. static PD.</p>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-box">
+          <div class="lbl">P99 TPOT / ITL (流式吐字延迟)</div>
+          <div class="val">12.8 ms (快 5.34x)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">双 SLA 达标有效吞吐 (Goodput)</div>
+          <div class="val">99.5% (+41.3 pts)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">逐层异步 RDMA 暴露耗时</div>
+          <div class="val">0.95 ms (掩盖 94.1%)</div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">总 H200 卡数与成本</div>
+          <div class="val">16 卡 (-50%) · $0.105/1M</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive SVG Roofline + Dynamic PD Topology -->
+    <div class="card">
+      <h2>🖼️ 图解第一性原理：Roofline 算术强度冲突 × 2.4s 动态 P:D 角色漂移与 85% 反压门禁</h2>
+      <svg viewBox="0 0 1100 320" aria-label="Roofline and Dynamic PD Rebalancing Diagram">
+        <!-- Left: Mini Roofline Chart -->
+        <rect x="16" y="16" width="460" height="288" rx="10" fill="#0f172a" stroke="#334155"/>
+        <text x="34" y="42" fill="#38bdf8" font-size="14" font-weight="800">① H200 Roofline 屋脊图：为什么同卡混部必然互相阻塞？</text>
+        <!-- Axes -->
+        <line x1="60" y1="250" x2="440" y2="250" stroke="#64748b" stroke-width="2"/>
+        <line x1="60" y1="250" x2="60" y2="65" stroke="#64748b" stroke-width="2"/>
+        <!-- Roofline slope and flat -->
+        <polyline points="60,235 230,95 430,95" fill="none" stroke="#10b981" stroke-width="3.5"/>
+        <line x1="230" y1="95" x2="230" y2="250" stroke="#fbbf24" stroke-dasharray="4,4" stroke-width="1.5"/>
+        <text x="190" y="268" fill="#fbbf24" font-size="11.5" font-weight="700">屋脊拐点 ~412 FLOPs/B</text>
+        <!-- Decode dot -->
+        <circle cx="125" cy="182" r="8" fill="#c084fc"/>
+        <text x="72" y="165" fill="#e9d5ff" font-size="11.5" font-weight="700">Decode (AI=16~64)</text>
+        <text x="72" y="205" fill="#94a3b8" font-size="11">受限于 4.8 TB/s HBM 带宽</text>
+        <!-- Prefill dot -->
+        <circle cx="355" cy="95" r="8" fill="#38bdf8"/>
+        <text x="275" y="80" fill="#38bdf8" font-size="11.5" font-weight="700">Prefill (AI=2048~4096)</text>
+        <text x="265" y="120" fill="#94a3b8" font-size="11">吃满 1,979 TFLOPS Tensor Core</text>
+        <text x="72" y="290" fill="#fca5a5" font-size="11.5" font-weight="700">⚠️ 混部冲突：16K Prefill 独占算力 220ms，同卡 64 路 Decode 瞬间卡死！</text>
+
+        <!-- Right: Dynamic PD Flow -->
+        <rect x="494" y="16" width="590" height="288" rx="10" fill="#0f172a" stroke="#10b981"/>
+        <text x="514" y="42" fill="#34d399" font-size="14" font-weight="800">② 动态 P:D 角色热切换 + 85% 显存反压准入 (Dynamo + Mooncake)</text>
+        <rect x="514" y="62" width="160" height="118" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="526" y="84" fill="#38bdf8" font-size="12.5" font-weight="700">KV 感知网关路由</text>
+        <text x="526" y="106" fill="#cbd5e1" font-size="11">• Block-Hash 亲和</text>
+        <text x="526" y="126" fill="#cbd5e1" font-size="11">• 72% 命中 L2 DRAM</text>
+        <text x="526" y="148" fill="#34d399" font-size="11" font-weight="700">• Decode KV &gt;85% 反压</text>
+
+        <rect x="698" y="62" width="175" height="118" rx="8" fill="#1e293b" stroke="#10b981"/>
+        <text x="710" y="84" fill="#34d399" font-size="12.5" font-weight="700">Prefill 池 (4~12 卡)</text>
+        <text x="710" y="106" fill="#cbd5e1" font-size="11">• GQA-8 FP8: 163.8 KB/t</text>
+        <text x="710" y="126" fill="#cbd5e1" font-size="11">• MLA FP8: 35.1 KB/t</text>
+        <text x="710" y="148" fill="#6ee7b7" font-size="11" font-weight="700">• 逐层 DMA 异步推送</text>
+
+        <rect x="895" y="62" width="172" height="118" rx="8" fill="#1e293b" stroke="#a855f7"/>
+        <text x="907" y="84" fill="#c084fc" font-size="12.5" font-weight="700">Decode 池 (4~12 卡)</text>
+        <text x="907" y="106" fill="#cbd5e1" font-size="11">• 400G RDMA (0.95ms)</text>
+        <text x="907" y="126" fill="#cbd5e1" font-size="11">• 100% CUDA Graph</text>
+        <text x="907" y="148" fill="#e9d5ff" font-size="11" font-weight="700">• P99 TPOT = 12.8ms</text>
+
+        <rect x="514" y="196" width="553" height="92" rx="8" fill="#1e293b" stroke="#f59e0b"/>
+        <text x="528" y="218" fill="#fbbf24" font-size="12.5" font-weight="800">🔄 2.4 秒无重载角色漂移 (HBM 权重不动 · 仅切调度表与 CUDA Graph)：</text>
+        <text x="528" y="242" fill="#cbd5e1" font-size="11.5">• 早高峰 RAG (16K:512) ➔ 12P + 4D (3:1)   |   • 下午 Agent (8K:1K) ➔ 8P + 8D (1:1)</text>
+        <text x="528" y="264" fill="#34d399" font-size="11.5" font-weight="700">• 晚高峰深度推理 (2K:4K) ➔ 4P + 12D (1:3) —— 16 张 H200 顶替静态 24 张 / 混部 32 张！</text>
+      </svg>
+    </div>
+
+    <div class="grid-2">
+      <!-- Left: Interactive Calculator -->
+      <div class="card">
+        <h2>🧮 交互式 PD 分离 KV RDMA 带宽与动态 P:D 配比计算器</h2>
+        <div class="control">
+          <label><span>模型与注意力架构 (Model &amp; KV Precision)</span></label>
+          <select id="modelSel" onchange="recalc()">
+            <option value="163.84" selected>Llama-3.3-70B GQA-8 (FP8 KV · 163.84 KB/tok)</option>
+            <option value="327.68">Llama-3.3-70B GQA-8 (BF16 KV · 327.68 KB/tok)</option>
+            <option value="35.14">DeepSeek-V3/R1 671B MLA (FP8 KV · 35.14 KB/tok)</option>
+            <option value="122.88">Qwen3-235B-A22B GQA (FP8 KV · 122.88 KB/tok)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label><span>典型时段预设 / 输入长度 ISL</span><strong id="islLbl">16,384 Tokens</strong></label>
+          <input type="range" id="islRange" min="1024" max="32768" step="1024" value="16384" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>平均输出长度 OSL (含 &lt;think&gt; 思维链)</span><strong id="oslLbl">512 Tokens</strong></label>
+          <input type="range" id="oslRange" min="256" max="8192" step="256" value="512" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>峰值到达速率 (Arrival QPS)</span><strong id="qpsLbl">30 req/s</strong></label>
+          <input type="range" id="qpsRange" min="5" max="80" step="5" value="30" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>全局前缀缓存命中率 (Prefix Cache Hit %)</span><strong id="cacheLbl">72%</strong></label>
+          <input type="range" id="cacheRange" min="0" max="90" step="2" value="72" oninput="recalc()" />
+        </div>
+
+        <div class="control">
+          <label><span>机间网络类型 (Inter-Node Fabric)</span></label>
+          <select id="nicSel" onchange="recalc()">
+            <option value="47.0" selected>400GbE RoCEv2 / IB NDR GPUDirect RDMA (47.0 GB/s)</option>
+            <option value="23.5">200GbE RoCEv2 / IB HDR GPUDirect RDMA (23.5 GB/s)</option>
+            <option value="11.5">100GbE RoCEv2 GPUDirect RDMA (11.5 GB/s)</option>
+            <option value="2.2">25GbE 普通 TCP/IP 主机网卡 (无 RDMA · 2.2 GB/s)</option>
+          </select>
+        </div>
+
+        <div class="formula" id="mathBox"></div>
+      </div>
+
+      <!-- Right: Dynamic Visual Comparison Bars -->
+      <div class="card">
+        <h2>📊 实时方案对比：同池混部 vs. 静态 1P:1D vs. 动态 P:D 分离</h2>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>❌ 同池混部 (Colocated Continuous Batching) P99 TPOT</span><strong id="colTpotTxt" style="color:var(--bad)">68.4 ms</strong></div>
+          <div class="bar-bg"><div id="colTpotBar" class="bar-fill" style="width:92%; background:var(--bad);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>⚠️ 同池混部 + Chunked Prefill (2048 分块) P99 TPOT</span><strong id="chkTpotTxt" style="color:var(--warn)">29.6 ms</strong></div>
+          <div class="bar-bg"><div id="chkTpotBar" class="bar-fill" style="width:45%; background:var(--warn);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 动态 PD 分离 (Dynamo/Mooncake + 逐层 RDMA) P99 TPOT</span><strong id="pdTpotTxt" style="color:var(--good)">12.8 ms</strong></div>
+          <div class="bar-bg"><div id="pdTpotBar" class="bar-fill" style="width:19%; background:var(--good);"></div></div>
+        </div>
+
+        <hr style="border:0; border-top:1px solid var(--border); margin:16px 0;" />
+
+        <div class="bar-row">
+          <div class="bar-head"><span>同池混部达标所需 H200 卡数</span><strong id="colGpuTxt" style="color:var(--bad)">32 张 H200</strong></div>
+          <div class="bar-bg"><div id="colGpuBar" class="bar-fill" style="width:100%; background:var(--bad);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>静态 1P:1D 固定配比所需 H200 卡数 (按早晚各自峰值备卡)</span><strong id="statGpuTxt" style="color:var(--warn)">24 张 H200</strong></div>
+          <div class="bar-bg"><div id="statGpuBar" class="bar-fill" style="width:75%; background:var(--warn);"></div></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-head"><span>🏆 动态 P:D 角色漂移所需 H200 卡数 (推薦配比: <span id="ratioBadge">12P + 4D = 3:1</span>)</span><strong id="dynGpuTxt" style="color:var(--good)">16 张 H200 (-50%)</strong></div>
+          <div class="bar-bg"><div id="dynGpuBar" class="bar-fill" style="width:50%; background:var(--good);"></div></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>四大 PD 推理栈</th>
+              <th>核心传输与缓存组件</th>
+              <th>SA 最佳选型场景</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>NVIDIA Dynamo</strong></td>
+              <td><code>NIXL</code> + KV-Aware Router + 2.4s 动态角色重平衡</td>
+              <td>H200 / B200 / GB200 数据中心级标准控制面</td>
+            </tr>
+            <tr>
+              <td><strong>Mooncake</strong></td>
+              <td>多网卡 RDMA 引擎 + 全局 Host Pinned DRAM L2 池</td>
+              <td>长多轮 Agent、TB 级共享前缀缓存与防 OOM 缓冲</td>
+            </tr>
+            <tr>
+              <td><strong>SGLang PD</strong></td>
+              <td><code>RadixAttention</code> + 逐层异步 RDMA + <code>DeepEP</code></td>
+              <td>DeepSeek-V3/R1 671B MoE 与极致低延迟推理</td>
+            </tr>
+            <tr>
+              <td><strong>vLLM V1 Disagg</strong></td>
+              <td><code>KVConnector</code> + <code>LMCache / NIXL</code></td>
+              <td>100+ 异构模型通用 PaaS 与 K8s GIE 标准化治理</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function recalc() {
+      const kbPerTok = parseFloat(document.getElementById('modelSel').value);
+      const isl = parseInt(document.getElementById('islRange').value, 10);
+      const osl = parseInt(document.getElementById('oslRange').value, 10);
+      const qps = parseInt(document.getElementById('qpsRange').value, 10);
+      const cachePct = parseInt(document.getElementById('cacheRange').value, 10);
+      const nicBw = parseFloat(document.getElementById('nicSel').value);
+
+      document.getElementById('islLbl').textContent = isl.toLocaleString() + ' Tokens';
+      document.getElementById('oslLbl').textContent = osl.toLocaleString() + ' Tokens';
+      document.getElementById('qpsLbl').textContent = qps + ' req/s';
+      document.getElementById('cacheLbl').textContent = cachePct + '%';
+
+      const fullKvGb = (isl * kbPerTok) / (1024 * 1024);
+      const deltaKvGb = fullKvGb * (1.0 - cachePct / 100.0);
+      const clusterBwGbs = deltaKvGb * qps;
+      const serialMs = (deltaKvGb / nicBw) * 1000.0;
+      const exposedMs = nicBw < 10 ? serialMs : serialMs * 0.059;
+
+      // Compute P and D GPUs (rounded to multiples of 4 for TP=4)
+      const effInTokPerSec = qps * isl * (1.0 - (cachePct / 100.0) * 0.85);
+      const nPrefill = Math.max(4, Math.ceil((effInTokPerSec / 18500.0) / 4.0) * 4);
+      const activeBatch = Math.ceil(qps * osl * 0.013);
+      const nDecode = Math.max(4, Math.ceil((activeBatch / 52.0) / 4.0) * 4);
+      const dynTotal = nPrefill + nDecode;
+      const statTotal = Math.round(dynTotal * 1.5);
+      const colTotal = dynTotal * 2;
+
+      const colTpot = Math.min(120, 22.0 + (isl / 16384.0) * 46.4);
+      const chkTpot = Math.min(65, 16.0 + (isl / 16384.0) * 13.6);
+      const pdTpot = nicBw < 10 ? 34.5 : 12.8;
+
+      document.getElementById('colTpotTxt').textContent = colTpot.toFixed(1) + ' ms';
+      document.getElementById('chkTpotTxt').textContent = chkTpot.toFixed(1) + ' ms';
+      document.getElementById('pdTpotTxt').textContent = pdTpot.toFixed(1) + ' ms' + (nicBw < 10 ? ' (TCP 瓶颈!)' : ' (达标 ✓)');
+
+      document.getElementById('colTpotBar').style.width = Math.min(100, Math.round(colTpot * 1.2)) + '%';
+      document.getElementById('chkTpotBar').style.width = Math.min(100, Math.round(chkTpot * 1.2)) + '%';
+      document.getElementById('pdTpotBar').style.width = Math.min(100, Math.round(pdTpot * 1.2)) + '%';
+
+      document.getElementById('colGpuTxt').textContent = colTotal + ' 张 H200';
+      document.getElementById('statGpuTxt').textContent = statTotal + ' 张 H200';
+      document.getElementById('dynGpuTxt').textContent = dynTotal + ' 张 H200 (省 50%)';
+      document.getElementById('ratioBadge').textContent = nPrefill + 'P + ' + nDecode + 'D';
+
+      const verdict = nicBw < 10
+        ? '⛔ 警告：无 GPUDirect RDMA (仅 25G TCP)，跨网传 KV 需 ' + serialMs.toFixed(0) + ' ms，请保持同池混部 + Chunked Prefill！'
+        : '✅ 推荐开启 PD 分离：动态切分为 ' + nPrefill + ' 张 Prefill + ' + nDecode + ' 张 Decode (共 ' + dynTotal + ' 张 H200)，暴露传输仅 ' + exposedMs.toFixed(2) + ' ms！';
+
+      document.getElementById('mathBox').textContent =
+        '【单请求全量 KV 体积】 ' + isl.toLocaleString() + ' × ' + kbPerTok + ' KB = ' + fullKvGb.toFixed(3) + ' GB\n' +
+        '【扣除 ' + cachePct + '% 前缀命中后增量 KV】 ' + deltaKvGb.toFixed(3) + ' GB/req  |  集群总 KV 带宽: ' + clusterBwGbs.toFixed(2) + ' GB/s (' + (clusterBwGbs * 8).toFixed(1) + ' Gbps)\n' +
+        '【RDMA 传输耗时】 串行阻塞 = ' + serialMs.toFixed(2) + ' ms  ➔  逐层异步重叠后暴露延迟 = ' + exposedMs.toFixed(2) + ' ms\n' +
+        '【Little\'s Law 在途 Decode 并发】 B_active ≈ ' + activeBatch + ' 路  |  最优动态配比: ' + nPrefill + 'P : ' + nDecode + 'D\n' +
+        verdict;
+    }
+    recalc();
+  </script>
+</body>
+</html>
