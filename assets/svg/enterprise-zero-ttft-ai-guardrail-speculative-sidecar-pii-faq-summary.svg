@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <rect width="1200" height="630" fill="#0F172A" rx="16"/>
+  <rect x="24" y="20" width="1152" height="72" rx="12" fill="#1E293B" stroke="#334155"/>
+  <text x="44" y="50" fill="#38BDF8" font-size="19" font-weight="700">#647 企业大模型零 TTFT 损耗安全护栏：投机伴飞审查 (Speculative Sidecar) 与流式 PII 脱敏容量指南</text>
+  <text x="44" y="74" fill="#94A3B8" font-size="13">Zero-TTFT Guardrails: Serial Blocking (+145ms TTFT) vs. Parallel Speculative Sidecar (+2.5ms Net Penalty, -98.3%) + 6-Token Streaming PII</text>
+
+  <!-- Left: Why Serial Guardrails Kill TTFT -->
+  <rect x="24" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="42" y="136" fill="#FCA5A5" font-size="15" font-weight="700">① 为什么串行安全护栏会让大模型首字延迟翻倍？</text>
+
+  <rect x="40" y="150" width="333" height="142" rx="8" fill="#450A0A" stroke="#EF4444"/>
+  <text x="52" y="172" fill="#FCA5A5" font-size="13" font-weight="700">⛔ 反模式：前置串行阻断审查 + 后置整句审查</text>
+  <text x="52" y="194" fill="#F1F5F9" font-size="12">1. 先跑正则/NER 脱敏 (`18 ms`) + 越狱分类器 (`42 ms`)</text>
+  <text x="52" y="214" fill="#F1F5F9" font-size="12">2. 再跑 `Llama-Guard-3-8B` 输入安全审查 (`85 ms`)</text>
+  <text x="52" y="234" fill="#F1F5F9" font-size="12">3. 通过后才把请求发给主力 `70B LLM` (`180 ms` Prefill)</text>
+  <text x="52" y="256" fill="#FCA5A5" font-size="12" font-weight="700">· 结果：用户哪怕问一句“今天天气如何”，TTFT 也白白</text>
+  <text x="52" y="274" fill="#FCA5A5" font-size="12" font-weight="700">  多等 `145 ms (+80.6%)`！流式输出更被整句缓冲卡成顿挫！</text>
+
+  <rect x="40" y="304" width="333" height="174" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="52" y="326" fill="#6EE7B7" font-size="13" font-weight="700">✅ 正解：投机并行伴飞护栏 (Speculative Parallel Sidecar)</text>
+  <text x="52" y="348" fill="#F8FAFC" font-size="12">· 网关先做 `0.8 ms` 极速 Aho-Corasick 确定性 PII 掩码</text>
+  <text x="52" y="368" fill="#D1FAE5" font-size="12">· 随后 **同时双发**：一路发主力 `70B LLM (180ms)`，</text>
+  <text x="52" y="388" fill="#D1FAE5" font-size="12">  一路发伴飞 `Llama-Guard-3-8B FP8 (38ms)`！</text>
+  <text x="52" y="408" fill="#6EE7B7" font-size="12" font-weight="700">· 伴飞模型早在第 38ms 就返回 `SAFE` 令牌；</text>
+  <text x="52" y="428" fill="#6EE7B7" font-size="12" font-weight="700">  当 70B 在第 180ms 吐出首字时，网关零等待直接放行！</text>
+  <text x="52" y="450" fill="#A7F3D0" font-size="11">  (仅 `0.6%` 恶意越狱请求触发 `abort_request()`，净延迟仅 `+2.5ms`)</text>
+
+  <!-- Center: Streaming Output Guardrail & 6-Token Window -->
+  <rect x="407" y="108" width="386" height="385" rx="12" fill="#1E293B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="425" y="136" fill="#6EE7B7" font-size="15" font-weight="700">② 输出流式脱敏：6-Token 滑动窗口 + 异步块级伴飞</text>
+
+  <rect x="423" y="150" width="354" height="152" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="435" y="172" fill="#38BDF8" font-size="13" font-weight="700">🔒 L1 输出层：6-Token 微缓冲可逆 PII 掩码 (0.4ms)</text>
+  <text x="435" y="194" fill="#F1F5F9" font-size="12">· 为什么不能逐 Token 直出？因为手机号 `138-0013-8000`</text>
+  <text x="435" y="214" fill="#CBD5E1" font-size="12">  跨越 `4~5` 个 Token，逐字发等发现时前 8 位已泄露给前端！</text>
+  <text x="435" y="234" fill="#6EE7B7" font-size="12" font-weight="700">· 网关维持 `6 Tokens` (约 36ms) 微型 FIFO 滑动窗口：</text>
+  <text x="435" y="254" fill="#D1FAE5" font-size="12">  流式状态机实时识别身份证/银行卡/API Key/内网 IP，</text>
+  <text x="435" y="274" fill="#D1FAE5" font-size="12">  在推向 SSE 前毫秒级替换为 `[REDACTED_PHONE]`！</text>
+
+  <rect x="423" y="314" width="354" height="164" rx="8" fill="#0F172A" stroke="#A78BFA"/>
+  <text x="435" y="336" fill="#C4B5FD" font-size="13" font-weight="700">🛡️ L2 输出层：每 32 Tokens 异步伴飞分类审查</text>
+  <text x="435" y="358" fill="#F1F5F9" font-size="12">· SSE 流正常以 `0 ms` 阻塞向用户吐字，同时网关每攒够</text>
+  <text x="435" y="378" fill="#CBD5E1" font-size="12">  `32 Tokens` 异步镜像抄送给 `ShieldGemma / Llama-Guard`</text>
+  <text x="435" y="398" fill="#6EE7B7" font-size="12" font-weight="700">· 一旦检出合规违例：立即向前端下发 SSE `event: retract`</text>
+  <text x="435" y="418" fill="#D1FAE5" font-size="12">  撤回最后半句并切换安全兜底话术，同时断开后端生成！</text>
+  <text x="435" y="440" fill="#FDE68A" font-size="12" font-weight="700">· 延迟数学公式：T_TTFT_eff = max(T_LLM, T_Guard) + 1.7ms</text>
+  <text x="435" y="458" fill="#94A3B8" font-size="11">  因为 T_Guard (38ms) &lt;&lt; T_LLM (180ms)，故净 TTFT 增量趋近于零！</text>
+
+  <!-- Right: Sidecar GPU Sizing -->
+  <rect x="811" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#38BDF8" stroke-width="1.5"/>
+  <text x="829" y="136" fill="#38BDF8" font-size="15" font-weight="700">③ 安全护栏伴飞池容量配比 (100 RPS 生产实测)</text>
+
+  <rect x="827" y="150" width="333" height="106" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="839" y="172" fill="#6EE7B7" font-size="13" font-weight="700">📐 1:8 伴飞配比黄金法则 (2× L40S 护航 16× H200)</text>
+  <text x="839" y="194" fill="#F8FAFC" font-size="12">· `Llama-Guard-3-8B FP8` 仅输出 `1~2` 个分类 Token (`safe`)</text>
+  <text x="839" y="214" fill="#D1FAE5" font-size="12">· 完全是纯 Prefill 负载，无长自回归 Decode 负担！</text>
+  <text x="839" y="234" fill="#6EE7B7" font-size="12" font-weight="700">· 仅需 `2 张 L40S` ($1,440/月) 即可轻松处理 100 RPS</text>
+
+  <rect x="827" y="268" width="333" height="210" rx="8" fill="#0F172A" stroke="#334155"/>
+  <text x="839" y="290" fill="#FDE68A" font-size="13" font-weight="700">📊 三种企业安全护栏部署架构实测对比</text>
+  <text x="839" y="314" fill="#FCA5A5" font-size="12">1. 串行调用外部云 Content Safety API：</text>
+  <text x="839" y="332" fill="#CBD5E1" font-size="11">   · 额外 TTFT: `+165 ms` | 成本: `$15,000/月` | 敏感数据出境</text>
+  <text x="839" y="356" fill="#FDE68A" font-size="12">2. 内网串行自建 Llama-Guard-8B (先审后发)：</text>
+  <text x="839" y="374" fill="#CBD5E1" font-size="11">   · 额外 TTFT: `+85 ms` (`+145ms` 含后置) | 阻塞流式体验</text>
+  <text x="839" y="398" fill="#6EE7B7" font-size="12" font-weight="700">3. 投机并行伴飞 + 6-Token 滑动脱敏 (`2× L40S`)：</text>
+  <text x="839" y="418" fill="#F8FAFC" font-size="11">   · 额外 TTFT: **`+2.5 ms (-98.3%)`** | 拦截率: **`99.7%`**</text>
+  <text x="839" y="438" fill="#6EE7B7" font-size="11" font-weight="700">   · 硬件成本仅占主集群 `5.5%` ($1,440/月 vs 云 API 省 90.4%)！</text>
+  <text x="839" y="460" fill="#94A3B8" font-size="11">   · 恶意越狱浪费算力仅 `0.6% × (38ms/180ms) = 0.13%` 集群算力</text>
+
+  <!-- Bottom Banner -->
+  <rect x="24" y="508" width="1152" height="100" rx="12" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="44" y="536" fill="#6EE7B7" font-size="16" font-weight="700">🔑 AI Solution Architect 零延迟安全护栏架构设计铁律</text>
+  <text x="44" y="562" fill="#F8FAFC" font-size="13">1. 变“串行门禁”为“投机并行伴飞”：利用 Guard 模型 (38ms) 快于主力大模型 Prefill (180ms) 的时间差，把输入审查延迟完全隐藏在首字计算内部；</text>
+  <text x="44" y="586" fill="#CBD5E1" font-size="13">2. 输出层采用“6-Token 确定性 PII 微缓冲 + 32-Token 异步语义抄送”：既杜绝跨 Token 手机号/密钥半截泄露，又保持丝滑流式输出。</text>
+</svg>
