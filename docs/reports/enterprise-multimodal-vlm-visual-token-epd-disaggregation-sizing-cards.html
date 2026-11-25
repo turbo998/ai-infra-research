@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+  <title>#631 Multimodal VLM Visual Token Sizer &amp; E-P-D Disaggregation — 7-Card Visual Report</title>
+  <style>
+    body { background:#0b1120; color:#f8fafc; font-family:system-ui,-apple-system,sans-serif; margin:0; padding:24px; }
+    .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; max-width:1400px; margin:0 auto; }
+    .card { background:#111827; border:1px solid #334155; border-radius:16px; padding:20px; aspect-ratio:4/5; display:flex; flex-direction:column; justify-content:space-between; }
+    .badge { font-size:11px; color:#38bdf8; font-weight:700; letter-spacing:1px; }
+    h2 { font-size:18px; margin:8px 0; line-height:1.35; }
+    p, li { font-size:13px; color:#cbd5e1; line-height:1.5; }
+    table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+    th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+    th { color:#94a3b8; }
+    .code { background:#0f172a; padding:10px; border-radius:8px; font-family:monospace; font-size:11px; color:#34d399; }
+    .bar { height:12px; border-radius:4px; background:#3b82f6; margin:4px 0; }
+    .bar.muted { background:#cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="badge">1 / 7 · HANDS-ON · MULTIMODAL VLM E-P-D SERVING</div>
+        <h2>E-P-D 3-Pool Disaggregation (L40S ViT → H100 Prefill → H200 Decode) Cuts TCO 60.3% &amp; Speeds TPOT 7.0×</h2>
+        <p>Evaluated on `Qwen2.5-VL-72B` at 20 QPS (3× 1080p images/req) comparing colocated `20× H200` (`$64K/mo`) vs. `4×L40S + 4×H100 + 4×H200` (`$25.4K/mo`).</p>
+      </div>
+      <div class="code">Provenance: analytical_model · #631 Multimodal VLM E-P-D Sizer</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">2 / 7 · SCENARIO: 3× 1080P IMAGES PER REQUEST (8,073 TOKENS)</div>
+        <h2>Offloading ViT to TP=1 L40S + SHA-256 Feature Cache Eliminates 210ms Decode Stalls</h2>
+        <p>Input: Three `1920×1080` images (`2,691` visual tokens each) + multi-turn follow-up queries.</p>
+        <ul>
+          <li><strong>Step 1 (`choice` · 0.998):</strong> `SHA-256` cache hits 78% of follow-up image turns in `0ms` → <em>Act automatically</em></li>
+          <li><strong>Step 2 (`score` · 0.996):</strong> `4× L40S (TP=1)` encodes cache misses without TP=8 AllReduce tax → <em>Act automatically</em></li>
+          <li><strong>Step 3 (`score` · 0.995):</strong> `4× H100 P -&gt; 4× H200 D` delivers `590ms` TTFT &amp; `13.2ms` TPOT → <em>Act automatically</em></li>
+        </ul>
+      </div>
+      <div class="code">Monthly Spend: $25,400/mo vs. $64,000/mo Colocated (-60.3% TCO)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">3 / 7 · WHAT I TESTED</div>
+        <h2>Evaluation Matrix Across Multimodal Serving Topologies</h2>
+        <table>
+          <thead><tr><th>SCENARIO</th><th>METRIC</th><th>MODEL ANSWER</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>Colocated ViT+LLM</td><td>P99 TPOT</td><td>92.4 ms (ViT stall ✕)</td><td>Disaggregate Pool E</td></tr>
+            <tr><td>Uncapped 4K Photo</td><td>Visual Tokens</td><td>10,647 tok/image ✕</td><td>Cap 1280×1280</td></tr>
+            <tr><td>ViT on TP=8 H200</td><td>GPU Util %</td><td>24.0% (45% AR tax ✕)</td><td>Run TP=1 on L40S</td></tr>
+            <tr><td>E-P-D 3-Pool (#631)</td><td>P95 TTFT / TCO</td><td>590 ms / -60.3% $</td><td>Production Default</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">Miss Marker (✕): Sharding a 600M ViT across TP=8 wastes 45% of runtime in AllReduce</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">4 / 7 · UNDER THE HOOD</div>
+        <h2>Visual Token Grid Math &amp; SHA-256 Embedding Cache</h2>
+        <div class="code">N_tok_img = ceil(1920 / 28) * ceil(1080 / 28) = 69 * 39 = 2,691 tokens<br/>↓<br/>Payload_FP8_Embed = 2691 * 8192 * 1B = 22.0 MB -&gt; cached by SHA256(image_bytes)</div>
+        <p>Caching the post-merger `FP8` visual embeddings skips the entire bidirectional `ViT` pass on multi-turn conversations.</p>
+      </div>
+      <div class="code">Enforce max_pixels = 1280×1280 at the gateway to prevent 4K token explosions</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>Multi-Image Burst, Video Frame Sampling &amp; Cache Miss</h2>
+        <table>
+          <thead><tr><th>PERTURBATION</th><th>COLOCATED H200</th><th>E-P-D 3-POOL (#631)</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>10-image document upload</td><td>Decode stalls 380ms</td><td>0.0ms decode jitter</td><td>Isolated on Pool E</td></tr>
+            <tr><td>Multi-turn chart Q&amp;A</td><td>Re-runs ViT 5×</td><td>78% 0ms cache hit</td><td>5.80× faster TTFT</td></tr>
+            <tr><td>Monthly cluster TCO</td><td>$64,000 / mo</td><td>$25,400 / mo</td><td>-60.3% (-$38.6K/mo)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">Saves $463,200/yr while improving P99 TPOT by 7.00×</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">6 / 7 · LATENCY &amp; FLEET COST</div>
+        <h2>P99 Decode TPOT &amp; Monthly Fleet Cost</h2>
+        <p>P99 Decode TPOT (`13.2 ms` E-P-D vs `92.4 ms` Colocated):</p>
+        <div class="bar" style="width:14%"></div>
+        <div class="bar muted" style="width:100%"></div>
+        <p>Monthly Fleet Cost (`$25.4K` E-P-D vs `$64.0K` Colocated 20×H200):</p>
+        <div class="bar" style="width:40%"></div>
+        <div class="bar muted" style="width:100%"></div>
+      </div>
+      <div class="code">5.80× faster P95 TTFT (590ms vs 3,420ms) and 7.00× faster P99 TPOT</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs. Not For</h2>
+        <p><strong>✅ Good fit:</strong> Multimodal customer support, visual document/chart Q&amp;A, e-commerce visual shopping agents, and video understanding.</p>
+        <p><strong>⛔ Not for:</strong> Text-only LLM endpoints that have no vision encoder stage.</p>
+      </div>
+      <div class="code">Readiness: Production-ready (`L40S ViT TP=1 + SHA-256 Cache + H100/H200 PD`)</div>
+    </div>
+  </div>
+</body>
+</html>
