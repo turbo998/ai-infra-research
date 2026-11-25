@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+  <title>#632 GB200 NVL72 Supernode vs. 8-GPU HGX H200/B200 — 7-Card Visual Report</title>
+  <style>
+    body { background:#0b1120; color:#f8fafc; font-family:system-ui,-apple-system,sans-serif; margin:0; padding:24px; }
+    .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; max-width:1400px; margin:0 auto; }
+    .card { background:#111827; border:1px solid #334155; border-radius:16px; padding:20px; aspect-ratio:4/5; display:flex; flex-direction:column; justify-content:space-between; }
+    .badge { font-size:11px; color:#38bdf8; font-weight:700; letter-spacing:1px; }
+    h2 { font-size:18px; margin:8px 0; line-height:1.35; }
+    p, li { font-size:13px; color:#cbd5e1; line-height:1.5; }
+    table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+    th, td { border-bottom:1px solid #334155; padding:6px 4px; text-align:left; }
+    th { color:#94a3b8; }
+    .code { background:#0f172a; padding:10px; border-radius:8px; font-family:monospace; font-size:11px; color:#34d399; }
+    .bar { height:12px; border-radius:4px; background:#3b82f6; margin:4px 0; }
+    .bar.muted { background:#cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="card">
+      <div>
+        <div class="badge">1 / 7 · HANDS-ON · RACK-SCALE SUPERNODES</div>
+        <h2>GB200 NVL72 All-Copper EP=72 Delivers 7,240 tok/s/GPU (2.92× vs. H200) at 4.8ms TPOT &amp; $0.039/1M</h2>
+        <p>Evaluated on `DeepSeek-V3/R1 671B` and `1T+ MoE` comparing 2-node `16× HGX H200`, `8× HGX B200`, and rack-scale `GB200 NVL72` (`130 TB/s` copper backplane + Grace C2C).</p>
+      </div>
+      <div class="code">Provenance: analytical_model · #632 GB200 NVL72 vs. HGX Sizer</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">2 / 7 · SCENARIO: FRONTIER 671B MOE AT EP=72</div>
+        <h2>1,800 GB/s Copper Backplane Shrinks Per-Layer All-to-All to &lt;12μs &amp; C2C Restores 128K KV in 14ms</h2>
+        <p>Input: 72-GPU rack serving 671B MoE with 288 EPLB expert slots (4 experts/GPU).</p>
+        <ul>
+          <li><strong>Step 1 (`choice` · 0.998):</strong> `EP=72` places only `~5.2 GB` expert weights per GPU → <em>Act automatically</em></li>
+          <li><strong>Step 2 (`score` · 0.996):</strong> Passive copper backplane executes `All-to-All` at `1,800 GB/s` → <em>Act automatically</em></li>
+          <li><strong>Step 3 (`score` · 0.995):</strong> `Grace 900 GB/s C2C` restores `128K` KV in `14ms` (`6.9×` faster) → <em>Act automatically</em></li>
+        </ul>
+      </div>
+      <div class="code">Per-User Stream: 208.3 tok/s (4.8ms TPOT) · Cluster Output: 521.3K tok/s/rack</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">3 / 7 · WHAT I TESTED</div>
+        <h2>Evaluation Matrix Across HGX H200, HGX B200 &amp; GB200 NVL72</h2>
+        <table>
+          <thead><tr><th>PLATFORM</th><th>METRIC</th><th>MODEL ANSWER</th><th>ACTION</th></tr></thead>
+          <tbody>
+            <tr><td>16× HGX H200 (2-Node)</td><td>Goodput / TPOT</td><td>2,480 tok/s · 11.4ms</td><td>Standard Baseline</td></tr>
+            <tr><td>8× HGX B200 (1-Node)</td><td>Goodput / TPOT</td><td>4,650 tok/s · 7.6ms</td><td>&lt;64 GPU / Air-DLC</td></tr>
+            <tr><td>GB200 NVL72 (EP=72)</td><td>Goodput / TPOT</td><td>7,240 tok/s · 4.8ms</td><td>Frontier MoE Scale</td></tr>
+            <tr><td>Shared Default IMEX</td><td>Multi-Tenant</td><td>Cross-pod leak ✕</td><td>Mandate K8s DRA</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">Miss Marker (✕): Sharing default IMEX channels across tenants exposes GPU BAR1 memory</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">4 / 7 · UNDER THE HOOD</div>
+        <h2>EP=72 Expert Sharding &amp; Grace C2C Bandwidth</h2>
+        <div class="code">Experts_per_GPU = 288 / 72 = 4 experts (~5.2 GB in NVFP4)<br/>↓<br/>T_restore_C2C = 21.47 GB / (4 * 380 GB/s eff C2C) = 14 ms (vs 97ms PCIe5)</div>
+        <p>Eliminating optical transceivers inside the 72-GPU domain saves ~18 kW of DSP optics power and removes optical link flaps across `EP=72`.</p>
+      </div>
+      <div class="code">Mandate K8s DRA per-job IMEX channels and N+1 redundant 132kW CDU manifolds</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">5 / 7 · ROBUSTNESS CHECK</div>
+        <h2>CDU Manifold Fault, IMEX Isolation &amp; Sub-64 GPU Sizing</h2>
+        <table>
+          <thead><tr><th>PERTURBATION</th><th>SINGLE NVL72 RACK</th><th>DUAL-RACK / HGX</th><th>CHANGE</th></tr></thead>
+          <tbody>
+            <tr><td>Rack CDU cooling fault</td><td>72 GPUs offline ✕</td><td>Auto-failover Rack 2</td><td>99.99% uptime</td></tr>
+            <tr><td>Multi-tenant pod memory</td><td>Shared IMEX risk</td><td>DRA isolated channel</td><td>0.0% cross-read</td></tr>
+            <tr><td>Unit cost per 1M tokens</td><td>$0.088 (HGX H200)</td><td>$0.039 (NVL72)</td><td>-55.7% TCO</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code">Never deploy a single non-redundant NVL72 rack for mission-critical online traffic</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">6 / 7 · THROUGHPUT &amp; LATENCY</div>
+        <h2>Per-GPU Goodput &amp; P99 Decode TPOT</h2>
+        <p>Per-GPU Goodput (`7,240 tok/s` NVL72 vs `2,480 tok/s` HGX H200):</p>
+        <div class="bar" style="width:100%"></div>
+        <div class="bar muted" style="width:34%"></div>
+        <p>P99 Decode TPOT (`4.8 ms` NVL72 vs `11.4 ms` HGX H200):</p>
+        <div class="bar" style="width:42%"></div>
+        <div class="bar muted" style="width:100%"></div>
+      </div>
+      <div class="code">2.92× higher throughput per GPU and 55.7% lower cost per 1M tokens ($0.039/1M)</div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="badge">7 / 7 · MY TAKE</div>
+        <h2>Good Fit vs. Not For</h2>
+        <p><strong>✅ Good fit:</strong> `>=144 GPU` frontier MoE inference/training factories with `132 kW/rack` cold-plate liquid cooling.</p>
+        <p><strong>⛔ Not for:</strong> Air-cooled `&lt;40 kW` colocation cages, `&lt;64 GPU` departmental clusters, or single-rack deployments without failover capacity.</p>
+      </div>
+      <div class="code">Readiness: Production-ready (`GB200 NVL72 + K8s DRA IMEX + Dynamo EP=72`)</div>
+    </div>
+  </div>
+</body>
+</html>
