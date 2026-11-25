@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" font-family="Segoe UI, Inter, system-ui, sans-serif">
+  <rect width="1200" height="630" fill="#0F172A" rx="16"/>
+  <rect x="24" y="20" width="1152" height="72" rx="12" fill="#1E293B" stroke="#334155"/>
+  <text x="44" y="50" fill="#38BDF8" font-size="19" font-weight="700">#653 企业大模型全栈可观测性 (OTel GenAI + DCGM + RDMA) 与流式吐字卡顿 (ITL Stall) 五步根因决策树</text>
+  <text x="44" y="74" fill="#94A3B8" font-size="13">Full-Stack LLM Observability: Why Average TPOT Lies (14ms Avg vs. 820ms P99 Stall) · 4-Layer Telemetry Correlation · Tail Sampling (-84.5% Cost)</text>
+
+  <!-- Left: Why Average TPOT Hides Mid-Stream Freezes -->
+  <rect x="24" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#EF4444" stroke-width="1.5"/>
+  <text x="42" y="136" fill="#FCA5A5" font-size="15" font-weight="700">① 为什么平均 TPOT=14ms，用户却投诉打字机严重卡顿？</text>
+
+  <rect x="40" y="150" width="333" height="148" rx="8" fill="#450A0A" stroke="#EF4444"/>
+  <text x="52" y="172" fill="#FCA5A5" font-size="13" font-weight="700">⛔ 平均值欺骗定律：请求级 TPOT vs. 逐词间隔 ITL</text>
+  <text x="52" y="194" fill="#F1F5F9" font-size="12">· 某请求生成 `100` 个 Token 总耗时 `1.40s` → 平均 `TPOT = 14ms`</text>
+  <text x="52" y="214" fill="#CBD5E1" font-size="12">· 但真实情况是：前 99 个 Token 每个仅 `5.8 ms`，</text>
+  <text x="52" y="234" fill="#FCA5A5" font-size="12" font-weight="700">  而在第 42 个 Token 处突然卡死了 `825 ms` (ITL Stall)！</text>
+  <text x="52" y="254" fill="#CBD5E1" font-size="12">· 监控大盘显示 `TPOT = 14ms` 一片翠绿，但前端语音 TTS</text>
+  <text x="52" y="274" fill="#FCA5A5" font-size="11" font-weight="700">  直接断流破音、IDE 补全超时被取消！必须监控 `P99 ITL` 与 `Stall Rate`！</text>
+
+  <rect x="40" y="310" width="333" height="168" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="52" y="332" fill="#38BDF8" font-size="13" font-weight="700">📐 四层黄金遥测指标对齐 (Trace_ID 贯穿 L7→L1)</text>
+  <text x="52" y="354" fill="#F8FAFC" font-size="12">· L4 应用网关层：`gen_ai.latency.ttft`, `max_itl_ms`, `wcu`</text>
+  <text x="52" y="374" fill="#F8FAFC" font-size="12">· L3 引擎调度层：`num_requests_waiting`, `kv_cache_usage_perc`,</text>
+  <text x="52" y="392" fill="#CBD5E1" font-size="11">  `num_preemptions_total` (KV 满触发 Swap/Recompute 计数)</text>
+  <text x="52" y="412" fill="#F8FAFC" font-size="12">· L2 GPU 硬件层：`DCGM_FI_DEV_SM_ACTIVE`, `CLOCK_THROTTLE`</text>
+  <text x="52" y="432" fill="#F8FAFC" font-size="12">· L1 RDMA 网络层：`roce_adp_retrans`, `pfc_pause_duration_us`</text>
+  <text x="52" y="454" fill="#6EE7B7" font-size="11" font-weight="700">· 关联秘诀：在引擎每步 Batch Loop 打入 OTel Span Event 对齐时间戳</text>
+
+  <!-- Center: 5-Step ITL Stall Root-Cause Decision Tree -->
+  <rect x="407" y="108" width="386" height="385" rx="12" fill="#1E293B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="425" y="136" fill="#6EE7B7" font-size="15" font-weight="700">② 流式吐字顿挫 (P99 ITL &gt; 150ms) 五步根因决策树</text>
+
+  <rect x="423" y="150" width="354" height="62" rx="8" fill="#0F172A" stroke="#F59E0B"/>
+  <text x="435" y="170" fill="#FDE68A" font-size="12" font-weight="700">原因 1 (占 44%)：混部大块 Prefill 抢占 (`Chunked Prefill &gt; 4096`)</text>
+  <text x="435" y="190" fill="#E2E8F0" font-size="11">· 特征：同 Batch 插入 32K 新请求 → 处方：切 PD 分离或 `max_batched_tokens=2048`</text>
+
+  <rect x="423" y="218" width="354" height="62" rx="8" fill="#0F172A" stroke="#EF4444"/>
+  <text x="435" y="238" fill="#FCA5A5" font-size="12" font-weight="700">原因 2 (占 26%)：KV Cache 打满触发抢占换出 (`preemptions &gt; 0`)</text>
+  <text x="435" y="258" fill="#E2E8F0" font-size="11">· 特征：`kv_cache_usage &gt; 92%` → 处方：网关锁死 85% KV 反压闸门 + 开 FP8 KV</text>
+
+  <rect x="423" y="286" width="354" height="62" rx="8" fill="#0F172A" stroke="#38BDF8"/>
+  <text x="435" y="306" fill="#38BDF8" font-size="12" font-weight="700">原因 3 (占 15%)：宿主 Python GC / 同步 Detokenizer / 掩码阻塞</text>
+  <text x="435" y="326" fill="#E2E8F0" font-size="11">· 特征：`GPU SM_ACTIVE 跌至 0%` 但无网络等待 → 处方：升级 vLLM V1 多进程分离</text>
+
+  <rect x="423" y="354" width="354" height="62" rx="8" fill="#0F172A" stroke="#A78BFA"/>
+  <text x="435" y="374" fill="#C4B5FD" font-size="12" font-weight="700">原因 4 (占 10%)：RDMA 微突发 PFC 暂停 / EP All-to-All 象流碰撞</text>
+  <text x="435" y="394" fill="#E2E8F0" font-size="11">· 特征：`pfc_pause_us` 突刺 → 处方：开 `NCCL_IB_QPS_PER_CONNECTION=4` 或 AR</text>
+
+  <rect x="423" y="422" width="354" height="58" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="435" y="442" fill="#6EE7B7" font-size="12" font-weight="700">原因 5 (占 5%)：单卡供电/散热降频慢节点 (`T_comp/Median &gt; 1.08`)</text>
+  <text x="435" y="462" fill="#D1FAE5" font-size="11">· 特征：1 卡纯计算变慢拖住 TP 组 → 处方：Node Problem Detector 60s 自动 Cordon</text>
+
+  <!-- Right: Tail-Based Sampling & Observability Sizer -->
+  <rect x="811" y="108" width="365" height="385" rx="12" fill="#1E293B" stroke="#38BDF8" stroke-width="1.5"/>
+  <text x="829" y="136" fill="#38BDF8" font-size="15" font-weight="700">③ 可观测性存储容量手算与尾部采样 (-84.5%)</text>
+
+  <rect x="827" y="150" width="333" height="142" rx="8" fill="#450A0A" stroke="#EF4444"/>
+  <text x="839" y="172" fill="#FCA5A5" font-size="13" font-weight="700">⛔ 反模式：100% 全量保存 Prompt/Response 与逐词 Span</text>
+  <text x="839" y="194" fill="#F1F5F9" font-size="12">· 100 RPS × 500 Output Tokens = 每秒产生 `50,000` 个 Token Span！</text>
+  <text x="839" y="214" fill="#CBD5E1" font-size="12">· 加上完整 16K Prompt 原文日志，每日写入量高达 **`4.8 TB/天`**</text>
+  <text x="839" y="234" fill="#FCA5A5" font-size="12" font-weight="700">· 结果：ClickHouse/ES 账单 `$18,500/月`，且序列化拖慢网关 8ms！</text>
+  <text x="839" y="256" fill="#94A3B8" font-size="11">  (更严重的是：明文存储全量客户 Prompt 极易违反 GDPR / 金融合规)</text>
+
+  <rect x="827" y="304" width="333" height="174" rx="8" fill="#064E3B" stroke="#10B981"/>
+  <text x="839" y="326" fill="#6EE7B7" font-size="13" font-weight="700">✅ 正解：OTel Collector 尾部智能采样 + 逐词直方图聚合</text>
+  <text x="839" y="348" fill="#F8FAFC" font-size="12">1. 严禁每个 Token 建 1 个独立 Span：改为在 Request Span 上</text>
+  <text x="839" y="366" fill="#D1FAE5" font-size="11">   挂载紧凑数组 `[ttft_ms, p50_itl, p99_itl, max_itl_ms, stall_step]`</text>
+  <text x="839" y="388" fill="#F8FAFC" font-size="12">2. 尾部采样 (`Tail-Based Sampling`) 规则：</text>
+  <text x="839" y="406" fill="#6EE7B7" font-size="11" font-weight="700">   · 100% 保留：凡 `TTFT &gt; SLA`、`max_itl &gt; 150ms`、报错或护栏拦截</text>
+  <text x="839" y="424" fill="#D1FAE5" font-size="11">   · 仅 5% 抽样保留：完全健康的常规请求</text>
+  <text x="839" y="446" fill="#6EE7B7" font-size="12" font-weight="700">🎯 收益：异常根因捕获率 `100.0%`，日存储从 4.8TB 压至 `0.74TB`</text>
+  <text x="839" y="464" fill="#A7F3D0" font-size="11">   (月度可观测性账单从 `$18,500` 降至 `$2,860`，立省 `84.5%`)！</text>
+
+  <!-- Bottom Banner -->
+  <rect x="24" y="508" width="1152" height="100" rx="12" fill="#064E3B" stroke="#10B981" stroke-width="1.5"/>
+  <text x="44" y="536" fill="#6EE7B7" font-size="16" font-weight="700">🔑 AI Solution Architect 全栈可观测性设计铁律</text>
+  <text x="44" y="562" fill="#F8FAFC" font-size="13">1. 废除只看平均 TPOT 的假大盘：以 `Goodput (同时满足 TTFT &lt;= SLA 且 Max_ITL &lt;= 150ms 的请求占比)` 作为唯一北极星 SLA 指标；</text>
+  <text x="44" y="586" fill="#CBD5E1" font-size="13">2. 用紧凑数组记录 `max_itl_ms` + OTel 尾部采样 (`100% 异常 + 5% 正常`)：以 15.5% 的存储成本实现 100% 生产慢卡/卡顿根因可追溯。</text>
+</svg>

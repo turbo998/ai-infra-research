@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>#653 企业大模型全栈可观测性 (OTel GenAI + DCGM) 与 ITL Stall 根因决策树交互精读页</title>
+<style>
+  :root { --bg:#0B1120; --card:#1E293B; --border:#334155; --accent:#38BDF8; --green:#10B981; --amber:#F59E0B; --red:#EF4444; --text:#F8FAFC; --muted:#94A3B8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:20px; max-width:1180px; margin:0 auto; }
+  .nav { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; font-size:13px; }
+  .nav a { color:var(--accent); text-decoration:none; background:#1E293B; padding:6px 12px; border-radius:8px; border:1px solid var(--border); }
+  .hero { background:linear-gradient(135deg,#0F172A 0%,#064E3B 100%); border:1px solid var(--green); border-radius:14px; padding:22px; margin-bottom:20px; }
+  .hero h1 { font-size:22px; margin-bottom:8px; }
+  .hero p { color:#CBD5E1; font-size:14px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:16px 0; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+  .kpi .val { font-size:24px; font-weight:800; color:var(--green); }
+  .kpi .lbl { font-size:12px; color:var(--muted); }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:20px; }
+  .panel h2 { font-size:18px; color:var(--accent); margin-bottom:12px; }
+  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:16px; }
+  .ctrl { background:#0F172A; padding:12px; border-radius:10px; border:1px solid var(--border); }
+  .ctrl label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; font-weight:600; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .bar-row { margin:10px 0; }
+  .bar-lbl { display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .bar-bg { height:22px; background:#0F172A; border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+  .bar-fill { height:100%; transition:width 0.25s; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">⬅ 返回 AI Infra 全景精学馆</a>
+    <a href="ai-infra-learning-hub.html">🔥 7合1精学中心</a>
+    <a href="../components/enterprise-llm-observability-otel-dcgm-itl-stall-tree-faq.md">📖 中文 FAQ</a>
+    <a href="../components/enterprise-llm-observability-otel-dcgm-itl-stall-tree-faq.en.md">📘 English FAQ</a>
+    <a href="../reports/enterprise-llm-observability-otel-dcgm-itl-stall-tree-sizer.html">🧮 容量计算器</a>
+    <a href="../reports/enterprise-llm-observability-otel-dcgm-itl-stall-tree-cards.html">🃏 7-Card 评测卡</a>
+  </div>
+
+  <div class="hero">
+    <h1>#653 企业大模型全栈可观测性 (OTel GenAI + DCGM + RDMA) 与流式卡顿 (ITL Stall) 决策树精读页</h1>
+    <p>核心突破：戳破“平均 TPOT=14ms 却隐藏单步 825ms 卡顿”的监控盲区；通过四层指标对齐在 <code>15 秒</code> 内定界 5 类卡顿根因，并用紧凑数组 + <code>OTel 尾部采样</code> 将日日志量从 <code>4.80 TB</code> 压至 <code>0.74 TB (-84.5%)</code>，异常捕获率保持 <code>100.0%</code>。</p>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="val" id="kpi-tpot">14.0 ms</div><div class="lbl">欺骗性的请求平均 TPOT (看似达标 &lt;=15ms)</div></div>
+      <div class="kpi"><div class="val" id="kpi-stall" style="color:#EF4444;">825 ms!</div><div class="lbl">真实发生的最大单步卡顿 (max_itl_ms)</div></div>
+      <div class="kpi"><div class="val" id="kpi-vol">0.74 TB/天</div><div class="lbl">尾部采样日存储量 (对比全量 4.80 TB/天)</div></div>
+      <div class="kpi"><div class="val" id="kpi-save">省 $18.8万/年</div><div class="lbl">100% 捕获异常前提下年省存储费 (-84.5%)</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🎛️ 交互式“平均 TPOT 掩盖单步卡顿”模拟器与可观测性存储计算器</h2>
+    <div class="controls">
+      <div class="ctrl">
+        <label><span>正常步单 Token 耗时 (Normal ITL)</span><span id="v-norm">5.8 ms</span></label>
+        <input type="range" id="s-norm" min="4" max="12" step="0.2" value="5.8" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>中途单次抢占卡顿时长 (Stall)</span><span id="v-stl">825 ms</span></label>
+        <input type="range" id="s-stl" min="100" max="1500" step="25" value="825" oninput="calc()">
+      </div>
+      <div class="ctrl">
+        <label><span>集群峰值并发请求率 (RPS)</span><span id="v-rps">100 RPS</span></label>
+        <input type="range" id="s-rps" min="20" max="500" step="20" value="100" oninput="calc()">
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-lbl"><span>⛔ 全量逐 Token Span + 明文日志落盘 (50,000 Spans/s)</span><strong id="b-full-txt">4.80 TB / 天 ($18,500 / 月)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:94%;background:var(--red);"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-lbl"><span>✅ 紧凑 max_itl 数组 + OTel 尾部采样 (100% 异常 + 5% 正常)</span><strong id="b-tail-txt">0.74 TB / 天 ($2,860 / 月 · 省 84.5%)</strong></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:15%;background:var(--green);"></div></div>
+    </div>
+  </div>
+
+<script>
+function calc() {
+  const norm = +document.getElementById('s-norm').value;
+  const stl = +document.getElementById('s-stl').value;
+  const rps = +document.getElementById('s-rps').value;
+
+  document.getElementById('v-norm').textContent = norm.toFixed(1) + ' ms';
+  document.getElementById('v-stl').textContent = stl + ' ms';
+  document.getElementById('v-rps').textContent = rps + ' RPS';
+
+  const avgTpot = (99 * norm + stl) / 100.0;
+  const fullTb = (rps / 100.0) * 4.80;
+  const tailTb = (rps / 100.0) * 0.74;
+  const fullCost = Math.round((rps / 100.0) * 18500);
+  const tailCost = Math.round((rps / 100.0) * 2860);
+
+  document.getElementById('kpi-tpot').textContent = avgTpot.toFixed(1) + ' ms';
+  document.getElementById('kpi-stall').textContent = stl + ' ms!';
+  document.getElementById('kpi-vol').textContent = tailTb.toFixed(2) + ' TB/天';
+  document.getElementById('kpi-save').textContent = '省 $' + ((fullCost - tailCost)*12/10000).toFixed(1) + '万/年';
+
+  document.getElementById('b-full-txt').textContent = fullTb.toFixed(2) + ' TB / 天 ($' + fullCost.toLocaleString() + ' / 月)';
+  document.getElementById('b-tail-txt').textContent = tailTb.toFixed(2) + ' TB / 天 ($' + tailCost.toLocaleString() + ' / 月 · 省 84.5%)';
+}
+calc();
+</script>
+</body>
+</html>
